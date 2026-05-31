@@ -23,6 +23,8 @@ let navNearestIdx = 0;
 // Simulations-Zustand
 let simTimer     = null;
 let simRunning   = false;
+const NAV_SNAP_MAX_M = 85;
+const NAV_SNAP_WINDOW = 24;
 
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
@@ -35,6 +37,9 @@ const navPerfStats = {
   maxMs: 0,
   lastMs: 0,
   fallbackCount: 0,
+  snapApplied: 0,
+  snapRejected: 0,
+  lastSnapM: 0,
   lastRenderAt: 0
 };
 
@@ -117,6 +122,9 @@ function resetNavPerfStats(mode) {
   navPerfStats.maxMs = 0;
   navPerfStats.lastMs = 0;
   navPerfStats.fallbackCount = 0;
+  navPerfStats.snapApplied = 0;
+  navPerfStats.snapRejected = 0;
+  navPerfStats.lastSnapM = 0;
   navPerfStats.lastRenderAt = 0;
   renderNavPerfDebugHud(true);
 }
@@ -124,6 +132,13 @@ function resetNavPerfStats(mode) {
 function noteNavPerfFallback() {
   if (!navPerfDebugEnabled) return;
   navPerfStats.fallbackCount += 1;
+}
+
+function noteNavSnap(distanceM, applied) {
+  if (!navPerfDebugEnabled) return;
+  navPerfStats.lastSnapM = Number.isFinite(distanceM) ? distanceM : 0;
+  if (applied) navPerfStats.snapApplied += 1;
+  else navPerfStats.snapRejected += 1;
 }
 
 function noteNavPerfTick(durationMs) {
@@ -145,12 +160,15 @@ function renderNavPerfDebugHud(force) {
   const avgMs = navPerfStats.ticks ? (navPerfStats.totalMs / navPerfStats.ticks) : 0;
   const ticksPerSec = navPerfStats.ticks * 1000 / elapsedMs;
   const fallbackRate = navPerfStats.ticks ? (navPerfStats.fallbackCount * 100 / navPerfStats.ticks) : 0;
+  const snapSamples = navPerfStats.snapApplied + navPerfStats.snapRejected;
+  const snapRate = snapSamples ? (navPerfStats.snapApplied * 100 / snapSamples) : 0;
 
   navPerfHudEl.textContent =
     `DEBUG HUD | mode=${navPerfStats.mode} | ticks=${navPerfStats.ticks} | ` +
     `avg=${avgMs.toFixed(3)}ms | max=${navPerfStats.maxMs.toFixed(3)}ms | ` +
     `last=${navPerfStats.lastMs.toFixed(3)}ms | tick/s=${ticksPerSec.toFixed(1)} | ` +
-    `fallback=${fallbackRate.toFixed(1)}% (${navPerfStats.fallbackCount})`;
+    `fallback=${fallbackRate.toFixed(1)}% (${navPerfStats.fallbackCount}) | ` +
+    `snap=${snapRate.toFixed(1)}% | d=${navPerfStats.lastSnapM.toFixed(1)}m`;
 }
 
 // ── Service Worker ───────────────────────────────────────────
@@ -746,8 +764,17 @@ function startNavigation() {
       const { latitude: lat, longitude: lon, speed, heading } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
-      navCenterOn(lon, lat, smoothHeading(heading));
-      updateNavHud(lat, lon);
+      const pts = currentRoute.data.routePoints;
+      const snap = snapGpsToRoute(lat, lon, pts, navNearestIdx, NAV_SNAP_WINDOW);
+      const snappedLat = (snap && snap.applied) ? snap.lat : lat;
+      const snappedLon = (snap && snap.applied) ? snap.lon : lon;
+      if (snap) {
+        navNearestIdx = snap.index;
+        noteNavSnap(snap.distanceM, snap.applied);
+      }
+
+      navCenterOn(snappedLon, snappedLat, smoothHeading(heading));
+      updateNavHud(snappedLat, snappedLon, navNearestIdx);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';
         navSpeedEl.textContent = kmh;
@@ -900,6 +927,73 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
   return best;
 }
 
+function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW) {
+  if (!pts || pts.length < 2) return null;
+
+  const nearestIdx = findNearestNavIdx(lat, lon, pts, hintIdx);
+  const maxSeg = pts.length - 2;
+  if (maxSeg < 0) return null;
+
+  const segStart = Math.max(0, nearestIdx - windowSize);
+  const segEnd = Math.min(maxSeg, nearestIdx + windowSize);
+
+  const metersPerDegLat = 111320;
+  const metersPerDegLon = Math.max(1, Math.cos(lat * Math.PI / 180) * 111320);
+
+  let best = null;
+
+  for (let i = segStart; i <= segEnd; i++) {
+    const [aLat, aLon] = navGetLatLon(pts[i]);
+    const [bLat, bLon] = navGetLatLon(pts[i + 1]);
+
+    const ax = (aLon - lon) * metersPerDegLon;
+    const ay = (aLat - lat) * metersPerDegLat;
+    const bx = (bLon - lon) * metersPerDegLon;
+    const by = (bLat - lat) * metersPerDegLat;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 0.0001) continue;
+
+    const tRaw = -(ax * dx + ay * dy) / len2;
+    const t = Math.max(0, Math.min(1, tRaw));
+    const px = ax + dx * t;
+    const py = ay + dy * t;
+    const dist2 = px * px + py * py;
+
+    if (!best || dist2 < best.dist2) {
+      const snapLon = lon + (px / metersPerDegLon);
+      const snapLat = lat + (py / metersPerDegLat);
+      best = {
+        dist2,
+        lat: snapLat,
+        lon: snapLon,
+        index: Math.min(pts.length - 1, i + (t >= 0.5 ? 1 : 0))
+      };
+    }
+  }
+
+  if (!best) {
+    const [nLat, nLon] = navGetLatLon(pts[nearestIdx]);
+    return {
+      lat: nLat,
+      lon: nLon,
+      index: nearestIdx,
+      distanceM: haversineM(lat, lon, nLat, nLon),
+      applied: false
+    };
+  }
+
+  const distanceM = Math.sqrt(best.dist2);
+  return {
+    lat: best.lat,
+    lon: best.lon,
+    index: best.index,
+    distanceM,
+    applied: distanceM <= NAV_SNAP_MAX_M
+  };
+}
+
 function getTurnInfo(angle) {
   const a = angle;
   if (Math.abs(a) < 20)      return { icon: '⬆', label: 'Geradeaus' };
@@ -918,11 +1012,13 @@ function navFormatDist(meters) {
   return (meters / 1000).toFixed(1) + ' km';
 }
 
-function updateNavHud(lat, lon) {
+function updateNavHud(lat, lon, forcedIdx = null) {
   if (!navActive || !currentRoute) return;
   const perfT0 = navPerfDebugEnabled ? performance.now() : 0;
   const pts         = currentRoute.data.routePoints;
-  const idx         = findNearestNavIdx(lat, lon, pts, navNearestIdx);
+  const idx = Number.isFinite(forcedIdx)
+    ? Math.max(0, Math.min(pts.length - 1, Math.floor(forcedIdx)))
+    : findNearestNavIdx(lat, lon, pts, navNearestIdx);
   navNearestIdx     = idx;
   const currentDist = navCumDists[idx];
 
@@ -1017,7 +1113,7 @@ function startSimulation() {
 
     setSimulatedGPS(lon, lat, heading);
     simCenterOn(lon, lat, heading);
-    updateNavHud(lat, lon);
+    updateNavHud(lat, lon, step);
 
     step++;
     const pct = Math.round((step / total) * 100);

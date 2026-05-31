@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.18 - 2026-05-31
+- Added route snapping for live navigation in [app/js/app.js](app/js/app.js): incoming GPS positions are projected onto nearby route segments (windowed map matching) and only applied when deviation is plausible.
+- Reduced HUD work in simulation in [app/js/app.js](app/js/app.js) by reusing known route index (`step`) instead of nearest-point search on every tick.
+- Extended debug HUD metrics in [app/js/app.js](app/js/app.js) with snap acceptance rate and latest snap distance.
+- Updated cache-busting and service-worker shell revision in [app/index.html](app/index.html) and [app/sw.js](app/sw.js) for reliable rollout.
+
 ## V2.0.16 - 2026-05-31
 - Added a hidden developer performance overlay for navigation HUD timing in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css).
 - Overlay is strictly debug-only and remains invisible for drivers by default.
