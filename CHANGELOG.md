@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.14 - 2026-05-31
+- Improved runtime stability in [app/js/app.js](app/js/app.js): offline/online detection now uses a compatibility fallback when `AbortSignal.timeout` is unavailable.
+- Prevents false offline state on browsers/devices with partial AbortSignal support.
+
 ## V2.0.13 - 2026-05-31
 - Enforced strict write protection in [api/_auth.php](api/_auth.php): write APIs now require a configured server token (`LEHRFAHRER_API_TOKEN`) in all environments, including localhost.
 - Removed localhost write bypass.

@@ -133,12 +133,32 @@ function dbDelete(key) {
 
 // ── Offline-Erkennung (per echtem Fetch-Test, nicht navigator.onLine) ────────
 function detectOffline() {
+  function createTimeoutSignal(ms) {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
+    }
+
+    if (typeof AbortController !== 'undefined') {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      return {
+        signal: controller.signal,
+        cleanup: () => clearTimeout(timer)
+      };
+    }
+
+    return { signal: undefined, cleanup: () => {} };
+  }
+
   async function checkOnline() {
+    const timeout = createTimeoutSignal(4000);
     try {
-      await fetch('../api/list_cities.php', { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(4000) });
+      await fetch('../api/list_cities.php', { method: 'HEAD', cache: 'no-store', signal: timeout.signal });
       offlineBadge.classList.add('hidden');
     } catch {
       offlineBadge.classList.remove('hidden');
+    } finally {
+      timeout.cleanup();
     }
   }
   window.addEventListener('online',  checkOnline);
