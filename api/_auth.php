@@ -35,15 +35,9 @@ function lehrfahrer_require_write_auth(): void {
     $expected = getenv('LEHRFAHRER_API_TOKEN');
     $expected = is_string($expected) ? trim($expected) : '';
 
-    $remoteAddr = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    $isLoopback = ($remoteAddr === '127.0.0.1' || $remoteAddr === '::1');
-
-    // Ohne gesetzten Token nur lokale Schreibzugriffe erlauben.
+    // Ohne gesetzten Token sind alle Schreibzugriffe gesperrt.
     if ($expected === '') {
-        if ($isLoopback) {
-            return;
-        }
-        lehrfahrer_reject_unauthorized('Schreibzugriff verweigert. Setze LEHRFAHRER_API_TOKEN und sende X-Api-Token.');
+        lehrfahrer_reject_unauthorized('Schreibzugriff gesperrt. Bitte LEHRFAHRER_API_TOKEN auf dem Server setzen.');
     }
 
     $provided = lehrfahrer_get_header_ci('X-Api-Token');

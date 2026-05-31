@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.13 - 2026-05-31
+- Enforced strict write protection in [api/_auth.php](api/_auth.php): write APIs now require a configured server token (`LEHRFAHRER_API_TOKEN`) in all environments, including localhost.
+- Removed localhost write bypass.
+- Read endpoints remain open, so drivers can continue using the app without token for read/navigation only.
+
 ## V2.0.12 - 2026-05-31
 - Fixed intermittent `withApiAuthHeaders is not defined` errors caused by mixed browser cache states.
 - Added a defensive global API-token helper shim in [index.html](index.html) before local editor scripts load.
