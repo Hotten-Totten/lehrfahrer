@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.12 - 2026-05-31
+- Fixed intermittent `withApiAuthHeaders is not defined` errors caused by mixed browser cache states.
+- Added a defensive global API-token helper shim in [index.html](index.html) before local editor scripts load.
+- Result: token actions and write-auth test remain functional even if script versions are temporarily mismatched in cache.
+
 ## V2.0.11 - 2026-05-31
 - Added API token purpose tooltip in editor quickbar via [index.html](index.html), including a short explanation of write-protection scope and behavior.
 - Added visual help icon styling for the tooltip in [editor.css](editor.css).

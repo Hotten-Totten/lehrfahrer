@@ -372,6 +372,61 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+  <script>
+    (function () {
+      var KEY = "lehrfahrer_api_token";
+
+      if (typeof window.getApiToken !== "function") {
+        window.getApiToken = function () {
+          try { return (localStorage.getItem(KEY) || "").trim(); }
+          catch (_err) { return ""; }
+        };
+      }
+
+      if (typeof window.hasApiToken !== "function") {
+        window.hasApiToken = function () {
+          return window.getApiToken().length > 0;
+        };
+      }
+
+      if (typeof window.setApiToken !== "function") {
+        window.setApiToken = function (token) {
+          try {
+            var value = String(token || "").trim();
+            if (!value) {
+              localStorage.removeItem(KEY);
+              return false;
+            }
+            localStorage.setItem(KEY, value);
+            return true;
+          } catch (_err) {
+            return false;
+          }
+        };
+      }
+
+      if (typeof window.clearApiToken !== "function") {
+        window.clearApiToken = function () {
+          try {
+            localStorage.removeItem(KEY);
+            return true;
+          } catch (_err) {
+            return false;
+          }
+        };
+      }
+
+      if (typeof window.withApiAuthHeaders !== "function") {
+        window.withApiAuthHeaders = function (baseHeaders) {
+          var headers = Object.assign({}, baseHeaders || {});
+          var token = window.getApiToken();
+          if (token) headers["X-Api-Token"] = token;
+          return headers;
+        };
+      }
+    })();
+  </script>
+
   <script src="data/haltestellen.js"></script>
 
   <script src="js/editor.state.js"></script>
