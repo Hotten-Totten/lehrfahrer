@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.15 - 2026-05-31
+- Improved DOM safety in [app/js/app.js](app/js/app.js): stop list and offline route list rendering now use explicit element creation with `textContent` instead of template-based `innerHTML` for dynamic values.
+- Improved navigation runtime performance in [app/js/app.js](app/js/app.js): GPS HUD update now uses a hint-based nearest-point search window with global fallback only on edge hits, reducing per-tick computation on longer routes.
+
 ## V2.0.14 - 2026-05-31
 - Improved runtime stability in [app/js/app.js](app/js/app.js): offline/online detection now uses a compatibility fallback when `AbortSignal.timeout` is unavailable.
 - Prevents false offline state on browsers/devices with partial AbortSignal support.

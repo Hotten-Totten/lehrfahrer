@@ -18,6 +18,7 @@ let navFirstFix  = false;
 let navTurns     = [];
 let navCumDists  = [];
 let navStopDists = [];
+let navNearestIdx = 0;
 
 // Simulations-Zustand
 let simTimer     = null;
@@ -328,24 +329,40 @@ function displayRoute(data) {
 
 function renderStopList(stops) {
   if (!stops.length) {
-    stopList.innerHTML = '<p class="hint">Keine Haltestellen vorhanden.</p>';
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Keine Haltestellen vorhanden.';
+    stopList.replaceChildren(hint);
     return;
   }
 
-  stopList.innerHTML = '';
+  stopList.replaceChildren();
   stops.forEach((stop, i) => {
     const item = document.createElement('div');
     item.className   = 'stop-item';
     item.dataset.idx = i;
 
-    item.innerHTML = `
-      <span class="stop-index">${i + 1}</span>
-      <span class="stop-dot-icon"></span>
-      <span class="stop-name">${stop.name}</span>
-      ${stop.minuteFromStart > 0
-        ? `<span class="stop-minute">+${stop.minuteFromStart} min</span>`
-        : ''}
-    `;
+    const idxEl = document.createElement('span');
+    idxEl.className = 'stop-index';
+    idxEl.textContent = String(i + 1);
+
+    const dotEl = document.createElement('span');
+    dotEl.className = 'stop-dot-icon';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'stop-name';
+    nameEl.textContent = stop.name || 'Haltestelle';
+
+    item.appendChild(idxEl);
+    item.appendChild(dotEl);
+    item.appendChild(nameEl);
+
+    if ((stop.minuteFromStart || 0) > 0) {
+      const minuteEl = document.createElement('span');
+      minuteEl.className = 'stop-minute';
+      minuteEl.textContent = `+${stop.minuteFromStart} min`;
+      item.appendChild(minuteEl);
+    }
 
     item.addEventListener('click', () => {
       flyToStop(stop);
@@ -385,22 +402,32 @@ async function saveCurrentRouteOffline() {
 async function renderOfflineRouteList() {
   const entries = await dbGetAll();
   if (!entries.length) {
-    offlineRouteList.innerHTML = '<p class="hint">Keine Routen gespeichert.</p>';
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Keine Routen gespeichert.';
+    offlineRouteList.replaceChildren(hint);
     return;
   }
 
-  offlineRouteList.innerHTML = '';
+  offlineRouteList.replaceChildren();
   entries.forEach(entry => {
     const div = document.createElement('div');
     div.className = 'offline-route-entry';
-    div.innerHTML = `
-      <span>${entry.data.lineName || entry.key}</span>
-      <button title="Route aus Offline-Speicher löschen">🗑</button>
-    `;
-    div.querySelector('button').addEventListener('click', async () => {
+
+    const label = document.createElement('span');
+    label.textContent = (entry.data && entry.data.lineName) ? entry.data.lineName : entry.key;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.title = 'Route aus Offline-Speicher löschen';
+    removeBtn.textContent = '🗑';
+
+    removeBtn.addEventListener('click', async () => {
       await dbDelete(entry.key);
       await renderOfflineRouteList();
     });
+
+    div.appendChild(label);
+    div.appendChild(removeBtn);
     offlineRouteList.appendChild(div);
   });
 }
@@ -601,6 +628,7 @@ function startNavigation() {
 
   navActive   = true;
   navFirstFix = false;
+  navNearestIdx = 0;
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
@@ -672,6 +700,7 @@ function stopNavigation() {
   clearGpsFirstFixTimer();
   gpsActive = false;
   gpsBtn.style.color = '';
+  navNearestIdx = 0;
 }
 
 // ── Geometrie-Hilfsfunktionen ─────────────────────────────────
@@ -744,13 +773,47 @@ function buildNavStopDists(stops, pts, cumDists) {
   });
 }
 
-function findNearestNavIdx(lat, lon, pts) {
-  let minD = Infinity, best = 0;
-  for (let i = 0; i < pts.length; i++) {
+function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
+  if (!pts.length) return 0;
+
+  const maxIdx = pts.length - 1;
+  const seed   = Math.min(maxIdx, Math.max(0, Number.isFinite(hintIdx) ? Math.floor(hintIdx) : 0));
+
+  const distAt = i => {
     const [la, lo] = navGetLatLon(pts[i]);
-    const d = haversineM(lat, lon, la, lo);
-    if (d < minD) { minD = d; best = i; }
+    return haversineM(lat, lon, la, lo);
+  };
+
+  const windowSize = 35;
+  const edgeMargin = 5;
+  const start = Math.max(0, seed - windowSize);
+  const end   = Math.min(maxIdx, seed + windowSize);
+
+  let minD = Infinity;
+  let best = seed;
+
+  for (let i = start; i <= end; i++) {
+    const d = distAt(i);
+    if (d < minD) {
+      minD = d;
+      best = i;
+    }
   }
+
+  // Falls der beste Treffer am Fensterrand liegt, wurde evtl. stark abgewichen.
+  // Dann einmal global suchen (selten, aber korrekt).
+  if (best <= start + edgeMargin || best >= end - edgeMargin) {
+    minD = Infinity;
+    best = seed;
+    for (let i = 0; i <= maxIdx; i++) {
+      const d = distAt(i);
+      if (d < minD) {
+        minD = d;
+        best = i;
+      }
+    }
+  }
+
   return best;
 }
 
@@ -775,7 +838,8 @@ function navFormatDist(meters) {
 function updateNavHud(lat, lon) {
   if (!navActive || !currentRoute) return;
   const pts         = currentRoute.data.routePoints;
-  const idx         = findNearestNavIdx(lat, lon, pts);
+  const idx         = findNearestNavIdx(lat, lon, pts, navNearestIdx);
+  navNearestIdx     = idx;
   const currentDist = navCumDists[idx];
 
   // Nächste Abbiegung
@@ -823,6 +887,7 @@ function startSimulation() {
   navCumDists  = buildNavCumDists(pts);
   navTurns     = detectNavTurns(pts, navCumDists);
   navStopDists = buildNavStopDists(currentRoute.data.stops || [], pts, navCumDists);
+  navNearestIdx = 0;
 
   // Nav-HUD einblenden
   navActive = true;
