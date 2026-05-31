@@ -36,6 +36,8 @@ let navRejoinBlend = 0;
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
 let navPerfHudEl            = null;
+let navPerfLineEl           = null;
+let navPerfRecEl            = null;
 const navPerfStats = {
   mode: 'idle',
   startedAt: 0,
@@ -50,6 +52,15 @@ const navPerfStats = {
   routeState: 'ON',
   rejoinBlend: 0,
   lastRenderAt: 0
+};
+
+const navDriveLog = {
+  recording: false,
+  startedAt: 0,
+  samples: [],
+  maxSamples: 25000,
+  routeMeta: null,
+  reason: 'manual'
 };
 
 // ── DOM-Referenzen ───────────────────────────────────────────
@@ -118,8 +129,132 @@ function initNavPerfDebugHud() {
   if (!navPerfDebugEnabled) return;
   navPerfHudEl = document.createElement('div');
   navPerfHudEl.id = 'devNavPerfHud';
+  navPerfHudEl.innerHTML = [
+    '<div id="devNavPerfLine"></div>',
+    '<div id="devNavPerfControls">',
+    '  <button type="button" id="devNavLogToggleBtn">REC</button>',
+    '  <button type="button" id="devNavLogExportBtn">EXPORT</button>',
+    '  <button type="button" id="devNavLogResetBtn">RESET</button>',
+    '</div>',
+    '<div id="devNavPerfRec">rec=OFF | samples=0</div>'
+  ].join('');
   document.body.appendChild(navPerfHudEl);
+
+  navPerfLineEl = document.getElementById('devNavPerfLine');
+  navPerfRecEl = document.getElementById('devNavPerfRec');
+
+  const toggleBtn = document.getElementById('devNavLogToggleBtn');
+  const exportBtn = document.getElementById('devNavLogExportBtn');
+  const resetBtn = document.getElementById('devNavLogResetBtn');
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      if (navDriveLog.recording) stopNavDriveLogSession();
+      else startNavDriveLogSession('manual');
+      renderNavPerfDebugHud(true);
+      renderNavLogState();
+    });
+  }
+  if (exportBtn) exportBtn.addEventListener('click', exportNavDriveLog);
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      navDriveLog.samples = [];
+      navDriveLog.routeMeta = null;
+      navDriveLog.startedAt = 0;
+      navDriveLog.reason = 'manual';
+      renderNavLogState();
+    });
+  }
+
   renderNavPerfDebugHud(true);
+  renderNavLogState();
+}
+
+function getCurrentRouteMeta() {
+  if (!currentRoute || !currentRoute.data) return null;
+  return {
+    city: currentRoute.city || null,
+    fileBase: currentRoute.fileBase || null,
+    lineFolder: currentRoute.lineFolder || null,
+    lineName: currentRoute.data.lineName || null,
+    routeName: currentRoute.data.routeName || null
+  };
+}
+
+function startNavDriveLogSession(reason = 'manual') {
+  if (!navPerfDebugEnabled) return;
+  navDriveLog.recording = true;
+  navDriveLog.startedAt = Date.now();
+  navDriveLog.samples = [];
+  navDriveLog.routeMeta = getCurrentRouteMeta();
+  navDriveLog.reason = reason;
+  renderNavLogState();
+}
+
+function stopNavDriveLogSession() {
+  if (!navPerfDebugEnabled) return;
+  navDriveLog.recording = false;
+  renderNavLogState();
+}
+
+function renderNavLogState() {
+  if (!navPerfDebugEnabled || !navPerfRecEl) return;
+  const rec = navDriveLog.recording ? 'ON' : 'OFF';
+  navPerfRecEl.textContent = `rec=${rec} | samples=${navDriveLog.samples.length}`;
+}
+
+function recordNavDriveSample(rawLat, rawLon, tracked, speed, heading) {
+  if (!navPerfDebugEnabled || !navDriveLog.recording) return;
+  const elapsedMs = navDriveLog.startedAt ? (Date.now() - navDriveLog.startedAt) : 0;
+  navDriveLog.samples.push({
+    ts: Date.now(),
+    elapsedMs,
+    rawLat,
+    rawLon,
+    trackedLat: tracked.lat,
+    trackedLon: tracked.lon,
+    routeState: tracked.routeState,
+    snapDistanceM: tracked.snapDistanceM,
+    snapApplied: tracked.snapApplied,
+    nearestIdx: tracked.index,
+    offRoute: navOffRouteActive,
+    rejoinBlend: navRejoinBlend,
+    speedMps: (speed != null && !Number.isNaN(speed)) ? speed : null,
+    headingDeg: (heading != null && !Number.isNaN(heading)) ? heading : null
+  });
+
+  if (navDriveLog.samples.length > navDriveLog.maxSamples) {
+    navDriveLog.samples.splice(0, 1000);
+  }
+  renderNavLogState();
+}
+
+function exportNavDriveLog() {
+  if (!navPerfDebugEnabled) return;
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    reason: navDriveLog.reason,
+    routeMeta: navDriveLog.routeMeta,
+    sampleCount: navDriveLog.samples.length,
+    thresholds: {
+      snapMaxM: NAV_SNAP_MAX_M,
+      offRouteEnterM: NAV_OFF_ROUTE_ENTER_M,
+      rejoinStartM: NAV_REJOIN_START_M,
+      rejoinBlendStep: NAV_REJOIN_BLEND_STEP
+    },
+    samples: navDriveLog.samples
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.href = url;
+  a.download = `nav-drive-log-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function resetNavPerfStats(mode) {
@@ -180,13 +315,16 @@ function renderNavPerfDebugHud(force) {
   const snapSamples = navPerfStats.snapApplied + navPerfStats.snapRejected;
   const snapRate = snapSamples ? (navPerfStats.snapApplied * 100 / snapSamples) : 0;
 
-  navPerfHudEl.textContent =
+  const lineText =
     `DEBUG HUD | mode=${navPerfStats.mode} | ticks=${navPerfStats.ticks} | ` +
     `avg=${avgMs.toFixed(3)}ms | max=${navPerfStats.maxMs.toFixed(3)}ms | ` +
     `last=${navPerfStats.lastMs.toFixed(3)}ms | tick/s=${ticksPerSec.toFixed(1)} | ` +
     `fallback=${fallbackRate.toFixed(1)}% (${navPerfStats.fallbackCount}) | ` +
     `snap=${snapRate.toFixed(1)}% | d=${navPerfStats.lastSnapM.toFixed(1)}m | ` +
     `state=${navPerfStats.routeState} | rejoin=${(navPerfStats.rejoinBlend * 100).toFixed(0)}%`;
+
+  if (navPerfLineEl) navPerfLineEl.textContent = lineText;
+  else navPerfHudEl.textContent = lineText;
 }
 
 // ── Service Worker ───────────────────────────────────────────
@@ -748,6 +886,7 @@ function startNavigation() {
   navOffRouteActive = false;
   navRejoinBlend = 0;
   resetNavPerfStats('gps');
+  startNavDriveLogSession('nav-start');
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
@@ -787,6 +926,8 @@ function startNavigation() {
       const pts = currentRoute.data.routePoints;
       const tracked = resolveNavTrackPoint(lat, lon, pts);
 
+      recordNavDriveSample(lat, lon, tracked, speed, heading);
+
       navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading));
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
@@ -825,6 +966,7 @@ function stopNavigation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  stopNavDriveLogSession();
   resetNavPerfStats('idle');
 }
 
@@ -1018,7 +1160,14 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
   const snap = snapGpsToRoute(rawLat, rawLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
-    return { lat: rawLat, lon: rawLon, index: navNearestIdx };
+    return {
+      lat: rawLat,
+      lon: rawLon,
+      index: navNearestIdx,
+      routeState: navOffRouteActive ? 'OFF' : 'ON',
+      snapDistanceM: null,
+      snapApplied: false
+    };
   }
 
   navNearestIdx = snap.index;
@@ -1065,7 +1214,10 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
   return {
     lat: displayLat,
     lon: displayLon,
-    index: snap.index
+    index: snap.index,
+    routeState,
+    snapDistanceM: snap.distanceM,
+    snapApplied: snapAppliedNow
   };
 }
 
@@ -1149,6 +1301,7 @@ function startSimulation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  stopNavDriveLogSession();
   resetNavPerfStats('sim');
 
   // Nav-HUD einblenden
@@ -1213,6 +1366,7 @@ function stopSimulation(completed) {
   document.body.classList.remove('nav-mode');
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  stopNavDriveLogSession();
   resetNavPerfStats('idle');
 
   if (typeof map !== 'undefined' && map) {

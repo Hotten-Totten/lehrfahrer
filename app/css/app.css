@@ -587,9 +587,35 @@ html, body {
   font-size: 11px;
   line-height: 1.35;
   padding: 6px 8px;
+}
+
+#devNavPerfLine {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#devNavPerfControls {
+  margin-top: 4px;
+  display: flex;
+  gap: 6px;
+}
+
+#devNavPerfControls button {
+  pointer-events: auto;
+  border: 1px solid #e08c25;
+  background: #2a1710;
+  color: #ffd39c;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+
+#devNavPerfRec {
+  margin-top: 4px;
+  color: #ffcc8a;
 }
 
 /* Karte nach unten schieben wenn Nav-HUD sichtbar */

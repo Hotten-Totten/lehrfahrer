@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.21 - 2026-05-31
+- Added debug-only drive logger in [app/js/app.js](app/js/app.js): records raw GPS, snapped tracking point, route state (`ON/OFF/REJOIN`), snap distance, speed, heading, and nearest route index during navigation.
+- Added debug HUD controls in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css): `REC`, `EXPORT`, `RESET` for field-session capture and JSON export.
+- Recording starts automatically on navigation start and stops on nav/sim stop; export file includes thresholds and route metadata for post-analysis tuning.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.20 - 2026-05-31
 - Tuned off-route/rejoin thresholds in [app/js/app.js](app/js/app.js) for a calmer Cottbus city profile:
 	- `NAV_OFF_ROUTE_ENTER_M`: `130 -> 145`
