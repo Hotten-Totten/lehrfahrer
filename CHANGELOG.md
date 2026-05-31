@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.11 - 2026-05-31
+- Added API token purpose tooltip in editor quickbar via [index.html](index.html), including a short explanation of write-protection scope and behavior.
+- Added visual help icon styling for the tooltip in [editor.css](editor.css).
+
 ## V2.0.10 - 2026-05-31
 - Fixed non-working "API-Token setzen" and "Neuen Ort anlegen" actions in environments where `prompt()` is unsupported.
 - Added robust text-input fallback modal in [js/editor.main.js](js/editor.main.js) and input styling in [editor.css](editor.css).

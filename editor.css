@@ -139,6 +139,27 @@ body {
   color: #4b5563;
 }
 
+.token-help {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #64748b;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: help;
+  user-select: none;
+}
+
+.token-help:hover {
+  border-color: #93c5fd;
+  color: #e2e8f0;
+}
+
 .qb-sep {
   width: 1px;
   background: #555;
