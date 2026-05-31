@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.24 - 2026-05-31
+- Improved driver visibility in [app/js/map.js](app/js/map.js): active navigation now enforces forward-focused driver camera (no side-view mode switching while driving).
+- Driver camera now uses stronger forward bias (higher pitch + dynamic bottom padding) so significantly more road ahead is visible.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.23 - 2026-05-31
 - Improved driver focus layout in [app/css/app.css](app/css/app.css): during active navigation, non-essential UI (top bar, selection bar, panel) is hidden so the map and guidance remain central.
 - Extended navigation HUD in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): added dedicated in-HUD stop button and compact preview of the next three stops with distances.

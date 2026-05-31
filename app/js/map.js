@@ -411,7 +411,8 @@ function simCenterOn(lon, lat, headingDeg) {
 
 // ── Kamera-Optionen je nach gewählter Perspektive ─────────────────────────────
 function _buildCameraOptions(lon, lat, headingDeg) {
-  const mode = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
+  const perspective = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
+  const mode = document.body.classList.contains('nav-mode') ? 'driver' : perspective;
   switch (mode) {
     case 'follow':
       return {
@@ -432,12 +433,15 @@ function _buildCameraOptions(lon, lat, headingDeg) {
     default: {
       const zoomEl = document.getElementById('driverZoomSelect');
       const driverZoom = zoomEl ? parseFloat(zoomEl.value) : 21;
+      // Vorwärtsfokus: Marker unten im Bild, damit sichtbar mehr Straße voraus liegt.
+      const forwardBottom = Math.round(Math.min(360, Math.max(140, window.innerHeight * 0.38)));
+      const forwardTop = Math.round(Math.min(120, Math.max(8, window.innerHeight * 0.02)));
       return {
         center:  [lon, lat],
         zoom:    driverZoom,
-        pitch:   75,
+        pitch:   78,
         bearing: headingDeg != null ? headingDeg : 0,
-        padding: { top: 0, bottom: 80, left: 0, right: 0 }
+        padding: { top: forwardTop, bottom: forwardBottom, left: 0, right: 0 }
       };
     }
   }
