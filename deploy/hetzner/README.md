@@ -1,41 +1,79 @@
-# Hetzner Git Deploy (Staging)
+# Hetzner Testserver per Git-Push deployen
 
-## 1) Server user and folders
-Create a dedicated deploy user and folders:
+Diese Anleitung ist fuer einen neuen Staging-Server gedacht.
+Empfohlenes Ziel: Push auf Branch `staging` loest automatisches Deploy aus.
 
-- /srv/git/lehrfahrer-staging.git (bare repo)
-- /var/www/lehrfahrer-staging (web root)
+## 1) Neuen Server in Hetzner Cloud anlegen
+1. Image: Ubuntu 24.04 LTS
+2. Typ: kleiner Shared vCPU reicht fuer Staging
+3. SSH-Key hinterlegen (kein Passwort-Login)
+4. Servernamen z. B. `lehrfahrer-staging`
+5. Optional Domain vorbereiten: `staging.deine-domain.tld` auf Server-IP zeigen lassen
 
-## 2) Initialize bare repository
-Run on server:
+## 2) Basis auf dem Server installieren
+Per SSH als root verbinden und im Projektordner ausfuehren:
 
-sudo -u deploy git init --bare /srv/git/lehrfahrer-staging.git
+```bash
+SERVER_DOMAIN=staging.deine-domain.tld APP_NAME=lehrfahrer-staging bash deploy/hetzner/bootstrap-ubuntu.sh
+```
 
-## 3) Install post-receive hook
-Copy post-receive.sample.sh to:
+Hinweis:
+- Das Skript installiert Nginx, PHP-FPM, Git, UFW und legt Benutzer/Ordner an.
+- Bare-Repo: `/srv/git/lehrfahrer-staging.git`
+- Zielverzeichnis: `/var/www/lehrfahrer-staging`
 
-/srv/git/lehrfahrer-staging.git/hooks/post-receive
+## 3) Git Hook fuer Auto-Deploy aktivieren
+```bash
+cp deploy/hetzner/post-receive.sample.sh /srv/git/lehrfahrer-staging.git/hooks/post-receive
+chmod +x /srv/git/lehrfahrer-staging.git/hooks/post-receive
+chown deploy:deploy /srv/git/lehrfahrer-staging.git/hooks/post-receive
+```
 
-Then make it executable:
+## 4) Nginx Site aktivieren
+```bash
+cp deploy/hetzner/nginx-staging.conf /etc/nginx/sites-available/lehrfahrer-staging.conf
+sed -i 's/staging.example.com/staging.deine-domain.tld/g' /etc/nginx/sites-available/lehrfahrer-staging.conf
+ln -s /etc/nginx/sites-available/lehrfahrer-staging.conf /etc/nginx/sites-enabled/lehrfahrer-staging.conf
+nginx -t
+systemctl reload nginx
+```
 
-sudo chmod +x /srv/git/lehrfahrer-staging.git/hooks/post-receive
+## 5) TLS (Lets Encrypt)
+```bash
+certbot --nginx -d staging.deine-domain.tld
+```
 
-## 4) Add remote locally
-Run in your local project:
+## 6) Lokalen Remote setzen
+Im lokalen Projekt:
 
-git remote add staging deploy@YOUR_SERVER:/srv/git/lehrfahrer-staging.git
+```bash
+git remote add staging deploy@SERVER_IP:/srv/git/lehrfahrer-staging.git
+```
 
-## 5) Push staging branch
+Falls `staging` schon existiert:
 
+```bash
+git remote set-url staging deploy@SERVER_IP:/srv/git/lehrfahrer-staging.git
+```
+
+## 7) Erstes Deploy ausloesen
+```bash
+git checkout staging
 git push staging staging
+```
 
-This triggers auto-deploy to /var/www/lehrfahrer-staging.
+Danach sollte die App unter `https://staging.deine-domain.tld/app/` laufen.
 
-## 6) Nginx root
-Set web root to:
+## 8) Schnelltests
+1. `https://staging.deine-domain.tld/api/list_cities.php`
+2. `https://staging.deine-domain.tld/app/`
+3. In der App Stadt/Linie laden, Navigation und Simulation pruefen
 
-/var/www/lehrfahrer-staging/app
+## 9) Rollback
+Einen frueheren Commit direkt auf den Staging-Branch pushen:
 
-## 7) API path
-The app uses ../api from app/js/app.js.
-So expose the repository root under the same vhost, or map /api to /var/www/lehrfahrer-staging/api.
+```bash
+git push --force-with-lease staging <commit>:staging
+```
+
+Nur auf Staging erzwingen, niemals auf Produktion.
