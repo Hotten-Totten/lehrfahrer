@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.9 - 2026-05-31
+- Added visible API token status badge in editor quickbar via [index.html](index.html) (`API-Token: an/aus`).
+- Added quickbar status styling in [editor.css](editor.css) for active/inactive token state.
+- Added dynamic token status refresh in [js/editor.main.js](js/editor.main.js) on startup and after token set/clear actions.
+
 ## V2.0.8 - 2026-05-31
 - Added editor-side API token management actions in [index.html](index.html) server menu:
 	- Token setzen

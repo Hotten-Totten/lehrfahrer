@@ -116,6 +116,29 @@ body {
   font-weight: bold;
 }
 
+.token-status {
+  margin-left: auto;
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.token-status-on {
+  background: #e8f7ee;
+  border-color: #9bd3b0;
+  color: #17623a;
+}
+
+.token-status-off {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
 .qb-sep {
   width: 1px;
   background: #555;

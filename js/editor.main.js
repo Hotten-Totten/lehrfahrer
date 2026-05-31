@@ -202,6 +202,21 @@ function maskToken(token) {
   return t.slice(0, 3) + "..." + t.slice(-3);
 }
 
+function updateApiTokenStatusUI() {
+  const el = document.getElementById("apiTokenStatus");
+  if (!el) return;
+
+  const token = getApiToken();
+  const active = !!token;
+
+  el.classList.toggle("token-status-on", active);
+  el.classList.toggle("token-status-off", !active);
+  el.textContent = active ? "API-Token: an" : "API-Token: aus";
+  el.title = active
+    ? `API-Token aktiv (${maskToken(token)})`
+    : "Kein API-Token gespeichert";
+}
+
 function setApiTokenViaPrompt() {
   const current = getApiToken();
   const input = prompt(
@@ -223,6 +238,7 @@ function setApiTokenViaPrompt() {
     return;
   }
 
+  updateApiTokenStatusUI();
   setStatus(`API-Token gespeichert: ${maskToken(token)}`, "success");
 }
 
@@ -241,6 +257,7 @@ function clearApiTokenViaPrompt() {
     return;
   }
 
+  updateApiTokenStatusUI();
   setStatus("API-Token lokal gelöscht.", "success");
 }
 
@@ -423,6 +440,7 @@ function createNewLine() {
 // =========================
 
 initDebugPanel();
+updateApiTokenStatusUI();
 
 createCatalogMarkers();
 updateCatalogMarkerVisibilityNow();
