@@ -1301,7 +1301,7 @@ function startSimulation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
-  stopNavDriveLogSession();
+  startNavDriveLogSession('sim-start');
   resetNavPerfStats('sim');
 
   // Nav-HUD einblenden
@@ -1343,6 +1343,15 @@ function startSimulation() {
 
     setSimulatedGPS(lon, lat, heading);
     simCenterOn(lon, lat, heading);
+    const tracked = {
+      lat,
+      lon,
+      index: step,
+      routeState: 'ON',
+      snapDistanceM: 0,
+      snapApplied: true
+    };
+    recordNavDriveSample(lat, lon, tracked, null, heading);
     updateNavHud(lat, lon, step);
 
     step++;

@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.22 - 2026-05-31
+- Fixed debug drive logging for simulation in [app/js/app.js](app/js/app.js): simulation now starts a recording session (`sim-start`) and writes samples on each simulation tick.
+- This resolves empty exported logs when testing via `Fahrt ▶` without live GPS navigation.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.21 - 2026-05-31
 - Added debug-only drive logger in [app/js/app.js](app/js/app.js): records raw GPS, snapped tracking point, route state (`ON/OFF/REJOIN`), snap distance, speed, heading, and nearest route index during navigation.
 - Added debug HUD controls in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css): `REC`, `EXPORT`, `RESET` for field-session capture and JSON export.
