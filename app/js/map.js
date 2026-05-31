@@ -9,9 +9,78 @@ let stopMarkers  = [];
 let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
+let navCameraBearing = 0;
+let navBearingReady = false;
+let navLastFix = null;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
+
+function normalizeDeg(deg) {
+  return (deg % 360 + 360) % 360;
+}
+
+function shortestDegDelta(fromDeg, toDeg) {
+  return ((toDeg - fromDeg + 540) % 360) - 180;
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R  = 6371000;
+  const f1 = lat1 * Math.PI / 180;
+  const f2 = lat2 * Math.PI / 180;
+  const df = (lat2 - lat1) * Math.PI / 180;
+  const dl = (lon2 - lon1) * Math.PI / 180;
+  const a  = Math.sin(df / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function bearingFromCoords(lat1, lon1, lat2, lon2) {
+  const f1 = lat1 * Math.PI / 180;
+  const f2 = lat2 * Math.PI / 180;
+  const dl = (lon2 - lon1) * Math.PI / 180;
+  const y  = Math.sin(dl) * Math.cos(f2);
+  const x  = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return normalizeDeg(Math.atan2(y, x) * 180 / Math.PI);
+}
+
+function resetNavBearingState() {
+  navCameraBearing = 0;
+  navBearingReady = false;
+  navLastFix = null;
+}
+
+function resolveNavBearing(lon, lat, headingDeg) {
+  let candidate = null;
+
+  if (headingDeg != null && Number.isFinite(headingDeg)) {
+    candidate = normalizeDeg(headingDeg);
+  } else if (navLastFix) {
+    const movedM = haversineMeters(navLastFix.lat, navLastFix.lon, lat, lon);
+    if (movedM >= 2.5) {
+      candidate = bearingFromCoords(navLastFix.lat, navLastFix.lon, lat, lon);
+    }
+  }
+
+  navLastFix = { lat, lon };
+
+  if (candidate == null) {
+    return navBearingReady ? navCameraBearing : 0;
+  }
+
+  if (!navBearingReady) {
+    navCameraBearing = candidate;
+    navBearingReady = true;
+    return navCameraBearing;
+  }
+
+  const delta = shortestDegDelta(navCameraBearing, candidate);
+  if (Math.abs(delta) < 1.2) {
+    return navCameraBearing;
+  }
+
+  navCameraBearing = normalizeDeg(navCameraBearing + delta * 0.30);
+  return navCameraBearing;
+}
 
 // ── Online-Vektorkachel-Style (OpenFreeMap – kostenlos, kein API-Key) ───────
 function buildRasterStyle() {
@@ -378,6 +447,7 @@ function stopGPS() {
     gpsMarker.remove();
     gpsMarker = null;
   }
+  resetNavBearingState();
 }
 
 function flyToUser() {
@@ -397,7 +467,8 @@ function flyToUser() {
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
 function navCenterOn(lon, lat, headingDeg) {
   if (!map) return;
-  const opts = _buildCameraOptions(lon, lat, headingDeg);
+  const bearing = resolveNavBearing(lon, lat, headingDeg);
+  const opts = _buildCameraOptions(lon, lat, bearing);
   // 1100ms > typisches GPS-Intervall (~1s) → Animation läuft durch bis zur nächsten Position
   // ease-in-out: sanftes Beschleunigen + Abbremsen statt linearem Ruck
   map.easeTo({ ...opts, duration: 1100, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t });
@@ -406,7 +477,10 @@ function navCenterOn(lon, lat, headingDeg) {
 // ── Simulation: sofortige Kartenposition (kein Animations-Stau) ──────────────
 function simCenterOn(lon, lat, headingDeg) {
   if (!map) return;
-  map.jumpTo(_buildCameraOptions(lon, lat, headingDeg));
+  const bearing = (headingDeg != null && Number.isFinite(headingDeg))
+    ? normalizeDeg(headingDeg)
+    : resolveNavBearing(lon, lat, headingDeg);
+  map.jumpTo(_buildCameraOptions(lon, lat, bearing));
 }
 
 // ── Kamera-Optionen je nach gewählter Perspektive ─────────────────────────────

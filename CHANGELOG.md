@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.25 - 2026-05-31
+- Stabilized navigation camera heading in [app/js/map.js](app/js/map.js): reduced bearing jitter by smoothing heading updates and ignoring tiny oscillations.
+- Added robust fallback in [app/js/map.js](app/js/map.js): if GPS heading is unavailable/unstable, camera direction follows movement course from recent GPS fixes.
+- Camera bearing state is reset on GPS stop to avoid stale heading carry-over.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.24 - 2026-05-31
 - Improved driver visibility in [app/js/map.js](app/js/map.js): active navigation now enforces forward-focused driver camera (no side-view mode switching while driving).
 - Driver camera now uses stronger forward bias (higher pitch + dynamic bottom padding) so significantly more road ahead is visible.
