@@ -543,7 +543,7 @@ async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFold
       }
     }
 
-    const response = await fetch("/api/delete_line.php", {
+    const response = await fetch(`${API_BASE}/delete_line.php`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
