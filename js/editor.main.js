@@ -202,6 +202,76 @@ function maskToken(token) {
   return t.slice(0, 3) + "..." + t.slice(-3);
 }
 
+function askTextInput({ title, message, defaultValue = "", placeholder = "" }) {
+  try {
+    const native = prompt(
+      (title ? title + "\n" : "") + (message || ""),
+      defaultValue || ""
+    );
+    return Promise.resolve(native);
+  } catch (_err) {
+    return askTextInputModal({ title, message, defaultValue, placeholder });
+  }
+}
+
+function askTextInputModal({ title, message, defaultValue = "", placeholder = "" }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+
+    const box = document.createElement("div");
+    box.className = "save-confirm-box";
+    box.innerHTML = `
+      <div class="save-confirm-header">
+        <h3>${title || "Eingabe"}</h3>
+      </div>
+      <div class="save-confirm-body">
+        <div class="save-confirm-row" style="display:block;border-bottom:none;padding-bottom:10px;">
+          <div style="font-size:13px;color:#475569;margin-bottom:8px;">${message || ""}</div>
+          <input id="promptFallbackInput" class="prompt-fallback-input" type="text" placeholder="${placeholder || ""}" />
+        </div>
+      </div>
+      <div class="save-confirm-actions">
+        <button type="button" class="save-confirm-btn-cancel" id="promptFallbackCancelBtn">Abbrechen</button>
+        <button type="button" class="save-confirm-btn-ok" id="promptFallbackOkBtn">OK</button>
+      </div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const input = box.querySelector("#promptFallbackInput");
+    const okBtn = box.querySelector("#promptFallbackOkBtn");
+    const cancelBtn = box.querySelector("#promptFallbackCancelBtn");
+
+    input.value = defaultValue || "";
+    input.focus();
+    input.select();
+
+    function cleanup(result) {
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onOverlay);
+      input.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve(result);
+    }
+
+    function onOk() { cleanup(input.value); }
+    function onCancel() { cleanup(null); }
+    function onOverlay(e) { if (e.target === overlay) cleanup(null); }
+    function onKeyDown(e) {
+      if (e.key === "Enter") cleanup(input.value);
+      if (e.key === "Escape") cleanup(null);
+    }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onOverlay);
+    input.addEventListener("keydown", onKeyDown);
+  });
+}
+
 function updateApiTokenStatusUI() {
   const el = document.getElementById("apiTokenStatus");
   if (!el) return;
@@ -217,12 +287,14 @@ function updateApiTokenStatusUI() {
     : "Kein API-Token gespeichert";
 }
 
-function setApiTokenViaPrompt() {
+async function setApiTokenViaPrompt() {
   const current = getApiToken();
-  const input = prompt(
-    "API-Token eingeben.\nDer Token wird nur lokal im Browser gespeichert.",
-    current || ""
-  );
+  const input = await askTextInput({
+    title: "API-Token setzen",
+    message: "API-Token eingeben. Der Token wird nur lokal im Browser gespeichert.",
+    defaultValue: current || "",
+    placeholder: "z. B. mein-sicherer-token"
+  });
 
   if (input === null) return;
 
@@ -353,7 +425,11 @@ async function loadCitiesFromServer(selectCity = "") {
 }
 
 async function createCityViaPrompt() {
-  const name = prompt("Neuen Ort eingeben (z. B. Senftenberg):");
+  const name = await askTextInput({
+    title: "Neuen Ort anlegen",
+    message: "Ortsname eingeben (z. B. Senftenberg):",
+    placeholder: "Senftenberg"
+  });
   if (!name || !name.trim()) return;
   newCityInput.value = name.trim();
   await createCityOnServer();

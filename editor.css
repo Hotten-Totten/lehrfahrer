@@ -1013,6 +1013,20 @@ button.danger:hover {
 .save-confirm-btn-ok:hover { background: #1e40af; }
 .save-confirm-btn-ok:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.prompt-fallback-input {
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+}
+
+.prompt-fallback-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 /* =========================
    LINIEN-BROWSER ERWEITERUNGEN
 ========================= */

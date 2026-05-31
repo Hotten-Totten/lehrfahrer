@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.10 - 2026-05-31
+- Fixed non-working "API-Token setzen" and "Neuen Ort anlegen" actions in environments where `prompt()` is unsupported.
+- Added robust text-input fallback modal in [js/editor.main.js](js/editor.main.js) and input styling in [editor.css](editor.css).
+- Result: server menu actions now open a working input dialog instead of silently failing.
+
 ## V2.0.9 - 2026-05-31
 - Added visible API token status badge in editor quickbar via [index.html](index.html) (`API-Token: an/aus`).
 - Added quickbar status styling in [editor.css](editor.css) for active/inactive token state.
