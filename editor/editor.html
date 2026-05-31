@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Linien-Editor</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<!-- Marker Cluster CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+
+<!-- Dein CSS -->
+<link rel="stylesheet" href="editor.css">
+
+</head>
+<body>
+
+<div id="topbar">
+
+<div class="top-group">
+<label>Linie</label>
+<input id="lineName" value="16">
+</div>
+
+<div class="top-group">
+<label>Richtung</label>
+<input id="directionName" value="Sachsendorf → Schmellwitz">
+</div>
+
+<div class="top-group">
+<label>Farbe</label>
+<input id="lineColor" type="color" value="#d32f2f">
+</div>
+
+<div class="top-group search-group">
+<label>Haltestelle suchen</label>
+<input id="stopSearchInput" placeholder="z. B. Stadtpromenade">
+<div id="searchResults" class="search-results hidden"></div>
+</div>
+
+<div class="top-buttons">
+
+<button id="modeCatalogStopBtn">Haltestelle aus Karte</button>
+<button id="modeFreeStopBtn">Freie Haltestelle</button>
+<button id="modeRouteBtn">Route zeichnen</button>
+
+<button id="buildStreetRouteBtn">Straßenroute erzeugen</button>
+<button id="rerouteSegmentBtn">Teilstrecke neu berechnen</button>
+
+<button id="smoothRouteBtn">Route glätten</button>
+<button id="simplifyRouteBtn">Route vereinfachen</button>
+
+<button id="showOriginalRouteBtn">Original anzeigen</button>
+<button id="showSimplifiedRouteBtn">Vereinfachte anzeigen</button>
+
+<button id="modeSelectBtn">Auswählen</button>
+
+<button id="clearBtn">Alles löschen</button>
+<button id="saveLineBtn">Linie speichern</button>
+<button id="loadLineBtn">Linie laden</button>
+<button id="exportBtn">JSON exportieren</button>
+<button id="exportAutosaveBtn">Autosave Datei</button>
+<button id="loadAutosaveBtn">Autosave laden</button>
+<button id="clearAutosaveBtn">Autosave löschen</button>
+<button id="helpBtn">Hilfe</button>
+<input id="loadLineInput" type="file" accept=".json,application/json" class="hidden">
+
+</div>
+
+</div>
+
+<div id="layout">
+
+<div id="mapWrap">
+
+<div id="map"></div>
+
+<div id="selectionBox" class="selection-box hidden"></div>
+
+</div>
+
+<div id="sidebar">
+
+<h3>Eigenschaften</h3>
+
+<div id="stopEditor" class="editor-section hidden">
+
+<label>Name</label>
+<input id="stopName">
+
+<label>Minute</label>
+<input id="stopMinute" type="number">
+
+<label>Notiz</label>
+<textarea id="stopNote"></textarea>
+
+<label>Latitude</label>
+<input id="stopLat">
+
+<label>Longitude</label>
+<input id="stopLon">
+
+<label>Quelle</label>
+<input id="stopSource" disabled>
+
+<button id="saveStopBtn">Speichern</button>
+<button id="deleteStopBtn">Haltestelle löschen</button>
+
+</div>
+
+<div id="routeEditor" class="editor-section hidden">
+
+<label>Latitude</label>
+<input id="routeLat">
+
+<label>Longitude</label>
+<input id="routeLon">
+
+<button id="deleteRoutePointBtn">Routenpunkt löschen</button>
+
+</div>
+
+<div id="noSelection">
+Nichts ausgewählt.
+</div>
+
+<h4>Haltestellen-Reihenfolge</h4>
+<div id="stopOrderList" class="stop-order-list"></div>
+
+<h4>Vorschau</h4>
+
+<div id="statsBox">
+
+<div>Haltestellen in Linie: <span id="stopCount">0</span></div>
+<div>Routenpunkte: <span id="routePointCount">0</span></div>
+<div>Katalog-Haltestellen: <span id="catalogCount">0</span></div>
+<div>Modus: <span id="currentModeText"></span></div>
+
+</div>
+
+</div>
+
+</div>
+
+<div id="statusbar">Bereit.</div>
+<div id="helpModal" class="help-modal hidden">
+  <div class="help-modal-content">
+    <div class="help-modal-header">
+      <h3>Editor-Hilfe</h3>
+      <button id="helpCloseBtn" type="button">Schließen</button>
+    </div>
+    <pre id="helpModalBody" class="help-modal-body"></pre>
+  </div>
+</div>
+
+<div id="debugPanel" class="debug-panel hidden">
+  <div class="debug-panel-header">
+    <span>Debug-Panel</span>
+    <button id="debugClearBtn" type="button">Leeren</button>
+  </div>
+  <div id="debugPanelBody" class="debug-panel-body"></div>
+</div>
+
+<button id="debugToggleBtn" class="debug-toggle-btn" type="button">Debug</button>
+</div>
+
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- MarkerCluster -->
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<!-- Haltestellen Daten -->
+<script src="data/haltestellen.js"></script>
+
+<!-- Editor -->
+<script src="editor.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "Lehrfahrer",
+  "short_name": "Lehrfahrer",
+  "description": "ÖPNV Lehrfahrten-Viewer – offline nutzbar mit GPS",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#0f0f1a",
+  "orientation": "any",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "../assets/icons/icon_final3_blue_32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "../assets/icons/icon_final3_blue_48.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "../assets/icons/icon_final3_blue_64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

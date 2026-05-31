@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f0f1a">
+  <title>Lehrfahrer</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="../assets/icons/icon_final3_blue_64.png">
+
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
+  <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
+
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- ── Topbar ──────────────────────────────── -->
+  <div id="topbar">
+    <div id="topbar-left">
+      <span id="appTitle">🚌 Lehrfahrer</span>
+      <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
+    </div>
+    <div id="topbar-right">
+      <button id="navBtn"      class="hidden" title="Navigation starten">▶</button>
+      <button id="gpsBtn"      title="GPS aktivieren">◎</button>
+      <button id="settingsBtn" title="Einstellungen">⚙</button>
+    </div>
+  </div>
+
+  <!-- ── Auswahlleiste ──────────────────────── -->
+  <div id="selectionBar">
+    <select id="citySelect" title="Stadt auswählen">
+      <option value="">Stadt …</option>
+    </select>
+    <select id="lineSelect" disabled title="Linie auswählen">
+      <option value="">Linie …</option>
+    </select>
+    <button id="simBtn" class="hidden" title="Lehrfahrt starten – Strecke abfahren">Fahrt ▶</button>
+    <button id="saveOfflineBtn" disabled title="Route offline speichern">⬇</button>
+  </div>
+
+  <!-- ── Nav-HUD (sichtbar während Navigation) ── -->
+  <div id="navHud" class="hidden">
+    <div id="navManeuver">
+      <div id="navArrow">⬆</div>
+      <div id="navDistInfo">
+        <div id="navDist">–</div>
+        <div id="navLabel">Starte Navigation …</div>
+      </div>
+      <div id="navSpeedBox">
+        <div id="navSpeed">–</div>
+        <div id="navSpeedUnit">km/h</div>
+      </div>
+    </div>
+    <div id="navStopBar">
+      <span class="nav-stop-dot">⬤</span>
+      <span id="navStopName">–</span>
+      <span id="navStopDist">–</span>
+    </div>
+  </div>
+
+  <!-- ── Karte ──────────────────────────────── -->
+  <div id="map"></div>
+
+  <!-- ── Panel (Haltestellenliste) ─────────── -->
+  <div id="panel" class="panel-collapsed">
+    <div id="panelHandle" title="Liste aufklappen / zuklappen"></div>
+    <div id="panelHeader">
+      <span id="panelTitle">Haltestellenfolge</span>
+      <span id="panelMeta"></span>
+      <button id="panelCloseBtn" type="button" title="Haltestellenliste schließen" aria-label="Haltestellenliste schließen">✕</button>
+    </div>
+    <div id="stopList">
+      <p class="hint">Bitte eine Linie auswählen.</p>
+    </div>
+  </div>
+
+  <!-- ── Einstellungen ─────────────────────── -->
+  <div id="settingsOverlay" class="hidden">
+    <div id="settingsBox">
+      <h2>Einstellungen</h2>
+
+      <div class="settings-section">
+        <h3>Offline-Karten</h3>
+        <p>
+          Die Karte (OpenFreeMap) wird automatisch gecacht sobald du sie mit WLAN ansiehst.
+          Fahre deine Strecke einmal zuhause mit WLAN nach – danach läuft die Karte
+          komplett ohne Internet, nur GPS wird benötigt.
+        </p>
+        <p>
+          Für größere Regionen ohne jede Vorschau: PMTiles-Datei laden (optional).
+        </p>
+        <div id="tileStatus" class="status-box">Karte: OpenFreeMap (online)</div>
+        <button id="loadLocalTilesBtn" title="Lokale PMTiles-Datei vom Gerät laden (optional, für vollständigen Offline-Betrieb ohne Vorcaching)">
+          📂 PMTiles-Datei laden (optional)
+        </button>
+        <input type="file" id="tilesFileInput" accept=".pmtiles">
+      </div>
+
+      <div class="settings-section">
+        <h3>Kartenperspektive beim Fahren</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+          <label class="radio-row">
+            <input type="radio" name="mapPerspective" value="driver" checked>
+            <span>
+              <strong>Fahrersicht</strong>
+              <span class="radio-desc">Geneigt, dreht sich mit Fahrtrichtung</span>
+            </span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="mapPerspective" value="follow">
+            <span>
+              <strong>Verfolgerperspektive</strong>
+              <span class="radio-desc">Von oben, dreht sich mit Fahrtrichtung</span>
+            </span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="mapPerspective" value="north">
+            <span>
+              <strong>Vogelperspektive Nord</strong>
+              <span class="radio-desc">Von oben, Norden immer oben</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section" id="driverZoomSection">
+        <h3>Fahrersicht-Zoom</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Zoom:</label>
+          <select id="driverZoomSelect" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
+            <option value="16">16 – Übersicht</option>
+            <option value="17">17 – Weit</option>
+            <option value="18">18 – Mittel</option>
+            <option value="19">19 – Nah</option>
+            <option value="20">20 – Nah+</option>
+            <option value="21" selected>21 – Standard</option>
+            <option value="22">22 – Straßenebene</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Lehrfahrt-Geschwindigkeit</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Tempo:</label>
+          <select id="simSpeedSelect" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
+            <option value="1200">Langsam</option>
+            <option value="600" selected>Normal</option>
+            <option value="200">Schnell</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Gespeicherte Offline-Routen</h3>
+        <div id="offlineRouteList"><p class="hint">Keine Routen gespeichert.</p></div>
+        <button id="clearOfflineCacheBtn" title="Alle gespeicherten Offline-Routen löschen">
+          🗑 Alle Offline-Routen löschen
+        </button>
+      </div>
+
+      <button id="closeSettingsBtn" title="Einstellungen schließen">Schließen</button>
+    </div>
+  </div>
+
+  <!-- ── Simulations-Chip (klein, über der Karte, nicht-blockierend) ── -->
+  <div id="simChip" class="hidden">
+    <span id="simChipLabel">▶ Lehrfahrt läuft…</span>
+    <div id="simChipBar"><div id="simChipFill"></div></div>
+    <button id="simStopBtn" title="Lehrfahrt stoppen">■</button>
+  </div>
+
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

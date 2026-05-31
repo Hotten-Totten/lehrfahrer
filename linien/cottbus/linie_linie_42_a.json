@@ -1,0 +1,365 @@
+{
+    "id": "linie_linie_42_a",
+    "lineName": "Linie 42",
+    "routeName": "Route 01",
+    "directionName": "Peitz, Busbahnhof - Jänschwalde, Schule",
+    "color": "#d32f2f",
+    "routeMode": "street",
+    "stops": [
+        {
+            "id": "stop_4",
+            "catalogId": "hst_348",
+            "groupId": "hst_348",
+            "sourceType": "catalog",
+            "type": "bus_tram",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Cottbus, Stadthalle/Puschkinpromenade",
+            "lat": 51.761708,
+            "lon": 14.331035,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "note": "",
+            "order": 1,
+            "isTimingPoint": true
+        },
+        {
+            "id": "stop_5",
+            "catalogId": "hst_1559",
+            "groupId": "hst_1559",
+            "sourceType": "catalog",
+            "type": "bus_tram",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Stadthalle/Post",
+            "lat": 51.761224,
+            "lon": 14.329652,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "note": "",
+            "order": 2,
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_6",
+            "catalogId": "hst_355",
+            "groupId": "hst_355",
+            "sourceType": "catalog",
+            "type": "bus",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Cottbus, Stadtverwaltung",
+            "lat": 51.762215,
+            "lon": 14.327648,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "note": "",
+            "order": 3,
+            "isTimingPoint": true
+        }
+    ],
+    "routePoints": [
+        [
+            51.761662,
+            14.331545
+        ],
+        [
+            51.761662,
+            14.331545
+        ],
+        [
+            51.76143,
+            14.331527
+        ],
+        [
+            51.760977,
+            14.331473
+        ],
+        [
+            51.760994,
+            14.331394
+        ],
+        [
+            51.761006,
+            14.331337
+        ],
+        [
+            51.761023,
+            14.331256
+        ],
+        [
+            51.761035,
+            14.3312
+        ],
+        [
+            51.761095,
+            14.330981
+        ],
+        [
+            51.761104,
+            14.330948
+        ],
+        [
+            51.761111,
+            14.330923
+        ],
+        [
+            51.761151,
+            14.330733
+        ],
+        [
+            51.761164,
+            14.330668
+        ],
+        [
+            51.76121,
+            14.330292
+        ],
+        [
+            51.761218,
+            14.330225
+        ],
+        [
+            51.76127,
+            14.329748
+        ],
+        [
+            51.761277,
+            14.329664
+        ],
+        [
+            51.76129,
+            14.329517
+        ],
+        [
+            51.761319,
+            14.329179
+        ],
+        [
+            51.761342,
+            14.328478
+        ],
+        [
+            51.761357,
+            14.32803
+        ],
+        [
+            51.76136,
+            14.327866
+        ],
+        [
+            51.761361,
+            14.327793
+        ],
+        [
+            51.76136,
+            14.327608
+        ],
+        [
+            51.761474,
+            14.327588
+        ],
+        [
+            51.761649,
+            14.327586
+        ],
+        [
+            51.761871,
+            14.327635
+        ],
+        [
+            51.762214,
+            14.327608
+        ]
+    ],
+    "routePointsSimplified": [],
+    "meta": {
+        "formatVersion": "1.2",
+        "exportedAt": "2026-03-29T13:27:35.211Z",
+        "source": "Lehrfahrer Linien-Editor"
+    },
+    "line": {
+        "id": "linie_linie_42_a",
+        "lineName": "Linie 42",
+        "routeName": "Route 01",
+        "directionId": "a",
+        "directionName": "Peitz, Busbahnhof - Jänschwalde, Schule",
+        "startStopName": "Cottbus, Stadthalle/Puschkinpromenade",
+        "endStopName": "Cottbus, Stadtverwaltung",
+        "color": "#d32f2f",
+        "routeMode": "street"
+    },
+    "stats": {
+        "routeLengthMeters": 444,
+        "estimatedDriveMinutes": 1,
+        "stopCount": 3,
+        "routePointCount": 28,
+        "hasFreeStops": false
+    },
+    "mapView": {
+        "centerLat": 51.760868,
+        "centerLon": 14.329525,
+        "zoom": 17
+    },
+    "bounds": {
+        "minLat": 51.760977,
+        "minLon": 14.327586,
+        "maxLat": 51.762215,
+        "maxLon": 14.331545
+    },
+    "route": {
+        "original": [
+            {
+                "lat": 51.761662,
+                "lon": 14.331545,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761662,
+                "lon": 14.331545,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76143,
+                "lon": 14.331527,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.760977,
+                "lon": 14.331473,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.760994,
+                "lon": 14.331394,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761006,
+                "lon": 14.331337,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761023,
+                "lon": 14.331256,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761035,
+                "lon": 14.3312,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761095,
+                "lon": 14.330981,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761104,
+                "lon": 14.330948,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761111,
+                "lon": 14.330923,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761151,
+                "lon": 14.330733,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761164,
+                "lon": 14.330668,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76121,
+                "lon": 14.330292,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761218,
+                "lon": 14.330225,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76127,
+                "lon": 14.329748,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761277,
+                "lon": 14.329664,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76129,
+                "lon": 14.329517,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761319,
+                "lon": 14.329179,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761342,
+                "lon": 14.328478,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761357,
+                "lon": 14.32803,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76136,
+                "lon": 14.327866,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761361,
+                "lon": 14.327793,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76136,
+                "lon": 14.327608,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761474,
+                "lon": 14.327588,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761649,
+                "lon": 14.327586,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761871,
+                "lon": 14.327635,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762214,
+                "lon": 14.327608,
+                "sourceType": "street"
+            }
+        ],
+        "simplified": null
+    },
+    "savedAt": "2026-03-29T15:27:29+02:00"
+}

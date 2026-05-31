@@ -1,0 +1,244 @@
+﻿/lehrfahrer
+    index.html          â†’ Einstiegspunkt, gesamtes HTML (MenÃ¼, Quickbar, Topbar, Karte, Modals)
+    editor.css          â†’ Alle Styles (MenÃ¼leiste, Quickbar, Topbar, Karte, Buttons, Modals)
+
+    /js
+        haltestellen.js         â†’ Katalog-Daten (stopCatalog[]), generiert durch build_haltestellen.py
+        editor.state.js         â†’ Karte, State, Konstanten, Icons
+        editor.dom.js           â†’ DOM-Referenzen (alle getElementById)
+        editor.debug.js         â†’ Debug-Panel (debug, warn, error)
+        editor.ui.js            â†’ UI-Funktionen (setMode, Buttons, Stats, Haltestellenliste)
+        editor.selection.js     â†’ Auswahl-Logik (Einzel, Box-Selection, Mehrfachauswahl)
+        editor.stops.js         â†’ Haltestellen (hinzufÃ¼gen, lÃ¶schen, verschieben, Snap)
+        editor.route.js         â†’ Routenpunkte (Marker, Linien, GlÃ¤tten, Vereinfachen)
+        editor.routing.js       â†’ Routenberechnung (Valhalla bus + OSRM-Fallback)
+        editor.linelogic.js     â†’ Linienberechnungen (Distanz, Fahrtzeit, Minuten)
+        editor.search.js        â†’ Haltestellensuche + Katalog-Marker auf der Karte
+        editor.autosave.js      â†’ Automatisches Speichern in localStorage
+        editor.api.js           â†’ Server-Kommunikation, Export (JSON, GPX-Daten)
+        editor.history.js       â†’ Undo/Redo (Snapshot-basiert, max. 50 Schritte)
+        editor.lineBrowser.js   â†’ Modal: gespeicherte Linien laden/verwalten
+        editor.help.js          â†’ Hilfe-Modal
+        editor.events.js        â†’ Alle EventListener (Buttons, Karte, Tastatur)
+        editor.main.js          â†’ GPX-Export (buildGpxString, Waypoints, Track)
+
+    /build
+        build_haltestellen.py   â†’ LÃ¤dt Haltestellen per Overpass-API und schreibt haltestellen.js
+
+    /api
+        save_line.php           â†’ Linie auf dem Server speichern
+        load_line.php           â†’ Linie vom Server laden
+        list_lines.php          â†’ Gespeicherte Linien auflisten
+        list_cities.php         â†’ Orte auflisten
+        create_city.php         â†’ Neuen Ort anlegen
+        delete_line.php         â†’ Linie lÃ¶schen
+        save_gpx.php            â†’ GPX-Datei auf Server speichern
+
+    /linien                     â†’ Gespeicherte Liniendateien (JSON, nach Ort sortiert)
+    /autosave                   â†’ Lokale Autosave-Backups
+    /data                       â†’ Generierte Daten (haltestellen.js nach Build)
+
+
+========================================
+WAS JEDES MODUL MACHT (aktueller Stand)
+========================================
+
+haltestellen.js
+    EnthÃ¤lt: stopCatalog[] â€“ alle Bushaltestellen im Umkreis als Array
+    Wird NICHT manuell bearbeitet, sondern durch build_haltestellen.py neu generiert.
+    Merge-Radius: 8 m (zwei Richtungssteige derselben Haltestelle bleiben getrennt)
+
+editor.state.js
+    EnthÃ¤lt alles Globale:
+    - map (Leaflet-Karte, CartoDB Light-Tiles)
+    - catalogCluster (MarkerCluster-Plugin, optional)
+    - mode (aktueller Bearbeitungsmodus: freeStop | route | select | specialTrack)
+    - state{} (stops, routePoints, simplifiedRoutePoints, specialTracks, ...)
+    - stopIdCounter, routePointIdCounter
+    - Konstanten: VALHALLA_BASE_URL, OSRM_BASE_URL, CATALOG_MIN_ZOOM, API_BASE, ...
+    - Icons (createDivIcon, createStopBadgeIcon, ICONS{})
+    Hier NICHT rein: EventListener, UI-Logik, Speichern/Laden
+
+editor.dom.js
+    EnthÃ¤lt NUR: document.getElementById(...) fÃ¼r jeden Button und jedes Input-Feld.
+    Kein Code, nur Referenzen.
+
+editor.debug.js
+    EnthÃ¤lt: debug(), warn(), error(), toggleDebugPanel(), clearDebugPanel()
+    Zeigt ein einblendbares Debug-Panel am Bildschirmrand.
+
+editor.ui.js
+    EnthÃ¤lt alle Funktionen die die OberflÃ¤che aktualisieren:
+    - setStatus(text, level)            â†’ Statuszeile setzen
+    - updateRouteStats()                â†’ km / Fahrtzeit berechnen und anzeigen
+    - updateStats()                     â†’ ZÃ¤hler (Stops, Routenpunkte) + Modustext
+    - updateModeButtons()               â†’ Quickbar-Buttons hervorheben (active-Klasse)
+    - updatePreviewButtons()            â†’ Original/Vereinfacht-Buttons hervorheben
+    - setMode(newMode, statusText)      â†’ Modus wechseln + alles aktualisieren
+    - renderStopOrderList()             â†’ Haltestellenliste in der Seitenleiste neu aufbauen
+
+editor.selection.js
+    EnthÃ¤lt die gesamte Auswahllogik:
+    - selectStop(), selectRoutePoint()
+    - clearSelection(), clearRouteMultiSelection()
+    - beginBoxSelection(), updateBoxSelection(), finishBoxSelection()
+    - applyRoutePointIcons()            â†’ Aussehen ausgewÃ¤hlter Punkte setzen
+    - toggleRoutePointMultiSelection()
+
+editor.stops.js
+    EnthÃ¤lt alles rund um Haltestellen auf der Linie:
+    - addStopToLine({name, lat, lon, sourceType, catalogId})
+    - addCatalogStopToLine(catalogStop)  â†’ Haltestelle aus Katalog Ã¼bernehmen
+    - createFreeStop(lat, lon)           â†’ Haltestelle per Klick auf Karte setzen
+    - findClosestPointOnRoute(lat, lon)  â†’ nÃ¤chsten Routenpunkt berechnen
+    - moveStopUp(index), moveStopDown(index)
+    - deleteSelectedStop()
+    - snapSelectedStopToRoute()          â†’ Haltestelle auf nÃ¤chsten Routenpunkt snappen
+
+editor.route.js
+    EnthÃ¤lt alles zur Strecke:
+    - refreshRouteLine()                 â†’ Route auf der Karte neu zeichnen
+    - createRoutePointObject(lat, lon)   â†’ neuen Routenpunkt anlegen
+    - createManualRoutePoint(lat, lon)   â†’ manuell gesetzter Punkt
+    - douglasPeucker(points, tolerance)  â†’ Vereinfachungsalgorithmus
+    - findClosestSegment(latlng)         â†’ nÃ¤chstes Segment finden (fÃ¼r EinfÃ¼gen)
+    - buildRoutingAnchorsFromCurrentRoute()
+    - smoothRoute(), simplifyCurrentRoute()
+
+editor.routing.js
+    Routenberechnung Ã¼ber externe Dienste:
+    - decodePolyline6(str)               â†’ Valhalla Polyline6-Format dekodieren
+    - fetchStreetSegmentBus(from, to)    â†’ Valhalla (bus-Profil) anfragen
+    - fetchStreetSegment(from, to)       â†’ Valhalla zuerst, OSRM als Fallback
+    - buildStreetRouteFromStops()        â†’ komplette Route Haltâ†’Halt berechnen
+    - rerouteSelectedSegment()           â†’ nur ausgewÃ¤hltes Segment neu berechnen
+    Routing-Server: https://valhalla1.openstreetmap.de (primÃ¤r)
+                    https://router.project-osrm.org    (Fallback)
+
+editor.linelogic.js
+    Linienberechnungen (keine Karte, nur Mathematik):
+    - distanceMetersBetween(a, b)        â†’ Entfernung zweier Koordinaten
+    - getTotalRouteLengthMeters()        â†’ GesamtlÃ¤nge der Route
+    - calculateRouteLengthMeters()       â†’ LÃ¤nge nach Routenpunkten
+    - estimateMinutesForStop(index)      â†’ Fahrtzeit bis zur Haltestelle schÃ¤tzen
+    - recalculateAutoMinutes()           â†’ alle Auto-Minuten neu berechnen
+    Konstanten: LINE_ESTIMATE_KMH = 20, LINE_DWELL_MINUTES = 0.5
+
+editor.search.js
+    Katalogmarker auf der Karte + Suchfunktion:
+    - isCatalogStopVisible(stop)         â†’ Filterlogik (Bus, Tram, Mixed)
+    - createCatalogMarker(stop)          â†’ Marker mit Popup erzeugen
+    - updateCatalogMarkerVisibility()    â†’ ab Zoom 15 sichtbar, max. 250 Marker
+    - performSearch(query)               â†’ Suche im Katalog nach Name
+    - renderSearchResults(results)       â†’ Suchergebnisliste anzeigen
+    - highlightCatalogMarker(stop)       â†’ Marker hervorheben und zentrieren
+    Katalogmarker: nur im Modus freeStop klickbar (Haltestelle zur Linie hinzufÃ¼gen)
+
+editor.autosave.js
+    Automatisches Speichern im Browser (localStorage):
+    - buildAutosaveData()                â†’ serialisierbares Datenpaket bauen
+    - saveAutosave()                     â†’ in localStorage schreiben
+    - loadAutosave()                     â†’ aus localStorage laden und Karte aufbauen
+    - clearAutosave()                    â†’ gespeicherten Stand lÃ¶schen
+    - startAutosaveLoop()                â†’ alle 60 Sekunden speichern
+    Key: "linieneditor_autosave_v1"
+
+editor.api.js
+    Server-Kommunikation + Export-Hilfsfunktionen:
+    - getStopDisplayType(stop)           â†’ "free" | "catalog" | "unknown"
+    - getStopSegmentMinutes(index)       â†’ Minuten zwischen zwei Stops
+    - buildExportData()                  â†’ komplettes JSON-Paket fÃ¼r Server
+    - saveLineToServer()                 â†’ POST an api/save_line.php
+    - loadLineFromServer()               â†’ GET von api/load_line.php
+    - loadCityList()                     â†’ Orte-Dropdown befÃ¼llen
+    - exportJsonFile()                   â†’ JSON-Datei im Browser herunterladen
+
+editor.history.js
+    Snapshot-basiertes Undo/Redo:
+    - buildHistorySnapshot()             â†’ aktuellen Zustand serialisieren
+    - pushHistorySnapshot()              â†’ Snapshot speichern
+    - undoHistory(), redoHistory()       â†’ Schritte zurÃ¼ck/vor
+    Max. Schritte: 50
+
+editor.lineBrowser.js
+    Modal zum Laden gespeicherter Linien:
+    - openLineBrowser()                  â†’ Modal Ã¶ffnen, Linienliste laden
+    - closeLineBrowser()
+    - renderLineBrowserList(lines)       â†’ Liste von Linien anzeigen
+    LÃ¤dt Linienliste von api/list_lines.php
+
+editor.help.js
+    Hilfe-Modal:
+    - openHelpModal(), closeHelpModal()
+
+editor.events.js
+    Alle EventListener an einem Ort:
+    - Buttons (Datei, Bearbeiten, Route, Haltestellen, Ansicht, Hilfe-Dropdowns)
+    - Quickbar-Buttons (Neu, Undo, Redo, Modi, Routing)
+    - Kartenklick (je nach Modus: Haltestelle setzen oder Routenpunkt setzen)
+    - Tastatur (Entf = lÃ¶schen, Strg+Z/Y = Undo/Redo)
+    - Mausrad / Zoom (Katalogmarker-Sichtbarkeit aktualisieren)
+    Regel: Hier steht NUR addEventListener, keine Logik.
+
+editor.main.js
+    GPX-Export:
+    - escapeXml(value)                   â†’ XML-Sonderzeichen escapen
+    - getGpxTrackPoints()                â†’ Routenpunkte fÃ¼r GPX-Track
+    - getGpxWaypoints()                  â†’ Haltestellen als GPX-Waypoints
+    - buildGpxString()                   â†’ komplette GPX-Datei als String
+    - downloadGpxFile()                  â†’ Browser-Download auslÃ¶sen
+    Hinweis: Initialisierung der App liegt in editor.events.js / editor.state.js,
+             NICHT in dieser Datei.
+
+
+========================================
+MODI (state.mode)
+========================================
+
+freeStop        â†’ Klick auf Karte = neue Haltestelle; Klick auf Katalogmarker = Katalog-Halt
+route           â†’ Klick auf Karte = neuer Routenpunkt (manuell)
+select          â†’ Routenpunkte durch Klick oder Box-Selection auswÃ¤hlen
+specialTrack    â†’ Sondertrasse zeichnen (Abschnitt auÃŸerhalb des normalen Routing)
+
+
+========================================
+ROUTING
+========================================
+
+PrimÃ¤r:   Valhalla (https://valhalla1.openstreetmap.de) mit costing="bus"
+          â†’ berÃ¼cksichtigt Busspuren, Ã–PNV-Bevorzugungen aus OSM
+Fallback: OSRM  (https://router.project-osrm.org) mit driving-Profil
+          â†’ wird genutzt wenn Valhalla nicht erreichbar ist
+
+Haltestellen-Katalog (haltestellen.js):
+    Quelle:       OpenStreetMap via Overpass-API
+    Radius:       35 km um Cottbus (51.7563, 14.3329)
+    Tags:         highway=bus_stop, railway=tram_stop, public_transport=platform/stop_position
+    Merge-Radius: 8 m (Duplikate am gleichen Mast werden zusammengefasst,
+                  Gegenrichtungs-Steige bleiben getrennt)
+    Neu generieren: cd build && python build_haltestellen.py
+                    dann data/haltestellen.js nach js/haltestellen.js kopieren
+
+
+========================================
+LADEREIHENFOLGE (index.html <script>-Tags)
+========================================
+
+1.  haltestellen.js      (Katalog-Daten)
+2.  editor.state.js      (Karte, Globals)
+3.  editor.dom.js        (DOM-Referenzen)
+4.  editor.debug.js      (Debug-Panel)
+5.  editor.history.js    (Undo/Redo)
+6.  editor.ui.js         (UI-Funktionen)
+7.  editor.selection.js  (Auswahl)
+8.  editor.linelogic.js  (Berechnungen)
+9.  editor.stops.js      (Haltestellen)
+10. editor.route.js      (Routenpunkte)
+11. editor.routing.js    (Routing-API)
+12. editor.search.js     (Katalogsuche)
+13. editor.autosave.js   (localStorage)
+14. editor.api.js        (Server-API)
+15. editor.lineBrowser.js
+16. editor.help.js
+17. editor.events.js     (EventListener â€“ muss nach allen anderen kommen)
+18. editor.main.js       (GPX-Export)

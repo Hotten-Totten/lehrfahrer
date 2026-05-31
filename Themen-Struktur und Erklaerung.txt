@@ -1,0 +1,362 @@
+/lehrfahrer
+    index.html
+    editor.css
+
+    /js
+        editor.main.js
+        editor.state.js
+        editor.dom.js
+        editor.debug.js
+        editor.ui.js
+        editor.selection.js
+        editor.stops.js
+        editor.route.js
+        editor.routing.js
+        editor.search.js
+        editor.autosave.js
+        editor.api.js
+        editor.lineBrowser.js
+        editor.help.js
+
+Was jedes Modul macht
+editor.main.js
+
+Startet alles.
+Sozusagen der Motor an-Knopf.
+
+editor.state.js
+
+Enthält:
+
+state
+globale Zähler
+Konstanten
+map / routeLine / previewLine
+editor.dom.js
+
+Sammelt alle getElementById(...) an einer Stelle.
+
+editor.debug.js
+
+Debug-Panel, debug(), warn(), error().
+
+editor.ui.js
+
+Alles für:
+
+Statusbar
+Modusbutton-Status
+Vorschaubutton-Status
+Stats
+Stop-Reihenfolge rendern
+editor.selection.js
+
+Alles für:
+
+Auswahl
+Box-Selection
+Mehrfachauswahl
+Auswahlzustände
+editor.stops.js
+
+Alles zu:
+
+Haltestellen hinzufügen
+freie Haltestellen
+löschen
+Haltestellen verschieben
+Snap-to-Route
+editor.route.js
+
+Alles zu:
+
+Routenpunkte
+Marker
+Linien zeichnen
+Route glätten
+Vereinfachen
+Punkt auf Segment einfügen
+editor.routing.js
+
+Nur OSRM:
+
+fetchStreetSegment
+buildStreetRouteFromStops
+rerouteSelectedSegment
+editor.search.js
+
+Haltestellensuche + Suchergebnisliste + Marker hervorheben
+
+editor.autosave.js
+
+LocalStorage + Export Autosave + Laden
+
+editor.api.js
+
+Server-Kommunikation:
+
+speichern
+laden
+Linienliste holen
+editor.lineBrowser.js
+
+Modal für gespeicherte Linien
+
+editor.help.js
+
+Hilfemodal        
+
+UPdate:
+
+1. Finale Modulstruktur
+
+So ist dein Projekt jetzt logisch aufgebaut:
+
+/js
+  editor.state.js
+  editor.dom.js
+  editor.debug.js
+  editor.ui.js
+  editor.selection.js
+  editor.stops.js
+  editor.route.js
+  editor.routing.js
+  editor.search.js
+  editor.autosave.js
+  editor.api.js
+  editor.lineBrowser.js
+  editor.help.js
+  editor.events.js
+  editor.main.js
+2. Wofür jedes Modul zuständig ist
+editor.state.js
+
+Nur Grundgerüst.
+
+Hier rein gehört:
+
+map
+globale Konfiguration
+state
+Konstanten
+Icons
+
+Hier nicht rein:
+
+EventListener
+Speichern/Laden
+UI-Logik
+editor.dom.js
+
+Nur DOM-Referenzen.
+
+Also nur:
+
+document.getElementById(...)
+
+Hier nicht rein:
+
+Logik
+EventListener
+Rendercode
+editor.debug.js
+
+Nur Debugsystem.
+
+Hier rein:
+
+debug()
+warn()
+error()
+Debug-Panel-Funktionen
+
+Hier nicht rein:
+
+Fachlogik
+Kartenlogik
+editor.ui.js
+
+Nur Oberfläche aktualisieren.
+
+Hier rein:
+
+setStatus()
+updateStats()
+updateModeButtons()
+updatePreviewButtons()
+renderStopOrderList()
+
+Hier nicht rein:
+
+Haltestellen erzeugen
+Routing
+Serverzugriffe
+editor.selection.js
+
+Nur Auswahlzustand.
+
+Hier rein:
+
+selectStop()
+selectRoutePoint()
+clearSelection()
+Box-Selection
+Multi-Selection
+Icon-Umschaltung für Auswahl
+
+Hier nicht rein:
+
+neue Stops erzeugen
+Route berechnen
+editor.stops.js
+
+Alles rund um Haltestellen.
+
+Hier rein:
+
+addStopToLine()
+addCatalogStopToLine()
+createFreeStop()
+moveStopUp()
+moveStopDown()
+deleteSelectedStop()
+snapSelectedStopToRoute()
+
+Hier nicht rein:
+
+OSRM
+JSON-Export
+Modals
+editor.route.js
+
+Alles zur Route selbst.
+
+Hier rein:
+
+RoutePoints
+Geometrie-Helfer
+refreshRouteLine()
+createRoutePointObject()
+insertRoutePointOnSegment()
+rebuildAutoRouteFromStops()
+smoothRoute()
+simplifyCurrentRoute()
+
+Hier nicht rein:
+
+API-Calls
+Haltestellensuche
+Modals
+editor.routing.js
+
+Nur externer Router / OSRM.
+
+Hier rein:
+
+fetchStreetSegment()
+buildStreetRouteFromStops()
+rerouteSelectedSegment()
+
+Hier nicht rein:
+
+Marker-Erzeugung
+Sidebar-Zeug
+DOM-Zugriffe außer Status/Buttons
+editor.search.js
+
+Nur Katalog-Haltestellen + Suche.
+
+Hier rein:
+
+sichtbare Katalogmarker
+Suchergebnisse
+Filterlogik
+jumpToCatalogStop()
+
+Hier nicht rein:
+
+Linien speichern
+Route glätten
+Stop-Editor rechts
+editor.autosave.js
+
+Nur localStorage / Autosave.
+
+Hier rein:
+
+buildAutosaveData()
+saveAutosave()
+loadAutosave()
+clearAutosave()
+startAutosaveLoop()
+
+Hier nicht rein:
+
+Server-API
+Routing
+Katalogsuche
+editor.api.js
+
+Nur Datei-/Serverdaten.
+
+Hier rein:
+
+buildExportData()
+exportJson()
+saveLineToServer()
+fetchLineListFromServer()
+loadLineFromServer()
+loadLineFromData()
+
+Hier nicht rein:
+
+Haltestellen-Suche
+EventListener
+Moduswechsel
+editor.lineBrowser.js
+
+Nur Linien-Browser-Modal.
+
+Hier rein:
+
+openLineBrowser()
+closeLineBrowser()
+renderLineBrowser()
+editor.help.js
+
+Nur Hilfe-Modal.
+
+Hier rein:
+
+openHelpModal()
+closeHelpModal()
+editor.events.js
+
+Nur Verkabelung.
+
+Hier rein:
+
+Button-Listener
+Map-Listener
+Keydown
+Pointerdown/move/up
+
+Ganz wichtig:
+Hier keine Fachlogik neu erfinden.
+Events sollen nur Funktionen aufrufen, nicht 80 Zeilen Business-Logik selbst enthalten.
+
+editor.main.js
+
+Nur Start.
+
+Hier rein:
+
+Initialisierung
+erster Render
+erstes Marker-Update
+Autosave-Loop starten
+
+Hier nicht rein:
+
+Fachfunktionen
+Event-Code

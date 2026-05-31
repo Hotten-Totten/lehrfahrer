@@ -1,0 +1,27 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local backups and snapshots
+WorkingSystem/
+backup/
+autosave/
+_linien/backup/
+linien/backup/
+
+# Large local offline datasets
+Offlinekarten/
+*.osm.pbf
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
