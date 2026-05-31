@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.27 - 2026-05-31
+- Tightened driver cockpit camera in [app/js/map.js](app/js/map.js): higher nav-mode zoom, stronger pitch, and more aggressive forward framing so the visible area is closer to the road ahead.
+- Driver view now places the vehicle lower in frame during active navigation for a more realistic cockpit feel.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.26 - 2026-05-31
 - Improved stop visibility on map in [app/js/map.js](app/js/map.js) and [app/css/app.css](app/css/app.css): stops are now rendered as POI markers with readable labels, not only plain dots.
 - Improved navigation stop list in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css): HUD now shows destination stop plus the next 4 upcoming stops.

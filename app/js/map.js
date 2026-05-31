@@ -516,14 +516,16 @@ function _buildCameraOptions(lon, lat, headingDeg) {
     case 'driver':
     default: {
       const zoomEl = document.getElementById('driverZoomSelect');
-      const driverZoom = zoomEl ? parseFloat(zoomEl.value) : 21;
-      // Vorwärtsfokus: Marker unten im Bild, damit sichtbar mehr Straße voraus liegt.
-      const forwardBottom = Math.round(Math.min(360, Math.max(140, window.innerHeight * 0.38)));
-      const forwardTop = Math.round(Math.min(120, Math.max(8, window.innerHeight * 0.02)));
+      const baseZoom = zoomEl ? parseFloat(zoomEl.value) : 21;
+      const navMode = document.body.classList.contains('nav-mode');
+      // Cockpit-Boost in aktiver Navigation: näher an die Straße, stärker nach vorne fokussiert.
+      const driverZoom = navMode ? Math.min(22, baseZoom + 0.9) : baseZoom;
+      const forwardBottom = Math.round(Math.min(420, Math.max(220, window.innerHeight * 0.48)));
+      const forwardTop = Math.round(Math.min(64, Math.max(2, window.innerHeight * 0.01)));
       return {
         center:  [lon, lat],
         zoom:    driverZoom,
-        pitch:   78,
+        pitch:   navMode ? 80 : 78,
         bearing: headingDeg != null ? headingDeg : 0,
         padding: { top: forwardTop, bottom: forwardBottom, left: 0, right: 0 }
       };
