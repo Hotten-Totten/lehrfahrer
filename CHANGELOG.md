@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.23 - 2026-05-31
+- Improved driver focus layout in [app/css/app.css](app/css/app.css): during active navigation, non-essential UI (top bar, selection bar, panel) is hidden so the map and guidance remain central.
+- Extended navigation HUD in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): added dedicated in-HUD stop button and compact preview of the next three stops with distances.
+- Navigation updates now render upcoming stop cards in [app/js/app.js](app/js/app.js) via safe DOM creation.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.22 - 2026-05-31
 - Fixed debug drive logging for simulation in [app/js/app.js](app/js/app.js): simulation now starts a recording session (`sim-start`) and writes samples on each simulation tick.
 - This resolves empty exported logs when testing via `Fahrt ▶` without live GPS navigation.

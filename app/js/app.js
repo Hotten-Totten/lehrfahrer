@@ -93,6 +93,8 @@ const navLabelEl    = document.getElementById('navLabel');
 const navStopNameEl = document.getElementById('navStopName');
 const navStopDistEl = document.getElementById('navStopDist');
 const navSpeedEl    = document.getElementById('navSpeed');
+const navEndBtn     = document.getElementById('navEndBtn');
+const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
 
 // Simulations-DOM-Referenzen
 const simBtn         = document.getElementById('simBtn');
@@ -445,6 +447,13 @@ function bindEvents() {
     if (navActive) stopNavigation();
     else startNavigation();
   });
+
+  if (navEndBtn) {
+    navEndBtn.addEventListener('click', () => {
+      if (simRunning) stopSimulation(false);
+      else stopNavigation();
+    });
+  }
 
   simBtn.addEventListener('click', () => {
     if (simRunning) stopSimulation(false);
@@ -1274,9 +1283,43 @@ function updateNavHud(lat, lon, forcedIdx = null) {
     navStopDistEl.textContent = 'Ziel';
   }
 
+  renderUpcomingStops(currentDist);
+
   if (navPerfDebugEnabled) {
     noteNavPerfTick(performance.now() - perfT0);
   }
+}
+
+function renderUpcomingStops(currentDist) {
+  if (!navUpcomingStopsEl) return;
+
+  const upcoming = navStopDists
+    .filter(s => s.distFromStart > currentDist + 10)
+    .slice(0, 3);
+
+  if (!upcoming.length) {
+    navUpcomingStopsEl.replaceChildren();
+    return;
+  }
+
+  const nodes = upcoming.map(entry => {
+    const card = document.createElement('div');
+    card.className = 'nav-upcoming-item';
+
+    const name = document.createElement('span');
+    name.className = 'nav-upcoming-name';
+    name.textContent = entry.stop?.name || 'Haltestelle';
+
+    const dist = document.createElement('span');
+    dist.className = 'nav-upcoming-dist';
+    dist.textContent = navFormatDist(Math.max(0, entry.distFromStart - currentDist));
+
+    card.appendChild(name);
+    card.appendChild(dist);
+    return card;
+  });
+
+  navUpcomingStopsEl.replaceChildren(...nodes);
 }
 
 // =============================================================
