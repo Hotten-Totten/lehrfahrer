@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.8 - 2026-05-31
+- Added editor-side API token management actions in [index.html](index.html) server menu:
+	- Token setzen
+	- Token testen
+	- Token löschen
+- Added token helper utilities in [js/editor.state.js](js/editor.state.js): `hasApiToken`, `setApiToken`, `clearApiToken`.
+- Added token workflow functions in [js/editor.main.js](js/editor.main.js) including a write-auth probe against `create_city.php`.
+
 ## V2.0.7 - 2026-05-31
 - Fixed editor city workflow regression by extending [api/list_cities.php](api/list_cities.php) with `includeEmpty=1` support.
 - Updated [js/editor.main.js](js/editor.main.js) to request cities with `includeEmpty=1`, so newly created empty cities appear immediately in the editor.

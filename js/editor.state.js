@@ -93,6 +93,33 @@ function getApiToken() {
   }
 }
 
+function hasApiToken() {
+  return getApiToken().length > 0;
+}
+
+function setApiToken(token) {
+  try {
+    const value = String(token || "").trim();
+    if (!value) {
+      localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+      return false;
+    }
+    localStorage.setItem(API_TOKEN_STORAGE_KEY, value);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function clearApiToken() {
+  try {
+    localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
 function withApiAuthHeaders(baseHeaders = {}) {
   const headers = { ...baseHeaders };
   const token = getApiToken();

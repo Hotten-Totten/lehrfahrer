@@ -196,6 +196,89 @@ function prettifyCityName(slug) {
     .replace(/\b\w/g, ch => ch.toUpperCase());
 }
 
+function maskToken(token) {
+  const t = String(token || "");
+  if (t.length <= 6) return "***";
+  return t.slice(0, 3) + "..." + t.slice(-3);
+}
+
+function setApiTokenViaPrompt() {
+  const current = getApiToken();
+  const input = prompt(
+    "API-Token eingeben.\nDer Token wird nur lokal im Browser gespeichert.",
+    current || ""
+  );
+
+  if (input === null) return;
+
+  const token = String(input).trim();
+  if (!token) {
+    setStatus("Kein Token eingegeben. Aktion abgebrochen.", "warn");
+    return;
+  }
+
+  const ok = setApiToken(token);
+  if (!ok) {
+    setStatus("API-Token konnte nicht gespeichert werden.", "error");
+    return;
+  }
+
+  setStatus(`API-Token gespeichert: ${maskToken(token)}`, "success");
+}
+
+function clearApiTokenViaPrompt() {
+  if (!hasApiToken()) {
+    setStatus("Kein API-Token gespeichert.", "warn");
+    return;
+  }
+
+  const ok = confirm("Gespeicherten API-Token lokal löschen?");
+  if (!ok) return;
+
+  const deleted = clearApiToken();
+  if (!deleted) {
+    setStatus("API-Token konnte nicht gelöscht werden.", "error");
+    return;
+  }
+
+  setStatus("API-Token lokal gelöscht.", "success");
+}
+
+async function testApiWriteAuth() {
+  try {
+    const response = await fetch(`${API_BASE}/create_city.php`, {
+      method: "POST",
+      headers: withApiAuthHeaders({
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify({ city: "" })
+    });
+
+    const text = await response.text();
+    let result = null;
+    try { result = JSON.parse(text); } catch (_err) {}
+
+    if (response.status === 403) {
+      setStatus("Schreibzugriff gesperrt: Token fehlt oder ist ungültig.", "error");
+      return;
+    }
+
+    if (response.status === 400 && result && result.ok === false) {
+      setStatus("Schreibzugriff ok: Authentifizierung erfolgreich.", "success");
+      return;
+    }
+
+    if (response.ok) {
+      setStatus("API-Test erfolgreich.", "success");
+      return;
+    }
+
+    setStatus("API-Test fehlgeschlagen (HTTP " + response.status + ").", "error");
+  } catch (err) {
+    setStatus("API-Test fehlgeschlagen: " + err.message, "error");
+  }
+}
+
 async function loadCitiesFromServer(selectCity = "") {
   try {
     const response = await fetch(`${API_BASE}/list_cities.php?includeEmpty=1`, {

@@ -21,6 +21,9 @@
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
+          <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen …</button>
+          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
+          <button type="button" class="menu-item" onclick="clearApiTokenViaPrompt()" title="Löscht den lokal gespeicherten API-Token im Browser">API-Token löschen</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="loadLineBtn" title="Gespeicherte Linien vom Server anzeigen und in den Editor laden">Route laden / Inhalt</button>
           <button type="button" class="menu-item" data-click-target="saveLineBtn" title="Die aktuelle Route mit allen Haltestellen auf dem Server speichern">Route speichern</button>
