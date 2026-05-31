@@ -1,0 +1,6 @@
+# Changelog
+
+## V2.0.4 - 2026-05-31
+- Added one-click local startup script [start-local-apache.cmd](start-local-apache.cmd) for Apache/XAMPP.
+- Script validates XAMPP path, creates the project junction in htdocs when missing, checks app availability, and opens the app URL.
+- Added root [VERSION](VERSION) file for project version tracking.
