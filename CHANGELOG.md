@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.19 - 2026-05-31
+- Added off-route detection in [app/js/app.js](app/js/app.js): GPS is treated as off-route when deviation to route geometry exceeds a dedicated threshold.
+- Added smooth rejoin flow in [app/js/app.js](app/js/app.js): when the vehicle approaches the route again, map position blends from raw GPS to snapped route position instead of jumping abruptly.
+- Extended debug HUD in [app/js/app.js](app/js/app.js) with route state (`ON` / `OFF` / `REJOIN`) and current rejoin progress.
+- Updated rollout cache revisions in [app/index.html](app/index.html) and [app/sw.js](app/sw.js) to ensure V2.0.19 assets are delivered.
+
 ## V2.0.18 - 2026-05-31
 - Added route snapping for live navigation in [app/js/app.js](app/js/app.js): incoming GPS positions are projected onto nearby route segments (windowed map matching) and only applied when deviation is plausible.
 - Reduced HUD work in simulation in [app/js/app.js](app/js/app.js) by reusing known route index (`step`) instead of nearest-point search on every tick.

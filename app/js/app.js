@@ -25,6 +25,11 @@ let simTimer     = null;
 let simRunning   = false;
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
+const NAV_OFF_ROUTE_ENTER_M = 130;
+const NAV_REJOIN_START_M = 70;
+const NAV_REJOIN_BLEND_STEP = 0.28;
+let navOffRouteActive = false;
+let navRejoinBlend = 0;
 
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
@@ -40,6 +45,8 @@ const navPerfStats = {
   snapApplied: 0,
   snapRejected: 0,
   lastSnapM: 0,
+  routeState: 'ON',
+  rejoinBlend: 0,
   lastRenderAt: 0
 };
 
@@ -125,6 +132,8 @@ function resetNavPerfStats(mode) {
   navPerfStats.snapApplied = 0;
   navPerfStats.snapRejected = 0;
   navPerfStats.lastSnapM = 0;
+  navPerfStats.routeState = 'ON';
+  navPerfStats.rejoinBlend = 0;
   navPerfStats.lastRenderAt = 0;
   renderNavPerfDebugHud(true);
 }
@@ -139,6 +148,12 @@ function noteNavSnap(distanceM, applied) {
   navPerfStats.lastSnapM = Number.isFinite(distanceM) ? distanceM : 0;
   if (applied) navPerfStats.snapApplied += 1;
   else navPerfStats.snapRejected += 1;
+}
+
+function noteNavRouteState(state, blend) {
+  if (!navPerfDebugEnabled) return;
+  navPerfStats.routeState = state;
+  navPerfStats.rejoinBlend = Math.max(0, Math.min(1, Number.isFinite(blend) ? blend : 0));
 }
 
 function noteNavPerfTick(durationMs) {
@@ -168,7 +183,8 @@ function renderNavPerfDebugHud(force) {
     `avg=${avgMs.toFixed(3)}ms | max=${navPerfStats.maxMs.toFixed(3)}ms | ` +
     `last=${navPerfStats.lastMs.toFixed(3)}ms | tick/s=${ticksPerSec.toFixed(1)} | ` +
     `fallback=${fallbackRate.toFixed(1)}% (${navPerfStats.fallbackCount}) | ` +
-    `snap=${snapRate.toFixed(1)}% | d=${navPerfStats.lastSnapM.toFixed(1)}m`;
+    `snap=${snapRate.toFixed(1)}% | d=${navPerfStats.lastSnapM.toFixed(1)}m | ` +
+    `state=${navPerfStats.routeState} | rejoin=${(navPerfStats.rejoinBlend * 100).toFixed(0)}%`;
 }
 
 // ── Service Worker ───────────────────────────────────────────
@@ -727,6 +743,8 @@ function startNavigation() {
   navActive   = true;
   navFirstFix = false;
   navNearestIdx = 0;
+  navOffRouteActive = false;
+  navRejoinBlend = 0;
   resetNavPerfStats('gps');
 
   navHud.classList.remove('hidden');
@@ -765,16 +783,10 @@ function startNavigation() {
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
       const pts = currentRoute.data.routePoints;
-      const snap = snapGpsToRoute(lat, lon, pts, navNearestIdx, NAV_SNAP_WINDOW);
-      const snappedLat = (snap && snap.applied) ? snap.lat : lat;
-      const snappedLon = (snap && snap.applied) ? snap.lon : lon;
-      if (snap) {
-        navNearestIdx = snap.index;
-        noteNavSnap(snap.distanceM, snap.applied);
-      }
+      const tracked = resolveNavTrackPoint(lat, lon, pts);
 
-      navCenterOn(snappedLon, snappedLat, smoothHeading(heading));
-      updateNavHud(snappedLat, snappedLon, navNearestIdx);
+      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading));
+      updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';
         navSpeedEl.textContent = kmh;
@@ -809,6 +821,8 @@ function stopNavigation() {
   gpsActive = false;
   gpsBtn.style.color = '';
   navNearestIdx = 0;
+  navOffRouteActive = false;
+  navRejoinBlend = 0;
   resetNavPerfStats('idle');
 }
 
@@ -994,6 +1008,65 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
   };
 }
 
+function lerpValue(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function resolveNavTrackPoint(rawLat, rawLon, pts) {
+  const snap = snapGpsToRoute(rawLat, rawLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
+  if (!snap) {
+    noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
+    return { lat: rawLat, lon: rawLon, index: navNearestIdx };
+  }
+
+  navNearestIdx = snap.index;
+
+  if (snap.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
+    navOffRouteActive = true;
+    navRejoinBlend = 0;
+  }
+
+  let displayLat = rawLat;
+  let displayLon = rawLon;
+  let snapAppliedNow = false;
+
+  if (!navOffRouteActive) {
+    if (snap.applied) {
+      displayLat = snap.lat;
+      displayLon = snap.lon;
+      snapAppliedNow = true;
+    }
+  } else if (snap.applied && snap.distanceM <= NAV_REJOIN_START_M) {
+    navRejoinBlend = Math.min(1, navRejoinBlend + NAV_REJOIN_BLEND_STEP);
+    displayLat = lerpValue(rawLat, snap.lat, navRejoinBlend);
+    displayLon = lerpValue(rawLon, snap.lon, navRejoinBlend);
+    snapAppliedNow = navRejoinBlend > 0;
+
+    if (navRejoinBlend >= 1) {
+      navOffRouteActive = false;
+      navRejoinBlend = 0;
+      displayLat = snap.lat;
+      displayLon = snap.lon;
+      snapAppliedNow = true;
+    }
+  } else {
+    navRejoinBlend = 0;
+  }
+
+  const routeState = navOffRouteActive
+    ? (navRejoinBlend > 0 ? 'REJOIN' : 'OFF')
+    : 'ON';
+
+  noteNavRouteState(routeState, navRejoinBlend);
+  noteNavSnap(snap.distanceM, snapAppliedNow);
+
+  return {
+    lat: displayLat,
+    lon: displayLon,
+    index: snap.index
+  };
+}
+
 function getTurnInfo(angle) {
   const a = angle;
   if (Math.abs(a) < 20)      return { icon: '⬆', label: 'Geradeaus' };
@@ -1072,6 +1145,8 @@ function startSimulation() {
   navTurns     = detectNavTurns(pts, navCumDists);
   navStopDists = buildNavStopDists(currentRoute.data.stops || [], pts, navCumDists);
   navNearestIdx = 0;
+  navOffRouteActive = false;
+  navRejoinBlend = 0;
   resetNavPerfStats('sim');
 
   // Nav-HUD einblenden
@@ -1134,6 +1209,8 @@ function stopSimulation(completed) {
   navActive = false;
   navHud.classList.add('hidden');
   document.body.classList.remove('nav-mode');
+  navOffRouteActive = false;
+  navRejoinBlend = 0;
   resetNavPerfStats('idle');
 
   if (typeof map !== 'undefined' && map) {
