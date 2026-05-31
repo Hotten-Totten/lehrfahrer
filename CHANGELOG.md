@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.20 - 2026-05-31
+- Tuned off-route/rejoin thresholds in [app/js/app.js](app/js/app.js) for a calmer Cottbus city profile:
+	- `NAV_OFF_ROUTE_ENTER_M`: `130 -> 145`
+	- `NAV_REJOIN_START_M`: `70 -> 78`
+	- `NAV_REJOIN_BLEND_STEP`: `0.28 -> 0.20`
+- Result: less OFF-route flicker in dense urban GPS drift, earlier but smoother rejoin back to route geometry.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.19 - 2026-05-31
 - Added off-route detection in [app/js/app.js](app/js/app.js): GPS is treated as off-route when deviation to route geometry exceeds a dedicated threshold.
 - Added smooth rejoin flow in [app/js/app.js](app/js/app.js): when the vehicle approaches the route again, map position blends from raw GPS to snapped route position instead of jumping abruptly.

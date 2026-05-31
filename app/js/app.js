@@ -25,9 +25,11 @@ let simTimer     = null;
 let simRunning   = false;
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
-const NAV_OFF_ROUTE_ENTER_M = 130;
-const NAV_REJOIN_START_M = 70;
-const NAV_REJOIN_BLEND_STEP = 0.28;
+// Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
+// aber weiterhin klarer OFF->REJOIN->ON Verlauf.
+const NAV_OFF_ROUTE_ENTER_M = 145;
+const NAV_REJOIN_START_M = 78;
+const NAV_REJOIN_BLEND_STEP = 0.20;
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
 
