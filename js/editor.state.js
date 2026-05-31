@@ -83,6 +83,24 @@ const API_BASE = "api";
 const API_SAVE_LINE_URL = `${API_BASE}/save_line.php`;
 const API_LOAD_LINE_URL = `${API_BASE}/load_line.php`;
 const API_LIST_LINES_URL = `${API_BASE}/list_lines.php`;
+const API_TOKEN_STORAGE_KEY = "lehrfahrer_api_token";
+
+function getApiToken() {
+  try {
+    return (localStorage.getItem(API_TOKEN_STORAGE_KEY) || "").trim();
+  } catch (_err) {
+    return "";
+  }
+}
+
+function withApiAuthHeaders(baseHeaders = {}) {
+  const headers = { ...baseHeaders };
+  const token = getApiToken();
+  if (token) {
+    headers["X-Api-Token"] = token;
+  }
+  return headers;
+}
 
 const AUTOSAVE_KEY = "linieneditor_autosave_v1";
 const AUTOSAVE_INTERVAL_MS = 60000;

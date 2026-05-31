@@ -1,5 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/_auth.php';
+lehrfahrer_require_write_auth();
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(

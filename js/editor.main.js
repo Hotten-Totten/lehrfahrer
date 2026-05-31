@@ -113,9 +113,9 @@ const waypointXml = waypoints.map(wpt => `
 async function saveGpxToServer(filename, gpx, city, lineFolder) {
   const response = await fetch(`${API_BASE}/save_gpx.php`, {
     method: "POST",
-    headers: {
+    headers: withApiAuthHeaders({
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify({
       filename,
       gpx,
@@ -198,7 +198,7 @@ function prettifyCityName(slug) {
 
 async function loadCitiesFromServer(selectCity = "") {
   try {
-    const response = await fetch(`${API_BASE}/list_cities.php`, {
+    const response = await fetch(`${API_BASE}/list_cities.php?includeEmpty=1`, {
       cache: "no-store"
     });
 
@@ -270,9 +270,9 @@ async function createCityOnServer() {
 
     const response = await fetch(`${API_BASE}/create_city.php`, {
       method: "POST",
-      headers: {
+      headers: withApiAuthHeaders({
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         city: cityName
       })

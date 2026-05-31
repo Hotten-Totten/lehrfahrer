@@ -9,6 +9,7 @@ if (!is_dir($baseDir)) {
 
 $entries = scandir($baseDir);
 $cities = [];
+$includeEmpty = (($_GET['includeEmpty'] ?? '0') === '1');
 
 function cityHasLineJson(string $cityPath): bool {
     // Altes Format: linien/{city}/*.json
@@ -42,7 +43,9 @@ foreach ($entries as $entry) {
 
     $fullPath = $baseDir . "/" . $entry;
 
-    if (is_dir($fullPath) && cityHasLineJson($fullPath)) {
+    if (!is_dir($fullPath)) continue;
+
+    if ($includeEmpty || cityHasLineJson($fullPath)) {
         $cities[] = $entry;
     }
 }

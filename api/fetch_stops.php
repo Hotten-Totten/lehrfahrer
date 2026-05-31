@@ -1,6 +1,8 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
 set_time_limit(120); // PHP-Ausführungszeit erhöhen
+require_once __DIR__ . '/_auth.php';
+lehrfahrer_require_write_auth();
 
 // ---- Parameter lesen & validieren ----
 $lat    = isset($_POST["lat"])    ? (float) $_POST["lat"]    : null;

@@ -367,7 +367,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
     // ---------- JSON speichern ----------
     const response = await fetch(API_SAVE_LINE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(data)
     });
 
@@ -545,9 +545,9 @@ async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFold
 
     const response = await fetch(`${API_BASE}/delete_line.php`, {
       method: "POST",
-      headers: {
+      headers: withApiAuthHeaders({
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         city,
         line: normalizedLineId,
@@ -605,7 +605,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
 
     const saveRes = await fetch(API_SAVE_LINE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(lineData)
     });
     const saveResult = await saveRes.json();

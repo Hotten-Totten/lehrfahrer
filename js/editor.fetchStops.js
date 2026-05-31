@@ -149,7 +149,11 @@
     body.append("save",   (saveCheckbox.checked && mode === "replace") ? "1" : "0");
 
     try {
-      const res = await fetch(API_BASE + "/fetch_stops.php", { method: "POST", body });
+      const res = await fetch(API_BASE + "/fetch_stops.php", {
+        method: "POST",
+        headers: withApiAuthHeaders(),
+        body
+      });
 
       if (!res.ok) {
         const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -187,7 +191,11 @@
           try {
             const saveBody = new FormData();
             saveBody.append("catalog", JSON.stringify(stopCatalog));
-            const saveRes = await fetch(API_BASE + "/save_catalog.php", { method: "POST", body: saveBody });
+            const saveRes = await fetch(API_BASE + "/save_catalog.php", {
+              method: "POST",
+              headers: withApiAuthHeaders(),
+              body: saveBody
+            });
             if (!saveRes.ok) throw new Error("HTTP " + saveRes.status);
             statusNote += " · als haltestellen.js gespeichert";
           } catch (saveErr) {

@@ -1,5 +1,7 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
+require_once __DIR__ . '/_auth.php';
+lehrfahrer_require_write_auth();
 
 $raw = file_get_contents("php://input");
 $data = json_decode($raw, true);
