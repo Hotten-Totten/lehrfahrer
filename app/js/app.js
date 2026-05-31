@@ -25,7 +25,6 @@ let simTimer     = null;
 let simRunning   = false;
 
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
-const DEBUG_HUD_STORAGE_KEY = 'lehrfahrer_debug_navhud';
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
 let navPerfHudEl            = null;
 const navPerfStats = {
@@ -93,15 +92,9 @@ function resolveNavPerfDebugEnabled() {
   try {
     const params = new URLSearchParams(window.location.search || '');
     const queryValue = params.get('debugHud');
-    if (queryValue === '1') {
-      localStorage.setItem(DEBUG_HUD_STORAGE_KEY, '1');
-      return true;
-    }
-    if (queryValue === '0') {
-      localStorage.removeItem(DEBUG_HUD_STORAGE_KEY);
-      return false;
-    }
-    return localStorage.getItem(DEBUG_HUD_STORAGE_KEY) === '1';
+    if (queryValue === '1') return true;
+    if (queryValue === '0') return false;
+    return false;
   } catch {
     return false;
   }
