@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.28 - 2026-05-31
+- Added adaptive ultra-cockpit camera in [app/js/map.js](app/js/map.js): driver view now reacts to speed (slow approach / city / faster run) with different zoom, pitch, and forward framing.
+- During low-speed stop approach, camera is intentionally less tilted for better readability and reduced motion stress.
+- Navigation and simulation now pass speed data to camera updates in [app/js/app.js](app/js/app.js) for consistent profile switching.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.27 - 2026-05-31
 - Tightened driver cockpit camera in [app/js/map.js](app/js/map.js): higher nav-mode zoom, stronger pitch, and more aggressive forward framing so the visible area is closer to the road ahead.
 - Driver view now places the vehicle lower in frame during active navigation for a more realistic cockpit feel.

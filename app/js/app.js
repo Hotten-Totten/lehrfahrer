@@ -937,7 +937,7 @@ function startNavigation() {
 
       recordNavDriveSample(lat, lon, tracked, speed, heading);
 
-      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading));
+      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), speed);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';
@@ -1392,14 +1392,16 @@ function startSimulation() {
 
     // Heading zum nächsten Punkt
     let heading = null;
+    let simSpeedMps = null;
     if (step < total - 1) {
       const p2 = pts[step + 1];
       const [lat2, lon2] = Array.isArray(p2) ? [p2[0], p2[1]] : [p2.lat, p2.lon];
       heading = bearingDeg(lat, lon, lat2, lon2);
+      simSpeedMps = haversineM(lat, lon, lat2, lon2) / Math.max(0.001, stepMs / 1000);
     }
 
     setSimulatedGPS(lon, lat, heading);
-    simCenterOn(lon, lat, heading);
+    simCenterOn(lon, lat, heading, simSpeedMps);
     const tracked = {
       lat,
       lon,

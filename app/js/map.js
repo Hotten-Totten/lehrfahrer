@@ -475,26 +475,26 @@ function flyToUser() {
 }
 
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
-function navCenterOn(lon, lat, headingDeg) {
+function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = resolveNavBearing(lon, lat, headingDeg);
-  const opts = _buildCameraOptions(lon, lat, bearing);
+  const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   // 1100ms > typisches GPS-Intervall (~1s) → Animation läuft durch bis zur nächsten Position
   // ease-in-out: sanftes Beschleunigen + Abbremsen statt linearem Ruck
   map.easeTo({ ...opts, duration: 1100, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t });
 }
 
 // ── Simulation: sofortige Kartenposition (kein Animations-Stau) ──────────────
-function simCenterOn(lon, lat, headingDeg) {
+function simCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = (headingDeg != null && Number.isFinite(headingDeg))
     ? normalizeDeg(headingDeg)
     : resolveNavBearing(lon, lat, headingDeg);
-  map.jumpTo(_buildCameraOptions(lon, lat, bearing));
+  map.jumpTo(_buildCameraOptions(lon, lat, bearing, speedMps));
 }
 
 // ── Kamera-Optionen je nach gewählter Perspektive ─────────────────────────────
-function _buildCameraOptions(lon, lat, headingDeg) {
+function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
   const perspective = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
   const mode = document.body.classList.contains('nav-mode') ? 'driver' : perspective;
   switch (mode) {
@@ -518,14 +518,43 @@ function _buildCameraOptions(lon, lat, headingDeg) {
       const zoomEl = document.getElementById('driverZoomSelect');
       const baseZoom = zoomEl ? parseFloat(zoomEl.value) : 21;
       const navMode = document.body.classList.contains('nav-mode');
-      // Cockpit-Boost in aktiver Navigation: näher an die Straße, stärker nach vorne fokussiert.
-      const driverZoom = navMode ? Math.min(22, baseZoom + 0.9) : baseZoom;
-      const forwardBottom = Math.round(Math.min(420, Math.max(220, window.innerHeight * 0.48)));
-      const forwardTop = Math.round(Math.min(64, Math.max(2, window.innerHeight * 0.01)));
+
+      const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0)
+        ? speedMps * 3.6
+        : null;
+
+      let driverZoom = baseZoom;
+      let pitch = 78;
+      let bottomFactor = 0.48;
+      let topFactor = 0.01;
+
+      if (navMode) {
+        // Ultra-Cockpit: je schneller, desto weiter nach vorne sehen.
+        // Bei langsamer Haltestellenanfahrt bewusst etwas entzerren (lesbarer, ruhiger).
+        if (speedKmh != null && speedKmh < 8) {
+          driverZoom = Math.min(22, baseZoom + 0.35);
+          pitch = 66;
+          bottomFactor = 0.34;
+          topFactor = 0.04;
+        } else if (speedKmh != null && speedKmh < 25) {
+          driverZoom = Math.min(22, baseZoom + 0.9);
+          pitch = 79;
+          bottomFactor = 0.48;
+          topFactor = 0.01;
+        } else {
+          driverZoom = Math.min(22, baseZoom + 1.2);
+          pitch = 80;
+          bottomFactor = 0.55;
+          topFactor = 0.005;
+        }
+      }
+
+      const forwardBottom = Math.round(Math.min(460, Math.max(150, window.innerHeight * bottomFactor)));
+      const forwardTop = Math.round(Math.min(80, Math.max(2, window.innerHeight * topFactor)));
       return {
         center:  [lon, lat],
         zoom:    driverZoom,
-        pitch:   navMode ? 80 : 78,
+        pitch,
         bearing: headingDeg != null ? headingDeg : 0,
         padding: { top: forwardTop, bottom: forwardBottom, left: 0, right: 0 }
       };
