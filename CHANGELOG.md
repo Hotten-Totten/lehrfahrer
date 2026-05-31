@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.26 - 2026-05-31
+- Improved stop visibility on map in [app/js/map.js](app/js/map.js) and [app/css/app.css](app/css/app.css): stops are now rendered as POI markers with readable labels, not only plain dots.
+- Improved navigation stop list in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css): HUD now shows destination stop plus the next 4 upcoming stops.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.25 - 2026-05-31
 - Stabilized navigation camera heading in [app/js/map.js](app/js/map.js): reduced bearing jitter by smoothing heading updates and ignoring tiny oscillations.
 - Added robust fallback in [app/js/map.js](app/js/map.js): if GPS heading is unavailable/unstable, camera direction follows movement course from recent GPS fixes.

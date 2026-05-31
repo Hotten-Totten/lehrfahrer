@@ -308,12 +308,37 @@ html, body {
 }
 
 /* ── Haltestellen-Marker auf Karte ──────────── */
+.map-stop-poi {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-2px, -2px);
+  cursor: pointer;
+}
+
 .map-stop-dot {
-  width: 12px; height: 12px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid #fff;
-  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.22);
+  flex-shrink: 0;
+}
+
+.map-stop-label {
+  max-width: 160px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f3f5ff;
+  background: rgba(8, 10, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(2px);
 }
 
 /* ── Einstellungen-Overlay ──────────────────── */
@@ -559,6 +584,20 @@ html, body {
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.04);
   padding: 6px 8px;
+}
+
+.nav-upcoming-item.is-destination {
+  border-color: rgba(224, 140, 37, 0.55);
+  background: rgba(224, 140, 37, 0.12);
+}
+
+.nav-upcoming-type {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #ffcc8a;
 }
 
 .nav-upcoming-name {

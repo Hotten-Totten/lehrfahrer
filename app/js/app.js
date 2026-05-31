@@ -1295,16 +1295,27 @@ function renderUpcomingStops(currentDist) {
 
   const upcoming = navStopDists
     .filter(s => s.distFromStart > currentDist + 10)
-    .slice(0, 3);
+    .slice(0, 4);
 
-  if (!upcoming.length) {
+  const destination = navStopDists.length ? navStopDists[navStopDists.length - 1] : null;
+
+  const list = [];
+  if (destination) list.push({ kind: 'destination', entry: destination });
+  upcoming.forEach(entry => list.push({ kind: 'upcoming', entry }));
+
+  if (!list.length) {
     navUpcomingStopsEl.replaceChildren();
     return;
   }
 
-  const nodes = upcoming.map(entry => {
+  const nodes = list.map(({ kind, entry }) => {
     const card = document.createElement('div');
     card.className = 'nav-upcoming-item';
+    if (kind === 'destination') card.classList.add('is-destination');
+
+    const type = document.createElement('span');
+    type.className = 'nav-upcoming-type';
+    type.textContent = kind === 'destination' ? 'Ziel' : 'Nächste';
 
     const name = document.createElement('span');
     name.className = 'nav-upcoming-name';
@@ -1312,8 +1323,11 @@ function renderUpcomingStops(currentDist) {
 
     const dist = document.createElement('span');
     dist.className = 'nav-upcoming-dist';
-    dist.textContent = navFormatDist(Math.max(0, entry.distFromStart - currentDist));
+    dist.textContent = kind === 'destination'
+      ? navFormatDist(Math.max(0, entry.distFromStart - currentDist))
+      : navFormatDist(Math.max(0, entry.distFromStart - currentDist));
 
+    card.appendChild(type);
     card.appendChild(name);
     card.appendChild(dist);
     return card;

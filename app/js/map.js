@@ -342,8 +342,18 @@ function showStops(stops, onStopClick) {
 
   stops.forEach((stop, i) => {
     const el = document.createElement('div');
-    el.className = 'map-stop-dot';
+    el.className = 'map-stop-poi';
     el.title = stop.name;
+
+    const dot = document.createElement('span');
+    dot.className = 'map-stop-dot';
+
+    const label = document.createElement('span');
+    label.className = 'map-stop-label';
+    label.textContent = stop.name || `Haltestelle ${i + 1}`;
+
+    el.appendChild(dot);
+    el.appendChild(label);
 
     const popup = new maplibregl.Popup({ offset: 14, closeButton: false })
       .setHTML(`<strong>${stop.name}</strong>${stop.minuteFromStart > 0 ? `<br><span style="color:#4a9eff">Min. ${stop.minuteFromStart}</span>` : ''}`);
