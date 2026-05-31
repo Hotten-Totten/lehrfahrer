@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.16 - 2026-05-31
+- Added a hidden developer performance overlay for navigation HUD timing in [app/js/app.js](app/js/app.js) and [app/css/app.css](app/css/app.css).
+- Overlay is strictly debug-only and remains invisible for drivers by default.
+- Debug activation: `?debugHud=1` (persisted via localStorage), disable via `?debugHud=0`.
+
 ## V2.0.15 - 2026-05-31
 - Improved DOM safety in [app/js/app.js](app/js/app.js): stop list and offline route list rendering now use explicit element creation with `textContent` instead of template-based `innerHTML` for dynamic values.
 - Improved navigation runtime performance in [app/js/app.js](app/js/app.js): GPS HUD update now uses a hint-based nearest-point search window with global fallback only on edge hits, reducing per-tick computation on longer routes.

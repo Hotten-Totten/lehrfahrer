@@ -24,6 +24,21 @@ let navNearestIdx = 0;
 let simTimer     = null;
 let simRunning   = false;
 
+// Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
+const DEBUG_HUD_STORAGE_KEY = 'lehrfahrer_debug_navhud';
+const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
+let navPerfHudEl            = null;
+const navPerfStats = {
+  mode: 'idle',
+  startedAt: 0,
+  ticks: 0,
+  totalMs: 0,
+  maxMs: 0,
+  lastMs: 0,
+  fallbackCount: 0,
+  lastRenderAt: 0
+};
+
 // ── DOM-Referenzen ───────────────────────────────────────────
 const citySelect       = document.getElementById('citySelect');
 const lineSelect       = document.getElementById('lineSelect');
@@ -68,10 +83,82 @@ window.addEventListener('DOMContentLoaded', async () => {
   registerServiceWorker();
   await openDB();
   initMap();
+  initNavPerfDebugHud();
   bindEvents();
   detectOffline();
   await loadCities();
 });
+
+function resolveNavPerfDebugEnabled() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const queryValue = params.get('debugHud');
+    if (queryValue === '1') {
+      localStorage.setItem(DEBUG_HUD_STORAGE_KEY, '1');
+      return true;
+    }
+    if (queryValue === '0') {
+      localStorage.removeItem(DEBUG_HUD_STORAGE_KEY);
+      return false;
+    }
+    return localStorage.getItem(DEBUG_HUD_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function initNavPerfDebugHud() {
+  if (!navPerfDebugEnabled) return;
+  navPerfHudEl = document.createElement('div');
+  navPerfHudEl.id = 'devNavPerfHud';
+  document.body.appendChild(navPerfHudEl);
+  renderNavPerfDebugHud(true);
+}
+
+function resetNavPerfStats(mode) {
+  if (!navPerfDebugEnabled) return;
+  navPerfStats.mode = mode;
+  navPerfStats.startedAt = performance.now();
+  navPerfStats.ticks = 0;
+  navPerfStats.totalMs = 0;
+  navPerfStats.maxMs = 0;
+  navPerfStats.lastMs = 0;
+  navPerfStats.fallbackCount = 0;
+  navPerfStats.lastRenderAt = 0;
+  renderNavPerfDebugHud(true);
+}
+
+function noteNavPerfFallback() {
+  if (!navPerfDebugEnabled) return;
+  navPerfStats.fallbackCount += 1;
+}
+
+function noteNavPerfTick(durationMs) {
+  if (!navPerfDebugEnabled) return;
+  navPerfStats.ticks += 1;
+  navPerfStats.totalMs += durationMs;
+  navPerfStats.lastMs = durationMs;
+  if (durationMs > navPerfStats.maxMs) navPerfStats.maxMs = durationMs;
+  renderNavPerfDebugHud(false);
+}
+
+function renderNavPerfDebugHud(force) {
+  if (!navPerfDebugEnabled || !navPerfHudEl) return;
+  const now = performance.now();
+  if (!force && (now - navPerfStats.lastRenderAt) < 250) return;
+  navPerfStats.lastRenderAt = now;
+
+  const elapsedMs = Math.max(1, now - navPerfStats.startedAt);
+  const avgMs = navPerfStats.ticks ? (navPerfStats.totalMs / navPerfStats.ticks) : 0;
+  const ticksPerSec = navPerfStats.ticks * 1000 / elapsedMs;
+  const fallbackRate = navPerfStats.ticks ? (navPerfStats.fallbackCount * 100 / navPerfStats.ticks) : 0;
+
+  navPerfHudEl.textContent =
+    `DEBUG HUD | mode=${navPerfStats.mode} | ticks=${navPerfStats.ticks} | ` +
+    `avg=${avgMs.toFixed(3)}ms | max=${navPerfStats.maxMs.toFixed(3)}ms | ` +
+    `last=${navPerfStats.lastMs.toFixed(3)}ms | tick/s=${ticksPerSec.toFixed(1)} | ` +
+    `fallback=${fallbackRate.toFixed(1)}% (${navPerfStats.fallbackCount})`;
+}
 
 // ── Service Worker ───────────────────────────────────────────
 function registerServiceWorker() {
@@ -629,6 +716,7 @@ function startNavigation() {
   navActive   = true;
   navFirstFix = false;
   navNearestIdx = 0;
+  resetNavPerfStats('gps');
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
@@ -701,6 +789,7 @@ function stopNavigation() {
   gpsActive = false;
   gpsBtn.style.color = '';
   navNearestIdx = 0;
+  resetNavPerfStats('idle');
 }
 
 // ── Geometrie-Hilfsfunktionen ─────────────────────────────────
@@ -803,6 +892,7 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
   // Falls der beste Treffer am Fensterrand liegt, wurde evtl. stark abgewichen.
   // Dann einmal global suchen (selten, aber korrekt).
   if (best <= start + edgeMargin || best >= end - edgeMargin) {
+    noteNavPerfFallback();
     minD = Infinity;
     best = seed;
     for (let i = 0; i <= maxIdx; i++) {
@@ -837,6 +927,7 @@ function navFormatDist(meters) {
 
 function updateNavHud(lat, lon) {
   if (!navActive || !currentRoute) return;
+  const perfT0 = navPerfDebugEnabled ? performance.now() : 0;
   const pts         = currentRoute.data.routePoints;
   const idx         = findNearestNavIdx(lat, lon, pts, navNearestIdx);
   navNearestIdx     = idx;
@@ -866,6 +957,10 @@ function updateNavHud(lat, lon) {
       : null) || 'Endstation';
     navStopDistEl.textContent = 'Ziel';
   }
+
+  if (navPerfDebugEnabled) {
+    noteNavPerfTick(performance.now() - perfT0);
+  }
 }
 
 // =============================================================
@@ -888,6 +983,7 @@ function startSimulation() {
   navTurns     = detectNavTurns(pts, navCumDists);
   navStopDists = buildNavStopDists(currentRoute.data.stops || [], pts, navCumDists);
   navNearestIdx = 0;
+  resetNavPerfStats('sim');
 
   // Nav-HUD einblenden
   navActive = true;
@@ -949,6 +1045,7 @@ function stopSimulation(completed) {
   navActive = false;
   navHud.classList.add('hidden');
   document.body.classList.remove('nav-mode');
+  resetNavPerfStats('idle');
 
   if (typeof map !== 'undefined' && map) {
     map.easeTo({ pitch: 0, bearing: 0, zoom: 13, duration: 1000 });

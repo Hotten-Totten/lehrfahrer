@@ -571,6 +571,27 @@ html, body {
   line-height: 1;
 }
 
+/* ── Entwickler-Overlay: Nav-Performance (nur bei Debug-Flag) ── */
+#devNavPerfHud {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--safe-bottom) + 8px);
+  z-index: 950;
+  pointer-events: none;
+  background: rgba(20, 10, 6, 0.92);
+  border: 1px solid #e08c25;
+  border-radius: 8px;
+  color: #ffd39c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 6px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Karte nach unten schieben wenn Nav-HUD sichtbar */
 body.nav-mode #map {
   top: calc(var(--safe-top) + var(--topbar-h) + var(--sel-h) + var(--nav-hud-h));
