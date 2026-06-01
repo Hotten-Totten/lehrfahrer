@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.32 - 2026-06-01
+- Tuned driver camera in [app/js/map.js](app/js/map.js) to be closer to real navigation systems (less extreme pitch/zoom and reduced sky dominance).
+- Changed default driver zoom in [app/index.html](app/index.html) from very close to a more practical level (`19 – Standard`).
+- Improved update reliability in [app/js/app.js](app/js/app.js) and [app/sw.js](app/sw.js): service worker now forces fresh checks (`updateViaCache: none`), supports `SKIP_WAITING`, and reloads on controller switch.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.31 - 2026-06-01
 - Reduced map clutter in [app/js/map.js](app/js/map.js): app now uses the minimal in-app style (`buildRasterStyle`) instead of the full Liberty style, removing unrelated map POIs/labels.
 - Reduced PMTiles style clutter in [app/js/map.js](app/js/map.js): removed generic city/place labels so operational stop markers stay visually dominant.

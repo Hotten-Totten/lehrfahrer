@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP  = 'lehrfahrer-app-v31';
+const CACHE_APP  = 'lehrfahrer-app-v32';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // Nur kleine lokale Dateien – kein Blockieren durch große CDN-Downloads
@@ -15,8 +15,8 @@ const APP_SHELL = [
   './index.html',
   './manifest.json',
   './css/app.css',
-  './js/app.js?v=V2.0.31',
-  './js/map.js?v=V2.0.31'
+  './js/app.js?v=V2.0.32',
+  './js/map.js?v=V2.0.32'
 ];
 
 // ── Install ──────────────────────────────────────────────────
@@ -112,6 +112,11 @@ async function cacheFirstTile(request) {
 
 // ── Nachricht von der App – Route manuell cachen ─────────────
 self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
   if (event.data && event.data.type === 'CACHE_ROUTE') {
     const { url, data } = event.data;
     caches.open(CACHE_API).then(cache => {

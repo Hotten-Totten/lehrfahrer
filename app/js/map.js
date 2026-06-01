@@ -565,40 +565,40 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
         : null;
 
       let driverZoom = baseZoom;
-      let pitch = 78;
-      let bottomFactor = 0.48;
-      let topFactor = 0.01;
+      let pitch = 60;
+      let bottomFactor = 0.30;
+      let topFactor = 0.08;
 
       if (navMode) {
         // Ultra-Cockpit: je schneller, desto weiter nach vorne sehen.
         // Bei langsamer Haltestellenanfahrt bewusst etwas entzerren (lesbarer, ruhiger).
         if (speedKmh != null && speedKmh < 8) {
-          driverZoom = Math.min(22, baseZoom + 0.35);
-          pitch = 66;
-          bottomFactor = 0.34;
-          topFactor = 0.04;
+          driverZoom = Math.min(22, baseZoom - 0.2);
+          pitch = 52;
+          bottomFactor = 0.26;
+          topFactor = 0.09;
         } else if (speedKmh != null && speedKmh < 25) {
-          driverZoom = Math.min(22, baseZoom + 0.9);
-          pitch = 79;
-          bottomFactor = 0.48;
-          topFactor = 0.01;
+          driverZoom = Math.min(22, baseZoom + 0.2);
+          pitch = 58;
+          bottomFactor = 0.30;
+          topFactor = 0.08;
         } else {
-          driverZoom = Math.min(22, baseZoom + 1.2);
-          pitch = 80;
-          bottomFactor = 0.55;
-          topFactor = 0.005;
+          driverZoom = Math.min(22, baseZoom + 0.45);
+          pitch = 64;
+          bottomFactor = 0.34;
+          topFactor = 0.06;
         }
 
         if (profile === 'calm') {
-          driverZoom = Math.max(16, driverZoom - 0.35);
-          pitch = Math.max(60, pitch - 6);
-          bottomFactor = Math.max(0.28, bottomFactor - 0.08);
-          topFactor = Math.min(0.06, topFactor + 0.01);
+          driverZoom = Math.max(16, driverZoom - 0.25);
+          pitch = Math.max(48, pitch - 4);
+          bottomFactor = Math.max(0.22, bottomFactor - 0.04);
+          topFactor = Math.min(0.12, topFactor + 0.02);
         } else if (profile === 'dynamic') {
           driverZoom = Math.min(22, driverZoom + 0.25);
-          pitch = Math.min(80, pitch + 2);
-          bottomFactor = Math.min(0.62, bottomFactor + 0.03);
-          topFactor = Math.max(0.003, topFactor - 0.002);
+          pitch = Math.min(70, pitch + 4);
+          bottomFactor = Math.min(0.42, bottomFactor + 0.03);
+          topFactor = Math.max(0.04, topFactor - 0.01);
         }
       }
 

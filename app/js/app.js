@@ -335,7 +335,31 @@ function renderNavPerfDebugHud(force) {
 // ── Service Worker ───────────────────────────────────────────
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
+    navigator.serviceWorker.register('./sw.js?v=V2.0.32', { updateViaCache: 'none' })
+      .then(reg => {
+        const activateWaiting = () => {
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        };
+
+        activateWaiting();
+        reg.update().catch(() => {});
+
+        reg.addEventListener('updatefound', () => {
+          const installing = reg.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              installing.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (window.__lfSwReloading) return;
+          window.__lfSwReloading = true;
+          window.location.reload();
+        });
+      })
       .catch(err => console.warn('SW-Registrierung fehlgeschlagen:', err));
   }
 }
