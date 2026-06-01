@@ -143,6 +143,7 @@ function updateStopPoiVisibility() {
 function buildRasterStyle() {
   return {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       ofm: {
         type: 'vector',
@@ -194,6 +195,26 @@ function buildRasterStyle() {
         'source-layer': 'building',
         minzoom: 14,
         paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
+      },
+      {
+        id: 'road-name-main', type: 'symbol', source: 'ofm',
+        'source-layer': 'transportation_name',
+        minzoom: 14,
+        filter: ['in', ['coalesce', ['get', 'class'], ''], 'motorway', 'trunk', 'primary', 'secondary', 'tertiary'],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
+          'text-letter-spacing': 0.02,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#4d5870',
+          'text-halo-color': 'rgba(255,255,255,0.92)',
+          'text-halo-width': 1.2,
+          'text-halo-blur': 0.4
+        }
       }
     ]
   };
@@ -203,6 +224,7 @@ function buildRasterStyle() {
 function buildPMTilesStyle(pmtilesUrl) {
   return {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       openmaptiles: {
         type: 'vector',
@@ -247,6 +269,26 @@ function buildPMTilesStyle(pmtilesUrl) {
         'source-layer': 'building',
         minzoom: 14,
         paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
+      },
+      {
+        id: 'road-name-main', type: 'symbol', source: 'openmaptiles',
+        'source-layer': 'transportation_name',
+        minzoom: 14,
+        filter: ['in', ['coalesce', ['get', 'class'], ''], 'motorway', 'trunk', 'primary', 'secondary', 'tertiary'],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
+          'text-letter-spacing': 0.02,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#4d5870',
+          'text-halo-color': 'rgba(255,255,255,0.92)',
+          'text-halo-width': 1.2,
+          'text-halo-blur': 0.4
+        }
       }
     ]
   };
