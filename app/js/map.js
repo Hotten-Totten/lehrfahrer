@@ -245,6 +245,26 @@ function buildRasterStyle() {
           'text-halo-width': 1.4,
           'text-halo-blur': 0.4
         }
+      },
+      {
+        id: 'road-name-other', type: 'symbol', source: 'ofm',
+        'source-layer': 'transportation_name',
+        minzoom: 14,
+        filter: ['has', 'name'],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#555555',
+          'text-halo-color': 'rgba(255,255,255,0.9)',
+          'text-halo-width': 1.2,
+          'text-halo-blur': 0.3
+        }
       }
     ]
   };
@@ -348,6 +368,26 @@ function buildPMTilesStyle(pmtilesUrl) {
           'text-halo-color': 'rgba(255,255,255,0.95)',
           'text-halo-width': 1.4,
           'text-halo-blur': 0.4
+        }
+      },
+      {
+        id: 'road-name-other', type: 'symbol', source: 'openmaptiles',
+        'source-layer': 'transportation_name',
+        minzoom: 14,
+        filter: ['has', 'name'],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#555555',
+          'text-halo-color': 'rgba(255,255,255,0.9)',
+          'text-halo-width': 1.2,
+          'text-halo-blur': 0.3
         }
       }
     ]
