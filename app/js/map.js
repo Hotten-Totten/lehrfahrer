@@ -197,84 +197,41 @@ function buildRasterStyle() {
         paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
       },
       {
-        id: 'road-name-main', type: 'symbol', source: 'ofm',
+        id: 'road-name', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
         minzoom: 12,
         maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'motorway'],
-          ['==', ['get', 'class'], 'trunk'],
-          ['==', ['get', 'class'], 'primary'],
-          ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary']
-        ],
+        filter: ['has', 'name'],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 14, 12, 18, 15],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 
+            12, 8,
+            14, 11,
+            16, 14,
+            18, 16
+          ],
           'text-letter-spacing': 0.05,
-          'text-max-angle': 30
+          'text-max-angle': 30,
+          'text-opacity': ['interpolate', ['linear'], ['zoom'],
+            12, 1,
+            13, 1,
+            20, 1
+          ]
         },
         paint: {
-          'text-color': '#1a2847',
-          'text-halo-color': 'rgba(255,255,255,0.95)',
-          'text-halo-width': 1.6,
-          'text-halo-blur': 0.5
-        }
-      },
-      {
-        id: 'road-name-minor', type: 'symbol', source: 'ofm',
-        'source-layer': 'transportation_name',
-        minzoom: 13,
-        maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'residential'],
-          ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street'],
-          ['==', ['get', 'class'], 'service'],
-          ['==', ['get', 'class'], 'minor']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 12, 16, 16, 18, 18],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#2a2a2a',
-          'text-halo-color': 'rgba(255,255,255,0.92)',
-          'text-halo-width': 1.3,
+          'text-color': ['interpolate', ['linear'], ['zoom'],
+            12, '#1a2847',
+            14, '#1a2847',
+            16, '#333333'
+          ],
+          'text-halo-color': 'rgba(255,255,255,0.9)',
+          'text-halo-width': ['interpolate', ['linear'], ['zoom'],
+            12, 1.4,
+            18, 1.2
+          ],
           'text-halo-blur': 0.4
-        }
-      },
-      {
-        id: 'road-name-paths', type: 'symbol', source: 'ofm',
-        'source-layer': 'transportation_name',
-        minzoom: 15,
-        maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'path'],
-          ['==', ['get', 'class'], 'footway'],
-          ['==', ['get', 'class'], 'track'],
-          ['==', ['get', 'class'], 'cycleway'],
-          ['==', ['get', 'class'], 'bridleway']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#777777',
-          'text-halo-color': 'rgba(255,255,255,0.85)',
-          'text-halo-width': 1.0,
-          'text-halo-blur': 0.3
         }
       }
     ]
@@ -332,84 +289,41 @@ function buildPMTilesStyle(pmtilesUrl) {
         paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
       },
       {
-        id: 'road-name-main', type: 'symbol', source: 'openmaptiles',
+        id: 'road-name', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
         minzoom: 12,
         maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'motorway'],
-          ['==', ['get', 'class'], 'trunk'],
-          ['==', ['get', 'class'], 'primary'],
-          ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary']
-        ],
+        filter: ['has', 'name'],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 14, 12, 18, 15],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 
+            12, 8,
+            14, 11,
+            16, 14,
+            18, 16
+          ],
           'text-letter-spacing': 0.05,
-          'text-max-angle': 30
+          'text-max-angle': 30,
+          'text-opacity': ['interpolate', ['linear'], ['zoom'],
+            12, 1,
+            13, 1,
+            20, 1
+          ]
         },
         paint: {
-          'text-color': '#1a2847',
-          'text-halo-color': 'rgba(255,255,255,0.95)',
-          'text-halo-width': 1.6,
-          'text-halo-blur': 0.5
-        }
-      },
-      {
-        id: 'road-name-minor', type: 'symbol', source: 'openmaptiles',
-        'source-layer': 'transportation_name',
-        minzoom: 13,
-        maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'residential'],
-          ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street'],
-          ['==', ['get', 'class'], 'service'],
-          ['==', ['get', 'class'], 'minor']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 12, 16, 16, 18, 18],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#2a2a2a',
-          'text-halo-color': 'rgba(255,255,255,0.92)',
-          'text-halo-width': 1.3,
+          'text-color': ['interpolate', ['linear'], ['zoom'],
+            12, '#1a2847',
+            14, '#1a2847',
+            16, '#333333'
+          ],
+          'text-halo-color': 'rgba(255,255,255,0.9)',
+          'text-halo-width': ['interpolate', ['linear'], ['zoom'],
+            12, 1.4,
+            18, 1.2
+          ],
           'text-halo-blur': 0.4
-        }
-      },
-      {
-        id: 'road-name-paths', type: 'symbol', source: 'openmaptiles',
-        'source-layer': 'transportation_name',
-        minzoom: 15,
-        maxzoom: 20,
-        filter: ['any',
-          ['==', ['get', 'class'], 'path'],
-          ['==', ['get', 'class'], 'footway'],
-          ['==', ['get', 'class'], 'track'],
-          ['==', ['get', 'class'], 'cycleway'],
-          ['==', ['get', 'class'], 'bridleway']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#777777',
-          'text-halo-color': 'rgba(255,255,255,0.85)',
-          'text-halo-width': 1.0,
-          'text-halo-blur': 0.3
         }
       }
     ]
