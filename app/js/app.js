@@ -852,6 +852,8 @@ async function autoDownloadAllLines() {
     const available = availableLinesCatalog || [];
     
     console.log(`📊 Status: ${cached.length} cached, ${available.length} available`);
+    console.log('📋 Cached IDs:', cached.map(c => c.id));
+    console.log('📋 Available IDs:', available.map(l => l.id));
     
     if (available.length === 0) {
       console.log('⚠️ No lines to auto-download');
@@ -859,11 +861,14 @@ async function autoDownloadAllLines() {
     }
     
     // Nur nicht-gecachte Linien herunterladen
-    const toDownload = available.filter(line => 
-      !cached.find(c => c.id === line.id)
-    );
+    const toDownload = available.filter(line => {
+      const isCached = cached.find(c => c.id === line.id);
+      console.log(`  Checking ${line.id}: ${isCached ? 'CACHED' : 'NEW'}`);
+      return !isCached;
+    });
     
-    console.log(`📋 toDownload list: ${toDownload.length} lines`);
+    console.log(`📋 toDownload list: ${toDownload.length} lines to download`);
+    toDownload.forEach(l => console.log(`  - ${l.lineName} (${l.id})`));
     
     if (toDownload.length === 0) {
       console.log('✓ All lines already cached');
