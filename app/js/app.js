@@ -937,8 +937,7 @@ function detectOffline() {
   checkOnline();
 }
 
-// ── Offline-Warnung Modal anzeigen ──────────────────────────
- Events binden ────────────────────────────────────────────
+// ── Events binden ────────────────────────────────────────────
 function bindEvents() {
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
