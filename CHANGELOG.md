@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.40 - 2026-06-01
+- Auto-save routes to offline storage when navigation ends in [app/js/app.js](app/js/app.js); Routes are now automatically saved after each completed navigation session, eliminating need for manual save button. Offline availability guaranteed without extra user action.
+
 ## V2.0.39 - 2026-06-01
 - Added `.gps-dot` CSS class styling in [app/css/app.css](app/css/app.css): was missing, caused GPS marker to be invisible during navigation simulation. Now both real GPS and simulated GPS use the same 52px bus marker with proper styling.
 - Ensures cache-busting forces full refresh of CSS on device.

@@ -1022,6 +1022,20 @@ function stopNavigation() {
   navRejoinBlend = 0;
   stopNavDriveLogSession();
   resetNavPerfStats('idle');
+
+  // Auto-save route after navigation
+  if (currentRoute && currentRoute.key && currentRoute.data) {
+    dbPut(currentRoute.key, currentRoute.data)
+      .then(() => {
+        saveOfflineBtn.textContent = '✓';
+        saveOfflineBtn.title = 'Route ist offline gespeichert';
+        setTimeout(() => {
+          saveOfflineBtn.textContent = '⬇';
+          saveOfflineBtn.title = 'Route für Offline-Nutzung speichern';
+        }, 2000);
+      })
+      .catch(err => console.warn('Auto-save Route fehlgeschlagen:', err));
+  }
 }
 
 // ── Geometrie-Hilfsfunktionen ─────────────────────────────────
