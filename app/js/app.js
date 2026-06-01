@@ -126,12 +126,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   detectOffline();
   await loadCities();
   
-  // Lade Linien-Katalog und checke auf Updates
+  // Lade Linien-Katalog
   await fetchAndCacheLinesCatalog();
-  const hasNewLines = await checkForNewLines();
-  if (hasNewLines) {
-    showNewLinesNotification();
-  }
+  
+  // Auto-Download aller Linien im Hintergrund (nicht blockierend)
+  autoDownloadAllLines().catch(err => console.warn('Auto-download background error:', err));
 });
 
 function resolveNavPerfDebugEnabled() {
@@ -839,6 +838,71 @@ async function showNewLinesNotification() {
     }
   } catch (err) {
     console.error('Error showing notification:', err);
+  }
+}
+
+// ── Auto-Download aller Linien im Hintergrund ──────────────────
+async function autoDownloadAllLines() {
+  try {
+    const cached = await dbGetLinesCatalog();
+    const available = availableLinesCatalog || [];
+    
+    if (available.length === 0) {
+      console.log('ℹ️ No lines to auto-download');
+      return;
+    }
+    
+    // Nur nicht-gecachte Linien herunterladen
+    const toDownload = available.filter(line => 
+      !cached.find(c => c.id === line.id)
+    );
+    
+    if (toDownload.length === 0) {
+      console.log('✓ All lines already cached');
+      return;
+    }
+    
+    console.log(`⬇️ Auto-downloading ${toDownload.length} lines in background...`);
+    
+    // Zeige discreten Indicator in der Topbar
+    const topbar = document.getElementById('topbar');
+    const indicator = document.createElement('div');
+    indicator.id = 'downloadIndicator';
+    indicator.style.cssText = `
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--accent);
+      opacity: 0.7;
+      font-weight: 600;
+      white-space: nowrap;
+    `;
+    indicator.textContent = '⬇ Linien laden…';
+    topbar.style.position = 'relative';
+    topbar.appendChild(indicator);
+    
+    // Download im Hintergrund (mit Verzögerung zwischen den Downloads)
+    let completed = 0;
+    for (const line of toDownload) {
+      try {
+        const success = await downloadLineWithGPX(line.id);
+        if (success) completed++;
+        console.log(`  ✓ ${line.lineName} (${completed}/${toDownload.length})`);
+      } catch (err) {
+        console.warn(`  ✗ ${line.lineName}: ${err.message}`);
+      }
+      // Kleine Verzögerung zwischen Downloads um Server nicht zu überlasten
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // Indicator entfernen
+    if (indicator.parentNode) indicator.remove();
+    
+    console.log(`✓ Auto-download complete: ${completed}/${toDownload.length} lines cached`);
+  } catch (err) {
+    console.error('Error in autoDownloadAllLines:', err);
   }
 }
 
