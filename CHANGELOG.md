@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.31 - 2026-06-01
+- Reduced map clutter in [app/js/map.js](app/js/map.js): app now uses the minimal in-app style (`buildRasterStyle`) instead of the full Liberty style, removing unrelated map POIs/labels.
+- Reduced PMTiles style clutter in [app/js/map.js](app/js/map.js): removed generic city/place labels so operational stop markers stay visually dominant.
+- Tightened stop label focus in [app/js/map.js](app/js/map.js): during active navigation, only the nearest stop label remains visible on-map.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.30 - 2026-06-01
 - Further stabilized driver camera bearing in [app/js/map.js](app/js/map.js) for real bus-seat behavior:
 	- freeze bearing at standstill / very low speed,

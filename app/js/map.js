@@ -132,7 +132,7 @@ function updateStopPoiVisibility() {
     }))
     .sort((a, b) => a.d - b.d);
 
-  const keep = new Set(ranked.slice(0, 6).map(x => x.meta));
+  const keep = new Set(ranked.slice(0, 1).map(x => x.meta));
   stopMarkerMeta.forEach(meta => {
     if (keep.has(meta)) meta.el.classList.remove('label-hidden');
     else meta.el.classList.add('label-hidden');
@@ -193,21 +193,6 @@ function buildRasterStyle() {
         'source-layer': 'building',
         minzoom: 14,
         paint: { 'fill-color': '#1e1e38', 'fill-outline-color': '#252550' }
-      },
-      {
-        id: 'place-label', type: 'symbol', source: 'ofm',
-        'source-layer': 'place',
-        filter: ['in', 'class', 'city', 'town', 'village'],
-        layout: {
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 14, 13]
-        },
-        paint: {
-          'text-color': '#b0b0d0',
-          'text-halo-color': '#0f0f1a',
-          'text-halo-width': 1
-        }
       }
     ]
   };
@@ -259,17 +244,6 @@ function buildPMTilesStyle(pmtilesUrl) {
         'source-layer': 'building',
         minzoom: 14,
         paint: { 'fill-color': '#1e1e38', 'fill-outline-color': '#252550' }
-      },
-      {
-        id: 'place-city', type: 'symbol', source: 'openmaptiles',
-        'source-layer': 'place',
-        filter: ['in', 'class', 'city', 'town', 'village'],
-        layout: {
-          'text-field': ['get', 'name:de'],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 14, 13]
-        },
-        paint: { 'text-color': '#b0b0d0', 'text-halo-color': '#0f0f1a', 'text-halo-width': 1 }
       }
     ]
   };
@@ -288,7 +262,7 @@ function initMap() {
 
   map = new maplibregl.Map({
     container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty',
+    style: buildRasterStyle(),
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     maxZoom: 22,
