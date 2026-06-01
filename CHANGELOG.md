@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.63 - 2026-06-01
+- **Refactor: Remove Simulation Mode** – Deleted all local simulation code ("Fahrt ▶" button, sim-speed settings, ~150 lines JS, ~50 lines CSS). With auto-download, drivers never need local practice—they select a line and immediately navigate with real GPS. Removed 3 modal buttons (now only "Navigate with GPS" remains). Result: Ultra-clean interface, one workflow, zero confusion.
+
 ## V2.0.62 - 2026-06-01
 - **Refactor: Remove Download Center Modal** – Removed unnecessary download UI complexity. Auto-download now handles everything silently on startup. Deleted 116 lines of modal code, 150+ lines of CSS, and 8+ event handlers. Result: cleaner codebase, faster app. Drivers never touch download UI—lines are ready automatically when app starts.
 

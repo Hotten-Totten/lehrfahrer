@@ -771,51 +771,6 @@ html, body {
   font-weight: 600;
 }
 
-/* ── Simulations-Chip (nicht-blockierend) ───── */
-#simChip {
-  position: fixed;
-  bottom: calc(var(--safe-bottom) + var(--panel-peek) + 10px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(6,9,22,0.92);
-  border: 1px solid #2daa50;
-  border-radius: 24px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 16px;
-  z-index: 600;
-  white-space: nowrap;
-}
-#simChipLabel {
-  font-size: 13px;
-  color: #2daa50;
-  font-weight: 600;
-}
-#simChipBar {
-  width: 80px;
-  height: 5px;
-  background: var(--surface2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-#simChipFill {
-  height: 100%;
-  width: 0%;
-  background: #2daa50;
-  border-radius: 3px;
-  transition: width 0.4s linear;
-}
-#simStopBtn {
-  background: none;
-  border: none;
-  color: #e05555;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-}
-
 /* ── Entwickler-Overlay: Nav-Performance (nur bei Debug-Flag) ── */
 #devNavPerfHud {
   position: fixed;

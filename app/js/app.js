@@ -23,9 +23,6 @@ let navCumDists  = [];
 let navStopDists = [];
 let navNearestIdx = 0;
 
-// Simulations-Zustand
-let simTimer     = null;
-let simRunning   = false;
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
 // Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
@@ -89,7 +86,6 @@ const offlineRouteList = document.getElementById('offlineRouteList');
 
 // Offline-Warnung Modal
 const offlineNotAvailableModal = document.getElementById('offlineNotAvailableModal');
-const offlineModalSimBtn    = document.getElementById('offlineModalSimBtn');
 const offlineModalNavBtn    = document.getElementById('offlineModalNavBtn');
 const offlineModalLaterBtn  = document.getElementById('offlineModalLaterBtn');
 
@@ -105,13 +101,6 @@ const navSpeedEl    = document.getElementById('navSpeed');
 const navEndBtn     = document.getElementById('navEndBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
 
-// Simulations-DOM-Referenzen
-const simBtn         = document.getElementById('simBtn');
-const simSpeedSelect = document.getElementById('simSpeedSelect');
-const simChip        = document.getElementById('simChip');
-const simChipLabel   = document.getElementById('simChipLabel');
-const simChipFill    = document.getElementById('simChipFill');
-const simStopBtn     = document.getElementById('simStopBtn');
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
@@ -979,12 +968,6 @@ function bindEvents() {
   });
 
   // Offline-Warnung Modal Event-Listener
-  if (offlineModalSimBtn) {
-    offlineModalSimBtn.addEventListener('click', () => {
-      hideOfflineNotAvailableDialog();
-      startSimulation();
-    });
-  }
   if (offlineModalNavBtn) {
     offlineModalNavBtn.addEventListener('click', () => {
       hideOfflineNotAvailableDialog();
@@ -1018,16 +1001,9 @@ function bindEvents() {
 
   if (navEndBtn) {
     navEndBtn.addEventListener('click', () => {
-      if (simRunning) stopSimulation(false);
-      else stopNavigation();
+      stopNavigation();
     });
   }
-
-  simBtn.addEventListener('click', () => {
-    if (simRunning) stopSimulation(false);
-    else startSimulation();
-  });
-  simStopBtn.addEventListener('click', stopSimulation);
 }
 
 // ── Städte laden ─────────────────────────────────────────────
@@ -1181,9 +1157,8 @@ function displayRoute(data) {
   renderStopList(data.stops || []);
   setPanelOpen(true);
 
-  // Navi-Button + Sim-Button freischalten
+  // Navi-Button freischalten
   navBtn.classList.remove('hidden');
-  simBtn.classList.remove('hidden');
 }
 
 function renderStopList(stops) {
@@ -1982,110 +1957,4 @@ function renderUpcomingStops(currentDist) {
 // SIMULATION
 // =============================================================
 
-function startSimulation() {
-  if (!currentRoute?.data?.routePoints?.length) {
-    showToast('Bitte zuerst eine Linie laden.');
-    return;
-  }
-  if (simRunning) return;
 
-  const pts    = currentRoute.data.routePoints;
-  const stepMs = parseInt(simSpeedSelect ? simSpeedSelect.value : 600, 10) || 600;
-  const total  = pts.length;
-
-  // Nav-Vorberechnungen
-  navCumDists  = buildNavCumDists(pts);
-  navTurns     = detectNavTurns(pts, navCumDists);
-  navStopDists = buildNavStopDists(currentRoute.data.stops || [], pts, navCumDists);
-  navNearestIdx = 0;
-  navOffRouteActive = false;
-  navRejoinBlend = 0;
-  startNavDriveLogSession('sim-start');
-  resetNavPerfStats('sim');
-
-  // Nav-HUD einblenden
-  navActive = true;
-  navHud.classList.remove('hidden');
-  document.body.classList.add('nav-mode');
-
-  // Sim-Button auf "Stopp"
-  simRunning = true;
-  simBtn.textContent = '■ Stopp';
-  simBtn.classList.add('sim-running');
-
-  // Kleinen Chip anzeigen (blockiert Karte NICHT)
-  simChip.classList.remove('hidden');
-  simChipFill.style.width = '0%';
-  simChipLabel.textContent = '▶ Lehrfahrt läuft…';
-
-  // Panel schließen – mehr Kartenansicht
-  setPanelOpen(false);
-
-  let step = 0;
-
-  simTimer = setInterval(() => {
-    if (!simRunning || step >= total) {
-      stopSimulation(step >= total);
-      return;
-    }
-
-    const p = pts[step];
-    const [lat, lon] = Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lon];
-
-    // Heading zum nächsten Punkt
-    let heading = null;
-    let simSpeedMps = null;
-    if (step < total - 1) {
-      const p2 = pts[step + 1];
-      const [lat2, lon2] = Array.isArray(p2) ? [p2[0], p2[1]] : [p2.lat, p2.lon];
-      heading = bearingDeg(lat, lon, lat2, lon2);
-      simSpeedMps = haversineM(lat, lon, lat2, lon2) / Math.max(0.001, stepMs / 1000);
-    }
-
-    setSimulatedGPS(lon, lat, heading);
-    simCenterOn(lon, lat, heading, simSpeedMps);
-    const tracked = {
-      lat,
-      lon,
-      index: step,
-      routeState: 'ON',
-      snapDistanceM: 0,
-      snapApplied: true
-    };
-    recordNavDriveSample(lat, lon, tracked, null, heading);
-    updateNavHud(lat, lon, step);
-
-    step++;
-    const pct = Math.round((step / total) * 100);
-    simChipFill.style.width = pct + '%';
-    simChipLabel.textContent = '▶ ' + pct + ' %';
-
-  }, stepMs);
-}
-
-function stopSimulation(completed) {
-  simRunning = false;
-  if (simTimer) { clearInterval(simTimer); simTimer = null; }
-
-  simChip.classList.add('hidden');
-  simBtn.textContent = 'Fahrt ▶';
-  simBtn.classList.remove('sim-running');
-
-  navActive = false;
-  navHud.classList.add('hidden');
-  document.body.classList.remove('nav-mode');
-  navOffRouteActive = false;
-  navRejoinBlend = 0;
-  stopNavDriveLogSession();
-  resetNavPerfStats('idle');
-
-  if (typeof map !== 'undefined' && map) {
-    map.easeTo({ pitch: 0, bearing: 0, zoom: 13, duration: 1000 });
-  }
-
-  stopGPS();
-
-  if (completed) {
-    showToast('✓ Lehrfahrt abgeschlossen!', 5000);
-  }
-}

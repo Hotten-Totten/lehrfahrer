@@ -15,7 +15,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.62">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.63">
 </head>
 <body>
 
@@ -51,7 +51,6 @@
     <select id="lineSelect" disabled title="Linie auswählen">
       <option value="">Linie …</option>
     </select>
-    <button id="simBtn" class="hidden" title="Lehrfahrt starten – Strecke abfahren">Fahrt ▶</button>
   </div>
 
   <!-- ── Nav-HUD (sichtbar während Navigation) ── -->
@@ -166,18 +165,6 @@
       </div>
 
       <div class="settings-section">
-        <h3>Lehrfahrt-Geschwindigkeit</h3>
-        <div style="display:flex;gap:8px;align-items:center">
-          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Tempo:</label>
-          <select id="simSpeedSelect" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
-            <option value="1200">Langsam</option>
-            <option value="600" selected>Normal</option>
-            <option value="200">Schnell</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="settings-section">
         <h3>Gespeicherte Offline-Routen</h3>
         <div id="offlineRouteList"><p class="hint">Keine Routen gespeichert.</p></div>
         <button id="clearOfflineCacheBtn" title="Alle gespeicherten Offline-Routen löschen">
@@ -187,13 +174,6 @@
 
       <button id="closeSettingsBtn" title="Einstellungen schließen">Schließen</button>
     </div>
-  </div>
-
-  <!-- ── Simulations-Chip (klein, über der Karte, nicht-blockierend) ── -->
-  <div id="simChip" class="hidden">
-    <span id="simChipLabel">▶ Lehrfahrt läuft…</span>
-    <div id="simChipBar"><div id="simChipFill"></div></div>
-    <button id="simStopBtn" title="Lehrfahrt stoppen">■</button>
   </div>
 
   <!-- ── Offline-Warnung Dialog ─────────────────── -->
@@ -210,7 +190,6 @@
         <p style="margin-top: 16px; color: var(--text-muted); font-size: 13px;"><strong>Wo bist du gerade?</strong></p>
       </div>
       <div class="modal-footer">
-        <button id="offlineModalSimBtn" class="btn-primary">🏠 Zuhause üben (kein GPS nötig)</button>
         <button id="offlineModalNavBtn" class="btn-primary">🚗 Draußen fahren (mit GPS)</button>
         <button id="offlineModalLaterBtn" class="btn-secondary">Später anschauen</button>
       </div>
@@ -219,8 +198,8 @@
 
 
 
-    <script src="js/map.js?v=V2.0.62"></script>
-    <script src="js/app.js?v=V2.0.62"></script>
-    <script src="js/debug-helper.js?v=V2.0.62"></script>
+    <script src="js/map.js?v=V2.0.63"></script>
+    <script src="js/app.js?v=V2.0.63"></script>
+    <script src="js/debug-helper.js?v=V2.0.63"></script>
 </body>
 </html>
