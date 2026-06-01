@@ -210,16 +210,16 @@ function buildRasterStyle() {
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
-          'text-letter-spacing': 0.02,
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 12, 18, 15],
+          'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#4d5870',
-          'text-halo-color': 'rgba(255,255,255,0.92)',
-          'text-halo-width': 1.2,
-          'text-halo-blur': 0.4
+          'text-color': '#1a2847',
+          'text-halo-color': 'rgba(255,255,255,0.95)',
+          'text-halo-width': 1.6,
+          'text-halo-blur': 0.5
         }
       }
     ]
@@ -290,16 +290,16 @@ function buildPMTilesStyle(pmtilesUrl) {
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
-          'text-letter-spacing': 0.02,
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 12, 18, 15],
+          'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#4d5870',
-          'text-halo-color': 'rgba(255,255,255,0.92)',
-          'text-halo-width': 1.2,
-          'text-halo-blur': 0.4
+          'text-color': '#1a2847',
+          'text-halo-color': 'rgba(255,255,255,0.95)',
+          'text-halo-width': 1.6,
+          'text-halo-blur': 0.5
         }
       }
     ]

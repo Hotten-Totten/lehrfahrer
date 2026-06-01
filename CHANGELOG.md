@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.38 - 2026-06-01
+- Enlarged GPS bus marker in [app/css/app.css](app/css/app.css): increased from 34px to 52px for much better driver visibility with clearer colors and stronger shadow.
+- Improved road label readability in [app/js/map.js](app/js/map.js): increased text size, switched to bold font, darkened color, and strengthened halo for better contrast on day map.
+- Updated rollout revisions in [app/js/app.js](app/js/app.js), [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.37 - 2026-06-01
 - Fixed map style filter error in [app/js/map.js](app/js/map.js): replaced invalid `in` expression in `road-name-main` with valid `any`/`==` checks for road classes.
 - Resolves runtime error `layers[7].filter: Expected 2 arguments, but found 6 instead` and restores map rendering with street labels.
