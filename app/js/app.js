@@ -988,12 +988,32 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
   // Erst offline-Cache prüfen
   let data = null;
   let isOfflineAvailable = false;
-  try { 
-    data = await dbGet(key);
-    isOfflineAvailable = (data != null);
-  } catch {}
+  
+  try {
+    // 1. Checke neue linesData store (gedownloadete Linien)
+    const lineId = `${city}_${lineFolder || ''}_${fileBase}`.replace(/\//g, '_');
+    const lineData = await dbGetLineData(lineId);
+    if (lineData) {
+      data = lineData;
+      isOfflineAvailable = true;
+      console.log('✓ Linie aus Download-Cache geladen');
+    }
+  } catch (err) {
+    console.warn('Error checking linesData store:', err);
+  }
+  
+  // 2. Wenn nicht im Download-Cache, checke alte routes store
+  if (!data) {
+    try { 
+      data = await dbGet(key);
+      isOfflineAvailable = (data != null);
+      if (data) console.log('✓ Linie aus gespeicherten Routen geladen');
+    } catch (err) {
+      console.warn('Error checking routes store:', err);
+    }
+  }
 
-  // Dann Server versuchen
+  // 3. Dann Server versuchen
   if (!data) {
     try {
       let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}`;
@@ -1462,6 +1482,7 @@ function stopNavigation() {
 
   // Auto-save route after navigation
   if (currentRoute && currentRoute.key && currentRoute.data) {
+    // Speichere in alte routes store (für Kompatibilität)
     dbPut(currentRoute.key, currentRoute.data)
       .then(() => {
         if (saveOfflineBtn) {
@@ -1476,6 +1497,11 @@ function stopNavigation() {
         }
       })
       .catch(err => console.warn('Auto-save Route fehlgeschlagen:', err));
+    
+    // Speichere auch in neuer linesData store
+    const lineId = `${currentRoute.city}_${(currentRoute.lineFolder || '')}`.replace(/\//g, '_') + '_' + currentRoute.fileBase;
+    dbPutLineData(lineId, currentRoute.data)
+      .catch(err => console.warn('Auto-save linesData fehlgeschlagen:', err));
   }
 }
 
