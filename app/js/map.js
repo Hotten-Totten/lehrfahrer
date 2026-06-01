@@ -199,7 +199,8 @@ function buildRasterStyle() {
       {
         id: 'road-name-main', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
-        minzoom: 14,
+        minzoom: 12,
+        maxzoom: 20,
         filter: ['any',
           ['==', ['get', 'class'], 'motorway'],
           ['==', ['get', 'class'], 'trunk'],
@@ -211,7 +212,7 @@ function buildRasterStyle() {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 12, 18, 15],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 14, 12, 18, 15],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
@@ -223,52 +224,30 @@ function buildRasterStyle() {
         }
       },
       {
-        id: 'road-name-residential', type: 'symbol', source: 'ofm',
+        id: 'road-name-minor', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
         minzoom: 13,
+        maxzoom: 20,
         filter: ['any',
           ['==', ['get', 'class'], 'residential'],
           ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street']
+          ['==', ['get', 'class'], 'living_street'],
+          ['==', ['get', 'class'], 'service'],
+          ['==', ['get', 'class'], 'minor']
         ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 19],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 12, 16, 16, 18, 18],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#1a2847',
-          'text-halo-color': 'rgba(255,255,255,0.95)',
-          'text-halo-width': 1.4,
+          'text-color': '#2a2a2a',
+          'text-halo-color': 'rgba(255,255,255,0.92)',
+          'text-halo-width': 1.3,
           'text-halo-blur': 0.4
-        }
-      },
-      {
-        id: 'road-name-other', type: 'symbol', source: 'ofm',
-        'source-layer': 'transportation_name',
-        minzoom: 14,
-        filter: ['any',
-          ['==', ['get', 'class'], 'service'],
-          ['==', ['get', 'class'], 'minor'],
-          ['==', ['get', 'class'], 'footway'],
-          ['==', ['get', 'class'], 'track']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#666666',
-          'text-halo-color': 'rgba(255,255,255,0.9)',
-          'text-halo-width': 1.2,
-          'text-halo-blur': 0.3
         }
       }
     ]
@@ -328,7 +307,8 @@ function buildPMTilesStyle(pmtilesUrl) {
       {
         id: 'road-name-main', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
-        minzoom: 14,
+        minzoom: 12,
+        maxzoom: 20,
         filter: ['any',
           ['==', ['get', 'class'], 'motorway'],
           ['==', ['get', 'class'], 'trunk'],
@@ -340,7 +320,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 12, 18, 15],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 14, 12, 18, 15],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
@@ -352,52 +332,30 @@ function buildPMTilesStyle(pmtilesUrl) {
         }
       },
       {
-        id: 'road-name-residential', type: 'symbol', source: 'openmaptiles',
+        id: 'road-name-minor', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
         minzoom: 13,
+        maxzoom: 20,
         filter: ['any',
           ['==', ['get', 'class'], 'residential'],
           ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street']
+          ['==', ['get', 'class'], 'living_street'],
+          ['==', ['get', 'class'], 'service'],
+          ['==', ['get', 'class'], 'minor']
         ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 19],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 12, 16, 16, 18, 18],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#1a2847',
-          'text-halo-color': 'rgba(255,255,255,0.95)',
-          'text-halo-width': 1.4,
+          'text-color': '#2a2a2a',
+          'text-halo-color': 'rgba(255,255,255,0.92)',
+          'text-halo-width': 1.3,
           'text-halo-blur': 0.4
-        }
-      },
-      {
-        id: 'road-name-other', type: 'symbol', source: 'openmaptiles',
-        'source-layer': 'transportation_name',
-        minzoom: 14,
-        filter: ['any',
-          ['==', ['get', 'class'], 'service'],
-          ['==', ['get', 'class'], 'minor'],
-          ['==', ['get', 'class'], 'footway'],
-          ['==', ['get', 'class'], 'track']
-        ],
-        layout: {
-          'symbol-placement': 'line',
-          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
-          'text-font': ['Noto Sans'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 13],
-          'text-letter-spacing': 0.05,
-          'text-max-angle': 30
-        },
-        paint: {
-          'text-color': '#666666',
-          'text-halo-color': 'rgba(255,255,255,0.9)',
-          'text-halo-width': 1.2,
-          'text-halo-blur': 0.3
         }
       }
     ]
