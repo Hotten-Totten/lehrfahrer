@@ -276,6 +276,7 @@ function buildRasterStyle() {
           'text-halo-width': 1.0,
           'text-halo-blur': 0.3
         }
+      }
     ]
   };
 }
@@ -410,6 +411,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           'text-halo-width': 1.0,
           'text-halo-blur': 0.3
         }
+      }
     ]
   };
 }
