@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.33 - 2026-06-01
+- Fixed map sprite 404 error in [app/js/map.js](app/js/map.js): removed unused `sprite`/`glyphs` style references from custom styles so MapLibre no longer requests missing OpenFreeMap sprite assets.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.32 - 2026-06-01
 - Tuned driver camera in [app/js/map.js](app/js/map.js) to be closer to real navigation systems (less extreme pitch/zoom and reduced sky dominance).
 - Changed default driver zoom in [app/index.html](app/index.html) from very close to a more practical level (`19 – Standard`).

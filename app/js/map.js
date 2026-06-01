@@ -143,8 +143,6 @@ function updateStopPoiVisibility() {
 function buildRasterStyle() {
   return {
     version: 8,
-    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
-    sprite: 'https://tiles.openfreemap.org/sprites/liberty/sprite',
     sources: {
       ofm: {
         type: 'vector',
@@ -202,7 +200,6 @@ function buildRasterStyle() {
 function buildPMTilesStyle(pmtilesUrl) {
   return {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       openmaptiles: {
         type: 'vector',
