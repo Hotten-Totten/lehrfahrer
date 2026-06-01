@@ -250,7 +250,12 @@ function buildRasterStyle() {
         id: 'road-name-other', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
         minzoom: 14,
-        filter: ['has', 'name'],
+        filter: ['any',
+          ['==', ['get', 'class'], 'service'],
+          ['==', ['get', 'class'], 'minor'],
+          ['==', ['get', 'class'], 'footway'],
+          ['==', ['get', 'class'], 'track']
+        ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
@@ -260,7 +265,7 @@ function buildRasterStyle() {
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#555555',
+          'text-color': '#666666',
           'text-halo-color': 'rgba(255,255,255,0.9)',
           'text-halo-width': 1.2,
           'text-halo-blur': 0.3
@@ -374,7 +379,12 @@ function buildPMTilesStyle(pmtilesUrl) {
         id: 'road-name-other', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
         minzoom: 14,
-        filter: ['has', 'name'],
+        filter: ['any',
+          ['==', ['get', 'class'], 'service'],
+          ['==', ['get', 'class'], 'minor'],
+          ['==', ['get', 'class'], 'footway'],
+          ['==', ['get', 'class'], 'track']
+        ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
@@ -384,7 +394,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           'text-max-angle': 30
         },
         paint: {
-          'text-color': '#555555',
+          'text-color': '#666666',
           'text-halo-color': 'rgba(255,255,255,0.9)',
           'text-halo-width': 1.2,
           'text-halo-blur': 0.3
