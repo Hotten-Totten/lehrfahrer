@@ -667,6 +667,9 @@ async function showDownloadCenterModal() {
   const modal = document.getElementById('downloadCenterModal');
   if (!modal) return;
   
+  console.log('🔍 Opening Download Center...');
+  console.log('📋 availableLinesCatalog:', availableLinesCatalog);
+  
   // Beende Banner animation
   hideBanner();
   
@@ -674,10 +677,18 @@ async function showDownloadCenterModal() {
   const cached = await dbGetLinesCatalog();
   const available = availableLinesCatalog || [];
   
+  console.log('💾 Cached lines:', cached);
+  console.log('📦 Available lines:', available);
+  
   const container = document.getElementById('linesListContainer');
   if (!container) return;
   
   container.innerHTML = '';
+  
+  // Wenn keine Linien vorhanden
+  if (available.length === 0) {
+    container.innerHTML = '<p style="color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center;">❌ Keine Linien gefunden. Eventuell API-Fehler?</p>';
+  }
   
   // Für jede verfügbare Linie ein Checkbox-Item
   available.forEach((line, idx) => {
@@ -719,21 +730,29 @@ async function showDownloadCenterModal() {
   
   // "Alle auswählen" Button
   const selectAll = document.getElementById('selectAllLines');
-  selectAll.onchange = () => {
-    document.querySelectorAll('.line-checkbox').forEach(cb => {
-      cb.checked = selectAll.checked;
-    });
-  };
+  if (selectAll) {
+    selectAll.onchange = () => {
+      document.querySelectorAll('.line-checkbox').forEach(cb => {
+        cb.checked = selectAll.checked;
+      });
+    };
+  }
   
   // Download Button
-  document.getElementById('downloadCenterDownloadBtn').onclick = async () => {
-    await startLinesDownload();
-  };
+  const downloadBtn = document.getElementById('downloadCenterDownloadBtn');
+  if (downloadBtn) {
+    downloadBtn.onclick = async () => {
+      await startLinesDownload();
+    };
+  }
   
   // Cancel Button
-  document.getElementById('downloadCenterCancelBtn').onclick = () => {
-    modal.classList.add('hidden');
-  };
+  const cancelBtn = document.getElementById('downloadCenterCancelBtn');
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      modal.classList.add('hidden');
+    };
+  }
   
   // Stats aktualisieren
   updateDownloadStats();
