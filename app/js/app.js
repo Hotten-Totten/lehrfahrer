@@ -85,6 +85,11 @@ const availableLinesContainer = document.getElementById('availableLinesContainer
 const navigateToStartBtn = document.getElementById('navigateToStartBtn');
 const routeActionBar   = document.getElementById('routeActionBar');
 
+console.log('🔍 DOM Elements:', {
+  navigateToStartBtn: !!navigateToStartBtn,
+  routeActionBar: !!routeActionBar
+});
+
 // Nav-DOM-Referenzen
 const navBtn        = document.getElementById('navBtn');
 const navHud        = document.getElementById('navHud');
@@ -995,7 +1000,12 @@ function bindEvents() {
   panelHandle.addEventListener('click', togglePanel);
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
   
-  navigateToStartBtn.addEventListener('click', navigateToRouteStart);
+  if (navigateToStartBtn) {
+    navigateToStartBtn.addEventListener('click', navigateToRouteStart);
+    console.log('✅ navigateToStartBtn event listener attached');
+  } else {
+    console.warn('❌ navigateToStartBtn not found in DOM');
+  }
 
   loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
   tilesFileInput.addEventListener('change', onTilesFileSelected);
@@ -1163,8 +1173,10 @@ function displayRoute(data) {
   
   // "Zum Startpunkt" Button freischalten (wenn Route vorhanden)
   if (data.routePoints && data.routePoints.length > 0) {
+    console.log('✅ Showing routeActionBar');
     routeActionBar.classList.remove('hidden');
   } else {
+    console.log('❌ No routePoints, hiding routeActionBar');
     routeActionBar.classList.add('hidden');
   }
 }
