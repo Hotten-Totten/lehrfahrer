@@ -175,7 +175,7 @@ function buildRasterStyle() {
       {
         id: 'road-main', type: 'line', source: 'ofm',
         'source-layer': 'transportation',
-        filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk'],
+        filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'living_street'],
         paint: {
           'line-color': '#8b97b0',
           'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 16, 4.8]
@@ -205,7 +205,10 @@ function buildRasterStyle() {
           ['==', ['get', 'class'], 'trunk'],
           ['==', ['get', 'class'], 'primary'],
           ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary']
+          ['==', ['get', 'class'], 'tertiary'],
+          ['==', ['get', 'class'], 'residential'],
+          ['==', ['get', 'class'], 'unclassified'],
+          ['==', ['get', 'class'], 'living_street']
         ],
         layout: {
           'symbol-placement': 'line',
@@ -261,7 +264,7 @@ function buildPMTilesStyle(pmtilesUrl) {
       {
         id: 'road-main', type: 'line', source: 'openmaptiles',
         'source-layer': 'transportation',
-        filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk'],
+        filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'living_street'],
         paint: { 'line-color': '#8b97b0', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 16, 4.8] }
       },
       {
@@ -285,7 +288,10 @@ function buildPMTilesStyle(pmtilesUrl) {
           ['==', ['get', 'class'], 'trunk'],
           ['==', ['get', 'class'], 'primary'],
           ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary']
+          ['==', ['get', 'class'], 'tertiary'],
+          ['==', ['get', 'class'], 'residential'],
+          ['==', ['get', 'class'], 'unclassified'],
+          ['==', ['get', 'class'], 'living_street']
         ],
         layout: {
           'symbol-placement': 'line',

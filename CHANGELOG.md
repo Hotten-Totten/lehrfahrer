@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.45 - 2026-06-01
+- Enhanced road label coverage in [app/js/map.js](app/js/map.js): Expanded street name display filters for both online (OpenFreeMap) and PMTiles offline sources. Now shows all road types: motorway, trunk, primary, secondary, tertiary (main roads) PLUS residential, unclassified, living_street (small side streets). Drivers see complete street network for better navigation orientation.
+- Enlarged bus marker from 52px to 68px in [app/css/app.css](app/css/app.css): Bus icon now 30% larger for better visibility on driver's screen, more prominent during navigation, easier to track on map.
+
 ## V2.0.44 - 2026-06-01
 - Added 3D depth effect to bus marker in [app/css/app.css](app/css/app.css): Replaced flat gradient with multi-layered 5-color gradient (light-to-dark blue), inset box-shadows for internal structure (top/bottom/side highlights), and layered drop-shadows for realistic ground-level depth perception. Added subtle window details via overlay gradients and CSS perspective for 3D volume. Bus now appears as a rounded 3D object rather than a flat icon.
 

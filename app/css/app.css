@@ -283,8 +283,8 @@ html, body {
 /* ── GPS-Bus auf Karte ──────────────────────── */
 .gps-bus,
 .gps-dot {
-  width: 52px;
-  height: 52px;
+  width: 68px;
+  height: 68px;
   position: relative;
   transform-origin: 50% 50%;
   perspective: 800px;
