@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.30 - 2026-06-01
+- Further stabilized driver camera bearing in [app/js/map.js](app/js/map.js) for real bus-seat behavior:
+	- freeze bearing at standstill / very low speed,
+	- require higher speed before trusting noisy device heading,
+	- ignore large heading outliers at low speed,
+	- cap per-tick rotation by time-based max turn rate.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.29 - 2026-06-01
 - Added camera profile presets in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): `Standard`, `Extra Ruhig`, `Extra Dynamisch` (persisted locally).
 - Improved low-speed camera stability in [app/js/map.js](app/js/map.js): stronger heading dead-zone and slower bearing interpolation to reduce wobble near stops.

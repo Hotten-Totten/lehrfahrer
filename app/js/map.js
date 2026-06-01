@@ -13,6 +13,7 @@ let pmtilesProto = null;
 let navCameraBearing = 0;
 let navBearingReady = false;
 let navLastFix = null;
+let navLastBearingTs = 0;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -48,16 +49,24 @@ function resetNavBearingState() {
   navCameraBearing = 0;
   navBearingReady = false;
   navLastFix = null;
+  navLastBearingTs = 0;
 }
 
 function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   let candidate = null;
+  const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
+  const movedM = navLastFix ? haversineMeters(navLastFix.lat, navLastFix.lon, lat, lon) : 0;
 
-  if (headingDeg != null && Number.isFinite(headingDeg) && (speedKmh == null || speedKmh > 2)) {
+  // Im Stand / Schritttempo Bearing einfrieren: verhindert Rotieren im Kreis durch Sensorrauschen.
+  if (speedKmh != null && speedKmh < 3 && movedM < 1.2) {
+    navLastFix = { lat, lon };
+    return navBearingReady ? navCameraBearing : 0;
+  }
+
+  if (headingDeg != null && Number.isFinite(headingDeg) && (speedKmh == null || speedKmh > 6)) {
     candidate = normalizeDeg(headingDeg);
   } else if (navLastFix) {
-    const movedM = haversineMeters(navLastFix.lat, navLastFix.lon, lat, lon);
     if (movedM >= 2.5) {
       candidate = bearingFromCoords(navLastFix.lat, navLastFix.lon, lat, lon);
     }
@@ -72,17 +81,31 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   if (!navBearingReady) {
     navCameraBearing = candidate;
     navBearingReady = true;
+    navLastBearingTs = nowTs;
     return navCameraBearing;
   }
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
-  const smoothing = (speedKmh != null && speedKmh < 8) ? 0.16 : 0.30;
-  const deadZone = (speedKmh != null && speedKmh < 8) ? 2.5 : 1.2;
+  const smoothing = (speedKmh != null && speedKmh < 5) ? 0.10 : ((speedKmh != null && speedKmh < 15) ? 0.18 : 0.30);
+  const deadZone = (speedKmh != null && speedKmh < 5) ? 4.5 : ((speedKmh != null && speedKmh < 15) ? 2.5 : 1.2);
+  const maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 12 : ((speedKmh != null && speedKmh < 15) ? 22 : 60);
+
+  if (speedKmh != null && speedKmh < 8 && Math.abs(delta) > 120) {
+    // Grobe Ausreisser im Langsamverkehr ignorieren.
+    return navCameraBearing;
+  }
+
   if (Math.abs(delta) < deadZone) {
     return navCameraBearing;
   }
 
-  navCameraBearing = normalizeDeg(navCameraBearing + delta * smoothing);
+  const dtSec = navLastBearingTs > 0 ? Math.min(2, Math.max(0.2, (nowTs - navLastBearingTs) / 1000)) : 1;
+  const maxStep = maxTurnRateDegPerSec * dtSec;
+  const wantedStep = delta * smoothing;
+  const step = Math.sign(wantedStep) * Math.min(Math.abs(wantedStep), maxStep);
+
+  navCameraBearing = normalizeDeg(navCameraBearing + step);
+  navLastBearingTs = nowTs;
   return navCameraBearing;
 }
 
