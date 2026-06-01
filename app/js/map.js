@@ -150,31 +150,34 @@ function buildRasterStyle() {
       }
     },
     layers: [
-      { id: 'background', type: 'background', paint: { 'background-color': '#1a1a2e' } },
+      { id: 'background', type: 'background', paint: { 'background-color': '#edf1f7' } },
       {
         id: 'water', type: 'fill', source: 'ofm',
         'source-layer': 'water',
-        paint: { 'fill-color': '#162040' }
+        paint: { 'fill-color': '#cfe0ff' }
       },
       {
         id: 'landuse-green', type: 'fill', source: 'ofm',
         'source-layer': 'landuse',
         filter: ['in', 'class', 'grass', 'park', 'forest'],
-        paint: { 'fill-color': '#161e2a', 'fill-opacity': 0.6 }
+        paint: { 'fill-color': '#e4eddc', 'fill-opacity': 0.9 }
       },
       {
         id: 'road-minor', type: 'line', source: 'ofm',
         'source-layer': 'transportation',
         filter: ['in', 'class', 'minor', 'service', 'track'],
-        paint: { 'line-color': '#2a2a4a', 'line-width': 1 }
+        paint: {
+          'line-color': '#b7becd',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.9, 16, 2.0]
+        }
       },
       {
         id: 'road-main', type: 'line', source: 'ofm',
         'source-layer': 'transportation',
         filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk'],
         paint: {
-          'line-color': '#32325a',
-          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 4]
+          'line-color': '#8b97b0',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 16, 4.8]
         }
       },
       {
@@ -182,15 +185,15 @@ function buildRasterStyle() {
         'source-layer': 'transportation',
         filter: ['==', 'class', 'motorway'],
         paint: {
-          'line-color': '#3d3d72',
-          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 16, 6]
+          'line-color': '#6f7ad6',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.2, 16, 6.4]
         }
       },
       {
         id: 'building', type: 'fill', source: 'ofm',
         'source-layer': 'building',
         minzoom: 14,
-        paint: { 'fill-color': '#1e1e38', 'fill-outline-color': '#252550' }
+        paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
       }
     ]
   };
@@ -207,40 +210,43 @@ function buildPMTilesStyle(pmtilesUrl) {
       }
     },
     layers: [
-      { id: 'background', type: 'background', paint: { 'background-color': '#1a1a2e' } },
+      { id: 'background', type: 'background', paint: { 'background-color': '#edf1f7' } },
       {
         id: 'water', type: 'fill', source: 'openmaptiles',
         'source-layer': 'water',
-        paint: { 'fill-color': '#162040' }
+        paint: { 'fill-color': '#cfe0ff' }
       },
       {
         id: 'landcover', type: 'fill', source: 'openmaptiles',
         'source-layer': 'landcover',
-        paint: { 'fill-color': '#161e2a', 'fill-opacity': 0.7 }
+        paint: { 'fill-color': '#e4eddc', 'fill-opacity': 0.9 }
       },
       {
         id: 'road-minor', type: 'line', source: 'openmaptiles',
         'source-layer': 'transportation',
         filter: ['in', 'class', 'minor', 'service', 'track'],
-        paint: { 'line-color': '#2a2a4a', 'line-width': 1 }
+        paint: {
+          'line-color': '#b7becd',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.9, 16, 2.0]
+        }
       },
       {
         id: 'road-main', type: 'line', source: 'openmaptiles',
         'source-layer': 'transportation',
         filter: ['in', 'class', 'primary', 'secondary', 'tertiary', 'trunk'],
-        paint: { 'line-color': '#32325a', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 4] }
+        paint: { 'line-color': '#8b97b0', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.6, 16, 4.8] }
       },
       {
         id: 'road-motorway', type: 'line', source: 'openmaptiles',
         'source-layer': 'transportation',
         filter: ['==', 'class', 'motorway'],
-        paint: { 'line-color': '#3d3d72', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 16, 6] }
+        paint: { 'line-color': '#6f7ad6', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.2, 16, 6.4] }
       },
       {
         id: 'building', type: 'fill', source: 'openmaptiles',
         'source-layer': 'building',
         minzoom: 14,
-        paint: { 'fill-color': '#1e1e38', 'fill-outline-color': '#252550' }
+        paint: { 'fill-color': '#e1e5ef', 'fill-outline-color': '#c7cfde' }
       }
     ]
   };
@@ -343,7 +349,7 @@ function _renderRoute(routePoints) {
     id: 'route-shadow',
     type: 'line',
     source: 'route',
-    paint: { 'line-color': '#000', 'line-width': 7, 'line-opacity': 0.25, 'line-blur': 3 }
+    paint: { 'line-color': '#16324f', 'line-width': 8, 'line-opacity': 0.35, 'line-blur': 2 }
   });
 
   // Hauptlinie
@@ -351,7 +357,7 @@ function _renderRoute(routePoints) {
     id: 'route-line',
     type: 'line',
     source: 'route',
-    paint: { 'line-color': '#4a9eff', 'line-width': 4, 'line-opacity': 0.95 }
+    paint: { 'line-color': '#20a4ff', 'line-width': 5, 'line-opacity': 0.98 }
   });
 
   // Kartenausschnitt anpassen

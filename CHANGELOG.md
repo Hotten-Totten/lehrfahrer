@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.34 - 2026-06-01
+- Updated map rendering in [app/js/map.js](app/js/map.js) to a clearer navigation-style day palette (higher contrast roads, lighter land/background, clearer water/buildings).
+- Strengthened route visibility in [app/js/map.js](app/js/map.js) with a clearer casing and thicker main route line for faster driver recognition.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.33 - 2026-06-01
 - Fixed map sprite 404 error in [app/js/map.js](app/js/map.js): removed unused `sprite`/`glyphs` style references from custom styles so MapLibre no longer requests missing OpenFreeMap sprite assets.
 - Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
