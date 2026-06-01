@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.37 - 2026-06-01
+- Fixed map style filter error in [app/js/map.js](app/js/map.js): replaced invalid `in` expression in `road-name-main` with valid `any`/`==` checks for road classes.
+- Resolves runtime error `layers[7].filter: Expected 2 arguments, but found 6 instead` and restores map rendering with street labels.
+- Updated rollout revisions in [app/js/app.js](app/js/app.js), [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.36 - 2026-06-01
 - Added subtle road names for main roads in [app/js/map.js](app/js/map.js) (`motorway`, `trunk`, `primary`, `secondary`, `tertiary`) with line placement and readable halo for driver use.
 - Kept map focus clean: labels start at higher zoom and remain visually secondary to route and stops.

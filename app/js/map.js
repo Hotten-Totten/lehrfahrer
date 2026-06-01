@@ -200,7 +200,13 @@ function buildRasterStyle() {
         id: 'road-name-main', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
         minzoom: 14,
-        filter: ['in', ['coalesce', ['get', 'class'], ''], 'motorway', 'trunk', 'primary', 'secondary', 'tertiary'],
+        filter: ['any',
+          ['==', ['get', 'class'], 'motorway'],
+          ['==', ['get', 'class'], 'trunk'],
+          ['==', ['get', 'class'], 'primary'],
+          ['==', ['get', 'class'], 'secondary'],
+          ['==', ['get', 'class'], 'tertiary']
+        ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
@@ -274,7 +280,13 @@ function buildPMTilesStyle(pmtilesUrl) {
         id: 'road-name-main', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
         minzoom: 14,
-        filter: ['in', ['coalesce', ['get', 'class'], ''], 'motorway', 'trunk', 'primary', 'secondary', 'tertiary'],
+        filter: ['any',
+          ['==', ['get', 'class'], 'motorway'],
+          ['==', ['get', 'class'], 'trunk'],
+          ['==', ['get', 'class'], 'primary'],
+          ['==', ['get', 'class'], 'secondary'],
+          ['==', ['get', 'class'], 'tertiary']
+        ],
         layout: {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
