@@ -525,15 +525,23 @@ function dbGetLineGPX(id) {
 // ── Lines Katalog laden und aktualisieren ──────────────────
 async function fetchAndCacheLinesCatalog() {
   try {
+    console.log('📦 Fetching lines catalog from API...');
     const response = await fetch(`${API_BASE}/list_lines.php`);
-    if (!response.ok) throw new Error('Failed to fetch lines');
-    const result = await response.json();
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
     
-    if (!result.ok || !result.lines) return [];
+    const result = await response.json();
+    console.log('📦 API Response:', result);
+    
+    if (!result.ok || !result.lines) {
+      console.warn('⚠️ API response invalid:', result);
+      availableLinesCatalog = [];
+      return [];
+    }
     
     // In IndexedDB speichern
     await dbPutLinesCatalog(result.lines);
     availableLinesCatalog = result.lines;
+    console.log(`✓ Cached ${result.lines.length} lines to IndexedDB`);
     
     // Version speichern
     const catalogVersion = new Date().getTime();
@@ -541,7 +549,8 @@ async function fetchAndCacheLinesCatalog() {
     
     return result.lines;
   } catch (err) {
-    console.error('Error fetching lines catalog:', err);
+    console.error('❌ Error fetching lines catalog:', err);
+    availableLinesCatalog = [];
     return [];
   }
 }
