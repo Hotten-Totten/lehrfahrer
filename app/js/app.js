@@ -83,11 +83,9 @@ const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
 const navigateToStartBtn = document.getElementById('navigateToStartBtn');
-const routeActionBar   = document.getElementById('routeActionBar');
 
 console.log('🔍 DOM Elements:', {
-  navigateToStartBtn: !!navigateToStartBtn,
-  routeActionBar: !!routeActionBar
+  navigateToStartBtn: !!navigateToStartBtn
 });
 
 // Nav-DOM-Referenzen
@@ -1173,11 +1171,11 @@ function displayRoute(data) {
   
   // "Zum Startpunkt" Button freischalten (wenn Route vorhanden)
   if (data.routePoints && data.routePoints.length > 0) {
-    console.log('✅ Showing routeActionBar');
-    routeActionBar.classList.remove('hidden');
+    console.log('✅ Showing navigateToStartBtn');
+    navigateToStartBtn.style.display = 'block';
   } else {
-    console.log('❌ No routePoints, hiding routeActionBar');
-    routeActionBar.classList.add('hidden');
+    console.log('❌ No routePoints, hiding navigateToStartBtn');
+    navigateToStartBtn.style.display = 'none';
   }
 }
 
