@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.43 - 2026-06-01
+- Simplified offline route warning dialog text in [app/index.html](app/index.html): Changed from technical jargon ("Offline-Inventar", "offline nutzen") to simple driver-friendly language ("Route kennst du noch nicht!", "musst sie erst fahren"). Button labels also simplified: "Zuhause Üben (kein GPS nötig)" and "Draußen fahren (mit GPS)" with clearer action verbs.
+
 ## V2.0.42 - 2026-06-01
 - Enhanced offline route availability dialog in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): Now offers two immediate options in addition to "Später": (1) "🏠 Simulation (Zuhause)" starts a practice run at home without GPS, (2) "🚗 Echtes GPS (Draußen)" starts real GPS navigation on the road. Dialog text clarified to explain workflow: simulate at home to record + save, then use real GPS when driving.
 
