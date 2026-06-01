@@ -4,13 +4,16 @@
 
 const API_BASE = '../api';
 const DB_NAME  = 'lehrfahrer-offline';
-const DB_VER   = 1;
+const DB_VER   = 2;
+const STORAGE_KEY_LINES_CATALOG = 'lehrfahrer-lines-catalog-version';
+const STORAGE_KEY_DISMISSED_UPDATE = 'lehrfahrer-dismissed-lines-update';
 
 let db          = null;
 let currentRoute = null;
 let gpsActive   = false;
 let pmtilesUrl  = null; // gesetzt wenn lokale PMTiles-Datei geladen wurde
 let gpsFirstFixTimer = null;
+let availableLinesCatalog = []; // Linien vom API
 
 // Nav-Zustand
 let navActive    = false;
@@ -122,6 +125,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   detectOffline();
   await loadCities();
+  
+  // Lade Linien-Katalog und checke auf Updates
+  await fetchAndCacheLinesCatalog();
+  const hasNewLines = await checkForNewLines();
+  if (hasNewLines) {
+    showNewLinesNotification();
+  }
 });
 
 function resolveNavPerfDebugEnabled() {
@@ -376,8 +386,21 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = e => {
       const d = e.target.result;
+      // Routes Object Store
       if (!d.objectStoreNames.contains('routes')) {
         d.createObjectStore('routes', { keyPath: 'key' });
+      }
+      // Lines Catalog Object Store (Metadaten)
+      if (!d.objectStoreNames.contains('linesCatalog')) {
+        d.createObjectStore('linesCatalog', { keyPath: 'id' });
+      }
+      // Lines Data Object Store (JSON-Inhalte)
+      if (!d.objectStoreNames.contains('linesData')) {
+        d.createObjectStore('linesData', { keyPath: 'id' });
+      }
+      // Lines GPX Object Store
+      if (!d.objectStoreNames.contains('linesGPX')) {
+        d.createObjectStore('linesGPX', { keyPath: 'id' });
       }
     };
     req.onsuccess = e => { db = e.target.result; resolve(); };
@@ -419,6 +442,181 @@ function dbDelete(key) {
     req.onsuccess = () => resolve();
     req.onerror   = () => reject(req.error);
   });
+}
+
+// ── Lines Catalog (Metadaten) ─────────────────────────────────
+function dbPutLinesCatalog(catalog) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesCatalog', 'readwrite');
+    const req = tx.objectStore('linesCatalog').clear();
+    req.onsuccess = () => {
+      catalog.forEach(line => {
+        tx.objectStore('linesCatalog').put({ 
+          id: line.id, 
+          city: line.city,
+          lineFolder: line.lineFolder,
+          fileName: line.fileName,
+          lineName: line.lineName,
+          routeName: line.routeName,
+          updatedAt: line.updatedAt || Date.now()
+        });
+      });
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function dbGetLinesCatalog() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesCatalog', 'readonly');
+    const req = tx.objectStore('linesCatalog').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Lines Data (JSON-Inhalt) ──────────────────────────────────
+function dbPutLineData(id, lineData) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesData', 'readwrite');
+    const req = tx.objectStore('linesData').put({
+      id,
+      data: lineData,
+      savedAt: Date.now()
+    });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetLineData(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesData', 'readonly');
+    const req = tx.objectStore('linesData').get(id);
+    req.onsuccess = () => resolve(req.result?.data ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Lines GPX ─────────────────────────────────────────────────
+function dbPutLineGPX(id, gpxData) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesGPX', 'readwrite');
+    const req = tx.objectStore('linesGPX').put({
+      id,
+      data: gpxData,
+      savedAt: Date.now()
+    });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetLineGPX(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesGPX', 'readonly');
+    const req = tx.objectStore('linesGPX').get(id);
+    req.onsuccess = () => resolve(req.result?.data ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Lines Katalog laden und aktualisieren ──────────────────
+async function fetchAndCacheLinesCatalog() {
+  try {
+    const response = await fetch(`${API_BASE}/list_lines.php`);
+    if (!response.ok) throw new Error('Failed to fetch lines');
+    const result = await response.json();
+    
+    if (!result.ok || !result.lines) return [];
+    
+    // In IndexedDB speichern
+    await dbPutLinesCatalog(result.lines);
+    availableLinesCatalog = result.lines;
+    
+    // Version speichern
+    const catalogVersion = new Date().getTime();
+    localStorage.setItem(STORAGE_KEY_LINES_CATALOG, catalogVersion);
+    
+    return result.lines;
+  } catch (err) {
+    console.error('Error fetching lines catalog:', err);
+    return [];
+  }
+}
+
+// ── Prüfe auf neue Linien ──────────────────────────────────
+async function checkForNewLines() {
+  try {
+    const currentCatalog = await dbGetLinesCatalog();
+    const newCatalog = await fetchAndCacheLinesCatalog();
+    
+    if (newCatalog.length === 0) return false;
+    
+    const newCount = newCatalog.filter(line => 
+      !currentCatalog.find(c => c.id === line.id)
+    ).length;
+    
+    if (newCount > 0) {
+      const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED_UPDATE);
+      localStorage.removeItem(STORAGE_KEY_DISMISSED_UPDATE); // Reset bei neuen Linien
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('Error checking for new lines:', err);
+    return false;
+  }
+}
+
+// ── Eine Linie mit GPX herunterladen ────────────────────────
+async function downloadLineWithGPX(lineId) {
+  try {
+    const line = availableLinesCatalog.find(l => l.id === lineId);
+    if (!line) throw new Error('Line not found in catalog');
+    
+    // 1. JSON-Datei laden
+    const jsonPath = line.lineFolder 
+      ? `../linien/${line.city}/${line.lineFolder}/${line.file}`
+      : `../linien/${line.city}/${line.file}`;
+    
+    const jsonResp = await fetch(jsonPath);
+    if (!jsonResp.ok) throw new Error('Failed to fetch line JSON');
+    const lineData = await jsonResp.json();
+    
+    // In IndexedDB speichern
+    await dbPutLineData(lineId, lineData);
+    
+    // 2. GPX-Datei laden (wenn vorhanden)
+    if (line.hasGpx) {
+      const gpxBase = line.file.replace('.json', '.gpx');
+      const gpxPath = line.lineFolder
+        ? `../linien/${line.city}/${line.lineFolder}/${gpxBase}`
+        : `../linien/${line.city}/gpx/${gpxBase}`;
+      
+      try {
+        const gpxResp = await fetch(gpxPath);
+        if (gpxResp.ok) {
+          const gpxText = await gpxResp.text();
+          await dbPutLineGPX(lineId, gpxText);
+        }
+      } catch (gpxErr) {
+        console.warn('GPX download failed (continuing with JSON):', gpxErr);
+      }
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Error downloading line:', err);
+    return false;
+  }
+}
+
+// ── Notification für neue Linien ──────────────────────────────
+function showNewLinesNotification() {
+  // TODO: Implementieren - Banner oben anzeigen
+  console.log('New lines available!');
 }
 
 // ── Offline-Erkennung (per echtem Fetch-Test, nicht navigator.onLine) ────────
