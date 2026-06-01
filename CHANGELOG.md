@@ -1,6 +1,7 @@
 # Changelog
 
-## V2.0.63 - 2026-06-01
+## V2.0.64 - 2026-06-01
+- **Refactor: Replace "Route not saved" dialog with Available Lines display** – Removed confusing "Route noch nicht gespeichert" modal that told drivers to practice first. With auto-download, all 8 lines are ready on startup. Added new Settings section showing "✅ Verfügbare Offline-Linien" with visual list of all downloaded lines. Now when driver opens Settings, they see immediately which lines are cached and ready. Deleted: old offline-route-list code (~40 lines), clearAllOfflineRoutes function, showOfflineNotAvailableDialog logic. Result: Zero confusion, maximum transparency.
 - **Refactor: Remove Simulation Mode** – Deleted all local simulation code ("Fahrt ▶" button, sim-speed settings, ~150 lines JS, ~50 lines CSS). With auto-download, drivers never need local practice—they select a line and immediately navigate with real GPS. Removed 3 modal buttons (now only "Navigate with GPS" remains). Result: Ultra-clean interface, one workflow, zero confusion.
 
 ## V2.0.62 - 2026-06-01

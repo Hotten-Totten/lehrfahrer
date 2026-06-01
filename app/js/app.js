@@ -81,13 +81,7 @@ const stopList         = document.getElementById('stopList');
 const tileStatus       = document.getElementById('tileStatus');
 const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
-const clearOfflineCacheBtn = document.getElementById('clearOfflineCacheBtn');
-const offlineRouteList = document.getElementById('offlineRouteList');
-
-// Offline-Warnung Modal
-const offlineNotAvailableModal = document.getElementById('offlineNotAvailableModal');
-const offlineModalNavBtn    = document.getElementById('offlineModalNavBtn');
-const offlineModalLaterBtn  = document.getElementById('offlineModalLaterBtn');
+const availableLinesContainer = document.getElementById('availableLinesContainer');
 
 // Nav-DOM-Referenzen
 const navBtn        = document.getElementById('navBtn');
@@ -944,17 +938,7 @@ function detectOffline() {
 }
 
 // ── Offline-Warnung Modal anzeigen ──────────────────────────
-function showOfflineNotAvailableDialog() {
-  if (!offlineNotAvailableModal) return;
-  offlineNotAvailableModal.classList.remove('hidden');
-}
-
-function hideOfflineNotAvailableDialog() {
-  if (!offlineNotAvailableModal) return;
-  offlineNotAvailableModal.classList.add('hidden');
-}
-
-// ── Events binden ────────────────────────────────────────────
+ Events binden ────────────────────────────────────────────
 function bindEvents() {
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
@@ -967,32 +951,11 @@ function bindEvents() {
     if (e.target === settingsOverlay) closeSettings();
   });
 
-  // Offline-Warnung Modal Event-Listener
-  if (offlineModalNavBtn) {
-    offlineModalNavBtn.addEventListener('click', () => {
-      hideOfflineNotAvailableDialog();
-      startNavigation();
-    });
-  }
-  if (offlineModalLaterBtn) {
-    offlineModalLaterBtn.addEventListener('click', () => {
-      hideOfflineNotAvailableDialog();
-    });
-  }
-  if (offlineNotAvailableModal) {
-    offlineNotAvailableModal.addEventListener('click', e => {
-      if (e.target === offlineNotAvailableModal) hideOfflineNotAvailableDialog();
-    });
-  }
-
-
-
   panelHandle.addEventListener('click', togglePanel);
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
 
   loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
   tilesFileInput.addEventListener('change', onTilesFileSelected);
-  clearOfflineCacheBtn.addEventListener('click', clearAllOfflineRoutes);
 
   navBtn.addEventListener('click', () => {
     if (navActive) stopNavigation();
@@ -1129,11 +1092,6 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
   currentRoute = { city, fileBase, lineFolder, key, data };
 
   displayRoute(data);
-
-  // Warnung anzeigen wenn Route noch nicht offline verfügbar
-  if (!isOfflineAvailable) {
-    showOfflineNotAvailableDialog();
-  }
 }
 
 // ── Route darstellen ─────────────────────────────────────────
@@ -1236,45 +1194,50 @@ async function saveCurrentRouteOffline() {
   }
 }
 
-// ── Offline-Routen-Liste in Einstellungen ────────────────────
-async function renderOfflineRouteList() {
-  const entries = await dbGetAll();
-  if (!entries.length) {
-    const hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = 'Keine Routen gespeichert.';
-    offlineRouteList.replaceChildren(hint);
-    return;
-  }
-
-  offlineRouteList.replaceChildren();
-  entries.forEach(entry => {
-    const div = document.createElement('div');
-    div.className = 'offline-route-entry';
-
-    const label = document.createElement('span');
-    label.textContent = (entry.data && entry.data.lineName) ? entry.data.lineName : entry.key;
-
-    const removeBtn = document.createElement('button');
-    removeBtn.title = 'Route aus Offline-Speicher löschen';
-    removeBtn.textContent = '🗑';
-
-    removeBtn.addEventListener('click', async () => {
-      await dbDelete(entry.key);
-      await renderOfflineRouteList();
+// ── Verfügbare Offline-Linien in Einstellungen anzeigen ────
+async function displayAvailableLines() {
+  if (!availableLinesContainer) return;
+  
+  try {
+    // Hole die heruntergeladenen Linien aus linesData store
+    const tx = db.transaction('linesData', 'readonly');
+    const req = tx.objectStore('linesData').getAll();
+    const allLines = await new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
     });
 
-    div.appendChild(label);
-    div.appendChild(removeBtn);
-    offlineRouteList.appendChild(div);
-  });
-}
+    if (!allLines.length) {
+      availableLinesContainer.innerHTML = '<p class="hint">Keine Linien heruntergeladen – werden beim App-Start automatisch geladen.</p>';
+      return;
+    }
 
-async function clearAllOfflineRoutes() {
-  if (!confirm('Alle gespeicherten Offline-Routen löschen?')) return;
-  const entries = await dbGetAll();
-  for (const e of entries) await dbDelete(e.key);
-  await renderOfflineRouteList();
+    availableLinesContainer.innerHTML = '';
+    allLines.forEach(line => {
+      const div = document.createElement('div');
+      div.style.cssText = `
+        padding: 10px 12px;
+        background: var(--surface2);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      `;
+      
+      div.innerHTML = `
+        <span style="font-size: 18px;">✅</span>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; font-size: 14px;">${line.lineName || line.id}</div>
+          <div style="font-size: 12px; color: var(--text-muted);">${line.routeName || 'Route'}</div>
+        </div>
+      `;
+      
+      availableLinesContainer.appendChild(div);
+    });
+  } catch (err) {
+    console.error('Error displaying available lines:', err);
+    availableLinesContainer.innerHTML = '<p class="hint">Fehler beim Laden der Linien.</p>';
+  }
 }
 
 function gpsAllowedContext() {
@@ -1382,7 +1345,7 @@ function setPanelOpen(isOpen) {
 // ── Einstellungen ─────────────────────────────────────────────
 function openSettings() {
   settingsOverlay.classList.remove('hidden');
-  renderOfflineRouteList();
+  displayAvailableLines();
 }
 
 function closeSettings() {

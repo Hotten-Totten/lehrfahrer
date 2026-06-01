@@ -568,21 +568,6 @@ html, body {
 
 #tilesFileInput { display: none; }
 
-#offlineRouteList .offline-route-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-#offlineRouteList .offline-route-entry button {
-  width: auto;
-  padding: 4px 10px;
-  font-size: 12px;
-  margin: 0;
-}
-
 #closeSettingsBtn { background: var(--surface2) !important; }
 
 /* ── Radio-Zeilen (Perspektiv-Auswahl) ─────── */
