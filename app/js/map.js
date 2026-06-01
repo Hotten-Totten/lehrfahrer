@@ -205,10 +205,7 @@ function buildRasterStyle() {
           ['==', ['get', 'class'], 'trunk'],
           ['==', ['get', 'class'], 'primary'],
           ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary'],
-          ['==', ['get', 'class'], 'residential'],
-          ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street']
+          ['==', ['get', 'class'], 'tertiary']
         ],
         layout: {
           'symbol-placement': 'line',
@@ -223,6 +220,30 @@ function buildRasterStyle() {
           'text-halo-color': 'rgba(255,255,255,0.95)',
           'text-halo-width': 1.6,
           'text-halo-blur': 0.5
+        }
+      },
+      {
+        id: 'road-name-residential', type: 'symbol', source: 'ofm',
+        'source-layer': 'transportation_name',
+        minzoom: 15,
+        filter: ['any',
+          ['==', ['get', 'class'], 'residential'],
+          ['==', ['get', 'class'], 'unclassified'],
+          ['==', ['get', 'class'], 'living_street']
+        ],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 13, 18, 17],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#1a2847',
+          'text-halo-color': 'rgba(255,255,255,0.95)',
+          'text-halo-width': 1.4,
+          'text-halo-blur': 0.4
         }
       }
     ]
@@ -288,10 +309,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           ['==', ['get', 'class'], 'trunk'],
           ['==', ['get', 'class'], 'primary'],
           ['==', ['get', 'class'], 'secondary'],
-          ['==', ['get', 'class'], 'tertiary'],
-          ['==', ['get', 'class'], 'residential'],
-          ['==', ['get', 'class'], 'unclassified'],
-          ['==', ['get', 'class'], 'living_street']
+          ['==', ['get', 'class'], 'tertiary']
         ],
         layout: {
           'symbol-placement': 'line',
@@ -306,6 +324,30 @@ function buildPMTilesStyle(pmtilesUrl) {
           'text-halo-color': 'rgba(255,255,255,0.95)',
           'text-halo-width': 1.6,
           'text-halo-blur': 0.5
+        }
+      },
+      {
+        id: 'road-name-residential', type: 'symbol', source: 'openmaptiles',
+        'source-layer': 'transportation_name',
+        minzoom: 15,
+        filter: ['any',
+          ['==', ['get', 'class'], 'residential'],
+          ['==', ['get', 'class'], 'unclassified'],
+          ['==', ['get', 'class'], 'living_street']
+        ],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 13, 18, 17],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#1a2847',
+          'text-halo-color': 'rgba(255,255,255,0.95)',
+          'text-halo-width': 1.4,
+          'text-halo-blur': 0.4
         }
       }
     ]
