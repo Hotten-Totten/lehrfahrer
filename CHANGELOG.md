@@ -1,5 +1,25 @@
 # Changelog
 
+## V2.0.55 - 2026-06-01
+- **Offline Lines Download Center System** – Complete implementation in [app/js/app.js](app/js/app.js), [app/index.html](app/index.html), [app/css/app.css](app/css/app.css):
+  - **IndexedDB Schema Upgrade** (DB_VER 2): Added 4 new object stores (`linesCatalog`, `linesData`, `linesGPX`, plus existing `routes`), with 6 supporting database functions for complete offline lines persistence.
+  - **Lines Catalog API Integration**: `fetchAndCacheLinesCatalog()` automatically fetches all available lines from `/api/list_lines.php` on app startup, stores metadata in IndexedDB, enabling offline-first downloads without network.
+  - **Smart Update Notification Banner**: Top-of-screen alert (orange gradient, dismissible) appears when new lines detected, shows count of available updates, includes "Jetzt laden" button with persistent re-display on new line detection.
+  - **Interactive Download Center Modal**: User-facing UI with:
+    - Full list of available lines organized by city/route name
+    - Real-time cached status indicator ("✓ Schon geladen") for previously downloaded lines
+    - Checkboxes for selective download or "Select All" option
+    - Live download progress bar showing X/Y lines loaded
+    - Auto-saves complete JSON + GPX data per line to IndexedDB
+  - **Auto-Fallback Cache Strategy**: Line loader (`loadAndShowRoute()`) now checks in priority order: (1) New `linesData` store for downloaded lines, (2) Old `routes` store for manually saved routes, (3) API fallback if not cached. Enables seamless offline use.
+  - **Seamless Navigation Integration**: Auto-save on nav end now also writes to new `linesData` store, maintaining dual compatibility.
+  - **Technical Details**:
+    - Line IDs generated from city/lineFolder/fileName for consistent indexing
+    - Download progress tracking with real-time UI feedback
+    - Error handling for failed GPX downloads (JSON preserved)
+    - CSS utility for banner with banner-aware layout offset (--banner-h variable)
+    - LocalStorage version tracking for update detection
+
 ## V2.0.45 - 2026-06-01
 - Enhanced road label coverage in [app/js/map.js](app/js/map.js): Expanded street name display filters for both online (OpenFreeMap) and PMTiles offline sources. Now shows all road types: motorway, trunk, primary, secondary, tertiary (main roads) PLUS residential, unclassified, living_street (small side streets). Drivers see complete street network for better navigation orientation.
 - Enlarged bus marker from 52px to 68px in [app/css/app.css](app/css/app.css): Bus icon now 30% larger for better visibility on driver's screen, more prominent during navigation, easier to track on map.
