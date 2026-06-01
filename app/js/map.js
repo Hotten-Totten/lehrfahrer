@@ -225,7 +225,7 @@ function buildRasterStyle() {
       {
         id: 'road-name-residential', type: 'symbol', source: 'ofm',
         'source-layer': 'transportation_name',
-        minzoom: 15,
+        minzoom: 13,
         filter: ['any',
           ['==', ['get', 'class'], 'residential'],
           ['==', ['get', 'class'], 'unclassified'],
@@ -235,7 +235,7 @@ function buildRasterStyle() {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 13, 18, 17],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 19],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
@@ -329,7 +329,7 @@ function buildPMTilesStyle(pmtilesUrl) {
       {
         id: 'road-name-residential', type: 'symbol', source: 'openmaptiles',
         'source-layer': 'transportation_name',
-        minzoom: 15,
+        minzoom: 13,
         filter: ['any',
           ['==', ['get', 'class'], 'residential'],
           ['==', ['get', 'class'], 'unclassified'],
@@ -339,7 +339,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 13, 18, 17],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 19],
           'text-letter-spacing': 0.05,
           'text-max-angle': 30
         },
