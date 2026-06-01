@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.59 - 2026-06-01
+- **Auto-Download Lines on Startup** – Lines are now automatically downloaded and cached when app starts, making all lines immediately available offline without user interaction. Driver opens app and all lines are ready to drive. Progress indicator ("⬇ Linien laden…") appears discretely in topbar during background downloads. 200ms delay between downloads prevents server overload.
+- **Download Center Button** – Added permanent 📥 button in topbar for manual line management and selective downloads (backup/recovery use case).
+
 ## V2.0.55 - 2026-06-01
 - **Offline Lines Download Center System** – Complete implementation in [app/js/app.js](app/js/app.js), [app/index.html](app/index.html), [app/css/app.css](app/css/app.css):
   - **IndexedDB Schema Upgrade** (DB_VER 2): Added 4 new object stores (`linesCatalog`, `linesData`, `linesGPX`, plus existing `routes`), with 6 supporting database functions for complete offline lines persistence.
