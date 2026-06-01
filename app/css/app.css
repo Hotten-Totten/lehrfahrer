@@ -281,14 +281,16 @@ html, body {
 }
 
 /* ── GPS-Bus auf Karte ──────────────────────── */
-.gps-bus {
+.gps-bus,
+.gps-dot {
   width: 52px;
   height: 52px;
   position: relative;
   transform-origin: 50% 50%;
 }
 
-.gps-bus::before {
+.gps-bus::before,
+.gps-dot::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -299,12 +301,14 @@ html, body {
   transition: opacity 0.25s ease;
 }
 
-.gps-bus.has-heading::before {
+.gps-bus.has-heading::before,
+.gps-dot.has-heading::before {
   opacity: 1;
   animation: gpsPulse 1.8s infinite;
 }
 
-.gps-bus::after {
+.gps-bus::after,
+.gps-dot::after {
   content: '';
   position: absolute;
   left: 10px;

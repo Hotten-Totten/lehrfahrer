@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.39 - 2026-06-01
+- Added `.gps-dot` CSS class styling in [app/css/app.css](app/css/app.css): was missing, caused GPS marker to be invisible during navigation simulation. Now both real GPS and simulated GPS use the same 52px bus marker with proper styling.
+- Ensures cache-busting forces full refresh of CSS on device.
+
 ## V2.0.38 - 2026-06-01
 - Enlarged GPS bus marker in [app/css/app.css](app/css/app.css): increased from 34px to 52px for much better driver visibility with clearer colors and stronger shadow.
 - Improved road label readability in [app/js/map.js](app/js/map.js): increased text size, switched to bold font, darkened color, and strengthened halo for better contrast on day map.
