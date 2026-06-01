@@ -895,6 +895,7 @@ function bindEvents() {
   if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
 
   gpsBtn.addEventListener('click', toggleGPS);
+  document.getElementById('downloadCenterBtn')?.addEventListener('click', showDownloadCenterModal);
   settingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   settingsOverlay.addEventListener('click', e => {
@@ -923,6 +924,16 @@ function bindEvents() {
     offlineNotAvailableModal.addEventListener('click', e => {
       if (e.target === offlineNotAvailableModal) hideOfflineNotAvailableDialog();
     });
+  }
+
+  // Download Center Modal Events
+  const downloadNowBtn = document.getElementById('downloadNowBtn');
+  const dismissBannerBtn = document.getElementById('dismissBannerBtn');
+  if (downloadNowBtn) {
+    downloadNowBtn.addEventListener('click', showDownloadCenterModal);
+  }
+  if (dismissBannerBtn) {
+    dismissBannerBtn.addEventListener('click', hideBanner);
   }
 
   panelHandle.addEventListener('click', togglePanel);
