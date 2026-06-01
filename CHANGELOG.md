@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.61 - 2026-06-01
+- **Fix: Auto-Download Now Actually Works!** – Auto-download was checking `linesCatalog` (metadata) instead of `linesData` (actual JSON files). Fixed to check the correct store. Now on app startup with empty cache, all 8 lines are correctly identified as "NEW" and downloaded in background. Progress indicator "⬇ Linien laden…" displays, all 8 lines download successfully (verified: 8/8 complete). Drivers get instant offline line availability without manual steps.
+
 ## V2.0.60 - 2026-06-01
 - **Fix: Auto-Download Deduplication** – API returns duplicate lines when both new and old directory formats exist. Added automatic deduplication in `fetchAndCacheLinesCatalog()` to filter duplicate IDs before caching, ensuring exact line count matches available inventory. Fixes case where 13 lines displayed but only 8 were actually being downloaded due to ID collisions.
 
