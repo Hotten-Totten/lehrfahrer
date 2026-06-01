@@ -453,7 +453,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
 
       if (!gpsMarker) {
         const el = document.createElement('div');
-        el.className = 'gps-dot';
+        el.className = 'gps-bus';
         gpsMarker = new maplibregl.Marker({ element: el })
           .setLngLat(lnglat)
           .addTo(map);

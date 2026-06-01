@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.35 - 2026-06-01
+- Replaced the GPS point with a bus marker in [app/js/map.js](app/js/map.js) and [app/css/app.css](app/css/app.css), including heading-based rotation for a more realistic driving view.
+- Updated service worker registration URL in [app/js/app.js](app/js/app.js) and rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.34 - 2026-06-01
 - Updated map rendering in [app/js/map.js](app/js/map.js) to a clearer navigation-style day palette (higher contrast roads, lighter land/background, clearer water/buildings).
 - Strengthened route visibility in [app/js/map.js](app/js/map.js) with a clearer casing and thicker main route line for faster driver recognition.

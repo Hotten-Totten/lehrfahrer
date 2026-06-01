@@ -280,28 +280,46 @@ html, body {
   padding: 12px 4px;
 }
 
-/* ── GPS-Punkt auf Karte ────────────────────── */
-.gps-dot {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: var(--primary);
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 4px rgba(74,158,255,0.3);
-  animation: gpsPulse 2s infinite;
+/* ── GPS-Bus auf Karte ──────────────────────── */
+.gps-bus {
+  width: 34px;
+  height: 34px;
   position: relative;
+  transform-origin: 50% 50%;
 }
-.gps-dot::before {
+
+.gps-bus::before {
   content: '';
   position: absolute;
-  top: -10px;
-  left: calc(50% - 4px);
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 10px solid var(--primary);
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(74, 158, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.30);
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s ease;
 }
-.gps-dot.has-heading::before { opacity: 1; }
+
+.gps-bus.has-heading::before {
+  opacity: 1;
+  animation: gpsPulse 1.8s infinite;
+}
+
+.gps-bus::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 20px;
+  height: 28px;
+  border-radius: 7px 7px 6px 6px;
+  border: 2px solid #ffffff;
+  background:
+    radial-gradient(circle at 30% 82%, #0f172a 1.8px, transparent 2px),
+    radial-gradient(circle at 70% 82%, #0f172a 1.8px, transparent 2px),
+    linear-gradient(#9ecbff 0 36%, #1e88ff 36% 73%, #0d5dc0 73% 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
 @keyframes gpsPulse {
   0%, 100% { box-shadow: 0 0 0 4px rgba(74,158,255,0.3); }
   50%       { box-shadow: 0 0 0 8px rgba(74,158,255,0.08); }
