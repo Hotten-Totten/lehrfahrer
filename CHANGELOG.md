@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.44 - 2026-06-01
+- Added 3D depth effect to bus marker in [app/css/app.css](app/css/app.css): Replaced flat gradient with multi-layered 5-color gradient (light-to-dark blue), inset box-shadows for internal structure (top/bottom/side highlights), and layered drop-shadows for realistic ground-level depth perception. Added subtle window details via overlay gradients and CSS perspective for 3D volume. Bus now appears as a rounded 3D object rather than a flat icon.
+
 ## V2.0.43 - 2026-06-01
 - Simplified offline route warning dialog text in [app/index.html](app/index.html): Changed from technical jargon ("Offline-Inventar", "offline nutzen") to simple driver-friendly language ("Route kennst du noch nicht!", "musst sie erst fahren"). Button labels also simplified: "Zuhause Üben (kein GPS nötig)" and "Draußen fahren (mit GPS)" with clearer action verbs.
 

@@ -287,6 +287,7 @@ html, body {
   height: 52px;
   position: relative;
   transform-origin: 50% 50%;
+  perspective: 800px;
 }
 
 .gps-bus::before,
@@ -311,22 +312,66 @@ html, body {
 .gps-dot::after {
   content: '';
   position: absolute;
-  left: 10px;
+  left: 8px;
   top: 4px;
-  width: 32px;
+  width: 36px;
   height: 44px;
-  border-radius: 12px 12px 10px 10px;
-  border: 3px solid #ffffff;
+  border-radius: 14px 14px 10px 10px;
+  
+  /* 3D-Bus mit Schichten-Effekt */
   background:
-    radial-gradient(circle at 25% 86%, #061527 3px, transparent 3.5px),
-    radial-gradient(circle at 75% 86%, #061527 3px, transparent 3.5px),
-    linear-gradient(#7ab8ff 0 35%, #0d5dd1 35% 70%, #083a9e 70% 100%);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.50);
+    /* Fensterstreifen oben (Fahrerhaus) */
+    linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 15%, rgba(255,255,255,0.25) 85%, transparent 100%) 0 0 / 100% 8px no-repeat,
+    /* Fensterstreifen Mitte */
+    linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 10%, rgba(255,255,255,0.15) 90%, transparent 100%) 0 12px / 100% 12px repeat-y,
+    /* Hauptgradient: 3-farbig für Tiefe */
+    linear-gradient(180deg, 
+      #5db0ff 0%,      /* helles Blau oben (Dach/Fahrerhaus) */
+      #2a8ee8 25%,     /* mittleres Blau (Oberkörper) */
+      #0d5dd1 50%,     /* dunkles Blau (Mitte) */
+      #083a9e 75%,     /* noch dunkler (Unterkörper) */
+      #051f5c 100%     /* sehr dunkel unten (Radnähe) */
+    );
+  
+  border: 2px solid #ffffff;
+  
+  /* Mehrfach-Schatten für 3D-Tiefenwirkung */
+  box-shadow: 
+    /* Äußerer Rand-Schatten (Tiefe) */
+    0 8px 16px rgba(0, 0, 0, 0.6),
+    /* Innerer Schatten oben (Fahrerhaus-Definition) */
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    /* Innerer Schatten unten (Gewicht) */
+    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
+    /* Seitliche Schatten (Volumen) */
+    inset -1px 0 3px rgba(0, 0, 0, 0.3),
+    inset 1px 0 3px rgba(255, 255, 255, 0.2),
+    /* Externer Grund-Schatten */
+    0 10px 20px rgba(0, 0, 0, 0.4);
+  
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
 @keyframes gpsPulse {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(74,158,255,0.3); }
-  50%       { box-shadow: 0 0 0 8px rgba(74,158,255,0.08); }
+  0%, 100% { box-shadow: 
+    0 8px 16px rgba(0, 0, 0, 0.6),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
+    inset -1px 0 3px rgba(0, 0, 0, 0.3),
+    inset 1px 0 3px rgba(255, 255, 255, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(74,158,255,0.3);
+  }
+  50% { 
+    box-shadow: 
+    0 8px 16px rgba(0, 0, 0, 0.6),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
+    inset -1px 0 3px rgba(0, 0, 0, 0.3),
+    inset 1px 0 3px rgba(255, 255, 255, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 8px rgba(74,158,255,0.08);
+  }
 }
 
 /* ── Haltestellen-Marker auf Karte ──────────── */
