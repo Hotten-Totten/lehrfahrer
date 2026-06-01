@@ -249,7 +249,33 @@ function buildRasterStyle() {
           'text-halo-width': 1.3,
           'text-halo-blur': 0.4
         }
-      }
+      },
+      {
+        id: 'road-name-paths', type: 'symbol', source: 'ofm',
+        'source-layer': 'transportation_name',
+        minzoom: 15,
+        maxzoom: 20,
+        filter: ['any',
+          ['==', ['get', 'class'], 'path'],
+          ['==', ['get', 'class'], 'footway'],
+          ['==', ['get', 'class'], 'track'],
+          ['==', ['get', 'class'], 'cycleway'],
+          ['==', ['get', 'class'], 'bridleway']
+        ],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#777777',
+          'text-halo-color': 'rgba(255,255,255,0.85)',
+          'text-halo-width': 1.0,
+          'text-halo-blur': 0.3
+        }
     ]
   };
 }
@@ -357,7 +383,33 @@ function buildPMTilesStyle(pmtilesUrl) {
           'text-halo-width': 1.3,
           'text-halo-blur': 0.4
         }
-      }
+      },
+      {
+        id: 'road-name-paths', type: 'symbol', source: 'openmaptiles',
+        'source-layer': 'transportation_name',
+        minzoom: 15,
+        maxzoom: 20,
+        filter: ['any',
+          ['==', ['get', 'class'], 'path'],
+          ['==', ['get', 'class'], 'footway'],
+          ['==', ['get', 'class'], 'track'],
+          ['==', ['get', 'class'], 'cycleway'],
+          ['==', ['get', 'class'], 'bridleway']
+        ],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
+          'text-font': ['Noto Sans'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 18, 12],
+          'text-letter-spacing': 0.05,
+          'text-max-angle': 30
+        },
+        paint: {
+          'text-color': '#777777',
+          'text-halo-color': 'rgba(255,255,255,0.85)',
+          'text-halo-width': 1.0,
+          'text-halo-blur': 0.3
+        }
     ]
   };
 }
