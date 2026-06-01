@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.60 - 2026-06-01
+- **Fix: Auto-Download Deduplication** – API returns duplicate lines when both new and old directory formats exist. Added automatic deduplication in `fetchAndCacheLinesCatalog()` to filter duplicate IDs before caching, ensuring exact line count matches available inventory. Fixes case where 13 lines displayed but only 8 were actually being downloaded due to ID collisions.
+
 ## V2.0.59 - 2026-06-01
 - **Auto-Download Lines on Startup** – Lines are now automatically downloaded and cached when app starts, making all lines immediately available offline without user interaction. Driver opens app and all lines are ready to drive. Progress indicator ("⬇ Linien laden…") appears discretely in topbar during background downloads. 200ms delay between downloads prevents server overload.
 - **Download Center Button** – Added permanent 📥 button in topbar for manual line management and selective downloads (backup/recovery use case).

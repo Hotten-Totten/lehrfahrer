@@ -540,16 +540,30 @@ async function fetchAndCacheLinesCatalog() {
       return [];
     }
     
+    // ⚠️ WICHTIG: API kann Duplicates zurückgeben (neues + altes Format gescannt)
+    // Deduplizieren nach ID: Behalte nur das erste Vorkommen
+    const seenIds = new Set();
+    const uniqueLines = result.lines.filter(line => {
+      if (seenIds.has(line.id)) {
+        console.log(`  ⚠️ Duplicate ID filtered out: ${line.id}`);
+        return false;
+      }
+      seenIds.add(line.id);
+      return true;
+    });
+    
+    console.log(`📋 Deduplication: ${result.lines.length} → ${uniqueLines.length} unique lines`);
+    
     // In IndexedDB speichern
-    await dbPutLinesCatalog(result.lines);
-    availableLinesCatalog = result.lines;
-    console.log(`✓ Cached ${result.lines.length} lines to IndexedDB`);
+    await dbPutLinesCatalog(uniqueLines);
+    availableLinesCatalog = uniqueLines;
+    console.log(`✓ Cached ${uniqueLines.length} lines to IndexedDB`);
     
     // Version speichern
     const catalogVersion = new Date().getTime();
     localStorage.setItem(STORAGE_KEY_LINES_CATALOG, catalogVersion);
     
-    return result.lines;
+    return uniqueLines;
   } catch (err) {
     console.error('❌ Error fetching lines catalog:', err);
     availableLinesCatalog = [];
