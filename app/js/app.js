@@ -66,7 +66,7 @@ const navDriveLog = {
 // ── DOM-Referenzen ───────────────────────────────────────────
 const citySelect       = document.getElementById('citySelect');
 const lineSelect       = document.getElementById('lineSelect');
-const saveOfflineBtn   = document.getElementById('saveOfflineBtn');
+const saveOfflineBtn   = document.getElementById('saveOfflineBtn'); // Jetzt obsolet, aber Modal ersetzt Funktionalität
 const offlineBadge     = document.getElementById('offlineBadge');
 const gpsBtn           = document.getElementById('gpsBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
@@ -83,6 +83,11 @@ const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
 const clearOfflineCacheBtn = document.getElementById('clearOfflineCacheBtn');
 const offlineRouteList = document.getElementById('offlineRouteList');
+
+// Offline-Warnung Modal
+const offlineNotAvailableModal = document.getElementById('offlineNotAvailableModal');
+const offlineModalNowBtn    = document.getElementById('offlineModalNowBtn');
+const offlineModalLaterBtn  = document.getElementById('offlineModalLaterBtn');
 
 // Nav-DOM-Referenzen
 const navBtn        = document.getElementById('navBtn');
@@ -450,11 +455,22 @@ function detectOffline() {
   checkOnline();
 }
 
+// ── Offline-Warnung Modal anzeigen ──────────────────────────
+function showOfflineNotAvailableDialog() {
+  if (!offlineNotAvailableModal) return;
+  offlineNotAvailableModal.classList.remove('hidden');
+}
+
+function hideOfflineNotAvailableDialog() {
+  if (!offlineNotAvailableModal) return;
+  offlineNotAvailableModal.classList.add('hidden');
+}
+
 // ── Events binden ────────────────────────────────────────────
 function bindEvents() {
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
-  saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
+  if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
 
   gpsBtn.addEventListener('click', toggleGPS);
   settingsBtn.addEventListener('click', openSettings);
@@ -462,6 +478,24 @@ function bindEvents() {
   settingsOverlay.addEventListener('click', e => {
     if (e.target === settingsOverlay) closeSettings();
   });
+
+  // Offline-Warnung Modal Event-Listener
+  if (offlineModalNowBtn) {
+    offlineModalNowBtn.addEventListener('click', () => {
+      hideOfflineNotAvailableDialog();
+      startNavigation();
+    });
+  }
+  if (offlineModalLaterBtn) {
+    offlineModalLaterBtn.addEventListener('click', () => {
+      hideOfflineNotAvailableDialog();
+    });
+  }
+  if (offlineNotAvailableModal) {
+    offlineNotAvailableModal.addEventListener('click', e => {
+      if (e.target === offlineNotAvailableModal) hideOfflineNotAvailableDialog();
+    });
+  }
 
   panelHandle.addEventListener('click', togglePanel);
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
@@ -516,7 +550,7 @@ async function loadCities() {
 async function onCityChange() {
   lineSelect.innerHTML = '<option value="">Linie …</option>';
   lineSelect.disabled  = true;
-  saveOfflineBtn.disabled = true;
+  if (saveOfflineBtn) saveOfflineBtn.disabled = true;
   if (!citySelect.value) return;
   await loadLines(citySelect.value);
 }
@@ -546,7 +580,7 @@ async function loadLines(city) {
 }
 
 async function onLineChange() {
-  saveOfflineBtn.disabled = true;
+  if (saveOfflineBtn) saveOfflineBtn.disabled = true;
   currentRoute = null;
   if (!lineSelect.value) return;
 
@@ -562,7 +596,11 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
 
   // Erst offline-Cache prüfen
   let data = null;
-  try { data = await dbGet(key); } catch {}
+  let isOfflineAvailable = false;
+  try { 
+    data = await dbGet(key);
+    isOfflineAvailable = (data != null);
+  } catch {}
 
   // Dann Server versuchen
   if (!data) {
@@ -586,9 +624,13 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
   }
 
   currentRoute = { city, fileBase, lineFolder, key, data };
-  saveOfflineBtn.disabled = false;
 
   displayRoute(data);
+
+  // Warnung anzeigen wenn Route noch nicht offline verfügbar
+  if (!isOfflineAvailable) {
+    showOfflineNotAvailableDialog();
+  }
 }
 
 // ── Route darstellen ─────────────────────────────────────────
@@ -677,12 +719,16 @@ async function saveCurrentRouteOffline() {
 
   try {
     await dbPut(currentRoute.key, currentRoute.data);
-    saveOfflineBtn.textContent = '✓';
-    saveOfflineBtn.title = 'Route ist offline gespeichert';
-    setTimeout(() => {
-      saveOfflineBtn.textContent = '⬇';
-      saveOfflineBtn.title = 'Route für Offline-Nutzung speichern';
-    }, 2000);
+    if (saveOfflineBtn) {
+      saveOfflineBtn.textContent = '✓';
+      saveOfflineBtn.title = 'Route ist offline gespeichert';
+      setTimeout(() => {
+        if (saveOfflineBtn) {
+          saveOfflineBtn.textContent = '⬇';
+          saveOfflineBtn.title = 'Route für Offline-Nutzung speichern';
+        }
+      }, 2000);
+    }
   } catch (err) {
     alert('Speichern fehlgeschlagen: ' + err.message);
   }
@@ -1027,12 +1073,16 @@ function stopNavigation() {
   if (currentRoute && currentRoute.key && currentRoute.data) {
     dbPut(currentRoute.key, currentRoute.data)
       .then(() => {
-        saveOfflineBtn.textContent = '✓';
-        saveOfflineBtn.title = 'Route ist offline gespeichert';
-        setTimeout(() => {
-          saveOfflineBtn.textContent = '⬇';
-          saveOfflineBtn.title = 'Route für Offline-Nutzung speichern';
-        }, 2000);
+        if (saveOfflineBtn) {
+          saveOfflineBtn.textContent = '✓';
+          saveOfflineBtn.title = 'Route ist offline gespeichert';
+          setTimeout(() => {
+            if (saveOfflineBtn) {
+              saveOfflineBtn.textContent = '⬇';
+              saveOfflineBtn.title = 'Route für Offline-Nutzung speichern';
+            }
+          }, 2000);
+        }
       })
       .catch(err => console.warn('Auto-save Route fehlgeschlagen:', err));
   }

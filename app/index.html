@@ -15,7 +15,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.40">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.41">
 </head>
 <body>
 
@@ -41,7 +41,6 @@
       <option value="">Linie …</option>
     </select>
     <button id="simBtn" class="hidden" title="Lehrfahrt starten – Strecke abfahren">Fahrt ▶</button>
-    <button id="saveOfflineBtn" disabled title="Route offline speichern">⬇</button>
   </div>
 
   <!-- ── Nav-HUD (sichtbar während Navigation) ── -->
@@ -186,7 +185,26 @@
     <button id="simStopBtn" title="Lehrfahrt stoppen">■</button>
   </div>
 
-    <script src="js/map.js?v=V2.0.40"></script>
-    <script src="js/app.js?v=V2.0.40"></script>
+  <!-- ── Offline-Warnung Dialog ─────────────────── -->
+  <div id="offlineNotAvailableModal" class="hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Route nicht im Offline-Inventar</h2>
+      </div>
+      <div class="modal-body">
+        <p><strong>⚠️ Diese Route ist noch nicht in deinem Offline-Inventar gespeichert.</strong></p>
+        <p>Um diese Route <strong>offline nutzen</strong> zu können, musst du sie mindestens <strong>einmal komplett im Navigationsmodus abfahren</strong>.</p>
+        <p>Nach der Fahrt wird sie automatisch in deinem Offline-Bestand gespeichert.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="offlineModalNowBtn" class="btn-primary">Jetzt abfahren &amp; speichern</button>
+        <button id="offlineModalLaterBtn" class="btn-secondary">Später</button>
+      </div>
+    </div>
+  </div>
+
+    <script src="js/map.js?v=V2.0.41"></script>
+    <script src="js/app.js?v=V2.0.41"></script>
 </body>
 </html>
