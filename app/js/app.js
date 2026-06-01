@@ -86,7 +86,8 @@ const offlineRouteList = document.getElementById('offlineRouteList');
 
 // Offline-Warnung Modal
 const offlineNotAvailableModal = document.getElementById('offlineNotAvailableModal');
-const offlineModalNowBtn    = document.getElementById('offlineModalNowBtn');
+const offlineModalSimBtn    = document.getElementById('offlineModalSimBtn');
+const offlineModalNavBtn    = document.getElementById('offlineModalNavBtn');
 const offlineModalLaterBtn  = document.getElementById('offlineModalLaterBtn');
 
 // Nav-DOM-Referenzen
@@ -340,7 +341,7 @@ function renderNavPerfDebugHud(force) {
 // ── Service Worker ───────────────────────────────────────────
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js?v=V2.0.39', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('./sw.js?v=V2.0.42', { updateViaCache: 'none' })
       .then(reg => {
         const activateWaiting = () => {
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
@@ -480,8 +481,14 @@ function bindEvents() {
   });
 
   // Offline-Warnung Modal Event-Listener
-  if (offlineModalNowBtn) {
-    offlineModalNowBtn.addEventListener('click', () => {
+  if (offlineModalSimBtn) {
+    offlineModalSimBtn.addEventListener('click', () => {
+      hideOfflineNotAvailableDialog();
+      startSimulation();
+    });
+  }
+  if (offlineModalNavBtn) {
+    offlineModalNavBtn.addEventListener('click', () => {
       hideOfflineNotAvailableDialog();
       startNavigation();
     });

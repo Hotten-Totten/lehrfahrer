@@ -15,7 +15,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.41">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.42">
 </head>
 <body>
 
@@ -194,17 +194,18 @@
       </div>
       <div class="modal-body">
         <p><strong>⚠️ Diese Route ist noch nicht in deinem Offline-Inventar gespeichert.</strong></p>
-        <p>Um diese Route <strong>offline nutzen</strong> zu können, musst du sie mindestens <strong>einmal komplett im Navigationsmodus abfahren</strong>.</p>
-        <p>Nach der Fahrt wird sie automatisch in deinem Offline-Bestand gespeichert.</p>
+        <p>Um diese Route <strong>offline nutzen</strong> zu können, musst du sie mindestens <strong>einmal komplett abfahren</strong>.</p>
+        <p>Wähle je nachdem wo du bist:</p>
       </div>
       <div class="modal-footer">
-        <button id="offlineModalNowBtn" class="btn-primary">Jetzt abfahren &amp; speichern</button>
+        <button id="offlineModalSimBtn" class="btn-primary">🏠 Simulation (Zuhause)</button>
+        <button id="offlineModalNavBtn" class="btn-primary">🚗 Echtes GPS (Draußen)</button>
         <button id="offlineModalLaterBtn" class="btn-secondary">Später</button>
       </div>
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.0.41"></script>
-    <script src="js/app.js?v=V2.0.41"></script>
+    <script src="js/map.js?v=V2.0.42"></script>
+    <script src="js/app.js?v=V2.0.42"></script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.42 - 2026-06-01
+- Enhanced offline route availability dialog in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): Now offers two immediate options in addition to "Später": (1) "🏠 Simulation (Zuhause)" starts a practice run at home without GPS, (2) "🚗 Echtes GPS (Draußen)" starts real GPS navigation on the road. Dialog text clarified to explain workflow: simulate at home to record + save, then use real GPS when driving.
+
 ## V2.0.41 - 2026-06-01
 - Added offline route availability warning modal in [app/index.html](app/index.html) and [app/css/app.css](app/css/app.css); When user loads a route not yet in offline inventory, shows dialog with two options: "Jetzt abfahren & speichern" (start navigation immediately to record + auto-save) or "Später" (dismiss and view route info). Removes manual save button from UI since auto-save is now active.
 - Updated [app/js/app.js](app/js/app.js) to detect offline availability and trigger modal display on route load.
