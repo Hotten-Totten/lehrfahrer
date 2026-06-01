@@ -579,7 +579,47 @@ async function checkForNewLines() {
 }
 
 // ── Eine Linie mit GPX herunterladen ────────────────────────
+async function downloadLineWithGPX(lineId) {
+  try {
+    // Finde die Linie in der Catalog
+    const line = availableLinesCatalog.find(l => l.id === lineId);
+    if (!line) {
+      console.warn(`  ⚠️ Line not found in catalog: ${lineId}`);
+      return false;
+    }
 
+    // Lade von der API
+    let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.file)}`;
+    if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
+
+    const res = await fetch(url);
+    const json = await res.json();
+
+    if (!json.ok || !json.line) {
+      console.warn(`  ⚠️ API failed for ${lineId}`);
+      return false;
+    }
+
+    // Speichere in IndexedDB
+    const lineData = json.line;
+    
+    // Formatiere die ID konsistent (city_lineFolder_file, mit _ statt /)
+    const dbId = `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${line.file}`.replace(/\//g, '_');
+    
+    await dbPutLineData(dbId, lineData);
+    
+    // Speichere auch GPX falls vorhanden
+    if (json.gpx) {
+      await dbPutLineGPX(dbId, json.gpx);
+    }
+
+    console.log(`  ✓ ${line.lineName} downloaded and cached`);
+    return true;
+  } catch (err) {
+    console.warn(`  ⚠️ Error downloading line: ${err.message}`);
+    return false;
+  }
+}
 
 // ── Notification für neue Linien ──────────────────────────────
 function showNewLinesNotification() {

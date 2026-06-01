@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.65 - 2026-06-01
+- **Fix: Implement missing `downloadLineWithGPX()` function** – Auto-download was calling non-existent function, causing all 8 lines to fail. Implemented proper download logic: fetches line JSON from API via `/load_line.php`, stores in IndexedDB linesData, returns success/failure. Now auto-download completes successfully on app startup. Added missing HTML container for available lines display in Settings.
+
 ## V2.0.64 - 2026-06-01
 - **Refactor: Replace "Route not saved" dialog with Available Lines display** – Removed confusing "Route noch nicht gespeichert" modal that told drivers to practice first. With auto-download, all 8 lines are ready on startup. Added new Settings section showing "✅ Verfügbare Offline-Linien" with visual list of all downloaded lines. Now when driver opens Settings, they see immediately which lines are cached and ready. Deleted: old offline-route-list code (~40 lines), clearAllOfflineRoutes function, showOfflineNotAvailableDialog logic. Result: Zero confusion, maximum transparency.
 - **Refactor: Remove Simulation Mode** – Deleted all local simulation code ("Fahrt ▶" button, sim-speed settings, ~150 lines JS, ~50 lines CSS). With auto-download, drivers never need local practice—they select a line and immediately navigate with real GPS. Removed 3 modal buttons (now only "Navigate with GPS" remains). Result: Ultra-clean interface, one workflow, zero confusion.
