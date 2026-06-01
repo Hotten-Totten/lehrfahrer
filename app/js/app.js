@@ -670,6 +670,13 @@ async function showDownloadCenterModal() {
   console.log('🔍 Opening Download Center...');
   console.log('📋 availableLinesCatalog:', availableLinesCatalog);
   
+  // Falls availableLinesCatalog noch leer ist, lade nochmal vom API
+  if (!availableLinesCatalog || availableLinesCatalog.length === 0) {
+    console.log('⚡ availableLinesCatalog is empty! Reloading from API...');
+    const lines = await fetchAndCacheLinesCatalog();
+    console.log('✓ Reloaded:', lines.length, 'lines');
+  }
+  
   // Beende Banner animation
   hideBanner();
   
@@ -765,6 +772,8 @@ async function showDownloadCenterModal() {
 async function updateDownloadStats() {
   const cached = await dbGetLinesCatalog();
   const available = availableLinesCatalog || [];
+  
+  console.log('📊 updateDownloadStats:', { cached: cached.length, available: available.length, availableLinesCatalog });
   
   const statsText = document.getElementById('downloadStatsText');
   if (statsText) {
