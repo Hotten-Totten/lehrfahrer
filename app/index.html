@@ -217,6 +217,45 @@
     </div>
   </div>
 
+  <!-- ── Download Center Modal ──────────────────── -->
+  <div id="downloadCenterModal" class="hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h2>Linien Download-Center</h2>
+      </div>
+      <div class="modal-body" style="flex: 1; overflow-y: auto;">
+        <div id="downloadStats" style="margin-bottom: 16px; padding: 12px; background: var(--surface2); border-radius: 8px;">
+          <span id="downloadStatsText">📦 <strong>0</strong> / <strong>0</strong> Linien geladen</span>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="selectAllLines" style="width: 16px; height: 16px; cursor: pointer;">
+            <strong>Alle auswählen</strong>
+          </label>
+        </div>
+        
+        <div id="linesListContainer">
+          <!-- Lines werden hier eingefügt -->
+        </div>
+        
+        <div id="downloadProgress" class="hidden" style="margin-top: 16px;">
+          <div style="font-size: 13px; margin-bottom: 8px;">
+            <span id="downloadProgressText">Laden...</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden;">
+            <div id="downloadProgressBar" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="downloadCenterCancelBtn" class="btn-secondary">Schließen</button>
+        <button id="downloadCenterDownloadBtn" class="btn-primary">⬇ Auswahl laden</button>
+      </div>
+    </div>
+  </div>
+
     <script src="js/map.js?v=V2.0.55"></script>
     <script src="js/app.js?v=V2.0.55"></script>
 </body>

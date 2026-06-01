@@ -653,9 +653,133 @@ function hideBanner() {
 }
 
 // ── Download Center Modal (Placeholder) ────────────────────────
-function showDownloadCenterModal() {
-  // TODO: Implementieren - Modal mit Linien-Liste
-  console.log('Show Download Center Modal');
+// ── Download Center Modal Logik ────────────────────────────────
+async function showDownloadCenterModal() {
+  const modal = document.getElementById('downloadCenterModal');
+  if (!modal) return;
+  
+  // Beende Banner animation
+  hideBanner();
+  
+  // Lade aktuelle Daten
+  const cached = await dbGetLinesCatalog();
+  const available = availableLinesCatalog || [];
+  
+  const container = document.getElementById('linesListContainer');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  // Für jede verfügbare Linie ein Checkbox-Item
+  available.forEach((line, idx) => {
+    const isCached = cached.find(c => c.id === line.id);
+    const lineItem = document.createElement('div');
+    lineItem.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--surface2);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      opacity: ${isCached ? 0.7 : 1};
+    `;
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'line-checkbox';
+    checkbox.value = line.id;
+    checkbox.defaultChecked = !isCached;
+    checkbox.style.cssText = 'width: 16px; height: 16px; cursor: pointer;';
+    
+    const label = document.createElement('div');
+    label.style.cssText = 'flex: 1;';
+    label.innerHTML = `
+      <div style="font-weight: 600; font-size: 14px;">${line.lineName}</div>
+      <div style="font-size: 12px; color: var(--text-muted);">${line.routeName} • ${line.city}</div>
+      ${isCached ? '<div style="font-size: 11px; color: var(--accent);">✓ Schon geladen</div>' : ''}
+    `;
+    
+    lineItem.appendChild(checkbox);
+    lineItem.appendChild(label);
+    
+    lineItem.onclick = () => checkbox.click();
+    container.appendChild(lineItem);
+  });
+  
+  // "Alle auswählen" Button
+  const selectAll = document.getElementById('selectAllLines');
+  selectAll.onchange = () => {
+    document.querySelectorAll('.line-checkbox').forEach(cb => {
+      cb.checked = selectAll.checked;
+    });
+  };
+  
+  // Download Button
+  document.getElementById('downloadCenterDownloadBtn').onclick = async () => {
+    await startLinesDownload();
+  };
+  
+  // Cancel Button
+  document.getElementById('downloadCenterCancelBtn').onclick = () => {
+    modal.classList.add('hidden');
+  };
+  
+  // Stats aktualisieren
+  updateDownloadStats();
+  
+  // Modal zeigen
+  modal.classList.remove('hidden');
+}
+
+// ── Download Statistics ────────────────────────────────────────
+async function updateDownloadStats() {
+  const cached = await dbGetLinesCatalog();
+  const available = availableLinesCatalog || [];
+  
+  const statsText = document.getElementById('downloadStatsText');
+  if (statsText) {
+    statsText.innerHTML = `📦 <strong>${cached.length}</strong> / <strong>${available.length}</strong> Linien geladen`;
+  }
+}
+
+// ── Download starten ────────────────────────────────────────────
+async function startLinesDownload() {
+  const selectedCheckboxes = Array.from(document.querySelectorAll('.line-checkbox:checked'));
+  if (selectedCheckboxes.length === 0) return;
+  
+  const lineIds = selectedCheckboxes.map(cb => cb.value);
+  const progressDiv = document.getElementById('downloadProgress');
+  const progressBar = document.getElementById('downloadProgressBar');
+  const progressText = document.getElementById('downloadProgressText');
+  const downloadBtn = document.getElementById('downloadCenterDownloadBtn');
+  
+  if (!progressDiv || !progressBar || !progressText || !downloadBtn) return;
+  
+  progressDiv.classList.remove('hidden');
+  downloadBtn.disabled = true;
+  
+  let completed = 0;
+  for (const lineId of lineIds) {
+    progressText.textContent = `Lade ${completed + 1} / ${lineIds.length}…`;
+    progressBar.style.width = ((completed / lineIds.length) * 100) + '%';
+    
+    const success = await downloadLineWithGPX(lineId);
+    if (success) completed++;
+    
+    await new Promise(resolve => setTimeout(resolve, 100)); // Kleine Verzögerung
+  }
+  
+  progressBar.style.width = '100%';
+  progressText.textContent = `✓ Fertig! ${completed}/${lineIds.length} Linien geladen`;
+  
+  await updateDownloadStats();
+  
+  downloadBtn.disabled = false;
+  setTimeout(() => {
+    progressDiv.classList.add('hidden');
+  }, 2000);
 }
 
 // ── Aktualisierte showNewLinesNotification ──────────────────────
