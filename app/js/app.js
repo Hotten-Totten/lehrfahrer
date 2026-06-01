@@ -118,6 +118,7 @@ const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 App starting...');
   registerServiceWorker();
   await openDB();
   initMap();
@@ -126,9 +127,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   detectOffline();
   await loadCities();
   
+  console.log('📦 Fetching lines catalog...');
   // Lade Linien-Katalog
   await fetchAndCacheLinesCatalog();
   
+  console.log('⏳ Starting background auto-download...');
   // Auto-Download aller Linien im Hintergrund (nicht blockierend)
   autoDownloadAllLines().catch(err => console.warn('Auto-download background error:', err));
 });
@@ -844,11 +847,14 @@ async function showNewLinesNotification() {
 // ── Auto-Download aller Linien im Hintergrund ──────────────────
 async function autoDownloadAllLines() {
   try {
+    console.log('🔍 autoDownloadAllLines() called');
     const cached = await dbGetLinesCatalog();
     const available = availableLinesCatalog || [];
     
+    console.log(`📊 Status: ${cached.length} cached, ${available.length} available`);
+    
     if (available.length === 0) {
-      console.log('ℹ️ No lines to auto-download');
+      console.log('⚠️ No lines to auto-download');
       return;
     }
     
@@ -856,6 +862,8 @@ async function autoDownloadAllLines() {
     const toDownload = available.filter(line => 
       !cached.find(c => c.id === line.id)
     );
+    
+    console.log(`📋 toDownload list: ${toDownload.length} lines`);
     
     if (toDownload.length === 0) {
       console.log('✓ All lines already cached');
@@ -866,6 +874,11 @@ async function autoDownloadAllLines() {
     
     // Zeige discreten Indicator in der Topbar
     const topbar = document.getElementById('topbar');
+    if (!topbar) {
+      console.warn('❌ topbar not found');
+      return;
+    }
+    
     const indicator = document.createElement('div');
     indicator.id = 'downloadIndicator';
     indicator.style.cssText = `
@@ -878,18 +891,25 @@ async function autoDownloadAllLines() {
       opacity: 0.7;
       font-weight: 600;
       white-space: nowrap;
+      z-index: 1;
     `;
     indicator.textContent = '⬇ Linien laden…';
     topbar.style.position = 'relative';
     topbar.appendChild(indicator);
+    console.log('✓ Indicator added to topbar');
     
     // Download im Hintergrund (mit Verzögerung zwischen den Downloads)
     let completed = 0;
     for (const line of toDownload) {
       try {
+        console.log(`  ⏳ Downloading ${line.lineName}...`);
         const success = await downloadLineWithGPX(line.id);
-        if (success) completed++;
-        console.log(`  ✓ ${line.lineName} (${completed}/${toDownload.length})`);
+        if (success) {
+          completed++;
+          console.log(`  ✓ ${line.lineName} (${completed}/${toDownload.length})`);
+        } else {
+          console.log(`  ⚠️ ${line.lineName} failed`);
+        }
       } catch (err) {
         console.warn(`  ✗ ${line.lineName}: ${err.message}`);
       }
@@ -898,11 +918,14 @@ async function autoDownloadAllLines() {
     }
     
     // Indicator entfernen
-    if (indicator.parentNode) indicator.remove();
+    if (indicator.parentNode) {
+      indicator.remove();
+      console.log('✓ Indicator removed');
+    }
     
-    console.log(`✓ Auto-download complete: ${completed}/${toDownload.length} lines cached`);
+    console.log(`✅ Auto-download complete: ${completed}/${toDownload.length} lines cached`);
   } catch (err) {
-    console.error('Error in autoDownloadAllLines:', err);
+    console.error('❌ Error in autoDownloadAllLines:', err);
   }
 }
 
