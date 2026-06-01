@@ -862,11 +862,22 @@ async function showNewLinesNotification() {
 async function autoDownloadAllLines() {
   try {
     console.log('🔍 autoDownloadAllLines() called');
-    const cached = await dbGetLinesCatalog();
+    
+    // WICHTIG: Prüfe linesData, nicht linesCatalog!
+    // linesCatalog = nur Metadaten (geladen vom API)
+    // linesData = echte JSON-Daten (müssen heruntergeladen werden)
+    const tx = db.transaction('linesData', 'readonly');
+    const req = tx.objectStore('linesData').getAll();
+    
+    const cached = await new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result.map(item => item.id) || []);
+      req.onerror = () => reject(req.error);
+    });
+    
     const available = availableLinesCatalog || [];
     
-    console.log(`📊 Status: ${cached.length} cached, ${available.length} available`);
-    console.log('📋 Cached IDs:', cached.map(c => c.id));
+    console.log(`📊 Status: ${cached.length} cached (linesData), ${available.length} available`);
+    console.log('📋 Cached IDs (linesData):', cached);
     console.log('📋 Available IDs:', available.map(l => l.id));
     
     if (available.length === 0) {
@@ -874,9 +885,9 @@ async function autoDownloadAllLines() {
       return;
     }
     
-    // Nur nicht-gecachte Linien herunterladen
+    // Nur nicht-gecachte Linien herunterladen (prüfe gegen cached array)
     const toDownload = available.filter(line => {
-      const isCached = cached.find(c => c.id === line.id);
+      const isCached = cached.includes(line.id);
       console.log(`  Checking ${line.id}: ${isCached ? 'CACHED' : 'NEW'}`);
       return !isCached;
     });
@@ -885,7 +896,7 @@ async function autoDownloadAllLines() {
     toDownload.forEach(l => console.log(`  - ${l.lineName} (${l.id})`));
     
     if (toDownload.length === 0) {
-      console.log('✓ All lines already cached');
+      console.log('✓ All lines already cached in linesData');
       return;
     }
     
