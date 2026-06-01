@@ -82,6 +82,8 @@ const tileStatus       = document.getElementById('tileStatus');
 const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
+const navigateToStartBtn = document.getElementById('navigateToStartBtn');
+const routeActionBar   = document.getElementById('routeActionBar');
 
 // Nav-DOM-Referenzen
 const navBtn        = document.getElementById('navBtn');
@@ -992,6 +994,8 @@ function bindEvents() {
 
   panelHandle.addEventListener('click', togglePanel);
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
+  
+  navigateToStartBtn.addEventListener('click', navigateToRouteStart);
 
   loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
   tilesFileInput.addEventListener('change', onTilesFileSelected);
@@ -1156,6 +1160,13 @@ function displayRoute(data) {
 
   // Navi-Button freischalten
   navBtn.classList.remove('hidden');
+  
+  // "Zum Startpunkt" Button freischalten (wenn Route vorhanden)
+  if (data.routePoints && data.routePoints.length > 0) {
+    routeActionBar.classList.remove('hidden');
+  } else {
+    routeActionBar.classList.add('hidden');
+  }
 }
 
 function renderStopList(stops) {
@@ -1472,6 +1483,64 @@ function showToast(msg, duration = 4000) {
 // =============================================================
 // NAVIGATION
 // =============================================================
+
+// ── Navigation zum Startpunkt ──────────────────────────────────
+async function navigateToRouteStart() {
+  if (!currentRoute?.data?.routePoints?.length) {
+    showToast('Keine Route geladen');
+    return;
+  }
+
+  const routeStart = currentRoute.data.routePoints[0];
+  if (!routeStart) {
+    showToast('Startpunkt der Route nicht verfügbar');
+    return;
+  }
+
+  // GPS-Standort abrufen
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const currentPos = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude
+        };
+
+        // Konvertiere routeStart falls nötig
+        const startPt = Array.isArray(routeStart)
+          ? { lat: routeStart[0], lon: routeStart[1] }
+          : { lat: routeStart.lat, lon: routeStart.lon };
+
+        console.log('📍 Current position:', currentPos);
+        console.log('📍 Route start:', startPt);
+
+        // Zeichne Linie vom aktuellen Standort zum Startpunkt
+        drawNavigationPath(currentPos, startPt);
+
+        showToast(`Weg zum Startpunkt: ${calculateDistance(currentPos, startPt).toFixed(1)} km`);
+        resolve();
+      },
+      (err) => {
+        console.error('GPS error:', err);
+        showToast('GPS-Standort nicht verfügbar. Bitte GPS aktivieren.');
+        resolve();
+      },
+      { timeout: 5000, enableHighAccuracy: false }
+    );
+  });
+}
+
+// ── Entfernung zwischen zwei Punkten berechnen (Haversine) ──────
+function calculateDistance(pos1, pos2) {
+  const R = 6371; // Erdradius in km
+  const dLat = (pos2.lat - pos1.lat) * Math.PI / 180;
+  const dLon = (pos2.lon - pos1.lon) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(pos1.lat * Math.PI / 180) * Math.cos(pos2.lat * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 function startNavigation() {
   if (!currentRoute?.data?.routePoints?.length) {

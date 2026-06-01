@@ -15,7 +15,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.65">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.66">
 </head>
 <body>
 
@@ -85,6 +85,11 @@
       <span id="panelTitle">Haltestellenfolge</span>
       <span id="panelMeta"></span>
       <button id="panelCloseBtn" type="button" title="Haltestellenliste schließen" aria-label="Haltestellenliste schließen">✕</button>
+    </div>
+    <div id="routeActionBar" class="hidden" style="padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
+      <button id="navigateToStartBtn" type="button" title="Zum Startpunkt navigieren: Zeigt Weg vom aktuellen GPS-Standort zum Anfang der Route" style="flex: 1; padding: 8px 12px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+        📍 Zum Startpunkt
+      </button>
     </div>
     <div id="stopList">
       <p class="hint">Bitte eine Linie auswählen.</p>
@@ -184,8 +189,8 @@
 
 
 
-    <script src="js/map.js?v=V2.0.65"></script>
-    <script src="js/app.js?v=V2.0.65"></script>
-    <script src="js/debug-helper.js?v=V2.0.65"></script>
+    <script src="js/map.js?v=V2.0.66"></script>
+    <script src="js/app.js?v=V2.0.66"></script>
+    <script src="js/debug-helper.js?v=V2.0.66"></script>
 </body>
 </html>

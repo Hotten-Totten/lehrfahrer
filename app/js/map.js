@@ -443,6 +443,103 @@ function clearRoute() {
   if (map.getSource('route')) map.removeSource('route');
 }
 
+// ── Navigations-Pfad zum Startpunkt ────────────────────────────
+function drawNavigationPath(currentPos, routeStart) {
+  if (!map) return;
+
+  // Entferne alte nav-path falls vorhanden
+  if (map.getLayer('nav-path-line')) map.removeLayer('nav-path-line');
+  if (map.getSource('nav-path')) map.removeSource('nav-path');
+
+  // Erstelle GeoJSON für die Linie
+  const navPath = {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [currentPos.lon, currentPos.lat],  // Aktueller Standort
+          [routeStart.lon, routeStart.lat]   // Route Startpunkt
+        ]
+      }
+    }]
+  };
+
+  // Source hinzufügen
+  map.addSource('nav-path', {
+    type: 'geojson',
+    data: navPath
+  });
+
+  // Layer für die Linie (dashed/gestrichelt, grün)
+  map.addLayer({
+    id: 'nav-path-line',
+    type: 'line',
+    source: 'nav-path',
+    paint: {
+      'line-color': '#4ade80',        // Grün
+      'line-width': 3,
+      'line-opacity': 0.8,
+      'line-dasharray': [5, 5]        // Gestrichelt
+    }
+  });
+
+  // Marker für aktuellen Standort (blauer Kreis)
+  if (map.getLayer('current-pos-circle')) map.removeLayer('current-pos-circle');
+  if (map.getSource('current-pos')) map.removeSource('current-pos');
+
+  map.addSource('current-pos', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [currentPos.lon, currentPos.lat] }
+    }
+  });
+
+  map.addLayer({
+    id: 'current-pos-circle',
+    type: 'circle',
+    source: 'current-pos',
+    paint: {
+      'circle-radius': 8,
+      'circle-color': '#4a9eff',      // Blau
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff'
+    }
+  });
+
+  // Marker für Startpunkt (oranges Quadrat/Flag)
+  if (map.getLayer('route-start-marker')) map.removeLayer('route-start-marker');
+  if (map.getSource('route-start')) map.removeSource('route-start');
+
+  map.addSource('route-start', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [routeStart.lon, routeStart.lat] }
+    }
+  });
+
+  map.addLayer({
+    id: 'route-start-marker',
+    type: 'circle',
+    source: 'route-start',
+    paint: {
+      'circle-radius': 10,
+      'circle-color': '#ff8c42',      // Orange
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff'
+    }
+  });
+
+  // Karte zentrieren und beide Punkte zeigen
+  const bounds = new maplibregl.LngLatBounds([currentPos.lon, currentPos.lat], [routeStart.lon, routeStart.lat]);
+  map.fitBounds(bounds, { padding: { top: 100, bottom: 150, left: 20, right: 20 }, maxZoom: 15 });
+}
+
 // ── Haltestellen anzeigen ────────────────────────────────────
 function showStops(stops, onStopClick) {
   clearStops();

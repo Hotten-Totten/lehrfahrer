@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.66 - 2026-06-01
+- **Feature: Navigate to Route Start** – Added new button "📍 Zum Startpunkt" in route panel. When clicked, displays green dashed navigation line from current GPS position to the first point of the selected route. Shows blue marker for current position and orange marker for route start. Automatically fits map bounds to show both points. Displays distance to start point. Helps drivers quickly orient themselves and navigate to the beginning of their assigned route.
+
 ## V2.0.65 - 2026-06-01
 - **Fix: Implement missing `downloadLineWithGPX()` function** – Auto-download was calling non-existent function, causing all 8 lines to fail. Implemented proper download logic: fetches line JSON from API via `/load_line.php`, stores in IndexedDB linesData, returns success/failure. Now auto-download completes successfully on app startup. Added missing HTML container for available lines display in Settings.
 
