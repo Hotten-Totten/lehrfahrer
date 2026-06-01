@@ -619,6 +619,68 @@ function showNewLinesNotification() {
   console.log('New lines available!');
 }
 
+// ── Neue Linien Banner zeigen ──────────────────────────────────
+async function showNewLinesBanner(newLineCount) {
+  const banner = document.getElementById('newLinesBanner');
+  const countEl = document.getElementById('newLinesCount');
+  
+  if (!banner || !countEl) return;
+  
+  countEl.textContent = newLineCount;
+  banner.classList.remove('hidden');
+  
+  // Setze CSS-Variable für selectionBar offset
+  document.documentElement.style.setProperty('--banner-h', '56px');
+  
+  // Event Listeners
+  document.getElementById('dismissBannerBtn').onclick = () => {
+    localStorage.setItem(STORAGE_KEY_DISMISSED_UPDATE, 'true');
+    hideBanner();
+  };
+  
+  document.getElementById('downloadNowBtn').onclick = () => {
+    // TODO: Download Center Modal öffnen
+    console.log('Open Download Center');
+    showDownloadCenterModal();
+  };
+}
+
+function hideBanner() {
+  const banner = document.getElementById('newLinesBanner');
+  if (!banner) return;
+  banner.classList.add('hidden');
+  document.documentElement.style.setProperty('--banner-h', '0px');
+}
+
+// ── Download Center Modal (Placeholder) ────────────────────────
+function showDownloadCenterModal() {
+  // TODO: Implementieren - Modal mit Linien-Liste
+  console.log('Show Download Center Modal');
+}
+
+// ── Aktualisierte showNewLinesNotification ──────────────────────
+async function showNewLinesNotification() {
+  try {
+    const currentCatalog = await dbGetLinesCatalog();
+    const newCatalog = availableLinesCatalog || [];
+    
+    if (newCatalog.length === 0) return;
+    
+    const newCount = newCatalog.filter(line => 
+      !currentCatalog.find(c => c.id === line.id)
+    ).length;
+    
+    if (newCount > 0) {
+      const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED_UPDATE);
+      if (!dismissed) {
+        showNewLinesBanner(newCount);
+      }
+    }
+  } catch (err) {
+    console.error('Error showing notification:', err);
+  }
+}
+
 // ── Offline-Erkennung (per echtem Fetch-Test, nicht navigator.onLine) ────────
 function detectOffline() {
   function createTimeoutSignal(ms) {

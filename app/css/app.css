@@ -86,10 +86,93 @@ html, body {
 }
 #topbar-right button:active { background: var(--primary); color: #fff; }
 
+/* ── Banner für neue Linien ─────────────────── */
+.banner-new-lines {
+  position: fixed;
+  top: calc(var(--topbar-h) + var(--safe-top));
+  left: 0; right: 0;
+  background: linear-gradient(135deg, #ff9500 0%, #ff8c00 100%);
+  color: #fff;
+  padding: 12px;
+  padding-left: calc(12px + var(--safe-left));
+  padding-right: calc(12px + var(--safe-right));
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 99;
+  animation: slideDown 0.3s ease-out;
+}
+
+.banner-new-lines.hidden {
+  display: none;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.banner-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.banner-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.banner-btn-primary, .banner-btn-dismiss {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.banner-btn-primary {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.banner-btn-primary:active {
+  background: rgba(255,255,255,0.3);
+  transform: scale(0.98);
+}
+
+.banner-btn-dismiss {
+  background: transparent;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 16px;
+}
+
+.banner-btn-dismiss:active {
+  opacity: 0.7;
+}
+
 /* ── Auswahlleiste ──────────────────────────── */
 #selectionBar {
   position: fixed;
-  top: calc(var(--topbar-h) + var(--safe-top));
+  top: calc(var(--topbar-h) + var(--safe-top) + var(--banner-h, 0px));
   left: 0; right: 0;
   height: var(--sel-h);
   background: var(--surface);
