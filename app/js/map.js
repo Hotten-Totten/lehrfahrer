@@ -213,12 +213,7 @@ function buildRasterStyle() {
             18, 16
           ],
           'text-letter-spacing': 0.05,
-          'text-max-angle': 30,
-          'text-opacity': ['interpolate', ['linear'], ['zoom'],
-            12, 1,
-            13, 1,
-            20, 1
-          ]
+          'text-max-angle': 30
         },
         paint: {
           'text-color': ['interpolate', ['linear'], ['zoom'],
@@ -231,7 +226,8 @@ function buildRasterStyle() {
             12, 1.4,
             18, 1.2
           ],
-          'text-halo-blur': 0.4
+          'text-halo-blur': 0.4,
+          'text-opacity': 1
         }
       }
     ]
@@ -305,12 +301,7 @@ function buildPMTilesStyle(pmtilesUrl) {
             18, 16
           ],
           'text-letter-spacing': 0.05,
-          'text-max-angle': 30,
-          'text-opacity': ['interpolate', ['linear'], ['zoom'],
-            12, 1,
-            13, 1,
-            20, 1
-          ]
+          'text-max-angle': 30
         },
         paint: {
           'text-color': ['interpolate', ['linear'], ['zoom'],
@@ -323,7 +314,8 @@ function buildPMTilesStyle(pmtilesUrl) {
             12, 1.4,
             18, 1.2
           ],
-          'text-halo-blur': 0.4
+          'text-halo-blur': 0.4,
+          'text-opacity': 1
         }
       }
     ]
