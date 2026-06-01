@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.62 - 2026-06-01
+- **Refactor: Remove Download Center Modal** – Removed unnecessary download UI complexity. Auto-download now handles everything silently on startup. Deleted 116 lines of modal code, 150+ lines of CSS, and 8+ event handlers. Result: cleaner codebase, faster app. Drivers never touch download UI—lines are ready automatically when app starts.
+
 ## V2.0.61 - 2026-06-01
 - **Fix: Auto-Download Now Actually Works!** – Auto-download was checking `linesCatalog` (metadata) instead of `linesData` (actual JSON files). Fixed to check the correct store. Now on app startup with empty cache, all 8 lines are correctly identified as "NEW" and downloaded in background. Progress indicator "⬇ Linien laden…" displays, all 8 lines download successfully (verified: 8/8 complete). Drivers get instant offline line availability without manual steps.
 

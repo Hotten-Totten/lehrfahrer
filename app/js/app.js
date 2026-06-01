@@ -596,47 +596,7 @@ async function checkForNewLines() {
 }
 
 // ── Eine Linie mit GPX herunterladen ────────────────────────
-async function downloadLineWithGPX(lineId) {
-  try {
-    const line = availableLinesCatalog.find(l => l.id === lineId);
-    if (!line) throw new Error('Line not found in catalog');
-    
-    // 1. JSON-Datei laden
-    const jsonPath = line.lineFolder 
-      ? `../linien/${line.city}/${line.lineFolder}/${line.file}`
-      : `../linien/${line.city}/${line.file}`;
-    
-    const jsonResp = await fetch(jsonPath);
-    if (!jsonResp.ok) throw new Error('Failed to fetch line JSON');
-    const lineData = await jsonResp.json();
-    
-    // In IndexedDB speichern
-    await dbPutLineData(lineId, lineData);
-    
-    // 2. GPX-Datei laden (wenn vorhanden)
-    if (line.hasGpx) {
-      const gpxBase = line.file.replace('.json', '.gpx');
-      const gpxPath = line.lineFolder
-        ? `../linien/${line.city}/${line.lineFolder}/${gpxBase}`
-        : `../linien/${line.city}/gpx/${gpxBase}`;
-      
-      try {
-        const gpxResp = await fetch(gpxPath);
-        if (gpxResp.ok) {
-          const gpxText = await gpxResp.text();
-          await dbPutLineGPX(lineId, gpxText);
-        }
-      } catch (gpxErr) {
-        console.warn('GPX download failed (continuing with JSON):', gpxErr);
-      }
-    }
-    
-    return true;
-  } catch (err) {
-    console.error('Error downloading line:', err);
-    return false;
-  }
-}
+
 
 // ── Notification für neue Linien ──────────────────────────────
 function showNewLinesNotification() {
@@ -1012,7 +972,6 @@ function bindEvents() {
   if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
 
   gpsBtn.addEventListener('click', toggleGPS);
-  document.getElementById('downloadCenterBtn')?.addEventListener('click', showDownloadCenterModal);
   settingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   settingsOverlay.addEventListener('click', e => {
@@ -1043,15 +1002,7 @@ function bindEvents() {
     });
   }
 
-  // Download Center Modal Events
-  const downloadNowBtn = document.getElementById('downloadNowBtn');
-  const dismissBannerBtn = document.getElementById('dismissBannerBtn');
-  if (downloadNowBtn) {
-    downloadNowBtn.addEventListener('click', showDownloadCenterModal);
-  }
-  if (dismissBannerBtn) {
-    dismissBannerBtn.addEventListener('click', hideBanner);
-  }
+
 
   panelHandle.addEventListener('click', togglePanel);
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
