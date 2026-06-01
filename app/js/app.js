@@ -103,6 +103,9 @@ const simChip        = document.getElementById('simChip');
 const simChipLabel   = document.getElementById('simChipLabel');
 const simChipFill    = document.getElementById('simChipFill');
 const simStopBtn     = document.getElementById('simStopBtn');
+const cameraProfileSelect = document.getElementById('cameraProfileSelect');
+
+const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -828,6 +831,23 @@ function getMapPerspective() {
   return checked ? checked.value : 'driver';
 }
 
+function getCameraProfile() {
+  const val = localStorage.getItem(CAMERA_PROFILE_KEY);
+  if (val === 'calm' || val === 'dynamic' || val === 'balanced') return val;
+  return 'balanced';
+}
+
+function initCameraProfileSelect() {
+  if (!cameraProfileSelect) return;
+  cameraProfileSelect.value = getCameraProfile();
+  cameraProfileSelect.addEventListener('change', () => {
+    const v = cameraProfileSelect.value;
+    if (v === 'calm' || v === 'dynamic' || v === 'balanced') {
+      localStorage.setItem(CAMERA_PROFILE_KEY, v);
+    }
+  });
+}
+
 // Heading-Glättung: gleitender Durchschnitt über letzte 5 GPS-Richtungswerte
 const _headingBuf = [];
 function smoothHeading(hdg) {
@@ -854,6 +874,7 @@ function smoothHeading(hdg) {
     el.addEventListener('change', toggleDriverZoom);
   });
   toggleDriverZoom();
+  initCameraProfileSelect();
 })();
 
 // Globale Toast-Funktion (wird auch von map.js genutzt)

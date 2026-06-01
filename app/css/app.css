@@ -341,6 +341,10 @@ html, body {
   backdrop-filter: blur(2px);
 }
 
+.map-stop-poi.label-hidden .map-stop-label {
+  display: none;
+}
+
 /* ── Einstellungen-Overlay ──────────────────── */
 #settingsOverlay {
   position: fixed;

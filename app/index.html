@@ -145,6 +145,14 @@
             <option value="22">22 – Straßenebene</option>
           </select>
         </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <label style="font-size:13px;color:var(--text-muted);white-space:nowrap">Profil:</label>
+          <select id="cameraProfileSelect" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
+            <option value="balanced" selected>Standard</option>
+            <option value="calm">Extra Ruhig</option>
+            <option value="dynamic">Extra Dynamisch</option>
+          </select>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -178,7 +186,7 @@
     <button id="simStopBtn" title="Lehrfahrt stoppen">■</button>
   </div>
 
-  <script src="js/map.js?v=V2.0.28"></script>
-  <script src="js/app.js?v=V2.0.28"></script>
+  <script src="js/map.js?v=V2.0.29"></script>
+  <script src="js/app.js?v=V2.0.29"></script>
 </body>
 </html>

@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.29 - 2026-06-01
+- Added camera profile presets in [app/index.html](app/index.html) and [app/js/app.js](app/js/app.js): `Standard`, `Extra Ruhig`, `Extra Dynamisch` (persisted locally).
+- Improved low-speed camera stability in [app/js/map.js](app/js/map.js): stronger heading dead-zone and slower bearing interpolation to reduce wobble near stops.
+- Added intelligent stop-label visibility in [app/js/map.js](app/js/map.js) and [app/css/app.css](app/css/app.css): labels auto-hide at low zoom and are limited to nearby POIs during navigation.
+- Updated rollout revisions in [app/index.html](app/index.html), [app/sw.js](app/sw.js), and [VERSION](VERSION).
+
 ## V2.0.28 - 2026-05-31
 - Added adaptive ultra-cockpit camera in [app/js/map.js](app/js/map.js): driver view now reacts to speed (slow approach / city / faster run) with different zoom, pitch, and forward framing.
 - During low-speed stop approach, camera is intentionally less tilted for better readability and reduced motion stress.

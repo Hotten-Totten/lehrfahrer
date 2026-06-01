@@ -6,6 +6,7 @@
 let map = null;
 let stopPopups   = [];
 let stopMarkers  = [];
+let stopMarkerMeta = [];
 let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
@@ -49,10 +50,11 @@ function resetNavBearingState() {
   navLastFix = null;
 }
 
-function resolveNavBearing(lon, lat, headingDeg) {
+function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   let candidate = null;
+  const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
 
-  if (headingDeg != null && Number.isFinite(headingDeg)) {
+  if (headingDeg != null && Number.isFinite(headingDeg) && (speedKmh == null || speedKmh > 2)) {
     candidate = normalizeDeg(headingDeg);
   } else if (navLastFix) {
     const movedM = haversineMeters(navLastFix.lat, navLastFix.lon, lat, lon);
@@ -74,12 +76,44 @@ function resolveNavBearing(lon, lat, headingDeg) {
   }
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
-  if (Math.abs(delta) < 1.2) {
+  const smoothing = (speedKmh != null && speedKmh < 8) ? 0.16 : 0.30;
+  const deadZone = (speedKmh != null && speedKmh < 8) ? 2.5 : 1.2;
+  if (Math.abs(delta) < deadZone) {
     return navCameraBearing;
   }
 
-  navCameraBearing = normalizeDeg(navCameraBearing + delta * 0.30);
+  navCameraBearing = normalizeDeg(navCameraBearing + delta * smoothing);
   return navCameraBearing;
+}
+
+function updateStopPoiVisibility() {
+  if (!map || !stopMarkerMeta.length) return;
+  const zoom = map.getZoom();
+  const navMode = document.body.classList.contains('nav-mode');
+
+  if (!navMode && zoom < 16.8) {
+    stopMarkerMeta.forEach(meta => meta.el.classList.add('label-hidden'));
+    return;
+  }
+
+  if (!navMode) {
+    stopMarkerMeta.forEach(meta => meta.el.classList.remove('label-hidden'));
+    return;
+  }
+
+  const center = map.getCenter();
+  const ranked = stopMarkerMeta
+    .map(meta => ({
+      meta,
+      d: haversineMeters(center.lat, center.lng, meta.lat, meta.lon)
+    }))
+    .sort((a, b) => a.d - b.d);
+
+  const keep = new Set(ranked.slice(0, 6).map(x => x.meta));
+  stopMarkerMeta.forEach(meta => {
+    if (keep.has(meta)) meta.el.classList.remove('label-hidden');
+    else meta.el.classList.add('label-hidden');
+  });
 }
 
 // ── Online-Vektorkachel-Style (OpenFreeMap – kostenlos, kein API-Key) ───────
@@ -249,6 +283,9 @@ function initMap() {
     showToast('Karten-Fehler: ' + (e.error?.message || 'Unbekannt'));
   });
 
+  map.on('zoomend', updateStopPoiVisibility);
+  map.on('moveend', updateStopPoiVisibility);
+
   return map;
 }
 
@@ -369,7 +406,10 @@ function showStops(stops, onStopClick) {
 
     stopMarkers.push(marker);
     stopPopups.push(popup);
+    stopMarkerMeta.push({ el, lat: stop.lat, lon: stop.lon });
   });
+
+  updateStopPoiVisibility();
 }
 
 function clearStops() {
@@ -377,6 +417,7 @@ function clearStops() {
   stopPopups.forEach(p => p.remove());
   stopMarkers = [];
   stopPopups  = [];
+  stopMarkerMeta = [];
 }
 
 // ── Auf Haltestelle fliegen ──────────────────────────────────
@@ -477,11 +518,12 @@ function flyToUser() {
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
 function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
-  const bearing = resolveNavBearing(lon, lat, headingDeg);
+  const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   // 1100ms > typisches GPS-Intervall (~1s) → Animation läuft durch bis zur nächsten Position
   // ease-in-out: sanftes Beschleunigen + Abbremsen statt linearem Ruck
   map.easeTo({ ...opts, duration: 1100, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t });
+  updateStopPoiVisibility();
 }
 
 // ── Simulation: sofortige Kartenposition (kein Animations-Stau) ──────────────
@@ -489,13 +531,15 @@ function simCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = (headingDeg != null && Number.isFinite(headingDeg))
     ? normalizeDeg(headingDeg)
-    : resolveNavBearing(lon, lat, headingDeg);
+    : resolveNavBearing(lon, lat, headingDeg, speedMps);
   map.jumpTo(_buildCameraOptions(lon, lat, bearing, speedMps));
+  updateStopPoiVisibility();
 }
 
 // ── Kamera-Optionen je nach gewählter Perspektive ─────────────────────────────
 function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
   const perspective = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
+  const profile = (typeof getCameraProfile === 'function') ? getCameraProfile() : 'balanced';
   const mode = document.body.classList.contains('nav-mode') ? 'driver' : perspective;
   switch (mode) {
     case 'follow':
@@ -546,6 +590,18 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
           pitch = 80;
           bottomFactor = 0.55;
           topFactor = 0.005;
+        }
+
+        if (profile === 'calm') {
+          driverZoom = Math.max(16, driverZoom - 0.35);
+          pitch = Math.max(60, pitch - 6);
+          bottomFactor = Math.max(0.28, bottomFactor - 0.08);
+          topFactor = Math.min(0.06, topFactor + 0.01);
+        } else if (profile === 'dynamic') {
+          driverZoom = Math.min(22, driverZoom + 0.25);
+          pitch = Math.min(80, pitch + 2);
+          bottomFactor = Math.min(0.62, bottomFactor + 0.03);
+          topFactor = Math.max(0.003, topFactor - 0.002);
         }
       }
 
