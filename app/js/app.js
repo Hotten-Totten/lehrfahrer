@@ -1663,12 +1663,17 @@ function startNavigation() {
   // Display Line Information
   const lineNameEl = document.getElementById('navLineName');
   const cityNameEl = document.getElementById('navCity');
-  if (lineNameEl && currentRoute.lineFolder) {
-    const lineNum = currentRoute.lineFolder.replace(/\D/g, '') || '?';
+  console.log('🚌 Nav Start - currentRoute:', { city: currentRoute.city, fileBase: currentRoute.fileBase, lineFolder: currentRoute.lineFolder });
+  
+  if (lineNameEl) {
+    // Try fileBase first, then lineFolder
+    let lineNum = currentRoute.fileBase?.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?';
     lineNameEl.textContent = `Linie ${lineNum}`;
+    console.log('📍 Line set to:', lineNameEl.textContent);
   }
   if (cityNameEl) {
     cityNameEl.textContent = capitalizeCity(currentRoute.city || 'Stadt');
+    console.log('🏙️ City set to:', cityNameEl.textContent);
   }
 
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
