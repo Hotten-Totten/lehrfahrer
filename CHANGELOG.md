@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.74 - 2026-06-02
+- **Improved Navigation HUD Readability** – Enhanced UI for quick at-a-glance information:
+  - **Right Sidebar**: Expanded width (140px → 185px), larger fonts (11px → 13px)
+  - **Upcoming Stops**: Better contrast with improved borders, 2px instead of 1px, hover effects
+  - **Time/Speed Display**: Larger fonts (16px → 18-20px) for better visibility
+  - **Buttons**: Increased size from 40px to 44px with thicker borders for easier tapping
+  - Destination stops now have enhanced glow effect for visual prominence
+
 ## V2.0.73 - 2026-06-02
 - **Enhanced Route Display** – Show complete route description in navigation HUD:
   - Extracts route name from `fileBase` (e.g., "Route 01 Cottbus Hauptbahnhof - Branitz Schloss")
