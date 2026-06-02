@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.68 - 2026-06-02
+- **Improve: Professional Navigation Icons** – Replaced unprofessional emoji arrows (⬆, ➡, ⬅, etc.) with clean Font Awesome vector icons. Icons are scalable, crisp, and match professional GPS navigation standards. Updated: arrow-up, arrow-right, arrow-left, arrow-up-right, arrow-up-left, flag-checkered (finish). Result: Modern, polished UI.
+- **Cleanup: Remove Obsolete "Gespeicherte Offline-Routen" Section** – Deleted leftover UI from old local route storage system. With auto-download, this feature is no longer needed.
+
 ## V2.0.67 - 2026-06-02
 - **Improve: Vehicle Position Lower on Screen** – Moved vehicle indicator to bottom third of screen (increased bottomFactor from 0.26-0.34 to 0.52-0.60). Driver now sees more of the route ahead, similar to professional GPS navigation apps. Better visibility and situational awareness.
 - **Fix: GPS Smoothing Against Jitter** – Implemented exponential moving average (EMA, alpha=0.4) on raw GPS coordinates to eliminate jumping/stuttering movement. GPS noise is filtered out smoothly without reducing responsiveness. Result: Fluid, continuous movement instead of discrete jumps.
