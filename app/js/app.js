@@ -111,6 +111,8 @@ const navTimeEl     = document.getElementById('navTime');
 const navEndBtn     = document.getElementById('navEndBtn');
 const navMenuBtn    = document.getElementById('navMenuBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
+const navDestinationNameEl = document.getElementById('navDestinationName');
+const navDestinationDistEl = document.getElementById('navDestinationDist');
 
 // Navigation Menu Overlay
 const navMenuOverlay   = document.getElementById('navMenuOverlay');
@@ -1695,6 +1697,21 @@ function startNavigation() {
   if (cityNameEl) {
     cityNameEl.textContent = capitalizeCity(currentRoute.city || 'Stadt');
     console.log('🏙️ City set to:', cityNameEl.textContent);
+  }
+
+  // Display Destination (last stop)
+  if (navDestinationNameEl && currentRoute.data?.stops && currentRoute.data.stops.length) {
+    const lastStop = currentRoute.data.stops[currentRoute.data.stops.length - 1];
+    navDestinationNameEl.textContent = lastStop.name || 'Zielstation';
+    
+    // Calculate distance to last stop
+    if (navCumDists && navCumDists.length > 0) {
+      const totalDist = navCumDists[navCumDists.length - 1];
+      navDestinationDistEl.textContent = navFormatDist(totalDist);
+    } else {
+      navDestinationDistEl.textContent = '–';
+    }
+    console.log('🎯 Destination set to:', navDestinationNameEl.textContent);
   }
 
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
