@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.0.70 - 2026-06-02
+- **Fix: Restore Selection Interaction After HUD Redesign** – Z-index layering bug in V2.0.69 HUD prevented users from selecting cities and lines. Root cause: navHud grid overlay (z-index: 500) was covering selectionBar even when hidden. Solution: Added `#navHud.hidden { display: none; }` CSS rule and ensured pointer-events properly cascade. Now selectionBar is fully interactive when not in navigation mode. Service Worker cache version incremented to force refresh of cached assets.
+
 ## V2.0.69 - 2026-06-02
 - **Major Redesign: Google Maps-Style Navigation HUD** – Complete restructuring of the navigation interface to match professional GPS apps like Google Maps. New layout:
   - **Top Center**: Large next-action display (arrow icon + street/instruction + distance to maneuver) - easier to read at a glance
