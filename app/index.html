@@ -16,7 +16,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.71">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.72">
 </head>
 <body>
 
@@ -24,7 +24,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.71</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.72</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -57,38 +57,46 @@
 
   <!-- ── Nav-HUD (sichtbar während Navigation) ── -->
   <div id="navHud" class="hidden">
-    <!-- Oben: Action Bar (Nächste Aktion) -->
-    <div id="navActionBar">
-      <i id="navArrow" class="fa-solid fa-arrow-up"></i>
-      <div id="navActionInfo">
-        <div id="navLabel">Starte Navigation …</div>
-        <div id="navDist">–</div>
+    <!-- Top Row: Line Info | Centered Arrow | Time/Speed/Buttons -->
+    <div id="navTopBar">
+      <!-- Left: Line Information -->
+      <div id="navLineInfo">
+        <div id="navLineName">Linie –</div>
+        <div id="navCity">Stadt</div>
+      </div>
+      
+      <!-- Center: Large Arrow + Instruction -->
+      <div id="navArrowSection">
+        <i id="navArrow" class="fa-solid fa-arrow-up"></i>
+        <div id="navInstruction">
+          <div id="navLabel">Starte Navigation</div>
+          <div id="navDist">–</div>
+        </div>
+      </div>
+      
+      <!-- Right: Time + Speed + Buttons -->
+      <div id="navRightBox">
+        <div id="navTimeSpeed">
+          <div id="navTime">--:--</div>
+          <div id="navSpeed">–</div>
+          <span id="navSpeedUnit">km/h</span>
+        </div>
+        <div id="navButtonsCompact">
+          <button id="navMenuBtn" type="button" title="Menü">⋯</button>
+          <button id="navEndBtn" type="button" title="Navigation beenden">■</button>
+        </div>
       </div>
     </div>
     
-    <!-- Oben rechts: Zeit + Geschwindigkeit -->
-    <div id="navTimeBox">
-      <div id="navTime">--:--</div>
-      <div id="navSpeedBox">
-        <div id="navSpeed">–</div>
-        <div id="navSpeedUnit">km/h</div>
-      </div>
-    </div>
+    <!-- Right Sidebar: Upcoming Stops (vertical list) -->
+    <div id="navUpcomingStops" aria-label="Nächste Haltestellen"></div>
     
-    <!-- Rechts: Sidebar mit Buttons -->
-    <div id="navSidebar">
-      <button id="navEndBtn" type="button" title="Navigation beenden" aria-label="Navigation beenden">■</button>
-      <button id="navMenuBtn" type="button" title="Menü">⋯</button>
-    </div>
-    
-    <!-- Unten: Nächste Haltestelle -->
+    <!-- Bottom: Current Stop Information -->
     <div id="navStopBar">
       <span class="nav-stop-dot">⬤</span>
       <span id="navStopName">–</span>
       <span id="navStopDist">–</span>
     </div>
-    
-    <div id="navUpcomingStops" aria-label="Nächste Haltestellen"></div>
   </div>
 
   <!-- ── Karte ──────────────────────────────── -->
@@ -276,8 +284,8 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.0.71"></script>
-    <script src="js/app.js?v=V2.0.71"></script>
-    <script src="js/debug-helper.js?v=V2.0.71"></script>
+    <script src="js/map.js?v=V2.0.72"></script>
+    <script src="js/app.js?v=V2.0.72"></script>
+    <script src="js/debug-helper.js?v=V2.0.72"></script>
 </body>
 </html>

@@ -754,13 +754,12 @@ html, body {
   top: calc(var(--safe-top));
   left: 0; right: 0;
   z-index: 500;
-  display: grid;
-  grid-template-columns: 1fr 80px;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 0;
   background: transparent;
   pointer-events: none;
-  height: calc(100vh - var(--safe-top));
+  height: auto;
   max-height: 100vh;
 }
 
@@ -773,67 +772,87 @@ html, body {
   pointer-events: auto;
 }
 
-/* Oben: Nächste Aktion (Pfeil + Straße + Distanz) */
-#navActionBar {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
+/* ── Top Bar: Line Info | Arrow | Time/Speed ── */
+#navTopBar {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px;
+  gap: 0;
   background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
   border-bottom: 2px solid var(--primary);
-  border-radius: 0 0 16px 0;
+  padding: 12px 12px;
+  align-items: center;
 }
 
-#navActionInfo {
-  flex: 1;
+#navLineInfo {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+#navLineName {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+#navCity {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Center: Large Arrow + Instruction */
+#navArrowSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#navArrow {
+  font-size: 56px;
+  line-height: 1;
+  color: var(--primary);
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
+}
+
+#navInstruction {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
 }
 
 #navLabel {
   font-size: 14px;
-  color: var(--text-muted);
-  font-weight: 500;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 #navDist {
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 700;
-  color: #fff;
-  line-height: 1;
-  letter-spacing: -0.5px;
-}
-
-#navArrow {
-  font-size: 48px;
-  line-height: 1;
   color: var(--primary);
-  width: 56px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  text-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
-  flex-shrink: 0;
+  line-height: 1;
 }
 
-/* Oben rechts: Zeit + Geschwindigkeit */
-#navTimeBox {
-  grid-column: 2;
-  grid-row: 1;
+/* Right: Time + Speed + Buttons */
+#navRightBox {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+#navTimeSpeed {
+  display: flex;
+  align-items: baseline;
   gap: 4px;
-  background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
-  border-bottom: 2px solid var(--primary);
-  padding: 8px 6px;
-  min-height: 56px;
 }
 
 #navTime {
@@ -843,48 +862,31 @@ html, body {
   font-family: 'Courier New', monospace;
 }
 
-#navSpeedBox {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-
 #navSpeed {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--primary);
-  line-height: 1;
 }
 
 #navSpeedUnit {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
-/* Rechts: Sidebar mit Buttons */
-#navSidebar {
-  grid-column: 2;
-  grid-row: 1 / 4;
+#navButtonsCompact {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 12px 8px;
-  background: linear-gradient(180deg, rgba(6, 9, 22, 0.95), rgba(6, 9, 22, 0.8));
-  border-left: 1px solid var(--border);
+  gap: 6px;
 }
 
 #navEndBtn, #navMenuBtn {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
   border: 1px solid;
   background: rgba(255,255,255,0.05);
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -912,17 +914,77 @@ html, body {
   background: rgba(255,255,255,0.1);
 }
 
-/* Unten: Nächste Haltestelle */
+/* ── Right Sidebar: Upcoming Stops (vertical) ── */
+#navUpcomingStops {
+  position: fixed;
+  top: calc(var(--safe-top) + 100px);
+  right: 8px;
+  width: 140px;
+  max-height: calc(60vh - 120px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 8px 4px;
+  z-index: 501;
+  pointer-events: auto;
+}
+
+.nav-upcoming-item {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.nav-upcoming-item.is-destination {
+  border-color: rgba(224, 140, 37, 0.55);
+  background: rgba(224, 140, 37, 0.12);
+}
+
+.nav-upcoming-type {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #ffcc8a;
+}
+
+.nav-upcoming-name {
+  display: block;
+  font-size: 11px;
+  color: #d9def2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.nav-upcoming-dist {
+  display: block;
+  font-size: 10px;
+  color: var(--primary);
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+/* ── Bottom: Current Stop ── */
 #navStopBar {
-  grid-column: 1;
-  grid-row: 3;
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 18px;
-  background: rgba(6, 9, 22, 0.95);
+  padding-bottom: calc(10px + var(--safe-bottom));
+  background: linear-gradient(180deg, rgba(6, 9, 22, 0.85), rgba(6, 9, 22, 0.95));
   border-top: 1px solid var(--border);
-  border-radius: 16px 0 0 0;
+  z-index: 499;
 }
 
 .nav-stop-dot {
@@ -945,55 +1007,6 @@ html, body {
   color: var(--primary);
   font-weight: 600;
   white-space: nowrap;
-}
-
-#navUpcomingStops {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 0 14px 11px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.nav-upcoming-item {
-  flex: 0 0 auto;
-  min-width: 130px;
-  max-width: 45vw;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 6px 8px;
-}
-
-.nav-upcoming-item.is-destination {
-  border-color: rgba(224, 140, 37, 0.55);
-  background: rgba(224, 140, 37, 0.12);
-}
-
-.nav-upcoming-type {
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: #ffcc8a;
-}
-
-.nav-upcoming-name {
-  display: block;
-  font-size: 12px;
-  color: #d9def2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nav-upcoming-dist {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--primary);
-  font-weight: 600;
 }
 
 /* ── Entwickler-Overlay: Nav-Performance (nur bei Debug-Flag) ── */

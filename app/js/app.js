@@ -1660,15 +1660,27 @@ function startNavigation() {
   navBtn.title       = 'Navigation beenden';
   navBtn.classList.add('nav-active');
 
+  // Display Line Information
+  const lineNameEl = document.getElementById('navLineName');
+  const cityNameEl = document.getElementById('navCity');
+  if (lineNameEl && currentRoute.lineFolder) {
+    const lineNum = currentRoute.lineFolder.replace(/\D/g, '') || '?';
+    lineNameEl.textContent = `Linie ${lineNum}`;
+  }
+  if (cityNameEl) {
+    cityNameEl.textContent = capitalizeCity(currentRoute.city || 'Stadt');
+  }
+
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
   if (navTurns.length) {
     const info = getTurnInfo(navTurns[0].angle);
+    const distStr = navFormatDist(navTurns[0].distFromStart);
     setNavArrowIcon(info.iconClass);
-    navDistEl.textContent  = navFormatDist(navTurns[0].distFromStart);
+    navDistEl.textContent  = `in ${distStr}`;
     navLabelEl.textContent = info.label;
   } else {
     setNavArrowIcon('fa-arrow-up');
-    navDistEl.textContent  = '';
+    navDistEl.textContent  = 'Startpunkt';
     navLabelEl.textContent = 'Geradeaus';
   }
   if (navStopDists.length) {
@@ -2080,13 +2092,14 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   const nextTurn = navTurns.find(t => t.distFromStart > currentDist + 15);
   if (nextTurn) {
     const info = getTurnInfo(nextTurn.angle);
+    const distToTurn = navFormatDist(nextTurn.distFromStart - currentDist);
     setNavArrowIcon(info.iconClass);
-    navDistEl.textContent  = navFormatDist(nextTurn.distFromStart - currentDist);
+    navDistEl.textContent  = `in ${distToTurn}`;
     navLabelEl.textContent = info.label;
   } else {
     setNavArrowIcon('fa-flag-checkered');
-    navDistEl.textContent  = '';
-    navLabelEl.textContent = 'Zieleinfahrt';
+    navDistEl.textContent  = 'Zieleinfahrt';
+    navLabelEl.textContent = 'Ankommen';
   }
 
   // Nächste Haltestelle

@@ -1,5 +1,16 @@
 # Changelog
 
+## V2.0.72 - 2026-06-02
+- **Major HUD Redesign: Centered Navigation Layout** – Complete restructuring of navigation interface for better readability:
+  - **Top Bar**: New horizontal layout with 3 sections:
+    - Left: Line information (e.g., "Linie 10" + "Cottbus")
+    - Center: Large centered arrow + instruction + distance with "in" (e.g., "Rechts abbiegen in 200 m")
+    - Right: Time display + speed + menu/end buttons (compact)
+  - **Right Sidebar**: Upcoming stops now displayed vertically on the right side (scrollable) instead of bottom
+  - **Bottom Bar**: Current/next stop information (unchanged location)
+  - **Visual improvements**: Better use of screen space, more professional GPS app layout
+- Result: Clearer hierarchy, easier to glance at critical info (arrow + instruction + distance), better stop visibility
+
 ## V2.0.71 - 2026-06-02
 - **Feature: Comprehensive Navigation Menu (... button)** – New modal menu with tab-based interface during navigation. Includes:
   - **Pause/Resume & Cancel buttons** – Pause navigation while keeping it active, or cancel to end
