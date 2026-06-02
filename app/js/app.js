@@ -23,6 +23,10 @@ let navCumDists  = [];
 let navStopDists = [];
 let navNearestIdx = 0;
 
+// GPS-Smoothing (reduziert Ruckeln bei schlechtem GPS)
+let gpsLastSmoothedPos = null;
+const GPS_SMOOTHING_ALPHA = 0.4;  // 0.3-0.5: höher = schneller Response, niedriger = glatter
+
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
 // Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
@@ -1552,6 +1556,22 @@ function calculateDistance(pos1, pos2) {
   return R * c;
 }
 
+// ── GPS-Smoothing: Reduziert Ruckeln durch exponentiellen Durchschnitt ──
+function smoothGPSPosition(lat, lon, speed) {
+  if (!gpsLastSmoothedPos) {
+    gpsLastSmoothedPos = { lat, lon, speed };
+    return { lat, lon, speed };
+  }
+  
+  // Exponentieller Durchschnitt (EMA): neue_pos = alpha * aktuelle + (1-alpha) * letzte
+  const smoothedLat = GPS_SMOOTHING_ALPHA * lat + (1 - GPS_SMOOTHING_ALPHA) * gpsLastSmoothedPos.lat;
+  const smoothedLon = GPS_SMOOTHING_ALPHA * lon + (1 - GPS_SMOOTHING_ALPHA) * gpsLastSmoothedPos.lon;
+  const smoothedSpeed = GPS_SMOOTHING_ALPHA * speed + (1 - GPS_SMOOTHING_ALPHA) * gpsLastSmoothedPos.speed;
+  
+  gpsLastSmoothedPos = { lat: smoothedLat, lon: smoothedLon, speed: smoothedSpeed };
+  return gpsLastSmoothedPos;
+}
+
 function startNavigation() {
   if (!currentRoute?.data?.routePoints?.length) {
     showToast('Bitte zuerst eine Linie laden.');
@@ -1606,12 +1626,16 @@ function startNavigation() {
       const { latitude: lat, longitude: lon, speed, heading } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
+      
+      // GPS-Daten glätten (exponentieller Durchschnitt reduziert Ruckeln)
+      const smoothed = smoothGPSPosition(lat, lon, speed);
+      
       const pts = currentRoute.data.routePoints;
-      const tracked = resolveNavTrackPoint(lat, lon, pts);
+      const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
 
-      recordNavDriveSample(lat, lon, tracked, speed, heading);
+      recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
-      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), speed);
+      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), smoothed.speed);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';
@@ -1649,6 +1673,7 @@ function stopNavigation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  gpsLastSmoothedPos = null;  // GPS-Smoothing zurücksetzen
   stopNavDriveLogSession();
   resetNavPerfStats('idle');
 

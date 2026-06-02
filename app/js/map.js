@@ -741,21 +741,21 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 
       if (navMode) {
         // Ultra-Cockpit: je schneller, desto weiter nach vorne sehen.
-        // Bei langsamer Haltestellenanfahrt bewusst etwas entzerren (lesbarer, ruhiger).
+        // Fahrzeug sitzt jetzt im unteren Drittel (bottomFactor erhöht für bessere Sicht nach vorne).
         if (speedKmh != null && speedKmh < 8) {
           driverZoom = Math.min(22, baseZoom - 0.2);
           pitch = 52;
-          bottomFactor = 0.26;
+          bottomFactor = 0.52;
           topFactor = 0.09;
         } else if (speedKmh != null && speedKmh < 25) {
           driverZoom = Math.min(22, baseZoom + 0.2);
           pitch = 58;
-          bottomFactor = 0.30;
+          bottomFactor = 0.56;
           topFactor = 0.08;
         } else {
           driverZoom = Math.min(22, baseZoom + 0.45);
           pitch = 64;
-          bottomFactor = 0.34;
+          bottomFactor = 0.60;
           topFactor = 0.06;
         }
 
