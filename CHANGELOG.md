@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.77 - 2026-06-02
+- **Add Destination Box to Top Bar** – Display final destination separately:
+  - New elegant destination box next to line info with warm orange styling
+  - Shows last stop name and total distance to destination
+  - Top bar now 4 columns: Line (240px) | Destination (140px) | Arrow (1fr) | Time/Speed (130px)
+  - Subtle orange gradient background with matching border for visual distinction
+  - Destination distance dynamically calculated from route data
+
 ## V2.0.76 - 2026-06-02
 - **Fix Stops List Readability** – Critical contrast fix for upcoming stops display:
   - Changed background from light transparent white to dark blue (rgba(15, 25, 60, 0.85))
