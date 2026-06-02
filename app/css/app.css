@@ -640,6 +640,11 @@ html, body {
   color: var(--primary);
   min-width: 68px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
 }
 #navDistInfo {
   flex: 1;
@@ -970,6 +975,8 @@ body.nav-mode #navHud {
   #navArrow {
     font-size: 40px;
     min-width: 44px;
+    width: 44px;
+    height: 44px;
   }
 
   #navDist {

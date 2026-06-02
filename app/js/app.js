@@ -1600,11 +1600,11 @@ function startNavigation() {
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
   if (navTurns.length) {
     const info = getTurnInfo(navTurns[0].angle);
-    navArrowEl.textContent = info.icon;
+    setNavArrowIcon(info.iconClass);
     navDistEl.textContent  = navFormatDist(navTurns[0].distFromStart);
     navLabelEl.textContent = info.label;
   } else {
-    navArrowEl.textContent = '⬆';
+    setNavArrowIcon('fa-arrow-up');
     navDistEl.textContent  = '';
     navLabelEl.textContent = 'Geradeaus';
   }
@@ -1955,14 +1955,19 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
 
 function getTurnInfo(angle) {
   const a = angle;
-  if (Math.abs(a) < 20)      return { icon: '⬆', label: 'Geradeaus' };
-  if (a >= 20 && a < 50)     return { icon: '↗', label: 'Leicht rechts' };
-  if (a >= 50 && a < 130)    return { icon: '➡', label: 'Rechts abbiegen' };
-  if (a >= 130)              return { icon: '↪', label: 'Scharf rechts' };
-  if (a <= -20 && a > -50)   return { icon: '↖', label: 'Leicht links' };
-  if (a <= -50 && a > -130)  return { icon: '⬅', label: 'Links abbiegen' };
-  if (a <= -130)             return { icon: '↩', label: 'Scharf links' };
-  return { icon: '⬆', label: 'Weiterfahren' };
+  if (Math.abs(a) < 20)      return { iconClass: 'fa-arrow-up', label: 'Geradeaus' };
+  if (a >= 20 && a < 50)     return { iconClass: 'fa-arrow-up-right', label: 'Leicht rechts' };
+  if (a >= 50 && a < 130)    return { iconClass: 'fa-arrow-right', label: 'Rechts abbiegen' };
+  if (a >= 130)              return { iconClass: 'fa-arrow-up-right fa-rotate-90', label: 'Scharf rechts' };
+  if (a <= -20 && a > -50)   return { iconClass: 'fa-arrow-up-left', label: 'Leicht links' };
+  if (a <= -50 && a > -130)  return { iconClass: 'fa-arrow-left', label: 'Links abbiegen' };
+  if (a <= -130)             return { iconClass: 'fa-arrow-up-left fa-rotate-90', label: 'Scharf links' };
+  return { iconClass: 'fa-arrow-up', label: 'Weiterfahren' };
+}
+
+// ── Hilfsfunktion: Font Awesome Icon-Klasse setzen ───
+function setNavArrowIcon(iconClass) {
+  navArrowEl.className = 'fa-solid ' + iconClass;
 }
 
 function navFormatDist(meters) {
@@ -1985,11 +1990,11 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   const nextTurn = navTurns.find(t => t.distFromStart > currentDist + 15);
   if (nextTurn) {
     const info = getTurnInfo(nextTurn.angle);
-    navArrowEl.textContent = info.icon;
+    setNavArrowIcon(info.iconClass);
     navDistEl.textContent  = navFormatDist(nextTurn.distFromStart - currentDist);
     navLabelEl.textContent = info.label;
   } else {
-    navArrowEl.textContent = '🏁';
+    setNavArrowIcon('fa-flag-checkered');
     navDistEl.textContent  = '';
     navLabelEl.textContent = 'Zieleinfahrt';
   }
