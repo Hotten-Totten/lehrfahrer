@@ -2171,10 +2171,7 @@ function renderUpcomingStops(currentDist) {
     .filter(s => s.distFromStart > currentDist + 10)
     .slice(0, 4);
 
-  const destination = navStopDists.length ? navStopDists[navStopDists.length - 1] : null;
-
   const list = [];
-  if (destination) list.push({ kind: 'destination', entry: destination });
   upcoming.forEach(entry => list.push({ kind: 'upcoming', entry }));
 
   if (!list.length) {

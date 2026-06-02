@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.0.78 - 2026-06-02
+- **Enlarge Destination Box** – Make final destination more prominent and readable:
+  - Increased Destination Box in top bar: fonts 10→11px (label), 12→16px (name), 12→14px (distance)
+  - Padding enlarged: 10px 12px → 16px 14px for better spacing and tap targets
+  - Border thickness: 1px → 1.5px for stronger visual definition
+  - Border-radius: 8px → 10px for softer appearance
+  - Removed destination from right-side upcoming stops list – now only shows next 4 stops
+  - Destination now exclusively displayed in elegant orange box in top bar
+
 ## V2.0.77 - 2026-06-02
 - **Add Destination Box to Top Bar** – Display final destination separately:
   - New elegant destination box next to line info with warm orange styling
