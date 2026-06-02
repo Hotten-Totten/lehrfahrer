@@ -56,23 +56,37 @@
 
   <!-- ── Nav-HUD (sichtbar während Navigation) ── -->
   <div id="navHud" class="hidden">
-    <div id="navManeuver">
+    <!-- Oben: Action Bar (Nächste Aktion) -->
+    <div id="navActionBar">
       <i id="navArrow" class="fa-solid fa-arrow-up"></i>
-      <div id="navDistInfo">
-        <div id="navDist">–</div>
+      <div id="navActionInfo">
         <div id="navLabel">Starte Navigation …</div>
+        <div id="navDist">–</div>
       </div>
+    </div>
+    
+    <!-- Oben rechts: Zeit + Geschwindigkeit -->
+    <div id="navTimeBox">
+      <div id="navTime">--:--</div>
       <div id="navSpeedBox">
         <div id="navSpeed">–</div>
         <div id="navSpeedUnit">km/h</div>
       </div>
-      <button id="navEndBtn" type="button" title="Navigation beenden">■</button>
     </div>
+    
+    <!-- Rechts: Sidebar mit Buttons -->
+    <div id="navSidebar">
+      <button id="navEndBtn" type="button" title="Navigation beenden" aria-label="Navigation beenden">■</button>
+      <button id="navMenuBtn" type="button" title="Menü">⋯</button>
+    </div>
+    
+    <!-- Unten: Nächste Haltestelle -->
     <div id="navStopBar">
       <span class="nav-stop-dot">⬤</span>
       <span id="navStopName">–</span>
       <span id="navStopDist">–</span>
     </div>
+    
     <div id="navUpcomingStops" aria-label="Nächste Haltestellen"></div>
   </div>
 

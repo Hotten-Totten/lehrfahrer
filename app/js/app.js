@@ -22,6 +22,7 @@ let navTurns     = [];
 let navCumDists  = [];
 let navStopDists = [];
 let navNearestIdx = 0;
+let navTimeInterval = null;  // Timer für Zeit-Updates im HUD
 
 // GPS-Smoothing (reduziert Ruckeln bei schlechtem GPS)
 let gpsLastSmoothedPos = null;
@@ -101,7 +102,9 @@ const navLabelEl    = document.getElementById('navLabel');
 const navStopNameEl = document.getElementById('navStopName');
 const navStopDistEl = document.getElementById('navStopDist');
 const navSpeedEl    = document.getElementById('navSpeed');
+const navTimeEl     = document.getElementById('navTime');
 const navEndBtn     = document.getElementById('navEndBtn');
+const navMenuBtn    = document.getElementById('navMenuBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
 
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
@@ -1620,6 +1623,24 @@ function startNavigation() {
   }
 
   armGpsFirstFixTimer('Navigation');
+  
+  // Starte Zeit-Update im HUD
+  if (navTimeInterval) clearInterval(navTimeInterval);
+  navTimeInterval = setInterval(() => {
+    if (navTimeEl) {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      navTimeEl.textContent = `${hours}:${mins}`;
+    }
+  }, 1000);
+  // Einmal sofort aktualisieren
+  if (navTimeEl) {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const mins = String(now.getMinutes()).padStart(2, '0');
+    navTimeEl.textContent = `${hours}:${mins}`;
+  }
 
   const ok = startGPS(
     pos => {
@@ -1668,6 +1689,10 @@ function stopNavigation() {
   navBtn.classList.remove('nav-active');
   stopGPS();
   clearGpsFirstFixTimer();
+  if (navTimeInterval) {
+    clearInterval(navTimeInterval);
+    navTimeInterval = null;
+  }
   gpsActive = false;
   gpsBtn.style.color = '';
   navNearestIdx = 0;

@@ -622,96 +622,180 @@ html, body {
 /* ── Nav-HUD ───────────────────────────────── */
 #navHud {
   position: fixed;
-  top: calc(var(--safe-top) + var(--topbar-h) + var(--sel-h));
+  top: calc(var(--safe-top));
   left: 0; right: 0;
+  bottom: 0;
   z-index: 500;
-  background: rgba(6, 9, 22, 0.97);
+  display: grid;
+  grid-template-columns: 1fr 80px;
+  grid-template-rows: auto 1fr auto;
+  gap: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+#navHud > * {
+  pointer-events: auto;
+}
+
+/* Oben: Nächste Aktion (Pfeil + Straße + Distanz) */
+#navActionBar {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
   border-bottom: 2px solid var(--primary);
+  border-radius: 0 0 16px 0;
 }
-#navManeuver {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 18px 8px;
-}
-#navArrow {
-  font-size: 58px;
-  line-height: 1;
-  color: var(--primary);
-  min-width: 68px;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 68px;
-  height: 68px;
-  font-weight: 900;
-  text-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
-}
-#navDistInfo {
+
+#navActionInfo {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
-#navDist {
-  font-size: 40px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1;
-  letter-spacing: -0.5px;
-}
+
 #navLabel {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-muted);
+  font-weight: 500;
 }
-#navSpeedBox {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 64px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
-  padding: 6px 10px;
-}
-#navSpeed {
+
+#navDist {
   font-size: 32px;
   font-weight: 700;
   color: #fff;
   line-height: 1;
   letter-spacing: -0.5px;
 }
+
+#navArrow {
+  font-size: 48px;
+  line-height: 1;
+  color: var(--primary);
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
+  flex-shrink: 0;
+}
+
+/* Oben rechts: Zeit + Geschwindigkeit */
+#navTimeBox {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
+  border-bottom: 2px solid var(--primary);
+  padding: 8px 6px;
+  min-height: 56px;
+}
+
+#navTime {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+}
+
+#navSpeedBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+#navSpeed {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1;
+}
+
 #navSpeedUnit {
-  font-size: 11px;
+  font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-top: 2px;
+}
+
+/* Rechts: Sidebar mit Buttons */
+#navSidebar {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px 8px;
+  background: linear-gradient(180deg, rgba(6, 9, 22, 0.95), rgba(6, 9, 22, 0.8));
+  border-left: 1px solid var(--border);
+}
+
+#navEndBtn, #navMenuBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid;
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
 #navEndBtn {
-  min-width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid #e05555;
-  background: rgba(120, 18, 18, 0.5);
+  border-color: #e05555;
   color: #ffb0b0;
-  font-size: 20px;
-  font-weight: 700;
-  cursor: pointer;
 }
+
 #navEndBtn:active {
   background: #e05555;
   color: #fff;
 }
 
+#navMenuBtn {
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+#navMenuBtn:active {
+  background: rgba(255,255,255,0.1);
+}
+
+/* Unten: Nächste Haltestelle */
 #navStopBar {
+  grid-column: 1;
+  grid-row: 3;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 18px 11px;
+  padding: 10px 18px;
+  background: rgba(6, 9, 22, 0.95);
   border-top: 1px solid var(--border);
+  border-radius: 16px 0 0 0;
 }
-.nav-stop-dot { color: var(--accent); font-size: 11px; flex-shrink: 0; }
+
+.nav-stop-dot {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
 #navStopName {
   flex: 1;
   font-size: 15px;
@@ -720,6 +804,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 #navStopDist {
   font-size: 14px;
   color: var(--primary);
