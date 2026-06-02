@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.71 - 2026-06-02
+- **Feature: Comprehensive Navigation Menu (... button)** – New modal menu with tab-based interface during navigation. Includes:
+  - **Pause/Resume & Cancel buttons** – Pause navigation while keeping it active, or cancel to end
+  - **Route Info tab** – Displays total distance, distance traveled, remaining distance, and elapsed time
+  - **Upcoming Stops tab** – Lists all stops on the route with distance to each
+  - **Settings tab** – Future options for auto-zoom, sound notifications, screen-on settings
+  - Modal opens from ... button in top-right of HUD, closes with X or by tapping overlay
+  - Uses tab system for easy switching between info categories
+- Result: Professional GPS app menu system with comprehensive route and stop information
+
 ## V2.0.70 - 2026-06-02
 - **Fix: Restore Selection Interaction After HUD Redesign** – Z-index layering bug in V2.0.69 HUD prevented users from selecting cities and lines. Root cause: navHud grid overlay (z-index: 500) was covering selectionBar even when hidden. Solution: Added `#navHud.hidden { display: none; }` CSS rule and ensured pointer-events properly cascade. Now selectionBar is fully interactive when not in navigation mode. Service Worker cache version incremented to force refresh of cached assets.
 

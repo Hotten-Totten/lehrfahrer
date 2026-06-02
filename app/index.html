@@ -16,7 +16,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.70">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.71">
 </head>
 <body>
 
@@ -24,7 +24,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.70</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.71</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -192,11 +192,92 @@
     </div>
   </div>
 
+  <!-- ── Navigation Menu Overlay ─────────────────── -->
+  <div id="navMenuOverlay" class="hidden nav-menu-overlay">
+    <div class="nav-menu-modal">
+      <!-- Tab Navigation -->
+      <div class="nav-menu-tabs">
+        <button class="nav-menu-tab active" data-tab="pause" title="Navigation pausieren/fortsetzen">⏸ Pause</button>
+        <button class="nav-menu-tab" data-tab="info" title="Route-Informationen">ℹ Info</button>
+        <button class="nav-menu-tab" data-tab="stops" title="Kommende Haltestellen">🚏 Stops</button>
+        <button class="nav-menu-tab" data-tab="settings" title="Navigations-Einstellungen">⚙ Einst.</button>
+      </div>
 
+      <!-- Tab Content -->
+      <div class="nav-menu-content">
+        <!-- Pause Tab -->
+        <div class="nav-menu-pane active" data-pane="pause">
+          <div style="padding: 16px; text-align: center;">
+            <button id="navPauseBtn" class="nav-menu-action-btn" style="width: 100%; padding: 12px; margin-bottom: 12px;">
+              ⏸ Pause
+            </button>
+            <button id="navCancelBtn" class="nav-menu-action-btn nav-menu-danger" style="width: 100%; padding: 12px;">
+              ✕ Abbrechen
+            </button>
+          </div>
+        </div>
 
+        <!-- Info Tab -->
+        <div class="nav-menu-pane" data-pane="info">
+          <div style="padding: 16px;">
+            <div style="margin-bottom: 12px;">
+              <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Gesamt-Distanz</label>
+              <div id="navInfoDistance" style="font-size: 18px; font-weight: 700; color: var(--text);">-- km</div>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Bisherige Strecke</label>
+              <div id="navInfoTraveled" style="font-size: 16px; font-weight: 600; color: var(--accent);">0.0 km</div>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Verbleibende Strecke</label>
+              <div id="navInfoRemaining" style="font-size: 16px; font-weight: 600; color: var(--accent);">-- km</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Fahrtzeit (bisher)</label>
+              <div id="navInfoTime" style="font-size: 14px; font-weight: 500; color: var(--text);">0:00</div>
+            </div>
+          </div>
+        </div>
 
-    <script src="js/map.js?v=V2.0.70"></script>
-    <script src="js/app.js?v=V2.0.70"></script>
-    <script src="js/debug-helper.js?v=V2.0.70"></script>
+        <!-- Stops Tab -->
+        <div class="nav-menu-pane" data-pane="stops">
+          <div id="navUpcomingList" style="padding: 12px; max-height: 300px; overflow-y: auto;">
+            <div style="text-align: center; color: var(--text-muted); padding: 20px;">Lade Haltestellen...</div>
+          </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="nav-menu-pane" data-pane="settings">
+          <div style="padding: 16px;">
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="navAutoZoom" checked>
+                <span style="font-size: 13px;">Auto-Zoom bei Kurven</span>
+              </label>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="navSoundEnabled" checked>
+                <span style="font-size: 13px;">Sound-Benachrichtigungen</span>
+              </label>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="navScreenOn" checked>
+                <span style="font-size: 13px;">Bildschirm immer an</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Close Button -->
+      <button id="closeNavMenuBtn" class="nav-menu-close-btn" title="Menü schließen">✕</button>
+    </div>
+  </div>
+
+    <script src="js/map.js?v=V2.0.71"></script>
+    <script src="js/app.js?v=V2.0.71"></script>
+    <script src="js/debug-helper.js?v=V2.0.71"></script>
 </body>
 </html>

@@ -594,6 +594,124 @@ html, body {
 
 #closeSettingsBtn { background: var(--surface2) !important; }
 
+/* ── Navigation Menu Overlay ──────────────── */
+.nav-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 510;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-menu-overlay.hidden { display: none !important; }
+
+.nav-menu-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.nav-menu-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px;
+  background: var(--surface2);
+  border-radius: 16px 16px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-menu-tab {
+  flex: 1;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-menu-tab.active {
+  background: var(--surface);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.nav-menu-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.nav-menu-pane {
+  display: none;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.nav-menu-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nav-menu-action-btn {
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-menu-action-btn:active {
+  background: var(--accent);
+  transform: scale(0.98);
+}
+
+.nav-menu-action-btn.nav-menu-danger {
+  background: #d9534f;
+}
+
+.nav-menu-action-btn.nav-menu-danger:active {
+  background: #c9423f;
+}
+
+.nav-menu-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-menu-close-btn:active {
+  background: var(--primary);
+  color: white;
+}
+
 /* ── Radio-Zeilen (Perspektiv-Auswahl) ─────── */
 .radio-row {
   display: flex;

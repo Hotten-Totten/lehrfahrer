@@ -38,6 +38,11 @@ const NAV_REJOIN_BLEND_STEP = 0.20;
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
 
+// Navigation Menu
+let currentNavLine = null;
+let navProgressIdx = 0;
+let navStartTime = 0;
+
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
 let navPerfHudEl            = null;
@@ -106,6 +111,14 @@ const navTimeEl     = document.getElementById('navTime');
 const navEndBtn     = document.getElementById('navEndBtn');
 const navMenuBtn    = document.getElementById('navMenuBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
+
+// Navigation Menu Overlay
+const navMenuOverlay   = document.getElementById('navMenuOverlay');
+const closeNavMenuBtn  = document.getElementById('closeNavMenuBtn');
+const navPauseBtn     = document.getElementById('navPauseBtn');
+const navCancelBtn    = document.getElementById('navCancelBtn');
+const navTabs         = document.querySelectorAll('.nav-menu-tab');
+const navPanes        = document.querySelectorAll('.nav-menu-pane');
 
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 
@@ -1025,6 +1038,50 @@ function bindEvents() {
       stopNavigation();
     });
   }
+
+  // Navigation Menu Button
+  if (navMenuBtn) {
+    navMenuBtn.addEventListener('click', () => {
+      showNavMenu();
+    });
+  }
+
+  // Navigation Menu Tab Switching
+  navTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.getAttribute('data-tab');
+      switchNavMenuTab(tabName);
+    });
+  });
+
+  // Navigation Menu Close Button
+  if (closeNavMenuBtn) {
+    closeNavMenuBtn.addEventListener('click', () => {
+      hideNavMenu();
+    });
+  }
+
+  // Overlay Click to Close
+  if (navMenuOverlay) {
+    navMenuOverlay.addEventListener('click', (e) => {
+      if (e.target === navMenuOverlay) hideNavMenu();
+    });
+  }
+
+  // Pause Button
+  if (navPauseBtn) {
+    navPauseBtn.addEventListener('click', () => {
+      toggleNavPause();
+    });
+  }
+
+  // Cancel Button
+  if (navCancelBtn) {
+    navCancelBtn.addEventListener('click', () => {
+      stopNavigation();
+      hideNavMenu();
+    });
+  }
 }
 
 // ── Städte laden ─────────────────────────────────────────────
@@ -1591,6 +1648,9 @@ function startNavigation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  navProgressIdx = 0;
+  navStartTime = Date.now();
+  currentNavLine = currentRoute.data;
   resetNavPerfStats('gps');
   startNavDriveLogSession('nav-start');
 
@@ -1698,7 +1758,11 @@ function stopNavigation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  navProgressIdx = 0;
+  navStartTime = 0;
+  currentNavLine = null;
   gpsLastSmoothedPos = null;  // GPS-Smoothing zurücksetzen
+  if (navMenuOverlay) navMenuOverlay.classList.add('hidden');  // Close menu
   stopNavDriveLogSession();
   resetNavPerfStats('idle');
 
@@ -1928,6 +1992,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
   }
 
   navNearestIdx = snap.index;
+  navProgressIdx = snap.index;
 
   if (snap.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
     navOffRouteActive = true;
@@ -2087,6 +2152,157 @@ function renderUpcomingStops(currentDist) {
   });
 
   navUpcomingStopsEl.replaceChildren(...nodes);
+}
+
+// ═════════════════════════════════════════════════════════════
+// Navigation Menu Functions
+// ═════════════════════════════════════════════════════════════
+
+let navPaused = false;
+
+function showNavMenu() {
+  if (navMenuOverlay) {
+    navMenuOverlay.classList.remove('hidden');
+    updateNavMenuInfo();
+    updateNavMenuStops();
+  }
+}
+
+function hideNavMenu() {
+  if (navMenuOverlay) {
+    navMenuOverlay.classList.add('hidden');
+  }
+}
+
+function switchNavMenuTab(tabName) {
+  // Update active tab
+  navTabs.forEach(tab => {
+    if (tab.getAttribute('data-tab') === tabName) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
+  // Update active pane
+  navPanes.forEach(pane => {
+    if (pane.getAttribute('data-pane') === tabName) {
+      pane.classList.add('active');
+    } else {
+      pane.classList.remove('active');
+    }
+  });
+
+  // Update content when switching tabs
+  if (tabName === 'info') updateNavMenuInfo();
+  if (tabName === 'stops') updateNavMenuStops();
+}
+
+function updateNavMenuInfo() {
+  // Get route info
+  const distEl = document.getElementById('navInfoDistance');
+  const traveledEl = document.getElementById('navInfoTraveled');
+  const remainingEl = document.getElementById('navInfoRemaining');
+  const timeEl = document.getElementById('navInfoTime');
+
+  if (!currentNavLine) {
+    if (distEl) distEl.textContent = '-- km';
+    if (traveledEl) traveledEl.textContent = '0 km';
+    if (remainingEl) remainingEl.textContent = '-- km';
+    if (timeEl) timeEl.textContent = '0:00';
+    return;
+  }
+
+  // Calculate total distance
+  let totalDist = 0;
+  if (currentNavLine.points && currentNavLine.points.length > 0) {
+    for (let i = 1; i < currentNavLine.points.length; i++) {
+      const [lat1, lon1] = navGetLatLon(currentNavLine.points[i - 1]);
+      const [lat2, lon2] = navGetLatLon(currentNavLine.points[i]);
+      totalDist += haversineMeters(lat1, lon1, lat2, lon2);
+    }
+  }
+  const totalDistKm = totalDist / 1000;
+
+  // Calculate traveled distance
+  let traveledDist = 0;
+  if (navProgressIdx > 0 && currentNavLine.points && currentNavLine.points.length > 0) {
+    for (let i = 1; i <= navProgressIdx && i < currentNavLine.points.length; i++) {
+      const [lat1, lon1] = navGetLatLon(currentNavLine.points[i - 1]);
+      const [lat2, lon2] = navGetLatLon(currentNavLine.points[i]);
+      traveledDist += haversineMeters(lat1, lon1, lat2, lon2);
+    }
+  }
+  const traveledKm = traveledDist / 1000;
+  const remainingKm = Math.max(0, totalDistKm - traveledKm);
+
+  // Calculate elapsed time
+  const elapsedMs = Date.now() - navStartTime;
+  const elapsedSecs = Math.floor(elapsedMs / 1000);
+  const mins = Math.floor(elapsedSecs / 60);
+  const secs = elapsedSecs % 60;
+  const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+
+  // Update UI
+  if (distEl) distEl.textContent = totalDistKm.toFixed(1) + ' km';
+  if (traveledEl) traveledEl.textContent = traveledKm.toFixed(1) + ' km';
+  if (remainingEl) remainingEl.textContent = remainingKm.toFixed(1) + ' km';
+  if (timeEl) timeEl.textContent = timeStr;
+}
+
+function updateNavMenuStops() {
+  const listEl = document.getElementById('navUpcomingList');
+  if (!listEl || !currentNavLine || !currentNavLine.stops) {
+    if (listEl) listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Keine Haltestellen</div>';
+    return;
+  }
+
+  // Get current distance traveled
+  let currentDist = 0;
+  if (navProgressIdx > 0 && currentNavLine.points && currentNavLine.points.length > 0) {
+    for (let i = 1; i <= navProgressIdx && i < currentNavLine.points.length; i++) {
+      const [lat1, lon1] = navGetLatLon(currentNavLine.points[i - 1]);
+      const [lat2, lon2] = navGetLatLon(currentNavLine.points[i]);
+      currentDist += haversineMeters(lat1, lon1, lat2, lon2);
+    }
+  }
+
+  const nodes = currentNavLine.stops.map(stop => {
+    const card = document.createElement('div');
+    card.style.cssText = 'padding: 10px; background: var(--surface2); border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;';
+
+    const name = document.createElement('div');
+    name.style.cssText = 'flex: 1; font-size: 13px; font-weight: 600;';
+    name.textContent = stop.name;
+
+    const dist = document.createElement('div');
+    dist.style.cssText = 'font-size: 12px; color: var(--accent); font-weight: 500;';
+    const remaining = Math.max(0, stop.distFromStart - currentDist);
+    dist.textContent = navFormatDist(remaining);
+
+    card.appendChild(name);
+    card.appendChild(dist);
+    return card;
+  });
+
+  listEl.replaceChildren(...nodes);
+}
+
+function toggleNavPause() {
+  navPaused = !navPaused;
+  
+  if (navPauseBtn) {
+    if (navPaused) {
+      navPauseBtn.textContent = '▶ Fortsetzen';
+      navPauseBtn.style.background = 'var(--accent)';
+    } else {
+      navPauseBtn.textContent = '⏸ Pause';
+      navPauseBtn.style.background = 'var(--primary)';
+    }
+  }
+
+  // TODO: Implement actual pause logic (disable GPS updates, freeze map, etc.)
+  console.log('Navigation ' + (navPaused ? 'paused' : 'resumed'));
 }
 
 // =============================================================
