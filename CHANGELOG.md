@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.0.67 - 2026-06-02
+- **Improve: Vehicle Position Lower on Screen** – Moved vehicle indicator to bottom third of screen (increased bottomFactor from 0.26-0.34 to 0.52-0.60). Driver now sees more of the route ahead, similar to professional GPS navigation apps. Better visibility and situational awareness.
+- **Fix: GPS Smoothing Against Jitter** – Implemented exponential moving average (EMA, alpha=0.4) on raw GPS coordinates to eliminate jumping/stuttering movement. GPS noise is filtered out smoothly without reducing responsiveness. Result: Fluid, continuous movement instead of discrete jumps.
+
 ## V2.0.66 - 2026-06-01
 - **Feature: Navigate to Route Start** – Added new button "📍 Zum Startpunkt" in route panel. When clicked, displays green dashed navigation line from current GPS position to the first point of the selected route. Shows blue marker for current position and orange marker for route start. Automatically fits map bounds to show both points. Displays distance to start point. Helps drivers quickly orient themselves and navigate to the beginning of their assigned route.
 
