@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.76 - 2026-06-02
+- **Fix Stops List Readability** – Critical contrast fix for upcoming stops display:
+  - Changed background from light transparent white to dark blue (rgba(15, 25, 60, 0.85))
+  - White text now fully readable on dark background
+  - Destination stops highlight with warm orange background (rgba(224, 140, 37, 0.25))
+  - Blue borders on all stops for consistency with navigation theme
+
 ## V2.0.75 - 2026-06-02
 - **Enhanced Line Info Styling** – Better contrast and complete text display:
   - Line info now has elegant blue gradient background (rgba(74, 158, 255, 0.15))
