@@ -1668,26 +1668,16 @@ function startNavigation() {
   if (lineNameEl) {
     // Try fileBase first, then lineFolder
     let lineNum = currentRoute.fileBase?.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?';
+    const directionName = currentRoute.data?.directionName || '';
     lineNameEl.textContent = `Linie ${lineNum}`;
+    if (directionName) {
+      lineNameEl.textContent += ` / ${directionName}`;
+    }
     console.log('📍 Line set to:', lineNameEl.textContent);
-    console.log('📍 Element details:', {
-      tagName: lineNameEl.tagName,
-      className: lineNameEl.className,
-      visible: lineNameEl.offsetHeight > 0,
-      text: lineNameEl.textContent,
-      computed: window.getComputedStyle(lineNameEl).color
-    });
   }
   if (cityNameEl) {
     cityNameEl.textContent = capitalizeCity(currentRoute.city || 'Stadt');
     console.log('🏙️ City set to:', cityNameEl.textContent);
-    console.log('🏙️ Element details:', {
-      tagName: cityNameEl.tagName,
-      className: cityNameEl.className,
-      visible: cityNameEl.offsetHeight > 0,
-      text: cityNameEl.textContent,
-      computed: window.getComputedStyle(cityNameEl).color
-    });
   }
 
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
