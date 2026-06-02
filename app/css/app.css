@@ -645,6 +645,8 @@ html, body {
   justify-content: center;
   width: 68px;
   height: 68px;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(74, 158, 255, 0.4);
 }
 #navDistInfo {
   flex: 1;
@@ -977,6 +979,8 @@ body.nav-mode #navHud {
     min-width: 44px;
     width: 44px;
     height: 44px;
+    font-weight: 900;
+    text-shadow: 0 0 6px rgba(74, 158, 255, 0.4);
   }
 
   #navDist {
