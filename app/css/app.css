@@ -69,6 +69,17 @@ html, body {
   font-weight: 600;
 }
 
+.version-badge {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+  padding: 2px 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
 #topbar-right {
   display: flex;
   gap: 6px;
