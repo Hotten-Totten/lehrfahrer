@@ -624,7 +624,6 @@ html, body {
   position: fixed;
   top: calc(var(--safe-top));
   left: 0; right: 0;
-  bottom: 0;
   z-index: 500;
   display: grid;
   grid-template-columns: 1fr 80px;
@@ -632,6 +631,13 @@ html, body {
   gap: 0;
   background: transparent;
   pointer-events: none;
+  height: calc(100vh - var(--safe-top));
+  max-height: 100vh;
+}
+
+#navHud.hidden {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 #navHud > * {
