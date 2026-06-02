@@ -945,9 +945,9 @@ html, body {
 
 .nav-upcoming-item {
   flex: 0 0 auto;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(74, 158, 255, 0.3);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 25, 60, 0.85);
   padding: 10px 10px;
   font-size: 12px;
   line-height: 1.4;
@@ -955,14 +955,14 @@ html, body {
 }
 
 .nav-upcoming-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(15, 25, 60, 0.95);
+  border-color: rgba(74, 158, 255, 0.5);
 }
 
 .nav-upcoming-item.is-destination {
-  border-color: rgba(224, 140, 37, 0.75);
-  background: rgba(224, 140, 37, 0.18);
-  box-shadow: 0 0 12px rgba(224, 140, 37, 0.3);
+  border-color: rgba(224, 140, 37, 0.8);
+  background: rgba(224, 140, 37, 0.25);
+  box-shadow: 0 0 12px rgba(224, 140, 37, 0.35);
 }
 
 .nav-upcoming-type {
