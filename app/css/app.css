@@ -775,40 +775,43 @@ html, body {
 /* ── Top Bar: Line Info | Arrow | Time/Speed ── */
 #navTopBar {
   display: grid;
-  grid-template-columns: 200px 1fr 120px;
+  grid-template-columns: 240px 1fr 130px;
   gap: 0;
   background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
   border-bottom: 2px solid var(--primary);
   padding: 12px 12px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 #navLineInfo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.15), rgba(52, 120, 200, 0.1));
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  border-radius: 8px;
+  overflow: visible;
 }
 
 #navLineName {
   font-weight: 700;
-  color: var(--primary);
-  font-size: 13px;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.3;
   white-space: normal;
   word-break: break-word;
-  max-height: 40px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow: visible;
+  text-overflow: clip;
+  display: block;
+  max-height: none;
 }
 
 #navCity {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
 }
 
 /* Center: Large Arrow + Instruction */
