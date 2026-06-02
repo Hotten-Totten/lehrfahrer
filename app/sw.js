@@ -15,8 +15,8 @@ const APP_SHELL = [
   './index.html',
   './manifest.json',
   './css/app.css',
-  './js/app.js?v=V2.0.44',
-  './js/map.js?v=V2.0.44'
+  './js/app.js?v=V2.0.70',
+  './js/map.js?v=V2.0.70'
 ];
 
 // ── Install ──────────────────────────────────────────────────
