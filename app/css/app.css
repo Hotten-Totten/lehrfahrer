@@ -854,33 +854,34 @@ html, body {
 #navRightBox {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   align-items: flex-end;
 }
 
 #navTimeSpeed {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 6px;
 }
 
 #navTime {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: #fff;
   font-family: 'Courier New', monospace;
 }
 
 #navSpeed {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 900;
   color: var(--primary);
 }
 
 #navSpeedUnit {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 #navButtonsCompact {
@@ -889,13 +890,13 @@ html, body {
 }
 
 #navEndBtn, #navMenuBtn {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid;
   background: rgba(255,255,255,0.05);
   color: #fff;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -928,56 +929,65 @@ html, body {
   position: fixed;
   top: calc(var(--safe-top) + 100px);
   right: 8px;
-  width: 140px;
+  width: 185px;
   max-height: calc(60vh - 120px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   overflow-y: auto;
-  padding: 8px 4px;
+  padding: 12px 8px;
   z-index: 501;
   pointer-events: auto;
 }
 
 .nav-upcoming-item {
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 8px 8px;
-  font-size: 11px;
-  line-height: 1.3;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  transition: all 0.2s ease;
+}
+
+.nav-upcoming-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .nav-upcoming-item.is-destination {
-  border-color: rgba(224, 140, 37, 0.55);
-  background: rgba(224, 140, 37, 0.12);
+  border-color: rgba(224, 140, 37, 0.75);
+  background: rgba(224, 140, 37, 0.18);
+  box-shadow: 0 0 12px rgba(224, 140, 37, 0.3);
 }
 
 .nav-upcoming-type {
   display: block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: #ffcc8a;
+  margin-bottom: 4px;
 }
 
 .nav-upcoming-name {
   display: block;
-  font-size: 11px;
-  color: #d9def2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
+  margin-bottom: 4px;
+  line-height: 1.3;
 }
 
 .nav-upcoming-dist {
   display: block;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--primary);
-  font-weight: 600;
+  font-weight: 700;
   margin-top: 1px;
 }
 
