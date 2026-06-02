@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.75 - 2026-06-02
+- **Enhanced Line Info Styling** – Better contrast and complete text display:
+  - Line info now has elegant blue gradient background (rgba(74, 158, 255, 0.15))
+  - Full white text on blue background for superior readability
+  - Removed text clipping - complete route description always visible
+  - Increased top bar left column to 240px for full text accommodation
+  - Subtle blue border around line info box for definition
+
 ## V2.0.74 - 2026-06-02
 - **Improved Navigation HUD Readability** – Enhanced UI for quick at-a-glance information:
   - **Right Sidebar**: Expanded width (140px → 185px), larger fonts (11px → 13px)
