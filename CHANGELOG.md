@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.69 - 2026-06-02
+- **Major Redesign: Google Maps-Style Navigation HUD** – Complete restructuring of the navigation interface to match professional GPS apps like Google Maps. New layout:
+  - **Top Center**: Large next-action display (arrow icon + street/instruction + distance to maneuver) - easier to read at a glance
+  - **Top Right**: Clock and speed indicator (compact, monospace time display)
+  - **Right Sidebar**: Vertical button stack (End Navigation + Menu) - no longer takes screen width
+  - **Bottom**: Next stop info bar (station name + distance)
+  - **Map**: Now full-screen minus HUD areas, better visibility of the route ahead
+  - **Bonus**: Live clock updates every second during navigation
+- Result: Professional appearance, better use of screen space, more information at a glance without UI clutter.
+
 ## V2.0.68 - 2026-06-02
 - **Improve: Professional Navigation Icons** – Replaced unprofessional emoji arrows (⬆, ➡, ⬅, etc.) with clean Font Awesome vector icons. Icons are scalable, crisp, and match professional GPS navigation standards. Updated: arrow-up, arrow-right, arrow-left, arrow-up-right, arrow-up-left, flag-checkered (finish). Result: Modern, polished UI.
 - **Cleanup: Remove Obsolete "Gespeicherte Offline-Routen" Section** – Deleted leftover UI from old local route storage system. With auto-download, this feature is no longer needed.

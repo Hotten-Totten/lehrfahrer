@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v68';
+const CACHE_APP = 'lehrfahrer-app-v69';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // Nur kleine lokale Dateien – kein Blockieren durch große CDN-Downloads
