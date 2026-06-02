@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.73 - 2026-06-02
+- **Enhanced Route Display** – Show complete route description in navigation HUD:
+  - Extracts route name from `fileBase` (e.g., "Route 01 Cottbus Hauptbahnhof - Branitz Schloss")
+  - Displays as "Linie X / Route Description" in top-left HUD
+  - Supports special route info like diversions and notes
+  - CSS: Improved line-clamp for long route names (max 2 lines with ellipsis)
+  - Top bar grid expanded from 80px → 200px for line info column
+
 ## V2.0.72 - 2026-06-02
 - **Major HUD Redesign: Centered Navigation Layout** – Complete restructuring of navigation interface for better readability:
   - **Top Bar**: New horizontal layout with 3 sections:

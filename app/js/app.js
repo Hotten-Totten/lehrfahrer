@@ -1666,13 +1666,30 @@ function startNavigation() {
   console.log('🚌 Nav Start - currentRoute:', { city: currentRoute.city, fileBase: currentRoute.fileBase, lineFolder: currentRoute.lineFolder });
   
   if (lineNameEl) {
-    // Try fileBase first, then lineFolder
+    // Extract line number from fileBase
     let lineNum = currentRoute.fileBase?.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?';
-    const directionName = currentRoute.data?.directionName || '';
-    lineNameEl.textContent = `Linie ${lineNum}`;
-    if (directionName) {
-      lineNameEl.textContent += ` / ${directionName}`;
+    let lineText = `Linie ${lineNum}`;
+    
+    // Extract everything after the line number for the route description
+    // E.g. from "Linie_10_Route_01_Cottbus__Hauptbahnhof_-_Branitz__Schloss"
+    // Get "Route_01_Cottbus__Hauptbahnhof_-_Branitz__Schloss" and clean it up
+    if (currentRoute.fileBase) {
+      let routeDesc = currentRoute.fileBase;
+      // Remove line prefix if present (e.g., "Linie_10_" or just "10_")
+      routeDesc = routeDesc.replace(/^[Ll]inie[_\s]*\d+[_\s]*/, '');
+      // Replace underscores/commas with spaces, clean up double spaces
+      routeDesc = routeDesc
+        .replace(/_/g, ' ')
+        .replace(/,/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (routeDesc) {
+        lineText += ` / ${routeDesc}`;
+      }
     }
+    
+    lineNameEl.textContent = lineText;
     console.log('📍 Line set to:', lineNameEl.textContent);
   }
   if (cityNameEl) {
