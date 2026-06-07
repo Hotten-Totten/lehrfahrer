@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.103 - 2026-06-07
+- **Bus-Marker +50% vergrößert**:
+  - Marker-Fläche, Ring und Bus-SVG exakt um 50% skaliert
+  - Ziel: deutlich bessere Sichtbarkeit auf dem Handy während der Fahrt
+
 ## V2.0.102 - 2026-06-07
 - **Bus-Marker größer dargestellt**:
   - Marker-Größe auf der Karte erhöht für bessere Erkennbarkeit während der Fahrt

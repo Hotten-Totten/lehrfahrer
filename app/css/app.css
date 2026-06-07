@@ -400,15 +400,15 @@ body.is-standalone #fullscreenBtn {
 
 /* ── GPS-Bus auf Karte ──────────────────────── */
 .gps-bus-marker {
-  width: 68px;
-  height: 68px;
+  width: 102px;
+  height: 102px;
   position: relative;
   transform-origin: 50% 50%;
 }
 
 .gps-bus-ring {
   position: absolute;
-  inset: 8px;
+  inset: 12px;
   border-radius: 50%;
   background: rgba(32, 164, 255, 0.16);
   box-shadow: 0 0 0 2px rgba(32, 164, 255, 0.28);
@@ -421,10 +421,10 @@ body.is-standalone #fullscreenBtn {
 
 .gps-bus-icon {
   position: absolute;
-  left: 10px;
-  top: 8px;
-  width: 48px;
-  height: 54px;
+  left: 15px;
+  top: 12px;
+  width: 72px;
+  height: 81px;
   transform: perspective(220px) rotateX(16deg);
   transform-origin: 50% 70%;
   filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.5));
