@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.125 - 2026-06-07
+- **Fix: Karte im Landscape wieder mittig/breit + Marker stabil sichtbar**:
+  - Nav-Mode erzwingt jetzt volle Kartenbreite auch dann, wenn `panel-is-open` noch gesetzt ist
+  - Split-Panel-State wird beim Start der Navigation aktiv zurueckgesetzt
+  - `map.resize()` wird bei Panel/Nav-Layoutwechseln und beim Drehen des Geraets angestossen
+  - Ziel: kein halbes Kartenfenster mehr und deutlich stabilerer Navi-Pfeil nach Rotate/Layoutwechsel
+
 ## V2.0.124 - 2026-06-07
 - **Fix: Navi-Pfeil driftet nicht mehr weg / bleibt im Fahrerfokus**:
   - GPS-Navigation setzt Marker jetzt auf denselben gesnappten Trackpunkt wie die Kamera

@@ -1546,6 +1546,9 @@ function setPanelOpen(isOpen) {
   panel.classList.toggle('panel-open', isOpen);
   panel.classList.toggle('panel-collapsed', !isOpen);
   document.body.classList.toggle('panel-is-open', isOpen);
+  if (typeof refreshMapViewport === 'function') {
+    setTimeout(() => refreshMapViewport(), 0);
+  }
 }
 
 // ── Einstellungen ─────────────────────────────────────────────
@@ -1770,6 +1773,12 @@ function startNavigation(options = {}) {
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
+  document.body.classList.remove('panel-is-open');
+  panel.classList.remove('panel-open');
+  panel.classList.add('panel-collapsed');
+  if (typeof refreshMapViewport === 'function') {
+    setTimeout(() => refreshMapViewport(), 0);
+  }
   navBtn.textContent = '■';
   navBtn.title       = 'Navigation beenden';
   navBtn.classList.add('nav-active');
@@ -1917,6 +1926,9 @@ function stopNavigation() {
   renderNavPauseUi();
   currentNavLine = null;
   navInputMode = 'gps';
+  if (typeof refreshMapViewport === 'function') {
+    setTimeout(() => refreshMapViewport(), 0);
+  }
   if (navTimeEl) navTimeEl.textContent = 'Fahrzeit --:--';
   gpsLastSmoothedPos = null;  // GPS-Smoothing zurücksetzen
   if (navMenuOverlay) navMenuOverlay.classList.add('hidden');  // Close menu

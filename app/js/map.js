@@ -717,6 +717,11 @@ function stopGPS() {
   resetNavBearingState();
 }
 
+function refreshMapViewport() {
+  if (!map) return;
+  map.resize();
+}
+
 function flyToUser() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(pos => {
@@ -730,6 +735,12 @@ function flyToUser() {
     if (typeof showToast === 'function') showToast(msg, 6000);
   }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 3000 });
 }
+
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    refreshMapViewport();
+  }, 100);
+});
 
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
 function navCenterOn(lon, lat, headingDeg, speedMps = null) {

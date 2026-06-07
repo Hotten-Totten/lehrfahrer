@@ -1168,6 +1168,14 @@ body.is-standalone #fullscreenBtn {
 body.nav-mode #map {
   top: calc(var(--safe-top) + var(--nav-hud-h));
   bottom: var(--safe-bottom);
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+body.nav-mode.panel-is-open #map {
+  left: 0 !important;
+  right: 0 !important;
 }
 
 /* Fahrer-Fokus: während Navigation nur Karte + Navi-HUD anzeigen */
@@ -1340,6 +1348,11 @@ body.nav-mode #navHud {
 
   body.panel-is-open #map {
     right: calc(var(--split-panel-w) + var(--safe-right) + 14px);
+  }
+
+  body.nav-mode.panel-is-open #map {
+    left: 0;
+    right: 0;
   }
 
   #panel {
