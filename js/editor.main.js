@@ -509,6 +509,24 @@ function createNewLine() {
   updateHistoryButtons();
 
   setMode("freeStop", "Neue Linie erstellt. Modus: Haltestelle");
+  showLineInputFieldsForNewLine();
+}
+
+function showLineInputFieldsForNewLine() {
+  const topbar = document.getElementById("topbar");
+  if (topbar) {
+    topbar.classList.remove("hidden");
+    topbar.classList.add("topbar-attention");
+    topbar.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => topbar.classList.remove("topbar-attention"), 1400);
+  }
+
+  if (lineNameInput) {
+    lineNameInput.focus();
+    lineNameInput.select();
+  }
+
+  setStatus("Bitte oben Linie/Route/Richtung eingeben.");
 }
 
 // =========================

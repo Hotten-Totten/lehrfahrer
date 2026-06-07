@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.136 - 2026-06-07
+- **Editor-Fix: Bei "Neu" ist das Eingabefeld jetzt sofort sichtbar/nutzbar**:
+  - Nach Klick auf `Neu` wird die obere Eingabeleiste aktiv hervorgehoben
+  - Editor scrollt zur Eingabeleiste und setzt den Cursor direkt ins Linienfeld
+  - Statushinweis ergaenzt: Linie/Route/Richtung oben eingeben
+
 ## V2.0.135 - 2026-06-07
 - **Sofort-Updates ohne Voll-Reload aller Linien**:
   - Start-Update laedt nur noch fehlende oder geaenderte Linien
