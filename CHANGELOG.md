@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.94 - 2026-06-07
+- **iPhone HUD Feinkorrektur**:
+  - Navigationshinweise (Pfeil + Manövertext + Distanz) im Fahrbereich horizontal auf echte Bildschirmmitte korrigiert
+  - Restliche HUD-Aufteilung unverändert belassen
+
 ## V2.0.93 - 2026-06-07
 - **iPhone HUD Feintuning**:
   - `km/h` und `Fahrzeit` von der Mitte ganz nach links verschoben

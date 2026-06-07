@@ -1481,6 +1481,7 @@ body.nav-mode #navHud {
     gap: 6px;
     width: 100%;
     padding: 34px 0 4px;
+    transform: translateX(42px);
   }
 
   #navArrow {
