@@ -1816,6 +1816,7 @@ function startNavigation(options = {}) {
   // Starte Zeit-Update im HUD
   if (navTimeInterval) clearInterval(navTimeInterval);
   navTimeInterval = setInterval(() => {
+    if (navPaused) return;
     if (navTimeEl) {
       navTimeEl.textContent = `Fahrzeit ${formatDriveDuration(Date.now() - navStartTime)}`;
     }
@@ -1840,6 +1841,8 @@ function startNavigation(options = {}) {
 
   const ok = startGPS(
     pos => {
+      if (navPaused) return;
+
       const { latitude: lat, longitude: lon, speed, heading } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
@@ -2541,6 +2544,8 @@ function startNavSimulation() {
       stopNavSimulation();
       return;
     }
+
+    if (navPaused) return;
 
     simRouteIdx = advanceSimIndex(pts, simRouteIdx, metersPerTick);
     pushSimFrame(simRouteIdx, speedMps);

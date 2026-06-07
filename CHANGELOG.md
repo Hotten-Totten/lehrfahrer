@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.118 - 2026-06-07
+- **Pause bleibt jetzt wirklich aktiv bis erneut geklickt wird**:
+  - GPS-Positionsupdates werden waehrend Pause nicht mehr verarbeitet
+  - SIM-Ticks werden waehrend Pause nicht mehr weitergezaehlt
+  - Fahrzeitanzeige im HUD laeuft waehrend Pause nicht weiter
+  - Ergebnis: Navi bleibt stabil im Pausenstatus und startet nicht mehr nach ein paar Sekunden von selbst
+
 ## V2.0.117 - 2026-06-07
 - **Start-Download jetzt als Vollbild-Popup statt Mini-Zeile**:
   - Neues Overlay fuer den App-Start eingefuehrt (gesamtbildschirmig, mit Spinner)
