@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.85 - 2026-06-07
+- **Navigationspfeile auf standardisierte Maneuver-Symbole umgestellt**:
+  - Statt generischer Font-Arrow jetzt konsistente Turn-by-Turn-Symbole (geradeaus, leicht, normal, scharf, Ziel)
+  - Darstellung als SVG-Piktogramme im typischen Navi-Stil (klarere Lesbarkeit)
+  - Einheitliches Verhalten auf iPhone-Layout und Desktop-HUD
+- **Lizenzsicherheit**:
+  - Verwendung eines offenen, frei nutzbaren Symbolansatzes (keine proprietären Navi-Assets kopiert)
+
 ## V2.0.84 - 2026-06-07
 - **Fahrinfos zentriert und größer (iPhone)**:
   - Abbiegebereich jetzt mittig ausgerichtet statt linksbündig

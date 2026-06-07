@@ -1778,11 +1778,11 @@ function startNavigation(options = {}) {
   if (navTurns.length) {
     const info = getTurnInfo(navTurns[0].angle);
     const distStr = navFormatDist(navTurns[0].distFromStart);
-    setNavArrowIcon(info.iconClass);
+    setNavArrowIcon(info.iconKey);
     navDistEl.textContent  = `in ${distStr}`;
     navLabelEl.textContent = info.label;
   } else {
-    setNavArrowIcon('fa-arrow-up');
+    setNavArrowIcon('straight');
     navDistEl.textContent  = 'Startpunkt';
     navLabelEl.textContent = 'Geradeaus';
   }
@@ -2169,19 +2169,31 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
 
 function getTurnInfo(angle) {
   const a = angle;
-  if (Math.abs(a) < 20)      return { iconClass: 'fa-arrow-up', label: 'Geradeaus' };
-  if (a >= 20 && a < 50)     return { iconClass: 'fa-arrow-up-right', label: 'Leicht rechts' };
-  if (a >= 50 && a < 130)    return { iconClass: 'fa-arrow-right', label: 'Rechts abbiegen' };
-  if (a >= 130)              return { iconClass: 'fa-arrow-up-right fa-rotate-90', label: 'Scharf rechts' };
-  if (a <= -20 && a > -50)   return { iconClass: 'fa-arrow-up-left', label: 'Leicht links' };
-  if (a <= -50 && a > -130)  return { iconClass: 'fa-arrow-left', label: 'Links abbiegen' };
-  if (a <= -130)             return { iconClass: 'fa-arrow-up-left fa-rotate-90', label: 'Scharf links' };
-  return { iconClass: 'fa-arrow-up', label: 'Weiterfahren' };
+  if (Math.abs(a) < 20)      return { iconKey: 'straight', label: 'Geradeaus' };
+  if (a >= 20 && a < 50)     return { iconKey: 'slight-right', label: 'Leicht rechts' };
+  if (a >= 50 && a < 130)    return { iconKey: 'right', label: 'Rechts abbiegen' };
+  if (a >= 130)              return { iconKey: 'sharp-right', label: 'Scharf rechts' };
+  if (a <= -20 && a > -50)   return { iconKey: 'slight-left', label: 'Leicht links' };
+  if (a <= -50 && a > -130)  return { iconKey: 'left', label: 'Links abbiegen' };
+  if (a <= -130)             return { iconKey: 'sharp-left', label: 'Scharf links' };
+  return { iconKey: 'straight', label: 'Weiterfahren' };
 }
 
-// ── Hilfsfunktion: Font Awesome Icon-Klasse setzen ───
-function setNavArrowIcon(iconClass) {
-  navArrowEl.className = 'fa-solid ' + iconClass;
+const NAV_MANEUVER_SVG = {
+  straight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V7"></path><path d="M7 12l5-5 5 5"></path></svg>',
+  'slight-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-7q0-5 5-5h4"></path><path d="M15 4l4 4-4 4"></path></svg>',
+  right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20V9h9"></path><path d="M15 5l4 4-4 4"></path></svg>',
+  'sharp-right': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 20V12h4V8h6"></path><path d="M15 4l4 4-4 4"></path></svg>',
+  'slight-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 20v-7q0-5-5-5H5"></path><path d="M9 4L5 8l4 4"></path></svg>',
+  left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 20V9H5"></path><path d="M9 5L5 9l4 4"></path></svg>',
+  'sharp-left': '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 20V12h-4V8H5"></path><path d="M9 4L5 8l4 4"></path></svg>',
+  finish: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4"></path><path d="M6 4h10l-2 3 2 3H6"></path></svg>'
+};
+
+// ── Hilfsfunktion: Open-Source Maneuver-SVG setzen ───
+function setNavArrowIcon(iconKey) {
+  if (!navArrowEl) return;
+  navArrowEl.innerHTML = NAV_MANEUVER_SVG[iconKey] || NAV_MANEUVER_SVG.straight;
 }
 
 function navFormatDist(meters) {
@@ -2205,11 +2217,11 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   if (nextTurn) {
     const info = getTurnInfo(nextTurn.angle);
     const distToTurn = navFormatDist(nextTurn.distFromStart - currentDist);
-    setNavArrowIcon(info.iconClass);
+    setNavArrowIcon(info.iconKey);
     navDistEl.textContent  = `in ${distToTurn}`;
     navLabelEl.textContent = info.label;
   } else {
-    setNavArrowIcon('fa-flag-checkered');
+    setNavArrowIcon('finish');
     navDistEl.textContent  = 'Zieleinfahrt';
     navLabelEl.textContent = 'Ankommen';
   }
