@@ -425,10 +425,10 @@ body.is-standalone #fullscreenBtn {
   display: block;
 }
 
-.gps-arrow-icon .arrow-shadow { fill: rgba(34, 10, 10, 0.4); }
-.gps-arrow-icon .arrow-body { fill: #c1121f; stroke: #7f1d1d; stroke-width: 1.8; }
-.gps-arrow-icon .arrow-core { fill: #e63946; }
-.gps-arrow-icon .arrow-highlight { fill: rgba(255, 176, 176, 0.92); }
+.gps-arrow-icon .arrow-shadow { fill: rgba(24, 7, 7, 0.46); }
+.gps-arrow-icon .arrow-body { fill: #8f1018; stroke: #5f0a10; stroke-width: 1.8; }
+.gps-arrow-icon .arrow-core { fill: #b91d28; }
+.gps-arrow-icon .arrow-highlight { fill: rgba(219, 122, 122, 0.88); }
 
 @keyframes gpsPulse {
   0%, 100% {
@@ -437,7 +437,7 @@ body.is-standalone #fullscreenBtn {
   }
   50% {
     transform: scale(1.05);
-    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(214, 40, 40, 0.45));
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(143, 16, 24, 0.45));
   }
 }
 

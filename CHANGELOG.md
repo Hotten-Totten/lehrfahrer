@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.111 - 2026-06-07
+- **Navi-Pfeil auf dunkleres Rot abgestimmt**:
+  - Rotpalette deutlich dunkler gesetzt (Körper, Kern, Highlight)
+  - Glow-Farbe auf den dunkleren Rotton angepasst
+  - Ziel: kräftiger, weniger greller Pfeil auf heller Karte
+
 ## V2.0.110 - 2026-06-07
 - **Navi-Pfeil komplett Rot**:
   - Pfeilkörper, Kern und Highlight vollständig auf Rottöne umgestellt
