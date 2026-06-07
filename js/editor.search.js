@@ -26,6 +26,10 @@ function isCatalogStopVisible(catalogStop) {
 function getCatalogIconForStop(catalogStop, highlighted = false) {
   const type = normalizeStopType(catalogStop?.type);
   const iconStop = {
+    name: catalogStop?.name || "",
+    lat: catalogStop?.lat,
+    lon: catalogStop?.lon,
+    catalogId: catalogStop?.id || null,
     sourceType: "catalog",
     type,
     direction: catalogStop?.direction || "",

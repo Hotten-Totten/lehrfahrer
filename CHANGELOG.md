@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.161 - 2026-06-07
+- **Richtungspfeile sichtbar gemacht (Fallback)**:
+  - Wenn keine Richtungstexte vorliegen, wird die Richtung aus der Lage gleichnamiger Haltestellen abgeleitet
+  - Dadurch erscheinen Pfeile nun auch bei vielen OSM-Datensätzen ohne `direction/towards`
+  - Katalogmarker und Linien-Haltestellen nutzen dieselbe Fallback-Logik
+
 ## V2.0.160 - 2026-06-07
 - **Richtungspfeil in Haltestellenmarker ergänzt**:
   - Marker mit `B`/`T` (und `M`) zeigen jetzt zusätzlich einen kleinen Richtungspfeil

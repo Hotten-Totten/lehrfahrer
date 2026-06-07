@@ -239,7 +239,61 @@ function extractStopDirectionText(stop) {
   return "";
 }
 
-function getDirectionArrow(directionText) {
+function normalizeStopNameForDirection(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function approxDistanceMeters(lat1, lon1, lat2, lon2) {
+  const dLat = (lat2 - lat1) * 111320;
+  const meanLat = (lat1 + lat2) * 0.5 * Math.PI / 180;
+  const dLon = (lon2 - lon1) * 111320 * Math.cos(meanLat);
+  return Math.hypot(dLat, dLon);
+}
+
+function inferDirectionArrowFromGeometry(stop) {
+  if (!stop || typeof stop !== "object") return "";
+  if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) return "";
+
+  const nameKey = normalizeStopNameForDirection(stop.name);
+  if (!nameKey) return "";
+
+  const poolSource = stop.sourceType === "catalog" ? stopCatalog : state.stops;
+  if (!Array.isArray(poolSource) || !poolSource.length) return "";
+
+  const nearSameName = poolSource.filter(s => {
+    if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return false;
+    if (normalizeStopNameForDirection(s.name) !== nameKey) return false;
+    return approxDistanceMeters(stop.lat, stop.lon, s.lat, s.lon) <= 350;
+  });
+
+  if (nearSameName.length < 2) return "";
+
+  let minLat = nearSameName[0].lat;
+  let maxLat = nearSameName[0].lat;
+  let minLon = nearSameName[0].lon;
+  let maxLon = nearSameName[0].lon;
+
+  nearSameName.forEach(s => {
+    minLat = Math.min(minLat, s.lat);
+    maxLat = Math.max(maxLat, s.lat);
+    minLon = Math.min(minLon, s.lon);
+    maxLon = Math.max(maxLon, s.lon);
+  });
+
+  const latSpanM = approxDistanceMeters(minLat, stop.lon, maxLat, stop.lon);
+  const lonSpanM = approxDistanceMeters(stop.lat, minLon, stop.lat, maxLon);
+  if (Math.max(latSpanM, lonSpanM) < 14) return "";
+
+  if (latSpanM >= lonSpanM) {
+    const midLat = (minLat + maxLat) / 2;
+    return stop.lat >= midLat ? "↑" : "↓";
+  }
+
+  const midLon = (minLon + maxLon) / 2;
+  return stop.lon >= midLon ? "→" : "←";
+}
+
+function getDirectionArrow(directionText, stop) {
   const t = String(directionText || "")
     .toLowerCase()
     .replace(/ä/g, "ae")
@@ -260,7 +314,7 @@ function getDirectionArrow(directionText) {
   if (/ost|east|\be\b/.test(t)) return "→";
   if (/west|\bw\b/.test(t)) return "←";
 
-  return "";
+  return inferDirectionArrowFromGeometry(stop);
 }
 
 function getTransitBadgeStyle(type) {
@@ -282,7 +336,7 @@ function getTransitBadgeStyle(type) {
 function createTransitStopIcon(stop, size) {
   const type = resolveLineStopTransitType(stop);
   const style = getTransitBadgeStyle(type);
-  const arrow = getDirectionArrow(extractStopDirectionText(stop));
+  const arrow = getDirectionArrow(extractStopDirectionText(stop), stop);
   return createStopBadgeIcon(style.background, style.border, size, style.letter, arrow);
 }
 
