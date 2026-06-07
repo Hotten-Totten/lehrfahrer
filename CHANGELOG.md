@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.124 - 2026-06-07
+- **Fix: Navi-Pfeil driftet nicht mehr weg / bleibt im Fahrerfokus**:
+  - GPS-Navigation setzt Marker jetzt auf denselben gesnappten Trackpunkt wie die Kamera
+  - Marker-Update und Kamera-Following nutzen damit konsistente Positionsdaten
+  - Rohe GPS-Markerupdates werden im aktiven Navi-Modus unterdrueckt, um Auseinanderlaufen zu verhindern
+
 ## V2.0.123 - 2026-06-07
 - **Mobile-Querformat verbessert (Drehen des Geraets)**:
   - Portrait-Regeln auf `orientation: portrait` begrenzt, damit sie Landscape nicht mehr ueberschreiben

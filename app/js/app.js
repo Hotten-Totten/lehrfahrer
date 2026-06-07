@@ -1861,10 +1861,14 @@ function startNavigation(options = {}) {
 
       const pts = currentRoute.data.routePoints;
       const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
+      const navHeading = smoothHeading(heading);
 
       recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
-      navCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), smoothed.speed);
+      // Marker und Kamera immer auf denselben (gesnappten) Trackpunkt setzen,
+      // damit der Pfeil nicht von der Route wegdriftet.
+      setSimulatedGPS(tracked.lon, tracked.lat, navHeading);
+      navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';

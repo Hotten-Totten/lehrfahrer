@@ -665,22 +665,23 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
       const lnglat = [pos.coords.longitude, pos.coords.latitude];
+      const navMode = document.body.classList.contains('nav-mode');
 
       if (!gpsMarker) {
         const el = createGpsMarkerElement();
         gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
           .setLngLat(lnglat)
           .addTo(map);
-      } else {
+      } else if (!navMode) {
         gpsMarker.setLngLat(lnglat);
       }
 
       // Fahrtrichtung anzeigen (wenn Heading vorhanden und Tempo > 0,5 m/s)
       const hdg = pos.coords.heading;
-      if (hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5) {
+      if (!navMode && hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5) {
         gpsMarker.setRotation(normalizeDeg(hdg + BUS_HEADING_OFFSET_DEG));
         gpsMarker.getElement().classList.add('has-heading');
-      } else {
+      } else if (!navMode) {
         gpsMarker.setRotation(0);
         gpsMarker.getElement().classList.remove('has-heading');
       }
