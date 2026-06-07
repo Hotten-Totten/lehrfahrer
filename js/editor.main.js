@@ -516,6 +516,9 @@ function setLineInputMenuVisible(visible) {
   const topbar = document.getElementById("topbar");
   if (!topbar) return;
 
+  // Altlast aus vorheriger Implementierung entfernen (verhindert "auf und sofort wieder zu").
+  document.body.classList.remove("input-menu-hidden");
+
   if (visible) {
     topbar.classList.remove("hidden");
     topbar.style.display = "flex";

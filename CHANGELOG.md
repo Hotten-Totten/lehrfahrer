@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.150 - 2026-06-07
+- **Editor-Fix: `Neu` klappt nicht mehr sofort wieder zu (cache-robust)**:
+  - Legacy-Klasse `input-menu-hidden` wird beim Umschalten aktiv entfernt
+  - Verhindert Regressionsfall durch alte gecachte CSS/JS-Zustaende
+  - Eingabemaske bleibt nach `Neu` offen
+
 ## V2.0.149 - 2026-06-07
 - **Editor-Fix: `Neu`-Eingabemaske bleibt offen und bedienbar**:
   - Sichtbarkeitslogik von globalem Body-Status auf direktes Topbar-Toggling umgestellt
