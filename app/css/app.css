@@ -1442,6 +1442,7 @@ body.nav-mode #navHud {
 /* ── iPhone Portrait Cleanup ───────────────────── */
 @media (max-width: 430px) and (orientation: portrait) {
   #navTopBar {
+    position: relative;
     grid-template-columns: 1fr 84px;
     grid-template-areas:
       'line line'
@@ -1479,7 +1480,7 @@ body.nav-mode #navHud {
     justify-content: center;
     gap: 6px;
     width: 100%;
-    padding: 6px 0 4px;
+    padding: 34px 0 4px;
   }
 
   #navArrow {
@@ -1505,27 +1506,37 @@ body.nav-mode #navHud {
 
   #navRightBox {
     grid-area: right;
-    gap: 8px;
+    gap: 4px;
     align-items: flex-end;
-    justify-content: flex-end;
-    padding-top: 16px;
+    justify-content: flex-start;
+    padding-top: 2px;
   }
 
   #navTimeSpeed {
-    margin-top: 8px;
+    position: absolute;
+    left: 50%;
+    top: 54px;
+    transform: translateX(-50%);
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    z-index: 2;
   }
 
   #navTime {
     display: block;
-    font-size: 11px;
+    font-size: 12px;
+    text-align: center;
   }
 
   #navSpeed {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   #navSpeedUnit {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   #navButtonsCompact {

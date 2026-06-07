@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.0.92 - 2026-06-07
+- **iPhone HUD Positionierung**:
+  - `km/h` und `Fahrzeit` mittig unter der Zielkachel positioniert
+  - Config/Stop-Buttons rechts separat belassen
+  - Obere Zielkachel bleibt über die volle Breite
+- **Richtungswechsel-Timing weiter beruhigt**:
+  - Verzögerung nach Manöver erhöht (späterer Wechsel zur nächsten Anweisung)
+  - Enge Doppelmanöver bleiben weiterhin sichtbar durch Nahbereich-Override
+
 ## V2.0.91 - 2026-06-07
 - **HUD-Layout weiter vereinfacht (iPhone)**:
   - Obere Ziel-/Linienkachel jetzt über gesamte Breite

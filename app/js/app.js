@@ -36,8 +36,8 @@ const GPS_SMOOTHING_ALPHA = 0.4;  // 0.3-0.5: höher = schneller Response, niedr
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
 const NAV_TURN_LOOKAHEAD_M = 15;
-const NAV_POST_TURN_DELAY_M = 85;
-const NAV_CLOSE_TURN_OVERRIDE_M = 140;
+const NAV_POST_TURN_DELAY_M = 120;
+const NAV_CLOSE_TURN_OVERRIDE_M = 180;
 // Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
 // aber weiterhin klarer OFF->REJOIN->ON Verlauf.
 const NAV_OFF_ROUTE_ENTER_M = 145;
