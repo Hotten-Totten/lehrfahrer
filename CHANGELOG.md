@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.102 - 2026-06-07
+- **Bus-Marker größer dargestellt**:
+  - Marker-Größe auf der Karte erhöht für bessere Erkennbarkeit während der Fahrt
+  - Ring und Bus-SVG proportional vergrößert, Positionierung beibehalten
+
 ## V2.0.101 - 2026-06-07
 - **Bus-Marker Optik weiter verfeinert (weniger platt)**:
   - SVG-Form auf mehrschichtigen Bus mit Dach-, Seiten- und Schattenfläche umgestellt
