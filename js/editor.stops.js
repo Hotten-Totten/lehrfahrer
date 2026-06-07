@@ -93,7 +93,7 @@ function selectStop(stop) {
   if (selectedStops.length === 2) {
     setStatus(`2 Haltestellen ausgewählt: ${selectedStops[0].name} → ${selectedStops[1].name}`);
   } else {
-    setStatus(`Haltestelle ausgewählt: ${stop.name}`);
+    setStatus(`Haltestelle ausgewählt: ${stop.name} – neue Haltestellen werden darunter eingefügt.`);
   }
 }
 
@@ -151,7 +151,16 @@ function addStopToLine({ name, lat, lon, sourceType, catalogId = null }) {
   });
 
   stop.marker = marker;
-  state.stops.push(stop);
+
+  let insertIndex = state.stops.length;
+  if (state.selected && state.selected.type === "stop") {
+    const selectedIndex = state.stops.findIndex(s => s.id === state.selected.ref.id);
+    if (selectedIndex >= 0) {
+      insertIndex = selectedIndex + 1;
+    }
+  }
+
+  state.stops.splice(insertIndex, 0, stop);
 
   selectStop(stop);
   renderStopOrderList();
@@ -190,7 +199,10 @@ function renderStopOrderList() {
     const item = document.createElement("div");
     item.className = "stop-order-item";
 
-    if (state.selectedStopIds.has(stop.id)) {
+    const isSelectedInList = state.selectedStopIds.has(stop.id);
+    const isCurrentSelection = state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id;
+
+    if (isSelectedInList || isCurrentSelection) {
       item.classList.add("active");
     }
 

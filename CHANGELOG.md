@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.137 - 2026-06-07
+- **Editor: Umleitungen/Einfügen in bestehende Reihenfolge verbessert**:
+  - Markierte Haltestelle in der Haltestellen-Reihenfolge dient jetzt als Einfügeanker
+  - Neue Haltestellen (freie oder Katalog-Haltestellen) werden direkt darunter eingefügt
+  - Aktive Markierung in der Reihenfolge ist stabiler sichtbar
+  - Statushinweis ergänzt, dass neue Haltestellen unter der Auswahl eingefügt werden
+
 ## V2.0.136 - 2026-06-07
 - **Editor-Fix: Bei "Neu" ist das Eingabefeld jetzt sofort sichtbar/nutzbar**:
   - Nach Klick auf `Neu` wird die obere Eingabeleiste aktiv hervorgehoben
