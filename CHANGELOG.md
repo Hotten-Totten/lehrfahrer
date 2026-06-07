@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.89 - 2026-06-07
+- **iPhone HUD Lesbarkeit weiter verbessert**:
+  - Rechte Nächste-Haltestelle weiter nach oben gesetzt
+  - Stop-Karte rechts horizontal breiter statt vertikal höher gestaltet
+  - Haltestellenname rechts auf eine Zeile mit Ellipsis optimiert
+  - Fahranweisungstext (z. B. "Rechts abbiegen") deutlich vergrößert
+
 ## V2.0.88 - 2026-06-07
 - **iPhone Lesbarkeit auf Distanz verbessert**:
   - Maneuver-Pfeil nochmals deutlich vergrößert (66px -> 78px)
