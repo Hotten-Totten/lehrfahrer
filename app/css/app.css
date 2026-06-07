@@ -1182,7 +1182,7 @@ body.nav-mode #navHud {
 }
 
 /* ── Mobile Portrait: bessere Lesbarkeit im Fahrbetrieb ────── */
-@media (max-width: 900px) {
+@media (max-width: 900px) and (orientation: portrait) {
   #navTopBar {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
@@ -1317,6 +1317,27 @@ body.nav-mode #navHud {
     right: 0;
   }
 
+  #navTopBar {
+    grid-template-columns: minmax(180px, 1fr) 1fr 120px;
+    gap: 8px;
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  #navRightBox {
+    gap: 6px;
+  }
+
+  #navButtonsCompact {
+    gap: 5px;
+  }
+
+  #navButtonsCompact button {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
   body.panel-is-open #map {
     right: calc(var(--split-panel-w) + var(--safe-right) + 14px);
   }
@@ -1447,7 +1468,10 @@ body.nav-mode #navHud {
   }
 
   #navUpcomingStops {
-    padding: 0 10px 8px;
+    top: calc(var(--safe-top) + 96px);
+    right: 6px;
+    width: min(34vw, 186px);
+    padding: 0 8px 8px;
     gap: 6px;
   }
 

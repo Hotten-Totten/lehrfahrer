@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.123 - 2026-06-07
+- **Mobile-Querformat verbessert (Drehen des Geraets)**:
+  - Portrait-Regeln auf `orientation: portrait` begrenzt, damit sie Landscape nicht mehr ueberschreiben
+  - Eigenes Landscape-Finetuning fuer Navi-HUD-Grid, Abstaende und Button-Groessen
+  - Compact-Buttons im Landscape auf konsistente Touch-Groesse gesetzt
+  - Sidebar-Position/ -Breite fuer kommende Stops im Landscape angepasst
+
 ## V2.0.122 - 2026-06-07
 - **Fix: "Abbrechen" im Navi-Menue stoppt die Navigation nicht mehr**:
   - `navCancelBtn` schliesst jetzt nur noch das Menue
