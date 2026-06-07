@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.121 - 2026-06-07
+- **Hotfix: alle drei Compact-Navi-Buttons wieder bedienbar**:
+  - Einheitliches Tap-Handling fuer Menue, Pause und Stop eingefuehrt (`touchend` + Click-Fallback)
+  - Blockierende `preventDefault`-Pfade entfernt
+  - Compact-Button-Leiste mit hoehrem `z-index` abgesichert, damit keine HUD-Elemente die Touches ueberlagern
+
 ## V2.0.120 - 2026-06-07
 - **Hotfix: Pausenbutton reagiert wieder zuverlaessig**:
   - Press-Handler von `pointerup` auf iOS-stabiles `touchend` + `click`-Fallback umgestellt

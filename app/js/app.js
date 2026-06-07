@@ -1051,19 +1051,19 @@ function bindEvents() {
   });
 
   if (navEndBtn) {
-    navEndBtn.addEventListener('click', () => {
+    bindTapAction(navEndBtn, () => {
       stopNavigation();
     });
   }
 
   // Navigation Menu Button
   if (navMenuBtn) {
-    navMenuBtn.addEventListener('click', () => {
+    bindTapAction(navMenuBtn, () => {
       showNavMenu();
     });
   }
 
-  bindPressAction(navPauseCompactBtn, toggleNavPause);
+  bindTapAction(navPauseCompactBtn, toggleNavPause);
 
   // Navigation Menu Tab Switching
   navTabs.forEach(tab => {
@@ -1088,7 +1088,7 @@ function bindEvents() {
   }
 
   // Pause Button
-  bindPressAction(navPauseBtn, toggleNavPause);
+  bindTapAction(navPauseBtn, toggleNavPause);
 
   // Cancel Button
   if (navCancelBtn) {
@@ -1099,20 +1099,18 @@ function bindEvents() {
   }
 }
 
-function bindPressAction(el, action) {
+function bindTapAction(el, action) {
   if (!el || typeof action !== 'function') return;
 
   let suppressClickUntil = 0;
 
-  el.addEventListener('touchend', (ev) => {
-    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+  el.addEventListener('touchend', () => {
     suppressClickUntil = Date.now() + 350;
     action();
-  }, { passive: false });
+  }, { passive: true });
 
-  el.addEventListener('click', (ev) => {
+  el.addEventListener('click', () => {
     if (Date.now() < suppressClickUntil) {
-      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
       return;
     }
     action();

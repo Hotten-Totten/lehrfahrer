@@ -962,6 +962,8 @@ body.is-standalone #fullscreenBtn {
 #navButtonsCompact {
   display: flex;
   gap: 6px;
+  position: relative;
+  z-index: 4;
 }
 
 #navEndBtn, #navMenuBtn, #navPauseCompactBtn {
@@ -978,6 +980,8 @@ body.is-standalone #fullscreenBtn {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #navEndBtn {
@@ -1002,8 +1006,6 @@ body.is-standalone #fullscreenBtn {
 #navPauseCompactBtn {
   border-color: rgba(255, 176, 96, 0.65);
   color: #ffd9a8;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
 }
 
 #navPauseCompactBtn:active {
