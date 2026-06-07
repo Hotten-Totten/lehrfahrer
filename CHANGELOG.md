@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.116 - 2026-06-07
+- **Fix: Neue Stände kamen teils nicht in der App an**:
+  - Service-Worker-Registrierung von hartem `V2.0.42` auf dynamische Version (aus `versionBadge`) umgestellt
+  - Damit zieht die App bei jedem Release verlässlich den passenden SW-Stand
+  - Cache-/Asset-Versionen auf `V2.0.116` angehoben
+
 ## V2.0.115 - 2026-06-07
 - **Kurvenrotation entruckelt und Geradeaus-Fokus verbessert**:
   - Ueberaggressive Turn-Boost-Werte reduziert (weniger harte Spruenge)

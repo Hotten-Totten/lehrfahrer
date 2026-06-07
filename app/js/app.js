@@ -375,7 +375,8 @@ function renderNavPerfDebugHud(force) {
 // ── Service Worker ───────────────────────────────────────────
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js?v=V2.0.42', { updateViaCache: 'none' })
+    const swVersion = document.getElementById('versionBadge')?.textContent?.trim() || String(Date.now());
+    navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(swVersion)}`, { updateViaCache: 'none' })
       .then(reg => {
         const activateWaiting = () => {
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
