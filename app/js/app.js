@@ -89,6 +89,7 @@ const saveOfflineBtn   = document.getElementById('saveOfflineBtn'); // Jetzt obs
 const offlineBadge     = document.getElementById('offlineBadge');
 const gpsBtn           = document.getElementById('gpsBtn');
 const simBtn           = document.getElementById('simBtn');
+const refreshLinesBtn  = document.getElementById('refreshLinesBtn');
 const fullscreenBtn    = document.getElementById('fullscreenBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
 const startupDownloadOverlay = document.getElementById('startupDownloadOverlay');
@@ -140,6 +141,7 @@ const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
+let refreshInProgress = false;
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -1079,6 +1081,7 @@ function bindEvents() {
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
   if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
+  if (refreshLinesBtn) refreshLinesBtn.addEventListener('click', refreshLinesNow);
 
   gpsBtn.addEventListener('click', toggleGPS);
   if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
@@ -1220,7 +1223,7 @@ async function toggleFullscreenMode() {
 // ── Städte laden ─────────────────────────────────────────────
 async function loadCities() {
   try {
-    const res  = await fetch(`${API_BASE}/list_cities.php`);
+    const res  = await fetch(`${API_BASE}/list_cities.php`, { cache: 'no-store' });
     const json = await res.json();
     if (!json.ok || !json.cities.length) return;
 
@@ -1252,7 +1255,7 @@ async function onCityChange() {
 // ── Linien laden ─────────────────────────────────────────────
 async function loadLines(city) {
   try {
-    const res  = await fetch(`${API_BASE}/list_lines.php?city=${encodeURIComponent(city)}`);
+    const res  = await fetch(`${API_BASE}/list_lines.php?city=${encodeURIComponent(city)}&_ts=${Date.now()}`, { cache: 'no-store' });
     const json = await res.json();
     if (!json.ok || !json.lines.length) {
       lineSelect.innerHTML = '<option value="">Keine Linien vorhanden</option>';
@@ -1322,7 +1325,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
       let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}`;
       if (lineFolder) url += `&lineFolder=${encodeURIComponent(lineFolder)}`;
 
-      const res  = await fetch(url);
+      const res  = await fetch(`${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok && json.line) {
         data = json.line;
@@ -1340,6 +1343,100 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
   currentRoute = { city, fileBase, lineFolder, key, data };
 
   displayRoute(data);
+}
+
+function getSelectedLineRef() {
+  if (!lineSelect || !lineSelect.value) return null;
+  try {
+    const parsed = JSON.parse(lineSelect.value);
+    return {
+      city: String(citySelect?.value || '').trim(),
+      fileBase: String(parsed.fileBase || '').trim(),
+      lineFolder: parsed.lineFolder || null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findCatalogLineBySelection(selection) {
+  if (!selection) return null;
+  return (availableLinesCatalog || []).find(line => {
+    const lineFileBase = String(line.fileBase || line.id || '').trim();
+    const lineFolder = line.lineFolder || null;
+    return (
+      String(line.city || '').trim() === selection.city &&
+      lineFileBase === selection.fileBase &&
+      lineFolder === selection.lineFolder
+    );
+  }) || null;
+}
+
+function setRefreshButtonBusy(isBusy) {
+  if (!refreshLinesBtn) return;
+  refreshLinesBtn.disabled = !!isBusy;
+  refreshLinesBtn.style.opacity = isBusy ? '0.65' : '';
+  refreshLinesBtn.title = isBusy
+    ? 'Aktualisierung läuft...'
+    : 'Linien und aktuelle Route aktualisieren';
+}
+
+async function refreshLinesNow() {
+  if (refreshInProgress) return;
+  refreshInProgress = true;
+  setRefreshButtonBusy(true);
+
+  const selectionBefore = getSelectedLineRef();
+  const hadNav = navActive;
+  const navWasSim = navInputMode === 'sim';
+
+  try {
+    if (hadNav) {
+      const proceed = confirm('Navigation läuft gerade. Für ein Linien-Update wird die Navigation beendet und danach neu gestartet. Fortfahren?');
+      if (!proceed) return;
+      stopNavigation();
+    }
+
+    showToast('Aktualisiere Linien...', 2500);
+    await fetchAndCacheLinesCatalog();
+
+    const city = String(citySelect?.value || '').trim();
+    if (city) {
+      await loadLines(city);
+    }
+
+    if (selectionBefore && selectionBefore.fileBase) {
+      const catalogLine = findCatalogLineBySelection(selectionBefore);
+      if (catalogLine) {
+        await downloadLineWithGPX(catalogLine.id);
+      }
+
+      const selectedValue = JSON.stringify({
+        fileBase: selectionBefore.fileBase,
+        lineFolder: selectionBefore.lineFolder
+      });
+
+      if (lineSelect && Array.from(lineSelect.options).some(opt => opt.value === selectedValue)) {
+        lineSelect.value = selectedValue;
+      }
+
+      await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder);
+
+      if (hadNav) {
+        startNavigation({ useSimulation: navWasSim });
+      }
+      showToast('Linie aktualisiert.', 2500);
+      return;
+    }
+
+    showToast('Linienkatalog aktualisiert.', 2500);
+  } catch (err) {
+    console.error('Refresh failed:', err);
+    showToast(`Aktualisierung fehlgeschlagen: ${err.message || 'Unbekannter Fehler'}`, 4500);
+  } finally {
+    setRefreshButtonBusy(false);
+    refreshInProgress = false;
+  }
 }
 
 // ── Route darstellen ─────────────────────────────────────────

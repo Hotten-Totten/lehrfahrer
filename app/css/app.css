@@ -102,6 +102,11 @@ html, body {
   font-weight: 700;
 }
 
+#refreshLinesBtn {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 body.is-standalone #fullscreenBtn {
   display: none !important;
 }

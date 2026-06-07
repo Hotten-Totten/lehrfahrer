@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.139 - 2026-06-07
+- **App: Sofort-Refresh fuer geaenderte Linien eingebaut**:
+  - Neuer Refresh-Button (oben in der App) aktualisiert Linienkatalog und aktuelle Linie sofort
+  - Bei laufender Navigation gibt es eine Sicherheitsabfrage; danach wird Navigation sauber beendet und automatisch neu gestartet
+  - API-Ladevorgaenge fuer Staedte/Linien/Route jetzt konsequent mit `cache: no-store` + Cache-Buster
+  - Ziel: Aenderungen aus dem Editor direkt in der App sichtbar machen ohne App-Neustart
+
 ## V2.0.138 - 2026-06-07
 - **Editor-Fix: Gespeicherte Routen/Linien im Browser jetzt stabil sichtbar**:
   - Laden der Linienliste verwendet jetzt konsequent `cache: no-store`
