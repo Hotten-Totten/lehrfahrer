@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.120 - 2026-06-07
+- **Hotfix: Pausenbutton reagiert wieder zuverlaessig**:
+  - Press-Handler von `pointerup` auf iOS-stabiles `touchend` + `click`-Fallback umgestellt
+  - Doppeltrigger-Schutz bleibt aktiv, ohne die Ausloesung komplett zu blockieren
+  - Ziel: erster Tap loest wieder sicher aus
+
 ## V2.0.119 - 2026-06-07
 - **Pausenbutton reagiert jetzt deutlich zuverlaessiger beim ersten Tap**:
   - Pause-Buttons auf robustes Press-Handling umgestellt (`pointerup` + `click` mit Doppeltrigger-Schutz)

@@ -1102,20 +1102,21 @@ function bindEvents() {
 function bindPressAction(el, action) {
   if (!el || typeof action !== 'function') return;
 
-  let lastTriggerTs = 0;
-  const invoke = (ev) => {
-    const now = Date.now();
-    if (now - lastTriggerTs < 220) {
+  let suppressClickUntil = 0;
+
+  el.addEventListener('touchend', (ev) => {
+    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    suppressClickUntil = Date.now() + 350;
+    action();
+  }, { passive: false });
+
+  el.addEventListener('click', (ev) => {
+    if (Date.now() < suppressClickUntil) {
       if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
       return;
     }
-    lastTriggerTs = now;
-    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
     action();
-  };
-
-  el.addEventListener('pointerup', invoke);
-  el.addEventListener('click', invoke);
+  });
 }
 
 function isStandaloneMode() {
