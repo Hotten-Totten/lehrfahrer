@@ -1466,28 +1466,30 @@ body.nav-mode #navHud {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    padding: 4px 2px 3px;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 0 4px;
   }
 
   #navArrow {
-    width: 38px;
-    height: 38px;
+    width: 52px;
+    height: 52px;
   }
 
   #navInstruction {
+    width: 100%;
     align-items: center;
     text-align: center;
   }
 
   #navLabel {
-    font-size: 13px;
+    font-size: 14px;
     white-space: normal;
-    line-height: 1.25;
+    line-height: 1.3;
   }
 
   #navDist {
-    font-size: 24px;
+    font-size: 28px;
   }
 
   #navRightBox {

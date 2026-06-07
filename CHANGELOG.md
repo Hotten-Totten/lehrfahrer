@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.86 - 2026-06-07
+- **Maneuver-Pfeile größer und mittig (iPhone)**:
+  - Maneuver-Icon im iPhone-Layout deutlich vergrößert (38px -> 52px)
+  - Fahrinfo-Zeile sauber zentriert über volle verfügbare Breite
+  - Abbiege-Hinweistext leicht vergrößert und besser ausbalanciert
+  - Distanzangabe größer (24px -> 28px) für bessere Erkennbarkeit
+
 ## V2.0.85 - 2026-06-07
 - **Navigationspfeile auf standardisierte Maneuver-Symbole umgestellt**:
   - Statt generischer Font-Arrow jetzt konsistente Turn-by-Turn-Symbole (geradeaus, leicht, normal, scharf, Ziel)
