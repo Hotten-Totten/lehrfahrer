@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.108 - 2026-06-07
+- **Navi-Pfeil auf Rot/Weiß umgestellt**:
+  - Pfeilkörper von Blau auf Rot gewechselt
+  - Kern/Outline auf Weiß für klare Lesbarkeit
+  - Puls-Glow passend auf Rotton umgestellt
+
 ## V2.0.107 - 2026-06-07
 - **Fahrzeugmarker auf Navi-Pfeil umgestellt**:
   - Bus-Symbol durch klaren Richtungs-Pfeil im Navi-Stil ersetzt
