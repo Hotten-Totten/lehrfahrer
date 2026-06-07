@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.101 - 2026-06-07
+- **Bus-Marker Optik weiter verfeinert (weniger platt)**:
+  - SVG-Form auf mehrschichtigen Bus mit Dach-, Seiten- und Schattenfläche umgestellt
+  - Perspektivische Darstellung und stärkere Schattierung ergänzt
+  - Ziel: deutlich räumlicherer Bus-Look auf der Karte
+
 ## V2.0.100 - 2026-06-07
 - **Fahrzeugmarker Start-Sichtbarkeit + Bus-Optik**:
   - Marker in GPS und SIM auf gemeinsames SVG-Bus-Element umgestellt (klarere Bus-Form)

@@ -421,11 +421,13 @@ body.is-standalone #fullscreenBtn {
 
 .gps-bus-icon {
   position: absolute;
-  left: 10px;
-  top: 6px;
-  width: 36px;
-  height: 44px;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+  left: 7px;
+  top: 4px;
+  width: 42px;
+  height: 48px;
+  transform: perspective(220px) rotateX(16deg);
+  transform-origin: 50% 70%;
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.5));
 }
 
 .gps-bus-icon svg {
@@ -434,11 +436,15 @@ body.is-standalone #fullscreenBtn {
   display: block;
 }
 
-.gps-bus-icon .bus-body { fill: #2a88ef; stroke: #eaf4ff; stroke-width: 2; }
-.gps-bus-icon .bus-window { fill: #c7e5ff; }
-.gps-bus-icon .bus-door { fill: #86c2ff; }
-.gps-bus-icon .bus-wheel { fill: #101828; stroke: #5f7289; stroke-width: 1.2; }
-.gps-bus-icon .bus-bumper { fill: #f4fbff; opacity: 0.92; }
+.gps-bus-icon .bus-shadow { fill: rgba(8, 16, 30, 0.38); }
+.gps-bus-icon .bus-roof { fill: #9ed4ff; }
+.gps-bus-icon .bus-body { fill: #2a88ef; stroke: #eaf4ff; stroke-width: 1.8; }
+.gps-bus-icon .bus-side { fill: #1d63bc; }
+.gps-bus-icon .bus-window-top { fill: #d9efff; opacity: 0.95; }
+.gps-bus-icon .bus-window { fill: #b9dcff; }
+.gps-bus-icon .bus-wheel { fill: #0f172a; stroke: #64748b; stroke-width: 1.2; }
+.gps-bus-icon .bus-bumper { fill: #f8fdff; opacity: 0.92; }
+.gps-bus-icon .bus-light { fill: #ffd76a; opacity: 0.95; }
 
 @keyframes gpsPulse {
   0%, 100% {
