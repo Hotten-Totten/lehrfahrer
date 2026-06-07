@@ -1053,43 +1053,6 @@ button.danger:hover {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
-.new-line-modal {
-  max-width: 560px;
-}
-
-.new-line-modal-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.new-line-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.new-line-field span {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.new-line-field input {
-  width: 100%;
-  padding: 8px 9px;
-  font-size: 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 7px;
-}
-
-.new-line-color-field {
-  grid-column: 1 / -1;
-  max-width: 140px;
-}
-
 /* =========================
    LINIEN-BROWSER ERWEITERUNGEN
 ========================= */

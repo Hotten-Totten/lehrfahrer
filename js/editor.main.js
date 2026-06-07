@@ -470,7 +470,7 @@ async function createCityOnServer() {
   }
 }
 
-async function createNewLine() {
+function createNewLine() {
   const ok = confirm("Wirklich eine neue Linie erstellen?\n\nUngespeicherte Änderungen gehen dabei verloren.");
 
   if (!ok) return;
@@ -509,113 +509,7 @@ async function createNewLine() {
   updateHistoryButtons();
 
   setMode("freeStop", "Neue Linie erstellt. Modus: Haltestelle");
-  await promptNewLineInputMask();
-}
-
-function promptNewLineInputMask() {
-  return new Promise(resolve => {
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="save-confirm-modal new-line-modal" role="dialog" aria-modal="true" aria-label="Neue Linie Eingabe">
-        <div class="save-confirm-header">
-          <h3>Neue Linie</h3>
-          <p>Linie/Route/Richtung jetzt eingeben.</p>
-        </div>
-        <div class="save-confirm-body new-line-modal-body">
-          <label class="new-line-field">
-            <span>Linie</span>
-            <input id="newLineInputLine" type="text" placeholder="z. B. 10" autocomplete="off" />
-          </label>
-          <label class="new-line-field">
-            <span>Route</span>
-            <input id="newLineInputRoute" type="text" placeholder="z. B. 01" autocomplete="off" />
-          </label>
-          <label class="new-line-field">
-            <span>Richtung</span>
-            <input id="newLineInputDirection" type="text" placeholder="z. B. Hauptbahnhof – Branitz" autocomplete="off" />
-          </label>
-          <label class="new-line-field new-line-color-field">
-            <span>Farbe</span>
-            <input id="newLineInputColor" type="color" value="#d32f2f" />
-          </label>
-        </div>
-        <div class="save-confirm-actions">
-          <button type="button" class="save-confirm-btn-cancel" id="newLineCancelBtn">Später</button>
-          <button type="button" class="save-confirm-btn-ok" id="newLineApplyBtn">Übernehmen</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const lineInput = overlay.querySelector("#newLineInputLine");
-    const routeInput = overlay.querySelector("#newLineInputRoute");
-    const directionInput = overlay.querySelector("#newLineInputDirection");
-    const colorInput = overlay.querySelector("#newLineInputColor");
-    const applyBtn = overlay.querySelector("#newLineApplyBtn");
-    const cancelBtn = overlay.querySelector("#newLineCancelBtn");
-
-    if (lineInput) {
-      lineInput.value = String(lineNameInput?.value || "");
-      lineInput.focus();
-      lineInput.select();
-    }
-    if (routeInput) routeInput.value = String(routeNameInput?.value || "");
-    if (directionInput) directionInput.value = String(directionNameInput?.value || "");
-    if (colorInput) colorInput.value = String(lineColorInput?.value || "#d32f2f");
-
-    function close(withApply) {
-      if (withApply) {
-        lineNameInput.value = String(lineInput?.value || "").trim();
-        routeNameInput.value = String(routeInput?.value || "").trim();
-        directionNameInput.value = String(directionInput?.value || "").trim();
-        lineColorInput.value = String(colorInput?.value || "#d32f2f");
-        setStatus("Eingabemaske übernommen.");
-      } else {
-        setStatus("Eingabemaske geschlossen. Werte können später gesetzt werden.");
-      }
-
-      overlay.remove();
-      resolve(withApply);
-    }
-
-    applyBtn?.addEventListener("click", () => close(true));
-    cancelBtn?.addEventListener("click", () => close(false));
-    overlay.addEventListener("click", e => {
-      if (e.target === overlay) close(false);
-    });
-
-    overlay.addEventListener("keydown", e => {
-      if (e.key === "Escape") close(false);
-      if (e.key === "Enter") close(true);
-    });
-  });
-}
-
-function setLineInputMenuVisible(visible) {
-  const topbar = document.getElementById("topbar");
-  if (!topbar) return;
-
-  // Altlast aus vorheriger Implementierung entfernen (verhindert "auf und sofort wieder zu").
-  document.body.classList.remove("input-menu-hidden");
-
-  if (visible) {
-    topbar.classList.remove("hidden");
-    topbar.style.display = "flex";
-    topbar.style.visibility = "visible";
-    topbar.style.pointerEvents = "auto";
-    topbar.querySelectorAll(".top-group").forEach(group => {
-      group.classList.remove("hidden");
-      group.style.display = "flex";
-    });
-    return;
-  }
-
-  topbar.classList.remove("topbar-attention");
-  topbar.style.visibility = "hidden";
-  topbar.style.pointerEvents = "none";
-  topbar.style.display = "none";
+  showLineInputFieldsForNewLine();
 }
 
 function showLineInputFieldsForNewLine() {
@@ -625,7 +519,12 @@ function showLineInputFieldsForNewLine() {
     menubar.classList.remove("hidden");
     menubar.style.display = "";
   }
-  setLineInputMenuVisible(true);
+  if (topbar) {
+    topbar.classList.remove("hidden");
+    topbar.style.display = "flex";
+    topbar.style.visibility = "visible";
+    topbar.style.pointerEvents = "auto";
+  }
 
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -668,4 +567,3 @@ loadCitiesFromServer();
 
 startAutosaveLoop();
 setStatus("Editor bereit.");
-setLineInputMenuVisible(false);

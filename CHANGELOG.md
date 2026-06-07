@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.153 - 2026-06-07
+- **Editor-Design wiederhergestellt (klassisch)**:
+  - `Neu`-Eingabe-Modal wieder entfernt
+  - Rueckkehr zum alten Topbar-Design mit direkter Eingabe im Hauptlayout
+  - `Neu` setzt wieder Fokus in das Linienfeld der Topbar
+
 ## V2.0.152 - 2026-06-07
 - **Editor-UX stabilisiert: `Neu` nutzt jetzt eigenes Eingabe-Modal**:
   - Eigene Eingabemaske (Linie/Route/Richtung/Farbe) erscheint direkt bei `Neu`
