@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.106 - 2026-06-07
+- **Bus-Ausrichtung in Fahrtrichtung korrigiert**:
+  - Heading-Offset für Marker gesetzt, sodass die Bus-Front der tatsächlichen Fahrtrichtung folgt
+  - Gilt konsistent für GPS und SIM
+- **Seitliche Kippung reduziert**:
+  - 3D-Neigung des Bus-Icons deutlich verringert, damit der Bus nicht "auf der Seite" wirkt
+
 ## V2.0.105 - 2026-06-07
 - **Marker auf "Bus statt Kreis" umgestellt**:
   - Ring entfernt, nur noch Bus-Symbol als Fahrzeugmarker

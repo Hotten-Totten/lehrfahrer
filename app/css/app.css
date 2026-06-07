@@ -412,7 +412,7 @@ body.is-standalone #fullscreenBtn {
   position: relative;
   width: 144px;
   height: 158px;
-  transform: perspective(220px) rotateX(16deg);
+  transform: perspective(220px) rotateX(4deg);
   transform-origin: 50% 70%;
   filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
 }
@@ -439,11 +439,11 @@ body.is-standalone #fullscreenBtn {
 
 @keyframes gpsPulse {
   0%, 100% {
-    transform: perspective(220px) rotateX(16deg) scale(1);
+    transform: perspective(220px) rotateX(4deg) scale(1);
     filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
   }
   50% {
-    transform: perspective(220px) rotateX(16deg) scale(1.05);
+    transform: perspective(220px) rotateX(4deg) scale(1.05);
     filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(74, 158, 255, 0.45));
   }
 }

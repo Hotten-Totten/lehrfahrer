@@ -10,6 +10,7 @@ let stopMarkerMeta = [];
 let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
+const BUS_HEADING_OFFSET_DEG = -90;
 let navCameraBearing = 0;
 let navBearingReady = false;
 let navLastFix = null;
@@ -687,7 +688,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
       // Fahrtrichtung anzeigen (wenn Heading vorhanden und Tempo > 0,5 m/s)
       const hdg = pos.coords.heading;
       if (hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5) {
-        gpsMarker.setRotation(hdg);
+        gpsMarker.setRotation(normalizeDeg(hdg + BUS_HEADING_OFFSET_DEG));
         gpsMarker.getElement().classList.add('has-heading');
       } else {
         gpsMarker.setRotation(0);
@@ -893,7 +894,7 @@ function setSimulatedGPS(lon, lat, headingDeg) {
     gpsMarker.setLngLat(lnglat);
   }
   if (headingDeg != null && Number.isFinite(headingDeg)) {
-    gpsMarker.setRotation(headingDeg);
+    gpsMarker.setRotation(normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG));
     gpsMarker.getElement().classList.add('has-heading');
   } else {
     gpsMarker.setRotation(0);
