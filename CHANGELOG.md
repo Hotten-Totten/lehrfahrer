@@ -1,5 +1,17 @@
 # Changelog
 
+## V2.0.79 - 2026-06-07
+- **Debug-Simulationsmodus in der App** - Navigation jetzt ohne reales GPS testbar:
+  - Neuer SIM-Button in der App-Topbar startet/stopppt eine echte Nav-Simulation auf der geladenen Route
+  - Simulation nutzt denselben HUD-Update-Pfad wie Live-GPS (Pfeile, Abbiegehinweise, Haltestellen, Distanzen)
+  - Simulierte Fahrt laeuft entlang der Route mit stabiler Testgeschwindigkeit und automatischem Ziel-Ende
+  - GPS wird waehrend Simulation blockiert, um Kollisionen zwischen Echt- und Sim-Daten zu vermeiden
+- **Mobile HUD-Verbesserungen** - bessere Lesbarkeit auf dem Handy:
+  - Neue Portrait-Optimierung fuer den Nav-HUD bis 900px Breite
+  - Obere HUD-Zeile auf 2x2 Raster umgebaut (Linie/Ziel oben, Pfeil/Tempo unten)
+  - Typografie jetzt viewport-skalierend mit clamp() fuer Linie, Ziel, Entfernung, Pfeil und Geschwindigkeit
+  - Rechte Haltestellenliste auf mobile Breite angepasst fuer bessere Sichtbarkeit
+
 ## V2.0.78 - 2026-06-02
 - **Enlarge Destination Box** – Make final destination more prominent and readable:
   - Increased Destination Box in top bar: fonts 10→11px (label), 12→16px (name), 12→14px (distance)

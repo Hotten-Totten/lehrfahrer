@@ -23,6 +23,11 @@ let navCumDists  = [];
 let navStopDists = [];
 let navNearestIdx = 0;
 let navTimeInterval = null;  // Timer für Zeit-Updates im HUD
+let navInputMode = 'gps';
+let simTimer = null;
+let simRouteIdx = 0;
+const SIM_TICK_MS = 900;
+const SIM_DEFAULT_SPEED_KMH = 34;
 
 // GPS-Smoothing (reduziert Ruckeln bei schlechtem GPS)
 let gpsLastSmoothedPos = null;
@@ -79,6 +84,7 @@ const lineSelect       = document.getElementById('lineSelect');
 const saveOfflineBtn   = document.getElementById('saveOfflineBtn'); // Jetzt obsolet, aber Modal ersetzt Funktionalität
 const offlineBadge     = document.getElementById('offlineBadge');
 const gpsBtn           = document.getElementById('gpsBtn');
+const simBtn           = document.getElementById('simBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const settingsOverlay  = document.getElementById('settingsOverlay');
@@ -1011,6 +1017,7 @@ function bindEvents() {
   if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
 
   gpsBtn.addEventListener('click', toggleGPS);
+  if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
   settingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   settingsOverlay.addEventListener('click', e => {
@@ -1234,6 +1241,7 @@ function displayRoute(data) {
 
   // Navi-Button freischalten
   navBtn.classList.remove('hidden');
+  if (simBtn) simBtn.classList.remove('hidden');
   
   // "Zum Startpunkt" Button freischalten (wenn Route vorhanden)
   if (data.routePoints && data.routePoints.length > 0) {
@@ -1417,6 +1425,11 @@ function onTilesFileSelected() {
 
 // ── GPS toggle ───────────────────────────────────────────────
 function toggleGPS() {
+  if (navActive && navInputMode === 'sim') {
+    showToast('Simulation läuft. Erst Simulation beenden, dann GPS aktivieren.', 4500);
+    return;
+  }
+
   if (gpsActive) {
     stopGPS();
     clearGpsFirstFixTimer();
@@ -1634,7 +1647,9 @@ function smoothGPSPosition(lat, lon, speed) {
   return gpsLastSmoothedPos;
 }
 
-function startNavigation() {
+function startNavigation(options = {}) {
+  const useSimulation = options && options.useSimulation === true;
+
   if (!currentRoute?.data?.routePoints?.length) {
     showToast('Bitte zuerst eine Linie laden.');
     return;
@@ -1653,7 +1668,8 @@ function startNavigation() {
   navProgressIdx = 0;
   navStartTime = Date.now();
   currentNavLine = currentRoute.data;
-  resetNavPerfStats('gps');
+  navInputMode = useSimulation ? 'sim' : 'gps';
+  resetNavPerfStats(navInputMode);
   startNavDriveLogSession('nav-start');
 
   navHud.classList.remove('hidden');
@@ -1731,13 +1747,7 @@ function startNavigation() {
     navStopDistEl.textContent = navFormatDist(navStopDists[0].distFromStart);
   }
 
-  if (!gpsAllowedContext()) {
-    showToast('Navigation braucht HTTPS (oder localhost), sonst liefert iPhone kein GPS.', 8000);
-    stopNavigation();
-    return;
-  }
-
-  armGpsFirstFixTimer('Navigation');
+  stopNavSimulation();
   
   // Starte Zeit-Update im HUD
   if (navTimeInterval) clearInterval(navTimeInterval);
@@ -1757,15 +1767,28 @@ function startNavigation() {
     navTimeEl.textContent = `${hours}:${mins}`;
   }
 
+  if (useSimulation) {
+    startNavSimulation();
+    return;
+  }
+
+  if (!gpsAllowedContext()) {
+    showToast('Navigation braucht HTTPS (oder localhost), sonst liefert iPhone kein GPS.', 8000);
+    stopNavigation();
+    return;
+  }
+
+  armGpsFirstFixTimer('Navigation');
+
   const ok = startGPS(
     pos => {
       const { latitude: lat, longitude: lon, speed, heading } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
-      
+
       // GPS-Daten glätten (exponentieller Durchschnitt reduziert Ruckeln)
       const smoothed = smoothGPSPosition(lat, lon, speed);
-      
+
       const pts = currentRoute.data.routePoints;
       const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
 
@@ -1802,6 +1825,7 @@ function stopNavigation() {
   navBtn.textContent = '▶';
   navBtn.title       = 'Navigation starten';
   navBtn.classList.remove('nav-active');
+  stopNavSimulation();
   stopGPS();
   clearGpsFirstFixTimer();
   if (navTimeInterval) {
@@ -1816,6 +1840,7 @@ function stopNavigation() {
   navProgressIdx = 0;
   navStartTime = 0;
   currentNavLine = null;
+  navInputMode = 'gps';
   gpsLastSmoothedPos = null;  // GPS-Smoothing zurücksetzen
   if (navMenuOverlay) navMenuOverlay.classList.add('hidden');  // Close menu
   stopNavDriveLogSession();
@@ -2361,5 +2386,109 @@ function toggleNavPause() {
 // =============================================================
 // SIMULATION
 // =============================================================
+
+function toggleSimulationMode() {
+  if (navActive && navInputMode === 'sim') {
+    stopNavigation();
+    return;
+  }
+  if (navActive && navInputMode === 'gps') {
+    showToast('GPS-Navigation läuft. Erst beenden, dann Simulation starten.', 4500);
+    return;
+  }
+  startNavigation({ useSimulation: true });
+}
+
+function stopNavSimulation() {
+  if (simTimer) {
+    clearInterval(simTimer);
+    simTimer = null;
+  }
+  simRouteIdx = 0;
+  if (simBtn) {
+    simBtn.classList.remove('sim-running', 'nav-active');
+    simBtn.textContent = 'SIM';
+    simBtn.title = 'Debug-Simulation starten (ohne GPS)';
+  }
+}
+
+function advanceSimIndex(pts, currentIdx, targetMeters) {
+  const maxIdx = pts.length - 1;
+  if (currentIdx >= maxIdx) return maxIdx;
+
+  let idx = currentIdx;
+  let covered = 0;
+  while (idx < maxIdx && covered < targetMeters) {
+    const [la1, lo1] = navGetLatLon(pts[idx]);
+    const [la2, lo2] = navGetLatLon(pts[idx + 1]);
+    covered += haversineM(la1, lo1, la2, lo2);
+    idx += 1;
+  }
+
+  return Math.min(maxIdx, Math.max(currentIdx + 1, idx));
+}
+
+function pushSimFrame(idx, speedMps) {
+  const pts = currentRoute?.data?.routePoints || [];
+  if (!pts.length) return;
+
+  const maxIdx = pts.length - 1;
+  const safeIdx = Math.max(0, Math.min(maxIdx, idx));
+  const [lat, lon] = navGetLatLon(pts[safeIdx]);
+
+  let heading = null;
+  if (safeIdx < maxIdx) {
+    const [nextLat, nextLon] = navGetLatLon(pts[safeIdx + 1]);
+    heading = bearingDeg(lat, lon, nextLat, nextLon);
+  }
+
+  const tracked = resolveNavTrackPoint(lat, lon, pts);
+  recordNavDriveSample(lat, lon, tracked, speedMps, heading);
+  setSimulatedGPS(tracked.lon, tracked.lat, heading);
+  simCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), speedMps);
+  updateNavHud(tracked.lat, tracked.lon, tracked.index);
+
+  if (navSpeedEl) navSpeedEl.textContent = String(Math.round(speedMps * 3.6));
+}
+
+function startNavSimulation() {
+  if (!currentRoute?.data?.routePoints?.length) {
+    showToast('Keine Route für Simulation geladen.', 5000);
+    stopNavigation();
+    return;
+  }
+
+  stopGPS();
+  gpsActive = false;
+  clearGpsFirstFixTimer();
+
+  const pts = currentRoute.data.routePoints;
+  const speedMps = SIM_DEFAULT_SPEED_KMH / 3.6;
+  const metersPerTick = speedMps * (SIM_TICK_MS / 1000);
+
+  if (simBtn) {
+    simBtn.classList.add('sim-running', 'nav-active');
+    simBtn.textContent = 'STOP';
+    simBtn.title = 'Simulation beenden';
+  }
+
+  simRouteIdx = 0;
+  pushSimFrame(simRouteIdx, speedMps);
+
+  simTimer = setInterval(() => {
+    if (!navActive || navInputMode !== 'sim') {
+      stopNavSimulation();
+      return;
+    }
+
+    simRouteIdx = advanceSimIndex(pts, simRouteIdx, metersPerTick);
+    pushSimFrame(simRouteIdx, speedMps);
+
+    if (simRouteIdx >= pts.length - 1) {
+      showToast('Simulation beendet.', 2500);
+      stopNavigation();
+    }
+  }, SIM_TICK_MS);
+}
 
 

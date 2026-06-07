@@ -231,10 +231,12 @@ html, body {
   background: #1b3d20;
   border: 1px solid #2daa50;
   color: #2daa50;
-  height: 34px;
-  padding: 0 12px;
+  width: auto !important;
+  min-width: 48px;
+  height: 36px;
+  padding: 0 10px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -1129,6 +1131,114 @@ body.nav-mode #panel {
 
 body.nav-mode #navHud {
   top: var(--safe-top);
+}
+
+/* ── Mobile Portrait: bessere Lesbarkeit im Fahrbetrieb ────── */
+@media (max-width: 900px) {
+  #navTopBar {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'line destination'
+      'arrow right';
+    gap: 8px;
+    padding: 10px 8px;
+    align-items: stretch;
+  }
+
+  #navLineInfo {
+    grid-area: line;
+    padding: 12px 10px;
+    min-width: 0;
+  }
+
+  #navDestinationBox {
+    grid-area: destination;
+    padding: 12px 10px;
+    min-width: 0;
+  }
+
+  #navArrowSection {
+    grid-area: arrow;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  #navRightBox {
+    grid-area: right;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  #navLineName {
+    font-size: clamp(13px, 3.2vw, 18px);
+    line-height: 1.25;
+  }
+
+  #navCity {
+    font-size: clamp(11px, 2.6vw, 14px);
+  }
+
+  #navDestinationLabel {
+    font-size: clamp(10px, 2.4vw, 12px);
+  }
+
+  #navDestinationName {
+    font-size: clamp(14px, 3.8vw, 20px);
+    line-height: 1.25;
+  }
+
+  #navDestinationDist {
+    font-size: clamp(13px, 3vw, 16px);
+  }
+
+  #navArrow {
+    font-size: clamp(36px, 10vw, 52px);
+  }
+
+  #navLabel {
+    font-size: clamp(12px, 2.8vw, 15px);
+    white-space: normal;
+    text-align: left;
+  }
+
+  #navDist {
+    font-size: clamp(17px, 4.6vw, 24px);
+  }
+
+  #navTime {
+    font-size: clamp(15px, 4vw, 20px);
+  }
+
+  #navSpeed {
+    font-size: clamp(17px, 4.8vw, 24px);
+  }
+
+  #navButtonsCompact button {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  #navUpcomingStops {
+    top: calc(var(--safe-top) + 132px);
+    width: min(46vw, 220px);
+    right: 6px;
+    padding: 8px 6px;
+    gap: 6px;
+  }
+
+  .nav-upcoming-item {
+    padding: 9px 9px;
+  }
+
+  .nav-upcoming-name,
+  .nav-upcoming-dist {
+    font-size: clamp(12px, 2.9vw, 14px);
+  }
 }
 
 /* ── Mobile Landscape ───────────────────────── */
