@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.113 - 2026-06-07
+- **Kurvenrotation nochmals stark beschleunigt**:
+  - Bearing-Following deutlich aggressiver bei Richtungswechseln
+  - Turn-Boost früher, länger und mit höherer Turn-Rate
+  - Bei sehr großem Winkelfehler direkter Sprung auf Ziel-Bearing
+  - Kamera-Dauer bei Kurven erneut reduziert für sofortigere Drehung
+
 ## V2.0.112 - 2026-06-07
 - **Karte dreht schneller in Fahrtrichtung bei Abbiegen**:
   - Bearing-Catch-up in Kurven deutlich beschleunigt (höhere Turn-Rate + stärkere Annäherung)

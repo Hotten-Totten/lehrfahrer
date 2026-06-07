@@ -92,32 +92,38 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
   const absDelta = Math.abs(delta);
-  if (absDelta > 35) {
-    navTurnBoostUntil = nowTs + 2200;
+  if (absDelta > 20) {
+    navTurnBoostUntil = nowTs + 2600;
   }
   let smoothing = (speedKmh != null && speedKmh < 5) ? 0.10 : ((speedKmh != null && speedKmh < 15) ? 0.18 : 0.30);
   let deadZone = (speedKmh != null && speedKmh < 5) ? 4.5 : ((speedKmh != null && speedKmh < 15) ? 2.5 : 1.2);
   let maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 12 : ((speedKmh != null && speedKmh < 15) ? 22 : 60);
 
   if (nowTs < navTurnBoostUntil) {
-    smoothing = Math.max(smoothing, 0.64);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 180);
-    deadZone = Math.min(deadZone, 0.8);
+    smoothing = Math.max(smoothing, 0.82);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 320);
+    deadZone = Math.min(deadZone, 0.4);
   }
 
   // In echten Kurven schneller auf den neuen Kurs ziehen, um seitliches Nachlaufen zu vermeiden.
-  if (absDelta > 35) {
-    smoothing = Math.max(smoothing, 0.55);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 140);
-    deadZone = Math.min(deadZone, 1.1);
+  if (absDelta > 25) {
+    smoothing = Math.max(smoothing, 0.7);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 220);
+    deadZone = Math.min(deadZone, 0.7);
   }
-  if (absDelta > 70) {
-    smoothing = Math.max(smoothing, 0.78);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 240);
-    deadZone = Math.min(deadZone, 0.6);
+  if (absDelta > 55) {
+    smoothing = Math.max(smoothing, 0.9);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 360);
+    deadZone = Math.min(deadZone, 0.25);
   }
 
-  if (absDelta > 90 && movedM >= 2.2) {
+  if (absDelta > 95 && movedM >= 1.5) {
+    navCameraBearing = candidate;
+    navLastBearingTs = nowTs;
+    return navCameraBearing;
+  }
+
+  if (absDelta > 65 && movedM >= 1.5) {
     // Bei sehr großen Richtungswechseln zügig auf den neuen Kurs aufschließen.
     navCameraBearing = normalizeDeg(navCameraBearing + delta * 0.9);
     navLastBearingTs = nowTs;
@@ -741,11 +747,11 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const mapBearing = normalizeDeg(map.getBearing());
   const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
 
-  let duration = 620;
-  if (turnDelta > 75) duration = 300;
-  else if (turnDelta > 45) duration = 380;
-  else if (turnDelta > 20) duration = 480;
-  else if (speedKmh != null && speedKmh < 8) duration = 700;
+  let duration = 420;
+  if (turnDelta > 75) duration = 120;
+  else if (turnDelta > 45) duration = 170;
+  else if (turnDelta > 20) duration = 240;
+  else if (speedKmh != null && speedKmh < 8) duration = 480;
 
   // Laufende Animation stoppen, damit nach Kurven kein seitliches Nachziehen stehen bleibt.
   map.stop();
