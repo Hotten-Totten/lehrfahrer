@@ -867,11 +867,11 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 
         const isLandscapeMobile = window.matchMedia('(orientation: landscape)').matches && (window.innerWidth || 0) <= 950;
         if (isLandscapeMobile) {
-          // Landscape: Marker etwas tiefer halten und weiter nach vorne schauen.
-          driverZoom = Math.max(16, driverZoom - 0.35);
-          pitch = Math.min(68, pitch + 2);
-          topFactor = Math.min(0.72, topFactor + 0.08);
-          bottomFactor = Math.max(0.08, bottomFactor - 0.03);
+          // Landscape: Marker weiter weg/fokussiert nach vorne (hoeher im Bild).
+          driverZoom = Math.max(16, driverZoom - 0.55);
+          pitch = Math.max(50, pitch - 3);
+          topFactor = Math.max(0.44, topFactor - 0.08);
+          bottomFactor = Math.min(0.28, bottomFactor + 0.06);
         }
       }
 

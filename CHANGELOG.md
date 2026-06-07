@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.129 - 2026-06-07
+- **Landscape-Fokus in Gegenrichtung angepasst (weiter weg)**:
+  - Kamera im Querformat bewusst auf "weiter weg" umgestellt
+  - Marker erscheint dadurch hoeher im Bild statt tiefer
+  - Landscape-Feintuning: mehr Distanzwirkung durch angepasstes Zoom/Pitch/Padding
+
 ## V2.0.128 - 2026-06-07
 - **Landscape-Fokus weiter nach vorne + stabilerer Marker-Fokuspunkt**:
   - Fahrerfokus im Querformat erweitert (mehr Sicht nach vorn, Marker tiefer im Bild)
