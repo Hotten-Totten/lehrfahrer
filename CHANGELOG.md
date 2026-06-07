@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.114 - 2026-06-07
+- **Kurvenrotation von "hart" auf "schnell + fluessig" umgestellt**:
+  - Harte Bearing-Spruenge entfernt (weniger Ruckeln)
+  - Kamera-Animation wird nicht mehr bei jedem Tick gestoppt, nur bei extremem Winkel
+  - Schnelleres, weiches Einrasten auf die kommende Gerade nach dem Abbiegen
+  - Ziel: deutlich fluessigeres Drehverhalten bei weiterhin hoher Reaktionsgeschwindigkeit
+
 ## V2.0.113 - 2026-06-07
 - **Kurvenrotation nochmals stark beschleunigt**:
   - Bearing-Following deutlich aggressiver bei Richtungswechseln
