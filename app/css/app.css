@@ -786,7 +786,7 @@ body.is-standalone #fullscreenBtn {
 /* ── Top Bar: Line Info | Destination | Arrow | Time/Speed ── */
 #navTopBar {
   display: grid;
-  grid-template-columns: 240px 140px 1fr 130px;
+  grid-template-columns: minmax(220px, 1fr) 1fr 130px;
   gap: 12px;
   background: linear-gradient(135deg, rgba(6, 9, 22, 0.98), rgba(15, 25, 50, 0.95));
   border-bottom: 2px solid var(--primary);
@@ -825,9 +825,9 @@ body.is-standalone #fullscreenBtn {
   font-weight: 500;
 }
 
-/* Destination Box */
+/* Destination Box (in compact mode hidden, info is merged into line tile) */
 #navDestinationBox {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 6px;
   padding: 16px 14px;
@@ -1147,7 +1147,7 @@ body.nav-mode #navHud {
   #navTopBar {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
-      'line destination'
+      'line right'
       'arrow right';
     gap: 8px;
     padding: 10px 8px;
@@ -1156,12 +1156,6 @@ body.nav-mode #navHud {
 
   #navLineInfo {
     grid-area: line;
-    padding: 12px 10px;
-    min-width: 0;
-  }
-
-  #navDestinationBox {
-    grid-area: destination;
     padding: 12px 10px;
     min-width: 0;
   }
@@ -1189,19 +1183,6 @@ body.nav-mode #navHud {
 
   #navCity {
     font-size: clamp(11px, 2.6vw, 14px);
-  }
-
-  #navDestinationLabel {
-    font-size: clamp(10px, 2.4vw, 12px);
-  }
-
-  #navDestinationName {
-    font-size: clamp(14px, 3.8vw, 20px);
-    line-height: 1.25;
-  }
-
-  #navDestinationDist {
-    font-size: clamp(13px, 3vw, 16px);
   }
 
   #navArrow {
@@ -1444,7 +1425,6 @@ body.nav-mode #navHud {
     grid-template-columns: 1fr 84px;
     grid-template-areas:
       'line right'
-      'destination right'
       'arrow right';
     gap: 6px;
     padding: 8px 6px;
@@ -1461,6 +1441,7 @@ body.nav-mode #navHud {
     font-size: 12px;
     line-height: 1.25;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -1468,29 +1449,6 @@ body.nav-mode #navHud {
 
   #navCity {
     display: none;
-  }
-
-  #navDestinationBox {
-    grid-area: destination;
-    padding: 7px 9px;
-    gap: 2px;
-  }
-
-  #navDestinationLabel {
-    display: none;
-  }
-
-  #navDestinationName {
-    font-size: 12px;
-    line-height: 1.2;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  #navDestinationDist {
-    font-size: 11px;
   }
 
   #navArrowSection {
@@ -1551,7 +1509,7 @@ body.nav-mode #navHud {
   }
 
   #navUpcomingStops {
-    top: calc(var(--safe-top) + 176px);
+    top: calc(var(--safe-top) + 144px);
     right: 4px;
     width: 112px;
     gap: 5px;

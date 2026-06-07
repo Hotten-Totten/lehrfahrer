@@ -1694,6 +1694,26 @@ function smoothGPSPosition(lat, lon, speed) {
   return gpsLastSmoothedPos;
 }
 
+function buildCompactLineLabel() {
+  if (!currentRoute) return 'Linie ?';
+
+  const src = currentRoute.fileBase || '';
+  const lineMatch = src.match(/[Ll]inie[_\s-]*(\d+)/);
+  const routeMatch = src.match(/[Rr]oute[_\s-]*(\d+)/);
+
+  let lineId = lineMatch?.[1] || (src.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?');
+  if (routeMatch?.[1]) {
+    lineId += `/${routeMatch[1].padStart(2, '0')}`;
+  }
+
+  const stops = currentRoute.data?.stops || [];
+  const lastStop = stops.length ? (stops[stops.length - 1].name || 'Ziel') : 'Ziel';
+  const totalDist = (navCumDists && navCumDists.length) ? navCumDists[navCumDists.length - 1] : null;
+  const distText = totalDist != null ? navFormatDist(totalDist).replace(' km', ' Km') : '–';
+
+  return `Linie ${lineId} ${lastStop} (in ${distText})`;
+}
+
 function startNavigation(options = {}) {
   const useSimulation = options && options.useSimulation === true;
 
@@ -1731,34 +1751,11 @@ function startNavigation(options = {}) {
   console.log('🚌 Nav Start - currentRoute:', { city: currentRoute.city, fileBase: currentRoute.fileBase, lineFolder: currentRoute.lineFolder });
   
   if (lineNameEl) {
-    // Extract line number from fileBase
-    let lineNum = currentRoute.fileBase?.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?';
-    let lineText = `Linie ${lineNum}`;
-    
-    // Extract everything after the line number for the route description
-    // E.g. from "Linie_10_Route_01_Cottbus__Hauptbahnhof_-_Branitz__Schloss"
-    // Get "Route_01_Cottbus__Hauptbahnhof_-_Branitz__Schloss" and clean it up
-    if (currentRoute.fileBase) {
-      let routeDesc = currentRoute.fileBase;
-      // Remove line prefix if present (e.g., "Linie_10_" or just "10_")
-      routeDesc = routeDesc.replace(/^[Ll]inie[_\s]*\d+[_\s]*/, '');
-      // Replace underscores/commas with spaces, clean up double spaces
-      routeDesc = routeDesc
-        .replace(/_/g, ' ')
-        .replace(/,/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      if (routeDesc) {
-        lineText += ` / ${routeDesc}`;
-      }
-    }
-    
-    lineNameEl.textContent = lineText;
+    lineNameEl.textContent = buildCompactLineLabel();
     console.log('📍 Line set to:', lineNameEl.textContent);
   }
   if (cityNameEl) {
-    cityNameEl.textContent = capitalizeCity(currentRoute.city || 'Stadt');
+    cityNameEl.textContent = '';
     console.log('🏙️ City set to:', cityNameEl.textContent);
   }
 

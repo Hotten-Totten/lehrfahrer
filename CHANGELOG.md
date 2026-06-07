@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.83 - 2026-06-07
+- **Obere Kacheln zusammengeführt** - Linie/Route und Ziel jetzt in einer einzigen Kachel:
+  - Separate Zielkachel entfernt (Info in Linienkachel integriert)
+  - Neues Format in der Hauptkachel: `Linie 1201/01 Technologiepark (in 17.3 Km)`
+  - Linienkennung wird aus Linie + Route gebildet (z. B. `1201/01`)
+  - HUD-Grid entsprechend vereinfacht und für iPhone-Layout angepasst
+
 ## V2.0.82 - 2026-06-07
 - **iPhone HUD Cleanup (Portrait)** - deutlich aufgeraeumte Darstellung fuer kleine Displays:
   - Spezielles Layout fuer iPhone-Breite (<=430px) mit weniger visueller Last
