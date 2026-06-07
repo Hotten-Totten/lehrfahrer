@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.104 - 2026-06-07
+- **Bus-Marker drastisch vergrößert (300%)**:
+  - Marker gegenüber V2.0.103 auf 300% skaliert
+  - Ring und Bus-SVG proportional mit vergrößert
+  - Ziel: maximale Sichtbarkeit während der Fahrt
+
 ## V2.0.103 - 2026-06-07
 - **Bus-Marker +50% vergrößert**:
   - Marker-Fläche, Ring und Bus-SVG exakt um 50% skaliert
