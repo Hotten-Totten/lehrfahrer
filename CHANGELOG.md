@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.127 - 2026-06-07
+- **Fix: Positionspfeil nach Kurven deutlich strenger im Fokus gehalten**:
+  - Drift-Guard-Schwellen klar verschaerft (frueheres Recenter)
+  - Sollposition des Markers im Viewport nach unten verlagert (stabiler Fahrerfokus)
+  - Vor jedem Follow-Update wird laufende Kamera-Animation gestoppt, um Animationsstau zu vermeiden
+  - Kamera-Dauern weiter verkuerzt fuer direkteres Nachziehen
+
 ## V2.0.126 - 2026-06-07
 - **Fix: Positionspfeil bleibt auch nach mehreren Kurven im Fokus**:
   - Kamera-Following um Drift-Guard erweitert

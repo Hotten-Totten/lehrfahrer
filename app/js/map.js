@@ -760,10 +760,10 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
     const h = Math.max(1, canvas.clientHeight || 0);
     const projected = map.project([lon, lat]);
     const targetX = w * 0.5;
-    const targetY = h * 0.72;
+    const targetY = h * 0.80;
     const dx = Math.abs(projected.x - targetX);
     const dy = Math.abs(projected.y - targetY);
-    hardRecenter = dx > (w * 0.28) || dy > (h * 0.34);
+    hardRecenter = dx > (w * 0.16) || dy > (h * 0.20);
   }
 
   if (hardRecenter) {
@@ -774,13 +774,14 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   }
 
   let duration = 560;
-  if (turnDelta > 75) duration = 260;
-  else if (turnDelta > 45) duration = 340;
-  else if (turnDelta > 20) duration = 420;
-  else if (speedKmh != null && speedKmh < 8) duration = 600;
+  if (turnDelta > 75) duration = 180;
+  else if (turnDelta > 45) duration = 220;
+  else if (turnDelta > 20) duration = 300;
+  else if (speedKmh != null && speedKmh < 8) duration = 360;
+  else duration = 340;
 
-  // Nur bei wirklich extremen Winkelspruengen abbrechen; sonst Animation weich fortsetzen.
-  if (turnDelta > 145) map.stop();
+  // Stauende Kamera-Animationen konsequent abbrechen, damit der Marker nie "hinterherhaengt".
+  map.stop();
   map.easeTo({ ...opts, duration, easing: t => t * t * (3 - 2 * t) });
   updateStopPoiVisibility();
 }
