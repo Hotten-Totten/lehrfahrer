@@ -14,6 +14,7 @@ let navCameraBearing = 0;
 let navBearingReady = false;
 let navLastFix = null;
 let navLastBearingTs = 0;
+let navCameraViewState = null;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -50,6 +51,7 @@ function resetNavBearingState() {
   navBearingReady = false;
   navLastFix = null;
   navLastBearingTs = 0;
+  navCameraViewState = null;
 }
 
 function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
@@ -687,9 +689,18 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
-  // 1100ms > typisches GPS-Intervall (~1s) → Animation läuft durch bis zur nächsten Position
-  // ease-in-out: sanftes Beschleunigen + Abbremsen statt linearem Ruck
-  map.easeTo({ ...opts, duration: 1100, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t });
+  const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
+  const mapBearing = normalizeDeg(map.getBearing());
+  const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
+
+  let duration = 820;
+  if (turnDelta > 70) duration = 520;
+  else if (turnDelta > 35) duration = 650;
+  else if (speedKmh != null && speedKmh < 8) duration = 920;
+
+  // Laufende Animation stoppen, damit nach Kurven kein seitliches Nachziehen stehen bleibt.
+  map.stop();
+  map.easeTo({ ...opts, duration, easing: t => t * (2 - t) });
   updateStopPoiVisibility();
 }
 
@@ -779,12 +790,36 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
       const forwardBottom = navMode
         ? Math.round(Math.min(220, Math.max(55, vh * bottomFactor)))
         : Math.round(Math.min(360, Math.max(100, vh * bottomFactor)));
+
+      if (navMode) {
+        const alpha = 0.26;
+        if (!navCameraViewState) {
+          navCameraViewState = {
+            zoom: driverZoom,
+            pitch,
+            top: forwardTop,
+            bottom: forwardBottom
+          };
+        } else {
+          navCameraViewState.zoom += (driverZoom - navCameraViewState.zoom) * alpha;
+          navCameraViewState.pitch += (pitch - navCameraViewState.pitch) * alpha;
+          navCameraViewState.top += (forwardTop - navCameraViewState.top) * alpha;
+          navCameraViewState.bottom += (forwardBottom - navCameraViewState.bottom) * alpha;
+        }
+      } else {
+        navCameraViewState = null;
+      }
+
+      const finalZoom = navMode ? navCameraViewState.zoom : driverZoom;
+      const finalPitch = navMode ? navCameraViewState.pitch : pitch;
+      const finalTop = navMode ? Math.round(navCameraViewState.top) : forwardTop;
+      const finalBottom = navMode ? Math.round(navCameraViewState.bottom) : forwardBottom;
       return {
         center:  [lon, lat],
-        zoom:    driverZoom,
-        pitch,
+        zoom:    finalZoom,
+        pitch:   finalPitch,
         bearing: headingDeg != null ? headingDeg : 0,
-        padding: { top: forwardTop, bottom: forwardBottom, left: 0, right: 0 }
+        padding: { top: finalTop, bottom: finalBottom, left: 0, right: 0 }
       };
     }
   }

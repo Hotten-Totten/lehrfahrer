@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.97 - 2026-06-07
+- **Kurvenkamera beruhigt (Schritt 2)**:
+  - Adaptive Kamera-Animation je nach Kurvenwinkel (stärkerer Turn = kürzere, direktere Transition)
+  - Laufende Kamera-Animation wird vor dem nächsten Update beendet, um seitliches Nachziehen nach Abbiegen zu vermeiden
+  - Zoom/Pitch/Padding im Fahrer-Modus werden geglättet statt sprunghaft gesetzt, für deutlich ruhigere Drehung
+
 ## V2.0.96 - 2026-06-07
 - **Spur-Einrastung (Schritt 1, ohne Kamera-Änderung)**:
   - Snap-Radius erhöht (`85m` -> `120m`), damit die Fahrzeugposition seltener neben der Strecke liegt
