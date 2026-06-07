@@ -88,16 +88,29 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   }
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
-  const smoothing = (speedKmh != null && speedKmh < 5) ? 0.10 : ((speedKmh != null && speedKmh < 15) ? 0.18 : 0.30);
-  const deadZone = (speedKmh != null && speedKmh < 5) ? 4.5 : ((speedKmh != null && speedKmh < 15) ? 2.5 : 1.2);
-  const maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 12 : ((speedKmh != null && speedKmh < 15) ? 22 : 60);
+  const absDelta = Math.abs(delta);
+  let smoothing = (speedKmh != null && speedKmh < 5) ? 0.10 : ((speedKmh != null && speedKmh < 15) ? 0.18 : 0.30);
+  let deadZone = (speedKmh != null && speedKmh < 5) ? 4.5 : ((speedKmh != null && speedKmh < 15) ? 2.5 : 1.2);
+  let maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 12 : ((speedKmh != null && speedKmh < 15) ? 22 : 60);
 
-  if (speedKmh != null && speedKmh < 8 && Math.abs(delta) > 120) {
+  // In echten Kurven schneller auf den neuen Kurs ziehen, um seitliches Nachlaufen zu vermeiden.
+  if (absDelta > 35) {
+    smoothing = Math.max(smoothing, 0.42);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 95);
+    deadZone = Math.min(deadZone, 1.6);
+  }
+  if (absDelta > 70) {
+    smoothing = Math.max(smoothing, 0.62);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 150);
+    deadZone = Math.min(deadZone, 1.0);
+  }
+
+  if (speedKmh != null && speedKmh < 8 && absDelta > 120 && movedM < 2.5) {
     // Grobe Ausreisser im Langsamverkehr ignorieren.
     return navCameraBearing;
   }
 
-  if (Math.abs(delta) < deadZone) {
+  if (absDelta < deadZone) {
     return navCameraBearing;
   }
 

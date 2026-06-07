@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.98 - 2026-06-07
+- **Gegen-Fix bei seitlichem Nachziehen nach Abbiegen**:
+  - Bearing-Regelung in Kurven deutlich reaktiver gemacht (höhere Turn-Rate und stärkere Annäherung bei großem Winkelfehler)
+  - Niedriggeschwindigkeits-Ausreißerfilter präzisiert, damit echte langsame Abbiegungen nicht fälschlich geblockt werden
+  - Ziel: schnelleres „Einfangen“ der neuen Fahrtrichtung direkt nach der Kurve
+
 ## V2.0.97 - 2026-06-07
 - **Kurvenkamera beruhigt (Schritt 2)**:
   - Adaptive Kamera-Animation je nach Kurvenwinkel (stärkerer Turn = kürzere, direktere Transition)
