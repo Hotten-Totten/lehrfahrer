@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.122 - 2026-06-07
+- **Fix: "Abbrechen" im Navi-Menue stoppt die Navigation nicht mehr**:
+  - `navCancelBtn` schliesst jetzt nur noch das Menue
+  - Navigation bleibt aktiv und laeuft direkt weiter
+  - Kein Rueckfall mehr in den Routen-Eingabemodus
+
 ## V2.0.121 - 2026-06-07
 - **Hotfix: alle drei Compact-Navi-Buttons wieder bedienbar**:
   - Einheitliches Tap-Handling fuer Menue, Pause und Stop eingefuehrt (`touchend` + Click-Fallback)

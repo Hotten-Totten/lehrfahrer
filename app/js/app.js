@@ -1093,7 +1093,6 @@ function bindEvents() {
   // Cancel Button
   if (navCancelBtn) {
     navCancelBtn.addEventListener('click', () => {
-      stopNavigation();
       hideNavMenu();
     });
   }
