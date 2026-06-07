@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.84 - 2026-06-07
+- **Fahrinfos zentriert und größer (iPhone)**:
+  - Abbiegebereich jetzt mittig ausgerichtet statt linksbündig
+  - Pfeil vergrößert (30px -> 38px)
+  - Distanz vergrößert (18px -> 24px)
+  - Hinweistext leicht vergrößert und zentriert
+- **Rechter Bereich vereinfacht**:
+  - Nur noch die nächste Haltestelle sichtbar
+  - Zusätzliche Haltestellen-Karten auf iPhone ausgeblendet
+
 ## V2.0.83 - 2026-06-07
 - **Obere Kacheln zusammengeführt** - Linie/Route und Ziel jetzt in einer einzigen Kachel:
   - Separate Zielkachel entfernt (Info in Linienkachel integriert)

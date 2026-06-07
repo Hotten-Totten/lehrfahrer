@@ -1453,30 +1453,30 @@ body.nav-mode #navHud {
 
   #navArrowSection {
     grid-area: arrow;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
-    padding: 3px 2px 2px;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 2px 3px;
   }
 
   #navArrow {
-    font-size: 30px;
+    font-size: 38px;
   }
 
   #navInstruction {
-    align-items: flex-start;
-    text-align: left;
+    align-items: center;
+    text-align: center;
   }
 
   #navLabel {
-    font-size: 12px;
+    font-size: 13px;
     white-space: normal;
-    line-height: 1.2;
+    line-height: 1.25;
   }
 
   #navDist {
-    font-size: 18px;
+    font-size: 24px;
   }
 
   #navRightBox {
@@ -1521,7 +1521,7 @@ body.nav-mode #navHud {
     border-radius: 8px;
   }
 
-  .nav-upcoming-item:nth-child(n+4) {
+  .nav-upcoming-item:nth-child(n+2) {
     display: none;
   }
 
