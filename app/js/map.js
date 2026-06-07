@@ -759,11 +759,12 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
     const w = Math.max(1, canvas.clientWidth || 0);
     const h = Math.max(1, canvas.clientHeight || 0);
     const projected = map.project([lon, lat]);
-    const targetX = w * 0.5;
-    const targetY = h * 0.80;
+    const pad = opts && opts.padding ? opts.padding : { top: 0, right: 0, bottom: 0, left: 0 };
+    const targetX = (w + (pad.left || 0) - (pad.right || 0)) * 0.5;
+    const targetY = (h + (pad.top || 0) - (pad.bottom || 0)) * 0.5;
     const dx = Math.abs(projected.x - targetX);
     const dy = Math.abs(projected.y - targetY);
-    hardRecenter = dx > (w * 0.16) || dy > (h * 0.20);
+    hardRecenter = dx > (w * 0.14) || dy > (h * 0.18);
   }
 
   if (hardRecenter) {
@@ -862,6 +863,15 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
           pitch = Math.min(70, pitch + 4);
           topFactor = Math.min(0.66, topFactor + 0.03);
           bottomFactor = Math.max(0.10, bottomFactor - 0.02);
+        }
+
+        const isLandscapeMobile = window.matchMedia('(orientation: landscape)').matches && (window.innerWidth || 0) <= 950;
+        if (isLandscapeMobile) {
+          // Landscape: Marker etwas tiefer halten und weiter nach vorne schauen.
+          driverZoom = Math.max(16, driverZoom - 0.35);
+          pitch = Math.min(68, pitch + 2);
+          topFactor = Math.min(0.72, topFactor + 0.08);
+          bottomFactor = Math.max(0.08, bottomFactor - 0.03);
         }
       }
 

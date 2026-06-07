@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.128 - 2026-06-07
+- **Landscape-Fokus weiter nach vorne + stabilerer Marker-Fokuspunkt**:
+  - Fahrerfokus im Querformat erweitert (mehr Sicht nach vorn, Marker tiefer im Bild)
+  - Drift-Guard nutzt jetzt den echten Kamera-Sollpunkt aus den aktuellen Padding-Werten
+  - Recenter-Schwellen weiter verschaerft, damit Abweichungen frueher korrigiert werden
+
 ## V2.0.127 - 2026-06-07
 - **Fix: Positionspfeil nach Kurven deutlich strenger im Fokus gehalten**:
   - Drift-Guard-Schwellen klar verschaerft (frueheres Recenter)
