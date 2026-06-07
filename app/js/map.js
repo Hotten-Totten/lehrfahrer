@@ -15,6 +15,7 @@ let navBearingReady = false;
 let navLastFix = null;
 let navLastBearingTs = 0;
 let navCameraViewState = null;
+let navTurnBoostUntil = 0;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -52,6 +53,7 @@ function resetNavBearingState() {
   navLastFix = null;
   navLastBearingTs = 0;
   navCameraViewState = null;
+  navTurnBoostUntil = 0;
 }
 
 function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
@@ -89,9 +91,18 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
   const absDelta = Math.abs(delta);
+  if (absDelta > 45) {
+    navTurnBoostUntil = nowTs + 1800;
+  }
   let smoothing = (speedKmh != null && speedKmh < 5) ? 0.10 : ((speedKmh != null && speedKmh < 15) ? 0.18 : 0.30);
   let deadZone = (speedKmh != null && speedKmh < 5) ? 4.5 : ((speedKmh != null && speedKmh < 15) ? 2.5 : 1.2);
   let maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 12 : ((speedKmh != null && speedKmh < 15) ? 22 : 60);
+
+  if (nowTs < navTurnBoostUntil) {
+    smoothing = Math.max(smoothing, 0.52);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 120);
+    deadZone = Math.min(deadZone, 1.2);
+  }
 
   // In echten Kurven schneller auf den neuen Kurs ziehen, um seitliches Nachlaufen zu vermeiden.
   if (absDelta > 35) {
@@ -103,6 +114,13 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
     smoothing = Math.max(smoothing, 0.62);
     maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 150);
     deadZone = Math.min(deadZone, 1.0);
+  }
+
+  if (absDelta > 95 && movedM >= 3) {
+    // Bei sehr großen Richtungswechseln zügig auf den neuen Kurs aufschließen.
+    navCameraBearing = normalizeDeg(navCameraBearing + delta * 0.75);
+    navLastBearingTs = nowTs;
+    return navCameraBearing;
   }
 
   if (speedKmh != null && speedKmh < 8 && absDelta > 120 && movedM < 2.5) {

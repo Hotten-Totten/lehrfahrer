@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.99 - 2026-06-07
+- **Feintuning Kurvenrotation (zusätzlicher Schritt)**:
+  - Kurzzeitiger Turn-Boost nach erkannter Abbiegung eingeführt (schnelleres Nachführen der Kamera)
+  - Bei sehr großem Richtungsfehler zusätzlicher schneller Catch-up-Schritt aktiviert
+  - Ziel: Rest-„Seitwärtsfahren“ direkt nach Kurven weiter reduzieren
+
 ## V2.0.98 - 2026-06-07
 - **Gegen-Fix bei seitlichem Nachziehen nach Abbiegen**:
   - Bearing-Regelung in Kurven deutlich reaktiver gemacht (höhere Turn-Rate und stärkere Annäherung bei großem Winkelfehler)
