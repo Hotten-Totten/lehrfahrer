@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.156 - 2026-06-07
+- **Fallback bei fehlender Richtungsinfo verbessert**:
+  - Gleichnamige Haltestellen ohne Richtung werden clusterweise auf Nord- und Süd-Extrempunkt reduziert
+  - Zielbild: statt 3-4 nahezu identischen Punkten bleiben maximal 2 (Nord/Süd)
+  - Statusausgabe erweitert: zeigt Anzahl der auf Nord/Süd reduzierten Einträge
+
 ## V2.0.155 - 2026-06-07
 - **Haltestellen-Import optimiert: max. 1 Haltestelle pro Richtung**:
   - Richtungsinfos aus OSM (`towards`/`destination`/`direction`/`local_ref`) werden übernommen

@@ -201,6 +201,68 @@
     return { stops: result, removed };
   }
 
+  // Fallback fuer OSM-Daten ohne Richtungs-Tag:
+  // Pro Name/Cluster bleiben nur Nord- und Suedpunkt erhalten.
+  function reduceUnnamedDirectionToNorthSouth(stops, clusterRadiusM, minNorthSouthSpanM) {
+    const output = [];
+    const byName = new Map();
+    let removed = 0;
+
+    for (const s of stops) {
+      const copy = { ...s };
+      const nameKey = String(copy.name || "").trim().toLowerCase();
+      const dirKey = normalizedDirection(copy);
+
+      if (!nameKey || dirKey) {
+        output.push(copy);
+        continue;
+      }
+
+      const list = byName.get(nameKey) || [];
+      list.push(copy);
+      byName.set(nameKey, list);
+    }
+
+    for (const sameNameStops of byName.values()) {
+      const clusters = [];
+
+      for (const s of sameNameStops) {
+        let assigned = false;
+        for (const cluster of clusters) {
+          const nearAny = cluster.some(c => haversineMeters(c.lat, c.lon, s.lat, s.lon) <= clusterRadiusM);
+          if (nearAny) {
+            cluster.push(s);
+            assigned = true;
+            break;
+          }
+        }
+        if (!assigned) clusters.push([s]);
+      }
+
+      for (const cluster of clusters) {
+        if (cluster.length <= 2) {
+          output.push(...cluster);
+          continue;
+        }
+
+        const sorted = cluster.slice().sort((a, b) => b.lat - a.lat);
+        const north = sorted[0];
+        const south = sorted[sorted.length - 1];
+        const spanM = haversineMeters(north.lat, north.lon, south.lat, south.lon);
+
+        if (spanM < minNorthSouthSpanM) {
+          output.push(north);
+          removed += cluster.length - 1;
+        } else {
+          output.push(north, south);
+          removed += cluster.length - 2;
+        }
+      }
+    }
+
+    return { stops: output, removed };
+  }
+
   // Neue Haltestellen in bestehenden Katalog mergen (8m-Radius, gleicher Name)
   function mergeIntoExisting(existing, incoming, mergeRadiusM) {
     mergeRadiusM = mergeRadiusM || 8;
@@ -320,6 +382,13 @@
       if (directionDedupe.removed > 0) {
         statusNote = (statusNote ? statusNote + " · " : "") +
           directionDedupe.removed + " Richtungs-Duplikate entfernt";
+      }
+
+      const northSouthFallback = reduceUnnamedDirectionToNorthSouth(incomingStops, 180, 15);
+      incomingStops = northSouthFallback.stops;
+      if (northSouthFallback.removed > 0) {
+        statusNote = (statusNote ? statusNote + " · " : "") +
+          northSouthFallback.removed + " ohne Richtung auf Nord/Sued reduziert";
       }
 
       if (snapToRoad && incomingStops.length) {
