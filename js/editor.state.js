@@ -302,7 +302,7 @@ function getDirectionArrow(directionText, stop) {
     .replace(/ß/g, "ss")
     .trim();
 
-  if (!t) return "";
+  if (!t) return inferDirectionArrowFromGeometry(stop);
 
   if (/nord\s*ost|northeast|north\s*east|\bne\b/.test(t)) return "↗";
   if (/nord\s*west|northwest|north\s*west|\bnw\b/.test(t)) return "↖";

@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.162 - 2026-06-07
+- **Hotfix Richtungspfeile**:
+  - Fehler behoben, bei dem bei leerem Richtungsfeld kein Fallback-Pfeil berechnet wurde
+  - Geometrie-Fallback greift jetzt auch ohne `direction/towards` zuverlässig
+
 ## V2.0.161 - 2026-06-07
 - **Richtungspfeile sichtbar gemacht (Fallback)**:
   - Wenn keine Richtungstexte vorliegen, wird die Richtung aus der Lage gleichnamiger Haltestellen abgeleitet
