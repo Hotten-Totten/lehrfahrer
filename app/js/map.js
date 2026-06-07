@@ -751,6 +751,28 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const mapBearing = normalizeDeg(map.getBearing());
   const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
 
+  // Drift-Guard: Wenn der Fahrmarker nach mehreren Kurven sichtbar aus dem Fahrerfokus
+  // rutscht, sofort hart neu zentrieren statt weiter weich zu animieren.
+  let hardRecenter = false;
+  const canvas = map.getCanvas();
+  if (canvas) {
+    const w = Math.max(1, canvas.clientWidth || 0);
+    const h = Math.max(1, canvas.clientHeight || 0);
+    const projected = map.project([lon, lat]);
+    const targetX = w * 0.5;
+    const targetY = h * 0.72;
+    const dx = Math.abs(projected.x - targetX);
+    const dy = Math.abs(projected.y - targetY);
+    hardRecenter = dx > (w * 0.28) || dy > (h * 0.34);
+  }
+
+  if (hardRecenter) {
+    map.stop();
+    map.jumpTo(opts);
+    updateStopPoiVisibility();
+    return;
+  }
+
   let duration = 560;
   if (turnDelta > 75) duration = 260;
   else if (turnDelta > 45) duration = 340;

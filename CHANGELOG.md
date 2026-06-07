@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.126 - 2026-06-07
+- **Fix: Positionspfeil bleibt auch nach mehreren Kurven im Fokus**:
+  - Kamera-Following um Drift-Guard erweitert
+  - Bei starker Abweichung im Viewport wird hart re-zentriert (`jumpTo`) statt weiter weich animiert
+  - Verhindert, dass der Pfeil nach Kurvenfolgen "irgendwo auf der Karte" landet
+
 ## V2.0.125 - 2026-06-07
 - **Fix: Karte im Landscape wieder mittig/breit + Marker stabil sichtbar**:
   - Nav-Mode erzwingt jetzt volle Kartenbreite auch dann, wenn `panel-is-open` noch gesetzt ist
