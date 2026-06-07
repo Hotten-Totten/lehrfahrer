@@ -514,12 +514,33 @@ function createNewLine() {
 
 function showLineInputFieldsForNewLine() {
   const topbar = document.getElementById("topbar");
+  const menubar = document.getElementById("menubar");
+  const forceVisible = () => {
+    if (menubar) {
+      menubar.classList.remove("hidden");
+      menubar.style.display = "";
+    }
+    if (topbar) {
+      topbar.classList.remove("hidden");
+      topbar.style.display = "flex";
+      topbar.querySelectorAll(".top-group").forEach(group => {
+        group.classList.remove("hidden");
+        group.style.display = "flex";
+      });
+    }
+  };
+
+  forceVisible();
+
   if (topbar) {
-    topbar.classList.remove("hidden");
     topbar.classList.add("topbar-attention");
     topbar.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => topbar.classList.remove("topbar-attention"), 1400);
   }
+
+  // Falls nachgelagerte UI-Updates die Eingabezeile wieder ausblenden, erneut erzwingen.
+  setTimeout(forceVisible, 40);
+  setTimeout(forceVisible, 180);
 
   if (lineNameInput) {
     lineNameInput.focus();

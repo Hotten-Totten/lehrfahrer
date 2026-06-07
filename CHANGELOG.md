@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.145 - 2026-06-07
+- **Editor-Fix: Eingabezeile bei `Neu` bleibt sichtbar**:
+  - `Neu` erzwingt jetzt die Sichtbarkeit von Menuezeile, Topbar und allen Eingabegruppen
+  - Zusätzlicher kurzer Nachtrigger verhindert, dass nachgelagerte UI-Updates die Eingabezeile direkt wieder ausblenden
+  - Fokus bleibt auf dem Linienfeld fuer sofortige Eingabe
+
 ## V2.0.144 - 2026-06-07
 - **Editor-Routing: Manuelle Pflichtpunkte werden jetzt strikt erzwungen**:
   - Wenn manuelle Routenpunkte vorhanden sind, werden betroffene Abschnitte als direkte Verbindung aufgebaut
