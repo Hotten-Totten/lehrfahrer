@@ -17,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.116">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.117">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.116</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.117</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -45,6 +45,15 @@
         <button id="downloadNowBtn" class="banner-btn-primary">Jetzt laden</button>
         <button id="dismissBannerBtn" class="banner-btn-dismiss">✕</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Vollbild-Popup für Start-Updates ───── -->
+  <div id="startupDownloadOverlay" class="startup-download-overlay hidden" aria-live="polite" aria-busy="true">
+    <div class="startup-download-card">
+      <div class="startup-download-title">Linien laden...</div>
+      <div id="startupDownloadText" class="startup-download-text">Bitte kurz warten...</div>
+      <div class="startup-download-spinner" aria-hidden="true"></div>
     </div>
   </div>
 
@@ -93,6 +102,7 @@
         </div>
         <div id="navButtonsCompact">
           <button id="navMenuBtn" type="button" title="Menü">⋯</button>
+          <button id="navPauseCompactBtn" type="button" title="Pause">⏸</button>
           <button id="navEndBtn" type="button" title="Navigation beenden">■</button>
         </div>
       </div>
@@ -294,8 +304,8 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.0.116"></script>
-    <script src="js/app.js?v=V2.0.116"></script>
-    <script src="js/debug-helper.js?v=V2.0.116"></script>
+    <script src="js/map.js?v=V2.0.117"></script>
+    <script src="js/app.js?v=V2.0.117"></script>
+    <script src="js/debug-helper.js?v=V2.0.117"></script>
 </body>
 </html>

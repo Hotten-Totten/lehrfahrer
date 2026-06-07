@@ -91,6 +91,8 @@ const gpsBtn           = document.getElementById('gpsBtn');
 const simBtn           = document.getElementById('simBtn');
 const fullscreenBtn    = document.getElementById('fullscreenBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
+const startupDownloadOverlay = document.getElementById('startupDownloadOverlay');
+const startupDownloadText = document.getElementById('startupDownloadText');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const settingsOverlay  = document.getElementById('settingsOverlay');
 const panelHandle      = document.getElementById('panelHandle');
@@ -121,6 +123,7 @@ const navSpeedEl    = document.getElementById('navSpeed');
 const navTimeEl     = document.getElementById('navTime');
 const navEndBtn     = document.getElementById('navEndBtn');
 const navMenuBtn    = document.getElementById('navMenuBtn');
+const navPauseCompactBtn = document.getElementById('navPauseCompactBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
 const navDestinationNameEl = document.getElementById('navDestinationName');
 const navDestinationDistEl = document.getElementById('navDestinationDist');
@@ -700,6 +703,27 @@ function hideBanner() {
   document.documentElement.style.setProperty('--banner-h', '0px');
 }
 
+function showStartupDownloadOverlay(totalCount) {
+  if (!startupDownloadOverlay) return;
+  if (startupDownloadText) {
+    startupDownloadText.textContent = `Linien werden aktualisiert (${totalCount})...`;
+  }
+  startupDownloadOverlay.classList.remove('hidden');
+}
+
+function updateStartupDownloadOverlay(current, total, lineName = '') {
+  if (!startupDownloadText) return;
+  const safeName = (lineName || '').trim();
+  startupDownloadText.textContent = safeName
+    ? `Linien werden aktualisiert (${current}/${total}) - ${safeName}`
+    : `Linien werden aktualisiert (${current}/${total})...`;
+}
+
+function hideStartupDownloadOverlay() {
+  if (!startupDownloadOverlay) return;
+  startupDownloadOverlay.classList.add('hidden');
+}
+
 // ── Download Center Modal (Placeholder) ────────────────────────
 // ── Download Center Modal Logik ────────────────────────────────
 async function showDownloadCenterModal() {
@@ -925,36 +949,14 @@ async function autoDownloadAllLines() {
     
     console.log(`⬇️ Auto-downloading ${toDownload.length} lines in background...`);
     
-    // Zeige discreten Indicator in der Topbar
-    const topbar = document.getElementById('topbar');
-    if (!topbar) {
-      console.warn('❌ topbar not found');
-      return;
-    }
-    
-    const indicator = document.createElement('div');
-    indicator.id = 'downloadIndicator';
-    indicator.style.cssText = `
-      position: absolute;
-      bottom: 2px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 10px;
-      color: var(--accent);
-      opacity: 0.7;
-      font-weight: 600;
-      white-space: nowrap;
-      z-index: 1;
-    `;
-    indicator.textContent = '⬇ Linien laden…';
-    topbar.style.position = 'relative';
-    topbar.appendChild(indicator);
-    console.log('✓ Indicator added to topbar');
+    showStartupDownloadOverlay(toDownload.length);
+    console.log('✓ Startup download overlay shown');
     
     // Download im Hintergrund (mit Verzögerung zwischen den Downloads)
     let completed = 0;
     for (const line of toDownload) {
       try {
+        updateStartupDownloadOverlay(completed + 1, toDownload.length, line.lineName || line.id);
         console.log(`  ⏳ Downloading ${line.lineName}...`);
         const success = await downloadLineWithGPX(line.id);
         if (success) {
@@ -969,15 +971,13 @@ async function autoDownloadAllLines() {
       // Kleine Verzögerung zwischen Downloads um Server nicht zu überlasten
       await new Promise(resolve => setTimeout(resolve, 200));
     }
-    
-    // Indicator entfernen
-    if (indicator.parentNode) {
-      indicator.remove();
-      console.log('✓ Indicator removed');
-    }
+
+    hideStartupDownloadOverlay();
+    console.log('✓ Startup download overlay hidden');
     
     console.log(`✅ Auto-download complete: ${completed}/${toDownload.length} lines cached`);
   } catch (err) {
+    hideStartupDownloadOverlay();
     console.error('❌ Error in autoDownloadAllLines:', err);
   }
 }
@@ -1060,6 +1060,12 @@ function bindEvents() {
   if (navMenuBtn) {
     navMenuBtn.addEventListener('click', () => {
       showNavMenu();
+    });
+  }
+
+  if (navPauseCompactBtn) {
+    navPauseCompactBtn.addEventListener('click', () => {
+      toggleNavPause();
     });
   }
 
@@ -1748,8 +1754,10 @@ function startNavigation(options = {}) {
   navStartTime = Date.now();
   currentNavLine = currentRoute.data;
   navInputMode = useSimulation ? 'sim' : 'gps';
+  navPaused = false;
   resetNavPerfStats(navInputMode);
   startNavDriveLogSession('nav-start');
+  renderNavPauseUi();
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
@@ -1889,6 +1897,8 @@ function stopNavigation() {
   navRejoinBlend = 0;
   navProgressIdx = 0;
   navStartTime = 0;
+  navPaused = false;
+  renderNavPauseUi();
   currentNavLine = null;
   navInputMode = 'gps';
   if (navTimeEl) navTimeEl.textContent = 'Fahrzeit --:--';
@@ -2286,6 +2296,18 @@ function renderUpcomingStops(currentDist) {
 
 let navPaused = false;
 
+function renderNavPauseUi() {
+  if (navPauseBtn) {
+    navPauseBtn.textContent = navPaused ? '▶ Fortsetzen' : '⏸ Pause';
+    navPauseBtn.style.background = navPaused ? 'var(--accent)' : 'var(--primary)';
+  }
+  if (navPauseCompactBtn) {
+    navPauseCompactBtn.textContent = navPaused ? '▶' : '⏸';
+    navPauseCompactBtn.style.background = navPaused ? 'var(--accent)' : 'rgba(255,255,255,0.05)';
+    navPauseCompactBtn.title = navPaused ? 'Fortsetzen' : 'Pause';
+  }
+}
+
 function showNavMenu() {
   if (navMenuOverlay) {
     navMenuOverlay.classList.remove('hidden');
@@ -2416,16 +2438,7 @@ function updateNavMenuStops() {
 
 function toggleNavPause() {
   navPaused = !navPaused;
-  
-  if (navPauseBtn) {
-    if (navPaused) {
-      navPauseBtn.textContent = '▶ Fortsetzen';
-      navPauseBtn.style.background = 'var(--accent)';
-    } else {
-      navPauseBtn.textContent = '⏸ Pause';
-      navPauseBtn.style.background = 'var(--primary)';
-    }
-  }
+  renderNavPauseUi();
 
   // TODO: Implement actual pause logic (disable GPS updates, freeze map, etc.)
   console.log('Navigation ' + (navPaused ? 'paused' : 'resumed'));

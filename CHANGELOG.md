@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.117 - 2026-06-07
+- **Start-Download jetzt als Vollbild-Popup statt Mini-Zeile**:
+  - Neues Overlay fuer den App-Start eingefuehrt (gesamtbildschirmig, mit Spinner)
+  - Fortschritt wird waehrend des Auto-Downloads als Zaehler `x/y` inkl. Linienname angezeigt
+  - Bisheriger kleiner Topbar-Hinweis `Linien laden...` aus dem Flow entfernt
+- **Pause-Button im kompakten Navi-HUD ergaenzt**:
+  - Neuer Compact-Button zwischen Optionen (Menue) und Stop eingefuegt
+  - Mit bestehender Pause-Logik verbunden (Pause/Fortsetzen inkl. Icon-Status)
+  - Pause-Status wird bei Start/Stop der Navigation sauber zurueckgesetzt
+
 ## V2.0.116 - 2026-06-07
 - **Fix: Neue Stände kamen teils nicht in der App an**:
   - Service-Worker-Registrierung von hartem `V2.0.42` auf dynamische Version (aus `versionBadge`) umgestellt

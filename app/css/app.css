@@ -189,6 +189,60 @@ body.is-standalone #fullscreenBtn {
   opacity: 0.7;
 }
 
+/* ── Vollbild-Overlay: Linien-Update beim Start ─────────── */
+.startup-download-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(10, 12, 28, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.startup-download-overlay.hidden {
+  display: none !important;
+}
+
+.startup-download-card {
+  width: min(92vw, 420px);
+  background: linear-gradient(160deg, rgba(37, 37, 64, 0.98), rgba(24, 24, 46, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 20px 18px;
+  text-align: center;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+}
+
+.startup-download-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.startup-download-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.84);
+  margin-bottom: 14px;
+}
+
+.startup-download-spinner {
+  width: 38px;
+  height: 38px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: startupSpinner 0.9s linear infinite;
+}
+
+@keyframes startupSpinner {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Auswahlleiste ──────────────────────────── */
 #selectionBar {
   position: fixed;
@@ -910,7 +964,7 @@ body.is-standalone #fullscreenBtn {
   gap: 6px;
 }
 
-#navEndBtn, #navMenuBtn {
+#navEndBtn, #navMenuBtn, #navPauseCompactBtn {
   width: 44px;
   height: 44px;
   border-radius: 10px;
@@ -943,6 +997,16 @@ body.is-standalone #fullscreenBtn {
 
 #navMenuBtn:active {
   background: rgba(255,255,255,0.1);
+}
+
+#navPauseCompactBtn {
+  border-color: rgba(255, 176, 96, 0.65);
+  color: #ffd9a8;
+}
+
+#navPauseCompactBtn:active {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* ── Right Sidebar: Upcoming Stops (vertical) ── */
