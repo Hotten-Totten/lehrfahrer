@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.140 - 2026-06-07
+- **Editor-Backend: Originalroute wird bei Aenderungen nicht mehr ueberschrieben**:
+  - Beim Speichern auf einer Originaldatei mit gleicher Route/Richtung wird automatisch eine neue Datei mit Suffix `Umleitung_XX` erzeugt
+  - Der Routename wird ebenfalls um `Umleitung_XX` erweitert, damit die Umleitung im Browser klar erkennbar/laadbar ist
+  - Bereits bestehende Umleitungen (`..._Umleitung_XX`) koennen weiterhin normal ueberschrieben werden
+
 ## V2.0.139 - 2026-06-07
 - **App: Sofort-Refresh fuer geaenderte Linien eingebaut**:
   - Neuer Refresh-Button (oben in der App) aktualisiert Linienkatalog und aktuelle Linie sofort

@@ -13,6 +13,10 @@ function sanitizeForFilesystem(string $value): string {
     return trim($value, '_');
 }
 
+function hasDiversionSuffix(string $value): bool {
+    return (bool)preg_match('/(^|_)Umleitung_\d{2}$/i', trim($value));
+}
+
 $baseDir = dirname(__DIR__);
 
 $raw = file_get_contents('php://input');
@@ -77,9 +81,10 @@ $data['savedAt'] = date('c');
 
 $filePath = $lineDir . '/' . $fileBase . '.json';
 
-// Konfliktvermeidung: Existiert die Datei bereits mit einer ANDEREN Route,
-// wird ein freier Dateiname mit Zählsuffix gesucht.
-// Selbe Route (gleicher routeName + directionName) → Update/Überschreiben erlaubt.
+// Konfliktvermeidung:
+// - Andere Route im selben Dateinamen -> freier Dateiname mit Zählsuffix
+// - Selbe Route/Direction auf Original-Datei -> neue Umleitung (Umleitung_XX)
+// - Bereits Umleitung_XX -> darf überschrieben werden
 if (file_exists($filePath)) {
     $existingRaw  = @file_get_contents($filePath);
     $existingData = $existingRaw ? @json_decode($existingRaw, true) : null;
@@ -94,7 +99,36 @@ if (file_exists($filePath)) {
         $inRoute = $inLine['routeName']     ?? ($data['routeName']     ?? '');
         $inDir   = $inLine['directionName'] ?? ($data['directionName'] ?? '');
 
-        if ($exRoute !== $inRoute || $exDir !== $inDir) {
+        $isSameRoute = ($exRoute === $inRoute && $exDir === $inDir);
+        $isDiversionFile = hasDiversionSuffix($fileBase) || hasDiversionSuffix((string)$inRoute);
+
+        if ($isSameRoute && !$isDiversionFile) {
+            // Originalroute wird bearbeitet: neue Umleitungsdatei erzeugen statt zu überschreiben.
+            $origBase = $fileBase;
+            $i = 1;
+            while ($i <= 99) {
+                $suffix = 'Umleitung_' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+                $candidateBase = $origBase . '_' . $suffix;
+                $candidatePath = $lineDir . '/' . $candidateBase . '.json';
+                if (!file_exists($candidatePath)) {
+                    $fileBase = $candidateBase;
+                    $filePath = $candidatePath;
+
+                    $newRouteName = trim((string)$inRoute);
+                    if ($newRouteName === '') {
+                        $newRouteName = 'Route';
+                    }
+                    $newRouteName .= ' ' . $suffix;
+
+                    $data['routeName'] = $newRouteName;
+                    if (isset($data['line']) && is_array($data['line'])) {
+                        $data['line']['routeName'] = $newRouteName;
+                    }
+                    break;
+                }
+                $i++;
+            }
+        } elseif (!$isSameRoute) {
             // Andere Route im selben Dateinamen – freie Datei mit Suffix suchen
             $origBase = $fileBase;
             $i = 1;
