@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.151 - 2026-06-07
+- **Editor-Fix: Verhalten nicht mehr von F12/DevTools abhaengig**:
+  - Cache-Buster fuer `editor.css` und alle lokalen Editor-Skripte in `index.html` aktiviert
+  - Verhindert, dass alter Browser-Cache alte `Neu`-Logik weiter ausliefert
+  - Neues Verhalten ist damit auch ohne DevTools sofort aktiv
+
 ## V2.0.150 - 2026-06-07
 - **Editor-Fix: `Neu` klappt nicht mehr sofort wieder zu (cache-robust)**:
   - Legacy-Klasse `input-menu-hidden` wird beim Umschalten aktiv entfernt
