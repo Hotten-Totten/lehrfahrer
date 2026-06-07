@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.88 - 2026-06-07
+- **iPhone Lesbarkeit auf Distanz verbessert**:
+  - Maneuver-Pfeil nochmals deutlich vergrößert (66px -> 78px)
+  - Distanzanzeige unter dem Maneuver größer (30px -> 33px)
+  - Rechte Nächste-Haltestelle größer dargestellt (Karte + Schrift)
+  - Haltestellenname und Distanz rechts besser aus der Ferne lesbar
+
 ## V2.0.87 - 2026-06-07
 - **iPhone HUD Feinschliff**:
   - Maneuver-Pfeil erneut deutlich vergrößert (52px -> 66px)
