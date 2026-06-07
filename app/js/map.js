@@ -741,39 +741,44 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 
       if (navMode) {
         // Ultra-Cockpit: je schneller, desto weiter nach vorne sehen.
-        // Fahrzeug sitzt jetzt im unteren Drittel (bottomFactor erhöht für bessere Sicht nach vorne).
+        // Für niedrige Fahrzeug-Position muss top-padding deutlich größer als bottom-padding sein.
         if (speedKmh != null && speedKmh < 8) {
           driverZoom = Math.min(22, baseZoom - 0.2);
           pitch = 52;
-          bottomFactor = 0.52;
-          topFactor = 0.09;
+          topFactor = 0.54;
+          bottomFactor = 0.18;
         } else if (speedKmh != null && speedKmh < 25) {
           driverZoom = Math.min(22, baseZoom + 0.2);
           pitch = 58;
-          bottomFactor = 0.56;
-          topFactor = 0.08;
+          topFactor = 0.57;
+          bottomFactor = 0.16;
         } else {
           driverZoom = Math.min(22, baseZoom + 0.45);
           pitch = 64;
-          bottomFactor = 0.60;
-          topFactor = 0.06;
+          topFactor = 0.60;
+          bottomFactor = 0.14;
         }
 
         if (profile === 'calm') {
           driverZoom = Math.max(16, driverZoom - 0.25);
           pitch = Math.max(48, pitch - 4);
-          bottomFactor = Math.max(0.22, bottomFactor - 0.04);
-          topFactor = Math.min(0.12, topFactor + 0.02);
+          topFactor = Math.max(0.48, topFactor - 0.03);
+          bottomFactor = Math.min(0.24, bottomFactor + 0.02);
         } else if (profile === 'dynamic') {
           driverZoom = Math.min(22, driverZoom + 0.25);
           pitch = Math.min(70, pitch + 4);
-          bottomFactor = Math.min(0.42, bottomFactor + 0.03);
-          topFactor = Math.max(0.04, topFactor - 0.01);
+          topFactor = Math.min(0.66, topFactor + 0.03);
+          bottomFactor = Math.max(0.10, bottomFactor - 0.02);
         }
       }
 
-      const forwardBottom = Math.round(Math.min(460, Math.max(150, window.innerHeight * bottomFactor)));
-      const forwardTop = Math.round(Math.min(80, Math.max(2, window.innerHeight * topFactor)));
+      const vh = Math.max(320, window.innerHeight || 0);
+      const forwardTop = navMode
+        ? Math.round(Math.min(520, Math.max(140, vh * topFactor)))
+        : Math.round(Math.min(120, Math.max(20, vh * topFactor)));
+      const forwardBottom = navMode
+        ? Math.round(Math.min(220, Math.max(55, vh * bottomFactor)))
+        : Math.round(Math.min(360, Math.max(100, vh * bottomFactor)));
       return {
         center:  [lon, lat],
         zoom:    driverZoom,

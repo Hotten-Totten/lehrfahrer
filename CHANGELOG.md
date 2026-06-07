@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.80 - 2026-06-07
+- **Fix Fahrerposition im HUD** - Fahrzeug im Nav-Modus wieder im unteren Bildschirmbereich:
+  - Kamerapadding in der Fahrersicht korrigiert (Top/Bottom-Logik neu ausbalanciert)
+  - Fehlerursache beseitigt: harte Padding-Limits hatten die Position trotz Faktorwerten nach oben gedrückt
+  - Geschwindigkeitsspezifische Fahrerposition jetzt stabil im unteren Bereich statt nahe Kopfzeile
+  - Gilt fuer Live-GPS und SIM-Modus identisch
+
 ## V2.0.79 - 2026-06-07
 - **Debug-Simulationsmodus in der App** - Navigation jetzt ohne reales GPS testbar:
   - Neuer SIM-Button in der App-Topbar startet/stopppt eine echte Nav-Simulation auf der geladenen Route
