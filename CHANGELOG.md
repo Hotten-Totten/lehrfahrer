@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.160 - 2026-06-07
+- **Richtungspfeil in Haltestellenmarker ergänzt**:
+  - Marker mit `B`/`T` (und `M`) zeigen jetzt zusätzlich einen kleinen Richtungspfeil
+  - Pfeil wird aus verfügbaren Richtungsfeldern (z. B. `directionHint`, `direction`, `towards`) abgeleitet
+  - Gilt für Katalogmarker und übernommene Linien-Haltestellen, inkl. Laden/Autosave/Undo
+
 ## V2.0.159 - 2026-06-07
 - **Haltestellen im Editor klar unterscheidbar gemacht**:
   - Bus-Haltestellen jetzt Lila mit weißem `B`

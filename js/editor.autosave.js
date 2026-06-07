@@ -242,7 +242,8 @@ function loadAutosave() {
         lon: stopData.lon,
         sourceType: stopData.sourceType || "free",
         catalogId: stopData.catalogId || null,
-        transitType: stopData.transitType || stopData.type || null
+        transitType: stopData.transitType || stopData.type || null,
+        directionHint: stopData.directionHint || stopData.direction || null
       });
 
       stop.id = stopData.id;

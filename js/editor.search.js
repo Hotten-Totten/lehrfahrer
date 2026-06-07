@@ -25,33 +25,31 @@ function isCatalogStopVisible(catalogStop) {
 // Liefert das passende Icon (normal oder hervorgehoben).
 function getCatalogIconForStop(catalogStop, highlighted = false) {
   const type = normalizeStopType(catalogStop?.type);
-
-  if (highlighted) {
-    if (type === "bus") {
-      return ICONS.catalogBusHighlight || ICONS.catalogHighlight || ICONS.catalogBus || ICONS.catalog;
-    }
-
-    if (type === "tram") {
-      return ICONS.catalogTramHighlight || ICONS.catalogHighlight || ICONS.catalogTram || ICONS.catalog;
-    }
-
-    if (type === "bus_tram" || type === "mixed") {
-      return ICONS.catalogMixedHighlight || ICONS.catalogHighlight || ICONS.catalogMixed || ICONS.catalog;
-    }
-
-    return ICONS.catalogHighlight || ICONS.catalog;
-  }
+  const iconStop = {
+    sourceType: "catalog",
+    type,
+    direction: catalogStop?.direction || "",
+    directionHint: catalogStop?.directionHint || "",
+    towards: catalogStop?.towards || "",
+    destination: catalogStop?.destination || "",
+    local_ref: catalogStop?.local_ref || ""
+  };
+  const size = highlighted ? 24 : 20;
 
   if (type === "bus") {
-    return ICONS.catalogBus || ICONS.catalog;
+    return createTransitStopIcon(iconStop, size);
   }
 
   if (type === "tram") {
-    return ICONS.catalogTram || ICONS.catalog;
+    return createTransitStopIcon(iconStop, size);
   }
 
   if (type === "bus_tram" || type === "mixed") {
-    return ICONS.catalogMixed || ICONS.catalog;
+    return createTransitStopIcon(iconStop, size);
+  }
+
+  if (highlighted) {
+    return ICONS.catalogHighlight || ICONS.catalog;
   }
 
   return ICONS.catalog;

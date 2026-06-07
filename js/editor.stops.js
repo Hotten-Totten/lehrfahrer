@@ -101,7 +101,7 @@ function selectStop(stop) {
 // STOPS MAIN
 // =========================
 
-function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitType = null }) {
+function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitType = null, directionHint = null }) {
   if (!historyRestoreRunning) {
     pushHistorySnapshot("Stop hinzugefügt");
   }
@@ -117,6 +117,7 @@ function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitTy
     note: "",
     sourceType,
     transitType,
+    directionHint,
     marker: null
   };
 
@@ -177,7 +178,8 @@ function addCatalogStopToLine(catalogStop) {
     lon: catalogStop.lon,
     sourceType: "catalog",
     catalogId: catalogStop.id,
-    transitType: catalogStop.type || null
+    transitType: catalogStop.type || null,
+    directionHint: catalogStop.direction || null
   });
 }
 
