@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.146 - 2026-06-07
+- **Editor-Fix: `Neu` oeffnet Eingabemenue jetzt aktiv**:
+  - Beim Klick auf `Neu` wird die Ansicht immer an den Anfang gescrollt
+  - Menuezeile, Topbar und Eingabegruppen werden mehrfach nachgetriggert sichtbar gemacht
+  - Statusmeldung klarer: Eingabemenue geoeffnet
+
 ## V2.0.145 - 2026-06-07
 - **Editor-Fix: Eingabezeile bei `Neu` bleibt sichtbar**:
   - `Neu` erzwingt jetzt die Sichtbarkeit von Menuezeile, Topbar und allen Eingabegruppen

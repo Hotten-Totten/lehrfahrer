@@ -532,6 +532,12 @@ function showLineInputFieldsForNewLine() {
 
   forceVisible();
 
+  try {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    window.scrollTo(0, 0);
+  }
+
   if (topbar) {
     topbar.classList.add("topbar-attention");
     topbar.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -541,13 +547,21 @@ function showLineInputFieldsForNewLine() {
   // Falls nachgelagerte UI-Updates die Eingabezeile wieder ausblenden, erneut erzwingen.
   setTimeout(forceVisible, 40);
   setTimeout(forceVisible, 180);
+  setTimeout(() => {
+    forceVisible();
+    try {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+  }, 260);
 
   if (lineNameInput) {
     lineNameInput.focus();
     lineNameInput.select();
   }
 
-  setStatus("Bitte oben Linie/Route/Richtung eingeben.");
+  setStatus("Eingabemenü geöffnet: Bitte oben Linie/Route/Richtung eingeben.");
 }
 
 // =========================
