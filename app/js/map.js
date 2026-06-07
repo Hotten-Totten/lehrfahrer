@@ -48,6 +48,13 @@ function bearingFromCoords(lat1, lon1, lat2, lon2) {
   return normalizeDeg(Math.atan2(y, x) * 180 / Math.PI);
 }
 
+function isLandscapeTouchDevice() {
+  const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+  const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const tabletLikeViewport = (window.innerHeight || 0) <= 700 && (window.innerWidth || 0) <= 1400;
+  return isLandscape && (isCoarsePointer || tabletLikeViewport);
+}
+
 function resetNavBearingState() {
   navCameraBearing = 0;
   navBearingReady = false;
@@ -747,7 +754,7 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
-  const isLandscapeMobile = window.matchMedia('(orientation: landscape)').matches && (window.innerWidth || 0) <= 950;
+  const isLandscapeMobile = isLandscapeTouchDevice();
 
   // Strict-Follow fuer Landscape: verhindert Animationsdrift,
   // wodurch der Marker sporadisch oben/aus dem Fokus landen kann.
@@ -876,7 +883,7 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
           bottomFactor = Math.max(0.10, bottomFactor - 0.02);
         }
 
-        const isLandscapeMobile = window.matchMedia('(orientation: landscape)').matches && (window.innerWidth || 0) <= 950;
+        const isLandscapeMobile = isLandscapeTouchDevice();
         if (isLandscapeMobile) {
           // Landscape: Marker weiter weg/fokussiert nach vorne (hoeher im Bild).
           driverZoom = Math.max(16, driverZoom - 0.55);

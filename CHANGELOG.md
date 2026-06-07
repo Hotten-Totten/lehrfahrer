@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.132 - 2026-06-07
+- **Fix: Landscape-Following greift jetzt auch auf groesseren Handys/Tablets**:
+  - Starre Breiten-Grenze (`<= 950px`) fuer Landscape-Erkennung entfernt
+  - Umschaltung jetzt auf `orientation: landscape` + Touch-/Tablet-Heuristik
+  - Dadurch werden Strict-Follow und Landscape-Fokus-Anpassungen auf realen Geraeten konsistent angewendet
+
 ## V2.0.131 - 2026-06-07
 - **Fix: Marker in Landscape jetzt konstant sichtbar (Strict-Follow)**:
   - In mobilem Querformat wird Navi-Following auf `jumpTo` umgestellt
