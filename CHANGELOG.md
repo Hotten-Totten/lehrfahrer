@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.119 - 2026-06-07
+- **Pausenbutton reagiert jetzt deutlich zuverlaessiger beim ersten Tap**:
+  - Pause-Buttons auf robustes Press-Handling umgestellt (`pointerup` + `click` mit Doppeltrigger-Schutz)
+  - Verhindert Fehlausloesungen durch mobile Touch/Click-Eigenheiten
+  - Touch-Flaeche im iPhone-Portrait fuer Compact-Buttons vergroessert (bessere Trefferquote)
+
 ## V2.0.118 - 2026-06-07
 - **Pause bleibt jetzt wirklich aktiv bis erneut geklickt wird**:
   - GPS-Positionsupdates werden waehrend Pause nicht mehr verarbeitet

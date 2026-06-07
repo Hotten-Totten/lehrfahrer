@@ -1063,11 +1063,7 @@ function bindEvents() {
     });
   }
 
-  if (navPauseCompactBtn) {
-    navPauseCompactBtn.addEventListener('click', () => {
-      toggleNavPause();
-    });
-  }
+  bindPressAction(navPauseCompactBtn, toggleNavPause);
 
   // Navigation Menu Tab Switching
   navTabs.forEach(tab => {
@@ -1092,11 +1088,7 @@ function bindEvents() {
   }
 
   // Pause Button
-  if (navPauseBtn) {
-    navPauseBtn.addEventListener('click', () => {
-      toggleNavPause();
-    });
-  }
+  bindPressAction(navPauseBtn, toggleNavPause);
 
   // Cancel Button
   if (navCancelBtn) {
@@ -1105,6 +1097,25 @@ function bindEvents() {
       hideNavMenu();
     });
   }
+}
+
+function bindPressAction(el, action) {
+  if (!el || typeof action !== 'function') return;
+
+  let lastTriggerTs = 0;
+  const invoke = (ev) => {
+    const now = Date.now();
+    if (now - lastTriggerTs < 220) {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      return;
+    }
+    lastTriggerTs = now;
+    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    action();
+  };
+
+  el.addEventListener('pointerup', invoke);
+  el.addEventListener('click', invoke);
 }
 
 function isStandaloneMode() {
