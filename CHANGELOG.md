@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.109 - 2026-06-07
+- **Navi-Pfeil Farbgebung umgekehrt**:
+  - Hauptkörper jetzt Weiß mit roter Kontur
+  - Pfeilkern jetzt Rot
+  - Entspricht der gewünschten "andersrum" Rot/Weiß-Variante
+
 ## V2.0.108 - 2026-06-07
 - **Navi-Pfeil auf Rot/Weiß umgestellt**:
   - Pfeilkörper von Blau auf Rot gewechselt

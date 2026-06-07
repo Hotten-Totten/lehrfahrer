@@ -426,9 +426,9 @@ body.is-standalone #fullscreenBtn {
 }
 
 .gps-arrow-icon .arrow-shadow { fill: rgba(34, 10, 10, 0.4); }
-.gps-arrow-icon .arrow-body { fill: #d62828; stroke: #ffffff; stroke-width: 1.8; }
-.gps-arrow-icon .arrow-core { fill: #ffffff; }
-.gps-arrow-icon .arrow-highlight { fill: rgba(255, 235, 235, 0.95); }
+.gps-arrow-icon .arrow-body { fill: #ffffff; stroke: #d62828; stroke-width: 1.8; }
+.gps-arrow-icon .arrow-core { fill: #d62828; }
+.gps-arrow-icon .arrow-highlight { fill: rgba(255, 255, 255, 0.95); }
 
 @keyframes gpsPulse {
   0%, 100% {
