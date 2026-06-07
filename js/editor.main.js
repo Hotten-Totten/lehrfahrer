@@ -516,11 +516,11 @@ function setLineInputMenuVisible(visible) {
   const topbar = document.getElementById("topbar");
   if (!topbar) return;
 
-  document.body.classList.toggle("input-menu-hidden", !visible);
-
   if (visible) {
     topbar.classList.remove("hidden");
     topbar.style.display = "flex";
+    topbar.style.visibility = "visible";
+    topbar.style.pointerEvents = "auto";
     topbar.querySelectorAll(".top-group").forEach(group => {
       group.classList.remove("hidden");
       group.style.display = "flex";
@@ -529,6 +529,8 @@ function setLineInputMenuVisible(visible) {
   }
 
   topbar.classList.remove("topbar-attention");
+  topbar.style.visibility = "hidden";
+  topbar.style.pointerEvents = "none";
   topbar.style.display = "none";
 }
 

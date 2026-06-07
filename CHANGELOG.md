@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.149 - 2026-06-07
+- **Editor-Fix: `Neu`-Eingabemaske bleibt offen und bedienbar**:
+  - Sichtbarkeitslogik von globalem Body-Status auf direktes Topbar-Toggling umgestellt
+  - Regressionsfehler "kurz auf, dann wieder zu" behoben
+  - Eingabefelder bleiben nach `Neu` fokussierbar und editierbar
+
 ## V2.0.148 - 2026-06-07
 - **Editor-Fix: Kein Auf/Zu-Flackern mehr bei `Neu`**:
   - Doppelte Nachtrigger zum Einblenden der Eingabemaske entfernt
