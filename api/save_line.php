@@ -14,7 +14,7 @@ function sanitizeForFilesystem(string $value): string {
 }
 
 function hasDiversionSuffix(string $value): bool {
-    return (bool)preg_match('/(^|_)Umleitung_\d{2}$/i', trim($value));
+    return (bool)preg_match('/(^|[_\s-])Umleitung[_\s-]?\d{2}($|[_\s-])/i', trim($value));
 }
 
 $baseDir = dirname(__DIR__);
@@ -100,7 +100,9 @@ if (file_exists($filePath)) {
         $inDir   = $inLine['directionName'] ?? ($data['directionName'] ?? '');
 
         $isSameRoute = ($exRoute === $inRoute && $exDir === $inDir);
-        $isDiversionFile = hasDiversionSuffix($fileBase) || hasDiversionSuffix((string)$inRoute);
+        $isDiversionFile = hasDiversionSuffix($fileBase)
+            || hasDiversionSuffix((string)$inRoute)
+            || hasDiversionSuffix((string)$exRoute);
 
         if ($isSameRoute && !$isDiversionFile) {
             // Originalroute wird bearbeitet: neue Umleitungsdatei erzeugen statt zu überschreiben.
@@ -118,7 +120,9 @@ if (file_exists($filePath)) {
                     if ($newRouteName === '') {
                         $newRouteName = 'Route';
                     }
-                    $newRouteName .= ' ' . $suffix;
+                    if (!hasDiversionSuffix($newRouteName)) {
+                        $newRouteName .= ' ' . $suffix;
+                    }
 
                     $data['routeName'] = $newRouteName;
                     if (isset($data['line']) && is_array($data['line'])) {

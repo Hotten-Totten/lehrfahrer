@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.142 - 2026-06-07
+- **Fix: Speichern/Loeschen bei Umleitungen wieder konsistent**:
+  - Umleitungs-Erkennung im Backend verbessert (auch wenn nach `Umleitung_XX` noch Richtung/weitere Teile im Dateinamen stehen)
+  - Bestehende Umleitungen werden jetzt korrekt als Umleitung erkannt und nicht versehentlich erneut als neue Umleitung abgespeichert
+  - Doppelte/ungewollte Suffix-Ketten beim Speichern verhindert
+
 ## V2.0.141 - 2026-06-07
 - **Editor: Umleitungslabel im Linien-Browser**:
   - Linien mit `Umleitung_XX` im Dateinamen oder Routennamen erhalten jetzt ein sichtbares Badge `Umleitung`
