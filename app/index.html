@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f0f1a">
   <title>Lehrfahrer</title>
@@ -16,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.80">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.81">
 </head>
 <body>
 
@@ -24,12 +25,13 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.80</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.81</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
       <button id="navBtn"      class="hidden" title="Navigation starten">▶</button>
       <button id="simBtn"      class="hidden" title="Debug-Simulation starten (ohne GPS)">SIM</button>
+      <button id="fullscreenBtn" title="Vollbild ein/aus">⛶</button>
       <button id="gpsBtn"      title="GPS aktivieren">◎</button>
       <button id="settingsBtn" title="Einstellungen">⚙</button>
     </div>
@@ -292,8 +294,8 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.0.80"></script>
-    <script src="js/app.js?v=V2.0.80"></script>
-    <script src="js/debug-helper.js?v=V2.0.80"></script>
+    <script src="js/map.js?v=V2.0.81"></script>
+    <script src="js/app.js?v=V2.0.81"></script>
+    <script src="js/debug-helper.js?v=V2.0.81"></script>
 </body>
 </html>

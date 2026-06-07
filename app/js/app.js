@@ -85,6 +85,7 @@ const saveOfflineBtn   = document.getElementById('saveOfflineBtn'); // Jetzt obs
 const offlineBadge     = document.getElementById('offlineBadge');
 const gpsBtn           = document.getElementById('gpsBtn');
 const simBtn           = document.getElementById('simBtn');
+const fullscreenBtn    = document.getElementById('fullscreenBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const settingsOverlay  = document.getElementById('settingsOverlay');
@@ -135,6 +136,7 @@ const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 App starting...');
+  initFullscreenUi();
   registerServiceWorker();
   await openDB();
   initMap();
@@ -1018,6 +1020,7 @@ function bindEvents() {
 
   gpsBtn.addEventListener('click', toggleGPS);
   if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
+  if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreenMode);
   settingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   settingsOverlay.addEventListener('click', e => {
@@ -1090,6 +1093,50 @@ function bindEvents() {
       stopNavigation();
       hideNavMenu();
     });
+  }
+}
+
+function isStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isFullscreenActive() {
+  return !!document.fullscreenElement;
+}
+
+function renderFullscreenButtonState() {
+  if (!fullscreenBtn) return;
+
+  if (isStandaloneMode()) {
+    document.body.classList.add('is-standalone');
+    return;
+  }
+
+  document.body.classList.remove('is-standalone');
+  const active = isFullscreenActive();
+  fullscreenBtn.textContent = active ? '⤡' : '⛶';
+  fullscreenBtn.title = active ? 'Vollbild verlassen' : 'Vollbild ein/aus';
+}
+
+function initFullscreenUi() {
+  renderFullscreenButtonState();
+  document.addEventListener('fullscreenchange', renderFullscreenButtonState);
+}
+
+async function toggleFullscreenMode() {
+  if (isStandaloneMode()) {
+    showToast('Bereits im Vollbild (App-Modus).', 2500);
+    return;
+  }
+
+  try {
+    if (isFullscreenActive()) {
+      await document.exitFullscreen();
+      return;
+    }
+    await document.documentElement.requestFullscreen();
+  } catch (_err) {
+    showToast('Vollbild ist hier begrenzt. Tipp: Im Browser-Menü "Zum Startbildschirm" wählen und als App starten.', 7000);
   }
 }
 

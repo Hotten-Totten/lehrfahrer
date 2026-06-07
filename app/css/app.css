@@ -97,6 +97,15 @@ html, body {
 }
 #topbar-right button:active { background: var(--primary); color: #fff; }
 
+#fullscreenBtn {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+body.is-standalone #fullscreenBtn {
+  display: none !important;
+}
+
 /* ── Banner für neue Linien ─────────────────── */
 .banner-new-lines {
   position: fixed;

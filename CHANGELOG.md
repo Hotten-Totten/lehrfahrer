@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.81 - 2026-06-07
+- **Vollbild-Modus fürs Handy** - erster Aufräum-Schritt gegen überladene Ansicht:
+  - Neuer Vollbild-Button (⛶) in der Topbar zum direkten Ein-/Ausschalten
+  - Statusanzeige am Button wechselt zwischen Vollbild und Normalmodus
+  - Automatische Erkennung von PWA-Standalone-Modus (Button wird dann ausgeblendet)
+  - Fallback-Hinweis für Browser mit eingeschränktem Fullscreen-Support (z. B. iOS Safari)
+  - Meta-Tag `mobile-web-app-capable` ergänzt
+
 ## V2.0.80 - 2026-06-07
 - **Fix Fahrerposition im HUD** - Fahrzeug im Nav-Modus wieder im unteren Bildschirmbereich:
   - Kamerapadding in der Fahrersicht korrigiert (Top/Bottom-Logik neu ausbalanciert)
