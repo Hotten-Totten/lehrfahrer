@@ -535,15 +535,11 @@ function setLineInputMenuVisible(visible) {
 function showLineInputFieldsForNewLine() {
   const topbar = document.getElementById("topbar");
   const menubar = document.getElementById("menubar");
-  const forceVisible = () => {
-    if (menubar) {
-      menubar.classList.remove("hidden");
-      menubar.style.display = "";
-    }
-    setLineInputMenuVisible(true);
-  };
-
-  forceVisible();
+  if (menubar) {
+    menubar.classList.remove("hidden");
+    menubar.style.display = "";
+  }
+  setLineInputMenuVisible(true);
 
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -557,22 +553,12 @@ function showLineInputFieldsForNewLine() {
     setTimeout(() => topbar.classList.remove("topbar-attention"), 1400);
   }
 
-  // Falls nachgelagerte UI-Updates die Eingabezeile wieder ausblenden, erneut erzwingen.
-  setTimeout(forceVisible, 40);
-  setTimeout(forceVisible, 180);
-  setTimeout(() => {
-    forceVisible();
-    try {
-      window.scrollTo({ top: 0, behavior: "instant" });
-    } catch {
-      window.scrollTo(0, 0);
+  requestAnimationFrame(() => {
+    if (lineNameInput) {
+      lineNameInput.focus();
+      lineNameInput.select();
     }
-  }, 260);
-
-  if (lineNameInput) {
-    lineNameInput.focus();
-    lineNameInput.select();
-  }
+  });
 
   setStatus("Eingabemenü geöffnet: Bitte oben Linie/Route/Richtung eingeben.");
 }

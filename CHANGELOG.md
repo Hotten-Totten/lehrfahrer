@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.148 - 2026-06-07
+- **Editor-Fix: Kein Auf/Zu-Flackern mehr bei `Neu`**:
+  - Doppelte Nachtrigger zum Einblenden der Eingabemaske entfernt
+  - Eingabemaske wird jetzt nur einmal stabil geoeffnet
+  - Fokus wird per `requestAnimationFrame` sauber ins Linienfeld gesetzt
+
 ## V2.0.147 - 2026-06-07
 - **Editor-UX umgestellt: Eingabemaske nur bei `Neu`**:
   - Obere Eingabemaske ist standardmaessig ausgeblendet
