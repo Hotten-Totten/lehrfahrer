@@ -644,7 +644,6 @@ function createGpsMarkerElement() {
   const el = document.createElement('div');
   el.className = 'gps-bus-marker';
   el.innerHTML = [
-    '<div class="gps-bus-ring" aria-hidden="true"></div>',
     '<div class="gps-bus-icon" aria-hidden="true">',
     '  <svg viewBox="0 0 56 56" focusable="false">',
     '    <ellipse cx="28" cy="46" rx="16" ry="6" class="bus-shadow"></ellipse>',
@@ -678,7 +677,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
 
       if (!gpsMarker) {
         const el = createGpsMarkerElement();
-        gpsMarker = new maplibregl.Marker({ element: el })
+        gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
           .setLngLat(lnglat)
           .addTo(map);
       } else {
@@ -887,7 +886,7 @@ function setSimulatedGPS(lon, lat, headingDeg) {
   const lnglat = [lon, lat];
   if (!gpsMarker) {
     const el = createGpsMarkerElement();
-    gpsMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
+    gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
       .setLngLat(lnglat)
       .addTo(map);
   } else {

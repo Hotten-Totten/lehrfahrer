@@ -400,34 +400,25 @@ body.is-standalone #fullscreenBtn {
 
 /* ── GPS-Bus auf Karte ──────────────────────── */
 .gps-bus-marker {
-  width: 306px;
-  height: 306px;
-  position: relative;
+  width: 144px;
+  height: 158px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transform-origin: 50% 50%;
 }
 
-.gps-bus-ring {
-  position: absolute;
-  inset: 36px;
-  border-radius: 50%;
-  background: rgba(32, 164, 255, 0.16);
-  box-shadow: 0 0 0 2px rgba(32, 164, 255, 0.28);
-  opacity: 0.92;
-}
-
-.gps-bus-marker.has-heading .gps-bus-ring {
-  animation: gpsPulse 1.6s ease-out infinite;
-}
-
 .gps-bus-icon {
-  position: absolute;
-  left: 45px;
-  top: 36px;
-  width: 216px;
-  height: 243px;
+  position: relative;
+  width: 144px;
+  height: 158px;
   transform: perspective(220px) rotateX(16deg);
   transform-origin: 50% 70%;
-  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
+}
+
+.gps-bus-marker.has-heading .gps-bus-icon {
+  animation: gpsPulse 1.5s ease-out infinite;
 }
 
 .gps-bus-icon svg {
@@ -448,12 +439,12 @@ body.is-standalone #fullscreenBtn {
 
 @keyframes gpsPulse {
   0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 2px rgba(32, 164, 255, 0.28);
+    transform: perspective(220px) rotateX(16deg) scale(1);
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
   }
   50% {
-    transform: scale(1.08);
-    box-shadow: 0 0 0 7px rgba(32, 164, 255, 0.08);
+    transform: perspective(220px) rotateX(16deg) scale(1.05);
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(74, 158, 255, 0.45));
   }
 }
 

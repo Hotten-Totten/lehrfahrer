@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.105 - 2026-06-07
+- **Marker auf "Bus statt Kreis" umgestellt**:
+  - Ring entfernt, nur noch Bus-Symbol als Fahrzeugmarker
+  - Marker-Anchor explizit auf Zentrum gesetzt (GPS + SIM)
+  - Ziel: Bus sitzt visuell zentral auf der Straße statt seitlich versetzt
+
 ## V2.0.104 - 2026-06-07
 - **Bus-Marker drastisch vergrößert (300%)**:
   - Marker gegenüber V2.0.103 auf 300% skaliert
