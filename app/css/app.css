@@ -398,52 +398,45 @@ body.is-standalone #fullscreenBtn {
   padding: 12px 4px;
 }
 
-/* ── GPS-Bus auf Karte ──────────────────────── */
-.gps-bus-marker {
-  width: 144px;
-  height: 158px;
+/* ── GPS-Pfeil auf Karte ────────────────────── */
+.gps-arrow-marker {
+  width: 128px;
+  height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
   transform-origin: 50% 50%;
 }
 
-.gps-bus-icon {
+.gps-arrow-icon {
   position: relative;
-  width: 144px;
-  height: 158px;
-  transform: perspective(220px) rotateX(4deg);
-  transform-origin: 50% 70%;
+  width: 128px;
+  height: 128px;
   filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
 }
 
-.gps-bus-marker.has-heading .gps-bus-icon {
-  animation: gpsPulse 1.5s ease-out infinite;
+.gps-arrow-marker.has-heading .gps-arrow-icon {
+  animation: gpsPulse 1.35s ease-out infinite;
 }
 
-.gps-bus-icon svg {
+.gps-arrow-icon svg {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-.gps-bus-icon .bus-shadow { fill: rgba(8, 16, 30, 0.38); }
-.gps-bus-icon .bus-roof { fill: #9ed4ff; }
-.gps-bus-icon .bus-body { fill: #2a88ef; stroke: #eaf4ff; stroke-width: 1.8; }
-.gps-bus-icon .bus-side { fill: #1d63bc; }
-.gps-bus-icon .bus-window-top { fill: #d9efff; opacity: 0.95; }
-.gps-bus-icon .bus-window { fill: #b9dcff; }
-.gps-bus-icon .bus-wheel { fill: #0f172a; stroke: #64748b; stroke-width: 1.2; }
-.gps-bus-icon .bus-bumper { fill: #f8fdff; opacity: 0.92; }
-.gps-bus-icon .bus-light { fill: #ffd76a; opacity: 0.95; }
+.gps-arrow-icon .arrow-shadow { fill: rgba(8, 16, 30, 0.38); }
+.gps-arrow-icon .arrow-body { fill: #2a88ef; stroke: #eaf4ff; stroke-width: 1.8; }
+.gps-arrow-icon .arrow-core { fill: #89c6ff; }
+.gps-arrow-icon .arrow-highlight { fill: rgba(223, 243, 255, 0.92); }
 
 @keyframes gpsPulse {
   0%, 100% {
-    transform: perspective(220px) rotateX(4deg) scale(1);
+    transform: scale(1);
     filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
   }
   50% {
-    transform: perspective(220px) rotateX(4deg) scale(1.05);
+    transform: scale(1.05);
     filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(74, 158, 255, 0.45));
   }
 }

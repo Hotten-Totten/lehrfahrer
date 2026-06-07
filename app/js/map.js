@@ -10,7 +10,7 @@ let stopMarkerMeta = [];
 let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
-const BUS_HEADING_OFFSET_DEG = -90;
+const BUS_HEADING_OFFSET_DEG = 0;
 let navCameraBearing = 0;
 let navBearingReady = false;
 let navLastFix = null;
@@ -643,22 +643,14 @@ function mapGpsErrorToMessage(err) {
 
 function createGpsMarkerElement() {
   const el = document.createElement('div');
-  el.className = 'gps-bus-marker';
+  el.className = 'gps-arrow-marker';
   el.innerHTML = [
-    '<div class="gps-bus-icon" aria-hidden="true">',
+    '<div class="gps-arrow-icon" aria-hidden="true">',
     '  <svg viewBox="0 0 56 56" focusable="false">',
-    '    <ellipse cx="28" cy="46" rx="16" ry="6" class="bus-shadow"></ellipse>',
-    '    <path d="M14 13 L42 13 L46 18 L10 18 Z" class="bus-roof"></path>',
-    '    <rect x="10" y="18" width="36" height="24" rx="9" class="bus-body"></rect>',
-    '    <path d="M46 18 L50 22 L50 38 L46 42 Z" class="bus-side"></path>',
-    '    <path d="M15 22 L41 22 L43 26 L13 26 Z" class="bus-window-top"></path>',
-    '    <rect x="14" y="27" width="10" height="9" rx="2" class="bus-window"></rect>',
-    '    <rect x="26" y="27" width="16" height="9" rx="2" class="bus-window"></rect>',
-    '    <rect x="12" y="37" width="32" height="3.5" rx="1.7" class="bus-bumper"></rect>',
-    '    <circle cx="18" cy="42.5" r="4.2" class="bus-wheel"></circle>',
-    '    <circle cx="38" cy="42.5" r="4.2" class="bus-wheel"></circle>',
-    '    <circle cx="13.5" cy="34.2" r="1.5" class="bus-light"></circle>',
-    '    <circle cx="42.5" cy="34.2" r="1.5" class="bus-light"></circle>',
+    '    <ellipse cx="28" cy="46" rx="11" ry="4" class="arrow-shadow"></ellipse>',
+    '    <path d="M28 5 L48 29 L35.5 29 L35.5 50 L20.5 50 L20.5 29 L8 29 Z" class="arrow-body"></path>',
+    '    <path d="M28 12 L40.5 27 L32 27 L32 46 L24 46 L24 27 L15.5 27 Z" class="arrow-core"></path>',
+    '    <path d="M28 8 L44.8 28 L40.3 28 L28 13.2 L15.7 28 L11.2 28 Z" class="arrow-highlight"></path>',
     '  </svg>',
     '</div>'
   ].join('');

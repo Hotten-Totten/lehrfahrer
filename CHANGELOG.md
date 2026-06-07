@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.107 - 2026-06-07
+- **Fahrzeugmarker auf Navi-Pfeil umgestellt**:
+  - Bus-Symbol durch klaren Richtungs-Pfeil im Navi-Stil ersetzt
+  - Eigene neutrale Vektorform (keine proprietäre 1:1-Grafik)
+  - Heading-Offset auf Pfeil-Ausrichtung angepasst, damit die Spitze in Fahrtrichtung zeigt
+  - Ziel: Richtung sofort erfassbar und stabiler als mit Bus-Form
+
 ## V2.0.106 - 2026-06-07
 - **Bus-Ausrichtung in Fahrtrichtung korrigiert**:
   - Heading-Offset für Marker gesetzt, sodass die Bus-Front der tatsächlichen Fahrtrichtung folgt
