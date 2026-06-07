@@ -640,6 +640,26 @@ function mapGpsErrorToMessage(err) {
   }
 }
 
+function createGpsMarkerElement() {
+  const el = document.createElement('div');
+  el.className = 'gps-bus-marker';
+  el.innerHTML = [
+    '<div class="gps-bus-ring" aria-hidden="true"></div>',
+    '<div class="gps-bus-icon" aria-hidden="true">',
+    '  <svg viewBox="0 0 48 48" focusable="false">',
+    '    <rect x="7" y="6" width="34" height="31" rx="10" class="bus-body"></rect>',
+    '    <rect x="12" y="11" width="24" height="9" rx="3" class="bus-window"></rect>',
+    '    <rect x="12" y="22" width="8" height="8" rx="2" class="bus-door"></rect>',
+    '    <rect x="22" y="22" width="14" height="8" rx="2" class="bus-door"></rect>',
+    '    <circle cx="15" cy="37" r="4" class="bus-wheel"></circle>',
+    '    <circle cx="33" cy="37" r="4" class="bus-wheel"></circle>',
+    '    <rect x="9" y="32" width="30" height="3" rx="1.5" class="bus-bumper"></rect>',
+    '  </svg>',
+    '</div>'
+  ].join('');
+  return el;
+}
+
 // ── GPS ──────────────────────────────────────────────────────
 function startGPS(onPositionUpdate, onError, onFirstFix) {
   if (!navigator.geolocation) return false;
@@ -652,8 +672,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
       const lnglat = [pos.coords.longitude, pos.coords.latitude];
 
       if (!gpsMarker) {
-        const el = document.createElement('div');
-        el.className = 'gps-bus';
+        const el = createGpsMarkerElement();
         gpsMarker = new maplibregl.Marker({ element: el })
           .setLngLat(lnglat)
           .addTo(map);
@@ -667,6 +686,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
         gpsMarker.setRotation(hdg);
         gpsMarker.getElement().classList.add('has-heading');
       } else {
+        gpsMarker.setRotation(0);
         gpsMarker.getElement().classList.remove('has-heading');
       }
 
@@ -861,16 +881,18 @@ function setSimulatedGPS(lon, lat, headingDeg) {
   if (!map) return;
   const lnglat = [lon, lat];
   if (!gpsMarker) {
-    const el = document.createElement('div');
-    el.className = 'gps-dot';
+    const el = createGpsMarkerElement();
     gpsMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
       .setLngLat(lnglat)
       .addTo(map);
   } else {
     gpsMarker.setLngLat(lnglat);
   }
-  if (headingDeg != null) {
+  if (headingDeg != null && Number.isFinite(headingDeg)) {
     gpsMarker.setRotation(headingDeg);
     gpsMarker.getElement().classList.add('has-heading');
+  } else {
+    gpsMarker.setRotation(0);
+    gpsMarker.getElement().classList.remove('has-heading');
   }
 }

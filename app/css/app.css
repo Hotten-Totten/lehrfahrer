@@ -399,96 +399,55 @@ body.is-standalone #fullscreenBtn {
 }
 
 /* ── GPS-Bus auf Karte ──────────────────────── */
-.gps-bus,
-.gps-dot {
-  width: 68px;
-  height: 68px;
+.gps-bus-marker {
+  width: 56px;
+  height: 56px;
   position: relative;
   transform-origin: 50% 50%;
-  perspective: 800px;
 }
 
-.gps-bus::before,
-.gps-dot::before {
-  content: '';
+.gps-bus-ring {
   position: absolute;
-  inset: 0;
+  inset: 6px;
   border-radius: 50%;
-  background: rgba(32, 164, 255, 0.22);
-  box-shadow: 0 0 0 3px rgba(32, 164, 255, 0.35);
-  opacity: 0;
-  transition: opacity 0.25s ease;
+  background: rgba(32, 164, 255, 0.16);
+  box-shadow: 0 0 0 2px rgba(32, 164, 255, 0.28);
+  opacity: 0.92;
 }
 
-.gps-bus.has-heading::before,
-.gps-dot.has-heading::before {
-  opacity: 1;
-  animation: gpsPulse 1.8s infinite;
+.gps-bus-marker.has-heading .gps-bus-ring {
+  animation: gpsPulse 1.6s ease-out infinite;
 }
 
-.gps-bus::after,
-.gps-dot::after {
-  content: '';
+.gps-bus-icon {
   position: absolute;
-  left: 8px;
-  top: 4px;
+  left: 10px;
+  top: 6px;
   width: 36px;
   height: 44px;
-  border-radius: 14px 14px 10px 10px;
-  
-  /* 3D-Bus mit Schichten-Effekt */
-  background:
-    /* Fensterstreifen oben (Fahrerhaus) */
-    linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 15%, rgba(255,255,255,0.25) 85%, transparent 100%) 0 0 / 100% 8px no-repeat,
-    /* Fensterstreifen Mitte */
-    linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 10%, rgba(255,255,255,0.15) 90%, transparent 100%) 0 12px / 100% 12px repeat-y,
-    /* Hauptgradient: 3-farbig für Tiefe */
-    linear-gradient(180deg, 
-      #5db0ff 0%,      /* helles Blau oben (Dach/Fahrerhaus) */
-      #2a8ee8 25%,     /* mittleres Blau (Oberkörper) */
-      #0d5dd1 50%,     /* dunkles Blau (Mitte) */
-      #083a9e 75%,     /* noch dunkler (Unterkörper) */
-      #051f5c 100%     /* sehr dunkel unten (Radnähe) */
-    );
-  
-  border: 2px solid #ffffff;
-  
-  /* Mehrfach-Schatten für 3D-Tiefenwirkung */
-  box-shadow: 
-    /* Äußerer Rand-Schatten (Tiefe) */
-    0 8px 16px rgba(0, 0, 0, 0.6),
-    /* Innerer Schatten oben (Fahrerhaus-Definition) */
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    /* Innerer Schatten unten (Gewicht) */
-    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
-    /* Seitliche Schatten (Volumen) */
-    inset -1px 0 3px rgba(0, 0, 0, 0.3),
-    inset 1px 0 3px rgba(255, 255, 255, 0.2),
-    /* Externer Grund-Schatten */
-    0 10px 20px rgba(0, 0, 0, 0.4);
-  
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
 }
 
+.gps-bus-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.gps-bus-icon .bus-body { fill: #2a88ef; stroke: #eaf4ff; stroke-width: 2; }
+.gps-bus-icon .bus-window { fill: #c7e5ff; }
+.gps-bus-icon .bus-door { fill: #86c2ff; }
+.gps-bus-icon .bus-wheel { fill: #101828; stroke: #5f7289; stroke-width: 1.2; }
+.gps-bus-icon .bus-bumper { fill: #f4fbff; opacity: 0.92; }
+
 @keyframes gpsPulse {
-  0%, 100% { box-shadow: 
-    0 8px 16px rgba(0, 0, 0, 0.6),
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
-    inset -1px 0 3px rgba(0, 0, 0, 0.3),
-    inset 1px 0 3px rgba(255, 255, 255, 0.2),
-    0 10px 20px rgba(0, 0, 0, 0.4),
-    0 0 0 4px rgba(74,158,255,0.3);
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(32, 164, 255, 0.28);
   }
-  50% { 
-    box-shadow: 
-    0 8px 16px rgba(0, 0, 0, 0.6),
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.4),
-    inset -1px 0 3px rgba(0, 0, 0, 0.3),
-    inset 1px 0 3px rgba(255, 255, 255, 0.2),
-    0 10px 20px rgba(0, 0, 0, 0.4),
-    0 0 0 8px rgba(74,158,255,0.08);
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 7px rgba(32, 164, 255, 0.08);
   }
 }
 

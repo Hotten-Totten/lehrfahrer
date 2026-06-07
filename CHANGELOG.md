@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.100 - 2026-06-07
+- **Fahrzeugmarker Start-Sichtbarkeit + Bus-Optik**:
+  - Marker in GPS und SIM auf gemeinsames SVG-Bus-Element umgestellt (klarere Bus-Form)
+  - Marker-Ring ist ab erstem Frame sichtbar, statt nur über indirekte Pseudo-Elemente
+  - Heading-Klasse wird bei fehlender Richtung wieder sauber entfernt, Rotation auf 0 gesetzt
+  - Ziel: Fahrzeug beim Start der Linienführung stabil sichtbar und optisch eindeutig als Bus
+
 ## V2.0.99 - 2026-06-07
 - **Feintuning Kurvenrotation (zusätzlicher Schritt)**:
   - Kurzzeitiger Turn-Boost nach erkannter Abbiegung eingeführt (schnelleres Nachführen der Kamera)
