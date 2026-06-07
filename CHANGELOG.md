@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.164 - 2026-06-07
+- **Richtungsanzeige direkt im B/T-Marker integriert**:
+  - Richtung wird jetzt als kleines Dreieck im Marker selbst dargestellt (statt externem Badge)
+  - Dadurch ist die Information direkt im `B`/`T`-Symbol sichtbar und robuster lesbar
+  - Geometrie-Fallback bleibt erhalten, wenn keine Richtungstexte vorhanden sind
+
 ## V2.0.163 - 2026-06-07
 - **Alternative zu Pfeilsymbolen umgesetzt**:
   - Statt Unicode-Pfeilen werden nun robuste Richtungs-Badges angezeigt (`N`, `S`, `O`, `W`, `NO`, `NW`, `SO`, `SW`)

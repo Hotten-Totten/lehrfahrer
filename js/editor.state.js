@@ -160,7 +160,27 @@ function createDivIcon(background, border = "#000", size = 16) {
   });
 }
 
-function createStopBadgeIcon(background, border = "#000", size = 20, text = "H", dirBadge = "") {
+function directionCodeToAngle(directionCode) {
+  const code = String(directionCode || "").toUpperCase();
+  if (code === "N") return 0;
+  if (code === "NO") return 45;
+  if (code === "O") return 90;
+  if (code === "SO") return 135;
+  if (code === "S") return 180;
+  if (code === "SW") return 225;
+  if (code === "W") return 270;
+  if (code === "NW") return 315;
+  return null;
+}
+
+function createStopBadgeIcon(background, border = "#000", size = 20, text = "H", directionCode = "") {
+  const angle = directionCodeToAngle(directionCode);
+  const hasDirection = Number.isFinite(angle);
+  const triangleSize = Math.max(3, Math.round(size * 0.18));
+  const letterFontSize = hasDirection
+    ? Math.max(9, Math.round(size * 0.46))
+    : Math.round(size * 0.6);
+
   return L.divIcon({
     className: "",
     html: `
@@ -174,12 +194,12 @@ function createStopBadgeIcon(background, border = "#000", size = 20, text = "H",
         display:flex;
         align-items:center;
         justify-content:center;
-        font-size:${Math.round(size * 0.6)}px;
-        font-weight:bold;
-        color:#ffffff;
         box-shadow:0 1px 4px rgba(0,0,0,0.35);
-      ">${text}
-        ${dirBadge ? `<span style="position:absolute;right:-4px;top:-6px;min-width:${Math.max(12, Math.round(size * 0.62))}px;height:${Math.max(10, Math.round(size * 0.52))}px;padding:0 2px;border-radius:999px;background:#0f172a;border:1px solid rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:${Math.max(7, Math.round(size * 0.34))}px;line-height:1;font-weight:700;color:#ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.45);letter-spacing:0.2px;">${dirBadge}</span>` : ""}
+      ">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;transform:translateY(${hasDirection ? "-1px" : "0"});">
+          ${hasDirection ? `<span style="display:block;width:0;height:0;border-left:${triangleSize}px solid transparent;border-right:${triangleSize}px solid transparent;border-bottom:${triangleSize + 2}px solid #ffffff;transform:rotate(${angle}deg);transform-origin:50% 60%;margin-bottom:1px;"></span>` : ""}
+          <span style="display:block;font-size:${letterFontSize}px;font-weight:700;color:#ffffff;line-height:1;">${text}</span>
+        </div>
       </div>
     `,
     iconSize: [size, size],
