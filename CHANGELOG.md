@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.163 - 2026-06-07
+- **Alternative zu Pfeilsymbolen umgesetzt**:
+  - Statt Unicode-Pfeilen werden nun robuste Richtungs-Badges angezeigt (`N`, `S`, `O`, `W`, `NO`, `NW`, `SO`, `SW`)
+  - Badge sitzt direkt am `B`/`T`/`M`-Marker und ist font-unabhängig besser sichtbar
+  - Geometrie-Fallback bleibt aktiv, wenn keine Richtungstexte vorhanden sind
+
 ## V2.0.162 - 2026-06-07
 - **Hotfix Richtungspfeile**:
   - Fehler behoben, bei dem bei leerem Richtungsfeld kein Fallback-Pfeil berechnet wurde

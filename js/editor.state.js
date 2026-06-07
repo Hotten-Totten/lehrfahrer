@@ -160,7 +160,7 @@ function createDivIcon(background, border = "#000", size = 16) {
   });
 }
 
-function createStopBadgeIcon(background, border = "#000", size = 20, text = "H", arrow = "") {
+function createStopBadgeIcon(background, border = "#000", size = 20, text = "H", dirBadge = "") {
   return L.divIcon({
     className: "",
     html: `
@@ -179,7 +179,7 @@ function createStopBadgeIcon(background, border = "#000", size = 20, text = "H",
         color:#ffffff;
         box-shadow:0 1px 4px rgba(0,0,0,0.35);
       ">${text}
-        ${arrow ? `<span style="position:absolute;right:-3px;top:-5px;width:${Math.max(10, Math.round(size * 0.52))}px;height:${Math.max(10, Math.round(size * 0.52))}px;border-radius:999px;background:#0f172a;border:1px solid rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:${Math.max(8, Math.round(size * 0.42))}px;line-height:1;color:#ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.45);">${arrow}</span>` : ""}
+        ${dirBadge ? `<span style="position:absolute;right:-4px;top:-6px;min-width:${Math.max(12, Math.round(size * 0.62))}px;height:${Math.max(10, Math.round(size * 0.52))}px;padding:0 2px;border-radius:999px;background:#0f172a;border:1px solid rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:${Math.max(7, Math.round(size * 0.34))}px;line-height:1;font-weight:700;color:#ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.45);letter-spacing:0.2px;">${dirBadge}</span>` : ""}
       </div>
     `,
     iconSize: [size, size],
@@ -250,7 +250,7 @@ function approxDistanceMeters(lat1, lon1, lat2, lon2) {
   return Math.hypot(dLat, dLon);
 }
 
-function inferDirectionArrowFromGeometry(stop) {
+function inferDirectionCodeFromGeometry(stop) {
   if (!stop || typeof stop !== "object") return "";
   if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) return "";
 
@@ -286,14 +286,14 @@ function inferDirectionArrowFromGeometry(stop) {
 
   if (latSpanM >= lonSpanM) {
     const midLat = (minLat + maxLat) / 2;
-    return stop.lat >= midLat ? "↑" : "↓";
+    return stop.lat >= midLat ? "N" : "S";
   }
 
   const midLon = (minLon + maxLon) / 2;
-  return stop.lon >= midLon ? "→" : "←";
+  return stop.lon >= midLon ? "O" : "W";
 }
 
-function getDirectionArrow(directionText, stop) {
+function getDirectionCode(directionText, stop) {
   const t = String(directionText || "")
     .toLowerCase()
     .replace(/ä/g, "ae")
@@ -302,19 +302,19 @@ function getDirectionArrow(directionText, stop) {
     .replace(/ß/g, "ss")
     .trim();
 
-  if (!t) return inferDirectionArrowFromGeometry(stop);
+  if (!t) return inferDirectionCodeFromGeometry(stop);
 
-  if (/nord\s*ost|northeast|north\s*east|\bne\b/.test(t)) return "↗";
-  if (/nord\s*west|northwest|north\s*west|\bnw\b/.test(t)) return "↖";
-  if (/sued\s*ost|sud\s*est|southeast|south\s*east|\bse\b/.test(t)) return "↘";
-  if (/sued\s*west|southwest|south\s*west|\bsw\b/.test(t)) return "↙";
+  if (/nord\s*ost|northeast|north\s*east|\bne\b/.test(t)) return "NO";
+  if (/nord\s*west|northwest|north\s*west|\bnw\b/.test(t)) return "NW";
+  if (/sued\s*ost|sud\s*est|southeast|south\s*east|\bse\b/.test(t)) return "SO";
+  if (/sued\s*west|southwest|south\s*west|\bsw\b/.test(t)) return "SW";
 
-  if (/stadteinwaerts|einwaerts|hinfahrt|\bhin\b|nord|north|\bn\b/.test(t)) return "↑";
-  if (/stadtauswaerts|auswaerts|rueckfahrt|rueck|r\u00fcck|sued|south|\bs\b/.test(t)) return "↓";
-  if (/ost|east|\be\b/.test(t)) return "→";
-  if (/west|\bw\b/.test(t)) return "←";
+  if (/stadteinwaerts|einwaerts|hinfahrt|\bhin\b|nord|north|\bn\b/.test(t)) return "N";
+  if (/stadtauswaerts|auswaerts|rueckfahrt|rueck|r\u00fcck|sued|south|\bs\b/.test(t)) return "S";
+  if (/ost|east|\be\b/.test(t)) return "O";
+  if (/west|\bw\b/.test(t)) return "W";
 
-  return inferDirectionArrowFromGeometry(stop);
+  return inferDirectionCodeFromGeometry(stop);
 }
 
 function getTransitBadgeStyle(type) {
@@ -336,8 +336,8 @@ function getTransitBadgeStyle(type) {
 function createTransitStopIcon(stop, size) {
   const type = resolveLineStopTransitType(stop);
   const style = getTransitBadgeStyle(type);
-  const arrow = getDirectionArrow(extractStopDirectionText(stop), stop);
-  return createStopBadgeIcon(style.background, style.border, size, style.letter, arrow);
+  const directionCode = getDirectionCode(extractStopDirectionText(stop), stop);
+  return createStopBadgeIcon(style.background, style.border, size, style.letter, directionCode);
 }
 
 function getLineStopIcon(stop, selected = false) {
