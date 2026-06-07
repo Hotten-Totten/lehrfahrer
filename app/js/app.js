@@ -598,7 +598,7 @@ function dbGetLineGPX(id) {
 async function fetchAndCacheLinesCatalog() {
   try {
     console.log('📦 Fetching lines catalog from API...');
-    const response = await fetch(`${API_BASE}/list_lines.php`);
+    const response = await fetch(`${API_BASE}/list_lines.php`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     
     const result = await response.json();
@@ -679,7 +679,7 @@ async function downloadLineWithGPX(lineId) {
     let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.file)}`;
     if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     const json = await res.json();
 
     if (!json.ok || !json.line) {
@@ -953,22 +953,10 @@ async function showNewLinesNotification() {
 async function autoDownloadAllLines() {
   try {
     console.log('🔍 autoDownloadAllLines() called');
-    
-    // WICHTIG: Prüfe linesData, nicht linesCatalog!
-    // linesCatalog = nur Metadaten (geladen vom API)
-    // linesData = echte JSON-Daten (müssen heruntergeladen werden)
-    const tx = db.transaction('linesData', 'readonly');
-    const req = tx.objectStore('linesData').getAll();
-    
-    const cached = await new Promise((resolve, reject) => {
-      req.onsuccess = () => resolve(req.result.map(item => item.id) || []);
-      req.onerror = () => reject(req.error);
-    });
-    
+
     const available = availableLinesCatalog || [];
-    
-    console.log(`📊 Status: ${cached.length} cached (linesData), ${available.length} available`);
-    console.log('📋 Cached IDs (linesData):', cached);
+
+    console.log(`📊 Status: ${available.length} lines available (full refresh mode)`);
     console.log('📋 Available IDs:', available.map(l => l.id));
     
     if (available.length === 0) {
@@ -976,22 +964,14 @@ async function autoDownloadAllLines() {
       return;
     }
     
-    // Nur nicht-gecachte Linien herunterladen (prüfe gegen cached array)
-    const toDownload = available.filter(line => {
-      const isCached = cached.includes(line.id);
-      console.log(`  Checking ${line.id}: ${isCached ? 'CACHED' : 'NEW'}`);
-      return !isCached;
-    });
+    // WICHTIG: Immer kompletter Refresh beim Start, damit kurzfristige
+    // Umleitungen/Änderungen sofort in der App landen.
+    const toDownload = available.slice();
     
     console.log(`📋 toDownload list: ${toDownload.length} lines to download`);
     toDownload.forEach(l => console.log(`  - ${l.lineName} (${l.id})`));
     
-    if (toDownload.length === 0) {
-      console.log('✓ All lines already cached in linesData');
-      return;
-    }
-    
-    console.log(`⬇️ Auto-downloading ${toDownload.length} lines in background...`);
+    console.log(`⬇️ Auto-refreshing ${toDownload.length} lines in background...`);
     
     showStartupDownloadOverlay(toDownload.length);
     console.log('✓ Startup download overlay shown');

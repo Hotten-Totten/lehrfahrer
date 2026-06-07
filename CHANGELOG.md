@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.134 - 2026-06-07
+- **"Sofort aktuelle Linien" umgesetzt (Umleitungen direkt in der App)**:
+  - Startup-Refresh laedt jetzt immer alle verfuegbaren Linien neu
+  - API-Fetches fuer Katalog und Linien auf `cache: no-store` gestellt
+  - Dadurch kommen kurzfristige Aenderungen/Umleitungen ohne Alt-Cache in der App an
+
 ## V2.0.133 - 2026-06-07
 - **Fix: Linien werden beim App-Start nicht mehr doppelt geladen**:
   - Startup-Auto-Download mit Session-Guard abgesichert (pro Version/Tab nur ein Durchlauf)
