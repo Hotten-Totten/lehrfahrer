@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.96 - 2026-06-07
+- **Spur-Einrastung (Schritt 1, ohne Kamera-Änderung)**:
+  - Snap-Radius erhöht (`85m` -> `120m`), damit die Fahrzeugposition seltener neben der Strecke liegt
+  - Rejoin-Verhalten umgestellt: bei erneuter Routennähe sofortiges hartes Einrasten statt seitlichem Einblenden
+  - Ziel: Marker bleibt sichtbar auf der Route, ohne das bisherige kameraseitige Verhalten mitzunehmen
+
 ## V2.0.95 - 2026-06-07
 - **Robustere Manöver-Umschaltung (SIM + GPS)**:
   - Wechsel zur nächsten Richtungsänderung erst nach bestätigter Passage der aktuellen Kurve

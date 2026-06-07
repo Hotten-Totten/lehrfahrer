@@ -33,7 +33,7 @@ const SIM_DEFAULT_SPEED_KMH = 34;
 let gpsLastSmoothedPos = null;
 const GPS_SMOOTHING_ALPHA = 0.4;  // 0.3-0.5: höher = schneller Response, niedriger = glatter
 
-const NAV_SNAP_MAX_M = 85;
+const NAV_SNAP_MAX_M = 120;
 const NAV_SNAP_WINDOW = 24;
 const NAV_TURN_DEFAULT_PASS_BUFFER_M = 38;
 const NAV_TURN_CLOSE_GAP_M = 90;
@@ -2140,18 +2140,12 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
       snapAppliedNow = true;
     }
   } else if (snap.applied && snap.distanceM <= NAV_REJOIN_START_M) {
-    navRejoinBlend = Math.min(1, navRejoinBlend + NAV_REJOIN_BLEND_STEP);
-    displayLat = lerpValue(rawLat, snap.lat, navRejoinBlend);
-    displayLon = lerpValue(rawLon, snap.lon, navRejoinBlend);
-    snapAppliedNow = navRejoinBlend > 0;
-
-    if (navRejoinBlend >= 1) {
-      navOffRouteActive = false;
-      navRejoinBlend = 0;
-      displayLat = snap.lat;
-      displayLon = snap.lon;
-      snapAppliedNow = true;
-    }
+    // Beim Rejoin direkt wieder auf die Route klemmen, statt seitlich einzublenden.
+    navOffRouteActive = false;
+    navRejoinBlend = 0;
+    displayLat = snap.lat;
+    displayLon = snap.lon;
+    snapAppliedNow = true;
   } else {
     navRejoinBlend = 0;
   }
