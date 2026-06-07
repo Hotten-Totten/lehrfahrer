@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.112 - 2026-06-07
+- **Karte dreht schneller in Fahrtrichtung bei Abbiegen**:
+  - Bearing-Catch-up in Kurven deutlich beschleunigt (höhere Turn-Rate + stärkere Annäherung)
+  - Turn-Boost früher und länger aktiv
+  - Kamera-Transitions bei Richtungswechseln merklich verkürzt
+  - Ziel: schnellere, direktere Drehung beim Abbiegen
+
 ## V2.0.111 - 2026-06-07
 - **Navi-Pfeil auf dunkleres Rot abgestimmt**:
   - Rotpalette deutlich dunkler gesetzt (Körper, Kern, Highlight)
