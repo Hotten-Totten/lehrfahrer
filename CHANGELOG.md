@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.143 - 2026-06-07
+- **API-Auth entschärft (Arbeitsmodus)**:
+  - Schreibzugriffe sind wieder ohne gesetzten Server-Token möglich
+  - Token-Prüfung greift nur noch, wenn `LEHRFAHRER_API_TOKEN` auf dem Server tatsächlich gesetzt ist
+  - Damit funktionieren Speichern/Löschen im aktuellen Entwicklungsbetrieb wieder ohne Token-Handling
+
 ## V2.0.142 - 2026-06-07
 - **Fix: Speichern/Loeschen bei Umleitungen wieder konsistent**:
   - Umleitungs-Erkennung im Backend verbessert (auch wenn nach `Umleitung_XX` noch Richtung/weitere Teile im Dateinamen stehen)

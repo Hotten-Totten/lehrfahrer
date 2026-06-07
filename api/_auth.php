@@ -35,9 +35,10 @@ function lehrfahrer_require_write_auth(): void {
     $expected = getenv('LEHRFAHRER_API_TOKEN');
     $expected = is_string($expected) ? trim($expected) : '';
 
-    // Ohne gesetzten Token sind alle Schreibzugriffe gesperrt.
+    // Entwicklungsmodus: Ohne gesetzten Server-Token sind Schreibzugriffe erlaubt.
+    // Sobald LEHRFAHRER_API_TOKEN gesetzt ist, wird Auth strikt erzwungen.
     if ($expected === '') {
-        lehrfahrer_reject_unauthorized('Schreibzugriff gesperrt. Bitte LEHRFAHRER_API_TOKEN auf dem Server setzen.');
+        return;
     }
 
     $provided = lehrfahrer_get_header_ci('X-Api-Token');
