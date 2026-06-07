@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.131 - 2026-06-07
+- **Fix: Marker in Landscape jetzt konstant sichtbar (Strict-Follow)**:
+  - In mobilem Querformat wird Navi-Following auf `jumpTo` umgestellt
+  - Laufende Kamera-Animationen werden dabei konsequent gestoppt
+  - Verhindert das sporadische "mal da, mal weg" des Positionspfeils
+
 ## V2.0.130 - 2026-06-07
 - **Fix: SIM startet wieder sauber und bleibt nicht beim ersten Frame stehen**:
   - Kurze Pause-Input-Sperre direkt nach Navi-Start eingefuehrt

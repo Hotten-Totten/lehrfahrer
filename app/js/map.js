@@ -747,6 +747,17 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
+  const isLandscapeMobile = window.matchMedia('(orientation: landscape)').matches && (window.innerWidth || 0) <= 950;
+
+  // Strict-Follow fuer Landscape: verhindert Animationsdrift,
+  // wodurch der Marker sporadisch oben/aus dem Fokus landen kann.
+  if (isLandscapeMobile) {
+    map.stop();
+    map.jumpTo(opts);
+    updateStopPoiVisibility();
+    return;
+  }
+
   const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
   const mapBearing = normalizeDeg(map.getBearing());
   const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
