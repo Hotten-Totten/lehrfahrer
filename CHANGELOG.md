@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.95 - 2026-06-07
+- **Robustere Manöver-Umschaltung (SIM + GPS)**:
+  - Wechsel zur nächsten Richtungsänderung erst nach bestätigter Passage der aktuellen Kurve
+  - Dynamischer Passage-Puffer: bei normalen Abständen späterer Wechsel, bei engen Doppelkurven schnellerer Wechsel
+  - Ziel: kein zu frühes Umschalten vor der aktuellen Kurve, aber weiterhin Sichtbarkeit bei schnellen Folge-Manövern
+
 ## V2.0.94 - 2026-06-07
 - **iPhone HUD Feinkorrektur**:
   - Navigationshinweise (Pfeil + Manövertext + Distanz) im Fahrbereich horizontal auf echte Bildschirmmitte korrigiert
