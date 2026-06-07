@@ -56,6 +56,7 @@ foreach ($cities as $city) {
                 if (!is_array($data)) continue;
 
                 $fileBase = pathinfo($file, PATHINFO_FILENAME);
+                $fileMtime = @filemtime($file);
                 $gpxPath  = $subPath . '/' . $fileBase . '.gpx';
                 $hasGpx   = file_exists($gpxPath);
 
@@ -70,6 +71,7 @@ foreach ($cities as $city) {
                     'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
                     'color'             => $data['color'] ?? ($data['line']['color'] ?? null),
                     'savedAt'           => $data['savedAt'] ?? null,
+                    'updatedAt'         => $fileMtime ? intval($fileMtime) : null,
                     'stopCount'         => count($data['stops'] ?? []),
                     'routePointCount'   => count($data['routePoints'] ?? []),
                     'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
@@ -87,6 +89,7 @@ foreach ($cities as $city) {
         if (!is_array($data)) continue;
 
         $fileBase = pathinfo($file, PATHINFO_FILENAME);
+        $fileMtime = @filemtime($file);
         $gpxPath  = $cityDir . '/gpx/' . $fileBase . '.gpx';
         $hasGpx   = file_exists($gpxPath);
 
@@ -101,6 +104,7 @@ foreach ($cities as $city) {
             'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
             'color'             => $data['color'] ?? ($data['line']['color'] ?? null),
             'savedAt'           => $data['savedAt'] ?? null,
+            'updatedAt'         => $fileMtime ? intval($fileMtime) : null,
             'stopCount'         => count($data['stops'] ?? []),
             'routePointCount'   => count($data['routePoints'] ?? []),
             'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,

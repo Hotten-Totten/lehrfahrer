@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.135 - 2026-06-07
+- **Sofort-Updates ohne Voll-Reload aller Linien**:
+  - Start-Update laedt nur noch fehlende oder geaenderte Linien
+  - Aenderungserkennung ueber `updatedAt` aus `list_lines.php` (Datei-MTime)
+  - Linien-Downloads speichern `sourceUpdatedAt` lokal zum Vergleich
+  - API-Requests bleiben `cache: no-store`, damit kurzfristige Umleitungen sofort erkannt werden
+
 ## V2.0.134 - 2026-06-07
 - **"Sofort aktuelle Linien" umgesetzt (Umleitungen direkt in der App)**:
   - Startup-Refresh laedt jetzt immer alle verfuegbaren Linien neu

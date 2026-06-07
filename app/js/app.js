@@ -528,9 +528,11 @@ function dbPutLinesCatalog(catalog) {
           city: line.city,
           lineFolder: line.lineFolder,
           fileName: line.fileName,
+          file: line.file,
+          fileBase: line.fileBase,
           lineName: line.lineName,
           routeName: line.routeName,
-          updatedAt: line.updatedAt || Date.now()
+          updatedAt: Number(line.updatedAt) || 0
         });
       });
     };
@@ -549,12 +551,13 @@ function dbGetLinesCatalog() {
 }
 
 // ── Lines Data (JSON-Inhalt) ──────────────────────────────────
-function dbPutLineData(id, lineData) {
+function dbPutLineData(id, lineData, sourceUpdatedAt = 0) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('linesData', 'readwrite');
     const req = tx.objectStore('linesData').put({
       id,
       data: lineData,
+      sourceUpdatedAt: Number(sourceUpdatedAt) || 0,
       savedAt: Date.now()
     });
     req.onsuccess = () => resolve();
@@ -689,11 +692,12 @@ async function downloadLineWithGPX(lineId) {
 
     // Speichere in IndexedDB
     const lineData = json.line;
-    
-    // Formatiere die ID konsistent (city_lineFolder_file, mit _ statt /)
-    const dbId = `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${line.file}`.replace(/\//g, '_');
-    
-    await dbPutLineData(dbId, lineData);
+
+    // Formatiere die ID konsistent (city_lineFolder_fileBase, mit _ statt /)
+    const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
+    const dbId = `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${fileBase}`.replace(/\//g, '_');
+
+    await dbPutLineData(dbId, lineData, Number(line.updatedAt) || 0);
     
     // Speichere auch GPX falls vorhanden
     if (json.gpx) {
@@ -956,7 +960,23 @@ async function autoDownloadAllLines() {
 
     const available = availableLinesCatalog || [];
 
-    console.log(`📊 Status: ${available.length} lines available (full refresh mode)`);
+    const tx = db.transaction('linesData', 'readonly');
+    const req = tx.objectStore('linesData').getAll();
+    const cachedData = await new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+
+    const cachedById = new Map();
+    cachedData.forEach(item => cachedById.set(item.id, item));
+
+    const resolveStorageId = (line, useLegacy = false) => {
+      const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
+      const filePart = useLegacy ? String(line.file || `${fileBase}.json`) : fileBase;
+      return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${filePart}`.replace(/\//g, '_');
+    };
+
+    console.log(`📊 Status: ${cachedData.length} cached, ${available.length} available`);
     console.log('📋 Available IDs:', available.map(l => l.id));
     
     if (available.length === 0) {
@@ -964,14 +984,27 @@ async function autoDownloadAllLines() {
       return;
     }
     
-    // WICHTIG: Immer kompletter Refresh beim Start, damit kurzfristige
-    // Umleitungen/Änderungen sofort in der App landen.
-    const toDownload = available.slice();
+    // Delta-Refresh mit Sofort-Aktualitaet:
+    // - fehlt lokal  -> laden
+    // - updatedAt geaendert -> neu laden
+    // - ohne updatedAt-Metadaten -> sicherheitshalber laden
+    const toDownload = available.filter(line => {
+      const idCurrent = resolveStorageId(line, false);
+      const idLegacy = resolveStorageId(line, true);
+      const cached = cachedById.get(idCurrent) || cachedById.get(idLegacy);
+      if (!cached) return true;
+
+      const serverUpdatedAt = Number(line.updatedAt) || 0;
+      if (!serverUpdatedAt) return true;
+
+      const localUpdatedAt = Number(cached.sourceUpdatedAt) || 0;
+      return localUpdatedAt !== serverUpdatedAt;
+    });
     
     console.log(`📋 toDownload list: ${toDownload.length} lines to download`);
     toDownload.forEach(l => console.log(`  - ${l.lineName} (${l.id})`));
     
-    console.log(`⬇️ Auto-refreshing ${toDownload.length} lines in background...`);
+    console.log(`⬇️ Auto-refreshing ${toDownload.length} changed/missing lines in background...`);
     
     showStartupDownloadOverlay(toDownload.length);
     console.log('✓ Startup download overlay shown');
