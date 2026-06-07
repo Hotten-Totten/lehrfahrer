@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.138 - 2026-06-07
+- **Editor-Fix: Gespeicherte Routen/Linien im Browser jetzt stabil sichtbar**:
+  - Laden der Linienliste verwendet jetzt konsequent `cache: no-store`
+  - Zusätzlicher Cache-Buster (`_ts`) verhindert veraltete Browser-Antworten
+  - Race-Condition beim mehrfachen Öffnen/Aktualisieren des Linien-Browsers behoben
+  - Veraltete (langsamere) Antworten überschreiben die aktuelle Liste nicht mehr
+
 ## V2.0.137 - 2026-06-07
 - **Editor: Umleitungen/Einfügen in bestehende Reihenfolge verbessert**:
   - Markierte Haltestelle in der Haltestellen-Reihenfolge dient jetzt als Einfügeanker

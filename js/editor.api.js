@@ -412,10 +412,16 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
 // Wird für den Linien-Browser verwendet
 async function fetchLineListFromServer() {
   try {
-    const city = citySelect?.value || "cottbus";
+    const city = String(citySelect?.value || "").trim();
+    const params = new URLSearchParams();
+    if (city) {
+      params.set("city", city);
+    }
+    params.set("_ts", String(Date.now()));
 
     const response = await fetch(
-      `${API_LIST_LINES_URL}?city=${encodeURIComponent(city)}`
+      `${API_LIST_LINES_URL}?${params.toString()}`,
+      { cache: "no-store" }
     );
     const rawText = await response.text();
     let result;

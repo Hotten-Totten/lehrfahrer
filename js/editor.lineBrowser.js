@@ -4,6 +4,8 @@
 // Dieses Modul verwaltet den Linien-Browser
 // Zeigt alle gespeicherten Linien vom Server an und ermöglicht Laden/Löschen/Umbenennen
 
+let lineBrowserRequestSeq = 0;
+
 // Schließt das Linien-Browser-Fenster
 function closeLineBrowser() {
   lineBrowserModal.classList.add("hidden");
@@ -291,10 +293,18 @@ function renderLineBrowser(lines) {
 
 // Öffnet den Linien-Browser und lädt die Linienliste vom Server
 async function openLineBrowser() {
+  const requestSeq = ++lineBrowserRequestSeq;
+  const city = String(citySelect?.value || "").trim();
+
   lineBrowserModal.classList.remove("hidden");
-  lineBrowserBody.innerHTML = '<div class="line-browser-empty">Lade…</div>';
+  lineBrowserBody.innerHTML = `<div class="line-browser-empty">Lade gespeicherte Linien${city ? " für " + city : ""}…</div>`;
 
   const lines = await fetchLineListFromServer();
+
+  // Falls zwischenzeitlich erneut geöffnet/aktualisiert wurde: veraltetes Ergebnis ignorieren.
+  if (requestSeq !== lineBrowserRequestSeq) {
+    return;
+  }
 
   if (!lines.length) {
     lineBrowserBody.innerHTML =
