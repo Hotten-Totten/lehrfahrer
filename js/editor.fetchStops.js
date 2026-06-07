@@ -406,6 +406,18 @@
 
         incomingStops = snapResult.stops;
         statusNote = (statusNote ? statusNote + " · " : "") + snapResult.snapped + " auf Fahrbahn ausgerichtet";
+
+        const beforeFilter = incomingStops.length;
+        incomingStops = incomingStops.filter(s => s && s.snappedToRoad === true);
+        const removedUnsnapped = beforeFilter - incomingStops.length;
+        if (removedUnsnapped > 0) {
+          statusNote += " · " + removedUnsnapped + " ohne Straßensnap entfernt";
+        }
+
+        if (!incomingStops.length) {
+          setStatus("Keine Haltestelle konnte innerhalb des Snap-Abstands auf die Fahrbahn gelegt werden.", "error");
+          return;
+        }
       }
 
       if (mode === "add") {

@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.157 - 2026-06-07
+- **Snap-Filter verschärft (auf Wunsch)**:
+  - Wenn "Haltestellen auf Fahrbahnmitte ausrichten" aktiv ist, bleiben nur erfolgreich gesnappte Haltestellen erhalten
+  - Haltestellen ohne gültigen Straßensnap werden konsequent verworfen
+  - Import bricht mit klarer Meldung ab, falls keine Haltestelle innerhalb des Snap-Abstands liegt
+
 ## V2.0.156 - 2026-06-07
 - **Fallback bei fehlender Richtungsinfo verbessert**:
   - Gleichnamige Haltestellen ohne Richtung werden clusterweise auf Nord- und Süd-Extrempunkt reduziert
