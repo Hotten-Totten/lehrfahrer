@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.110 - 2026-06-07
+- **Navi-Pfeil komplett Rot**:
+  - Pfeilkörper, Kern und Highlight vollständig auf Rottöne umgestellt
+  - Weißanteile entfernt, Kontrast über dunklere Kontur und rote Abstufungen erhalten
+
 ## V2.0.109 - 2026-06-07
 - **Navi-Pfeil Farbgebung umgekehrt**:
   - Hauptkörper jetzt Weiß mit roter Kontur
