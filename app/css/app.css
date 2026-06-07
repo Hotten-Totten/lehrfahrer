@@ -1444,7 +1444,7 @@ body.nav-mode #navHud {
   #navTopBar {
     grid-template-columns: 1fr 84px;
     grid-template-areas:
-      'line right'
+      'line line'
       'arrow right';
     gap: 6px;
     padding: 8px 6px;
@@ -1455,6 +1455,7 @@ body.nav-mode #navHud {
     grid-area: line;
     padding: 8px 9px;
     gap: 2px;
+    width: 100%;
   }
 
   #navLineName {
@@ -1504,9 +1505,14 @@ body.nav-mode #navHud {
 
   #navRightBox {
     grid-area: right;
-    gap: 5px;
+    gap: 8px;
     align-items: flex-end;
-    justify-content: space-between;
+    justify-content: flex-end;
+    padding-top: 16px;
+  }
+
+  #navTimeSpeed {
+    margin-top: 8px;
   }
 
   #navTime {

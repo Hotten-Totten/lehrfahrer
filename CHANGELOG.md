@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.91 - 2026-06-07
+- **HUD-Layout weiter vereinfacht (iPhone)**:
+  - Obere Ziel-/Linienkachel jetzt über gesamte Breite
+  - `km/h` und `Fahrzeit` im rechten Block weiter nach unten verschoben
+  - Distanzzusatz in der oberen Kachel entfernt (nur Linie + Zielname)
+  - Rechte Haltestellen-Sidebar bleibt deaktiviert (nur untere nächste Haltestelle sichtbar)
+- **Abbiegungslogik verbessert**:
+  - Nach einer Richtungsänderung wird die nächste Anweisung etwas später eingeblendet
+  - Schutz für dicht aufeinanderfolgende Manöver bleibt aktiv (enge Doppelkurven weiterhin sichtbar)
+
 ## V2.0.90 - 2026-06-07
 - **HUD vereinfacht und doppelte Haltestellenanzeige entfernt**:
   - Distanzangabe aus der oberen Linienkachel entfernt (kein `(in X.X Km)` mehr)

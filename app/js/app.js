@@ -35,6 +35,9 @@ const GPS_SMOOTHING_ALPHA = 0.4;  // 0.3-0.5: höher = schneller Response, niedr
 
 const NAV_SNAP_MAX_M = 85;
 const NAV_SNAP_WINDOW = 24;
+const NAV_TURN_LOOKAHEAD_M = 15;
+const NAV_POST_TURN_DELAY_M = 85;
+const NAV_CLOSE_TURN_OVERRIDE_M = 140;
 // Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
 // aber weiterhin klarer OFF->REJOIN->ON Verlauf.
 const NAV_OFF_ROUTE_ENTER_M = 145;
@@ -2215,13 +2218,37 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   const currentDist = navCumDists[idx];
 
   // Nächste Abbiegung
-  const nextTurn = navTurns.find(t => t.distFromStart > currentDist + 15);
+  const nextTurnRaw = navTurns.find(t => t.distFromStart > currentDist + NAV_TURN_LOOKAHEAD_M);
+
+  let lastPassedTurn = null;
+  for (let i = navTurns.length - 1; i >= 0; i--) {
+    if (navTurns[i].distFromStart <= currentDist) {
+      lastPassedTurn = navTurns[i];
+      break;
+    }
+  }
+
+  const distSinceLastTurn = lastPassedTurn ? (currentDist - lastPassedTurn.distFromStart) : Infinity;
+  const distToNextTurn = nextTurnRaw ? (nextTurnRaw.distFromStart - currentDist) : Infinity;
+  const shouldDelayNextTurn = Boolean(
+    nextTurnRaw &&
+    lastPassedTurn &&
+    distSinceLastTurn < NAV_POST_TURN_DELAY_M &&
+    distToNextTurn > NAV_CLOSE_TURN_OVERRIDE_M
+  );
+
+  const nextTurn = shouldDelayNextTurn ? null : nextTurnRaw;
+
   if (nextTurn) {
     const info = getTurnInfo(nextTurn.angle);
     const distToTurn = navFormatDist(nextTurn.distFromStart - currentDist);
     setNavArrowIcon(info.iconKey);
     navDistEl.textContent  = `in ${distToTurn}`;
     navLabelEl.textContent = info.label;
+  } else if (nextTurnRaw) {
+    setNavArrowIcon('straight');
+    navDistEl.textContent  = 'Weiterfahren';
+    navLabelEl.textContent = 'Geradeaus';
   } else {
     setNavArrowIcon('finish');
     navDistEl.textContent  = 'Zieleinfahrt';
