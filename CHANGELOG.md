@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.144 - 2026-06-07
+- **Editor-Routing: Manuelle Pflichtpunkte werden jetzt strikt erzwungen**:
+  - Wenn manuelle Routenpunkte vorhanden sind, werden betroffene Abschnitte als direkte Verbindung aufgebaut
+  - Dadurch entstehen keine ungewollten Umfahrungen ueber Valhalla/OSRM (z. B. wegen Durchfahrtsverboten)
+  - Admin-gesetzte Punkte bestimmen den Verlauf jetzt verbindlich
+
 ## V2.0.143 - 2026-06-07
 - **API-Auth entschärft (Arbeitsmodus)**:
   - Schreibzugriffe sind wieder ohne gesetzten Server-Token möglich

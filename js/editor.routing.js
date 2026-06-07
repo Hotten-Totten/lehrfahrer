@@ -300,6 +300,89 @@ function buildForcedRoutingSteps(stopsToBuild) {
   return steps;
 }
 
+function findStopByAnchor(anchor) {
+  if (!anchor || anchor.kind !== "stop") return null;
+  return state.stops.find(stop => stop.id === anchor.refId) || null;
+}
+
+function buildRoutingStepsFromAnchors(anchors) {
+  const steps = [];
+
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const from = anchors[i];
+    const to = anchors[i + 1];
+
+    if (!from || !to) continue;
+
+    const fromLabel = from.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(from)?.name || "Haltestelle");
+    const toLabel = to.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(to)?.name || "Haltestelle");
+
+    // Sobald ein manueller Punkt beteiligt ist, direkte Verbindung erzwingen.
+    if (from.kind === "manual" || to.kind === "manual") {
+      steps.push({
+        type: "direct",
+        points: [
+          [from.lon, from.lat],
+          [to.lon, to.lat]
+        ],
+        label: `${fromLabel} => ${toLabel}`
+      });
+      continue;
+    }
+
+    const fromStop = findStopByAnchor(from);
+    const toStop = findStopByAnchor(to);
+
+    if (!fromStop || !toStop) {
+      steps.push({
+        type: "direct",
+        points: [
+          [from.lon, from.lat],
+          [to.lon, to.lat]
+        ],
+        label: `${fromLabel} => ${toLabel}`
+      });
+      continue;
+    }
+
+    const match = findMatchingSpecialTrack(fromStop, toStop);
+    if (match) {
+      const rawPoints = match.reversed
+        ? match.track.points.slice().reverse()
+        : match.track.points.slice();
+
+      steps.push({
+        type: "track",
+        points: [
+          [fromStop.lon, fromStop.lat],
+          ...rawPoints.map(p => [p[1], p[0]]),
+          [toStop.lon, toStop.lat]
+        ],
+        label: `${fromStop.name} => ${toStop.name}`,
+        trackId: match.track.id
+      });
+      continue;
+    }
+
+    steps.push({
+      type: "street",
+      from: {
+        lat: fromStop.lat,
+        lon: fromStop.lon,
+        name: fromStop.name
+      },
+      to: {
+        lat: toStop.lat,
+        lon: toStop.lon,
+        name: toStop.name
+      },
+      label: `${fromStop.name} → ${toStop.name}`
+    });
+  }
+
+  return steps;
+}
+
 // Routet nur die zwei Abschnitte um einen neu in der Mitte eingefügten Stop.
 // Gibt true zurück wenn erfolgreich, false wenn Fallback auf Vollrouting nötig.
 async function rerouteInsertedStop(insertedStopIndex) {
@@ -456,20 +539,35 @@ async function buildStreetRouteFromStops() {
       state.simplifiedRoutePoints = [];
     }
 
+    const useManualAnchors =
+      !appendMode &&
+      Array.isArray(state.routePoints) &&
+      state.routePoints.some(point => point.sourceType === "manual");
+
     const allCoords = [];
-    const steps = buildForcedRoutingSteps(stopsToBuild);
+    const steps = useManualAnchors
+      ? buildRoutingStepsFromAnchors(buildRoutingAnchorsFromCurrentRoute())
+      : buildForcedRoutingSteps(stopsToBuild);
+
+    if (useManualAnchors) {
+      setStatus("Manuelle Pflichtpunkte erkannt: direkte Verbindungen werden erzwungen.", "warn");
+    }
 
     debug("Erzwungene Routing-Schritte", steps);
 
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
 
-      if (step.type === "track") {
-        setStatus(`Sondertrasse verwende Abschnitt ${i + 1}/${steps.length}: ${step.label}`);
+      if (step.type === "track" || step.type === "direct") {
+        const stepText = step.type === "direct" ? "Direktverbindung" : "Sondertrasse";
+        setStatus(`${stepText} verwende Abschnitt ${i + 1}/${steps.length}: ${step.label}`);
 
         step.points.forEach((coord, idx) => {
           if (allCoords.length && idx === 0) return;
-          allCoords.push(coord);
+          allCoords.push({
+            coord,
+            sourceType: step.type === "direct" ? "manual" : "street"
+          });
         });
 
         continue;
@@ -496,7 +594,7 @@ async function buildStreetRouteFromStops() {
 
       segment.forEach((coord, idx) => {
         if (allCoords.length && idx === 0) return;
-        allCoords.push(coord);
+        allCoords.push({ coord, sourceType: "street" });
       });
     }
 
@@ -505,10 +603,10 @@ async function buildStreetRouteFromStops() {
         ? allCoords.slice(1)
         : allCoords;
 
-    coordsToCreate.forEach(coord => {
-      const lon = coord[0];
-      const lat = coord[1];
-      createRoutePointObject(lat, lon, true, "street");
+    coordsToCreate.forEach(item => {
+      const lon = item.coord[0];
+      const lat = item.coord[1];
+      createRoutePointObject(lat, lon, true, item.sourceType || "street");
     });
 
     state.routeMode = "street";
