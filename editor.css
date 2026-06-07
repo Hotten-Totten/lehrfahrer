@@ -190,6 +190,10 @@ body {
   transition: box-shadow 0.2s ease;
 }
 
+body.input-menu-hidden #topbar {
+  display: none !important;
+}
+
 .top-group {
   display: flex;
   flex-direction: column;

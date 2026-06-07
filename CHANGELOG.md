@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.147 - 2026-06-07
+- **Editor-UX umgestellt: Eingabemaske nur bei `Neu`**:
+  - Obere Eingabemaske ist standardmaessig ausgeblendet
+  - Klick auf `Neu` blendet die Eingabemaske gezielt ein und setzt Fokus ins Linienfeld
+  - Ohne `Neu` bleibt die Eingabemaske verborgen
+
 ## V2.0.146 - 2026-06-07
 - **Editor-Fix: `Neu` oeffnet Eingabemenue jetzt aktiv**:
   - Beim Klick auf `Neu` wird die Ansicht immer an den Anfang gescrollt

@@ -512,6 +512,26 @@ function createNewLine() {
   showLineInputFieldsForNewLine();
 }
 
+function setLineInputMenuVisible(visible) {
+  const topbar = document.getElementById("topbar");
+  if (!topbar) return;
+
+  document.body.classList.toggle("input-menu-hidden", !visible);
+
+  if (visible) {
+    topbar.classList.remove("hidden");
+    topbar.style.display = "flex";
+    topbar.querySelectorAll(".top-group").forEach(group => {
+      group.classList.remove("hidden");
+      group.style.display = "flex";
+    });
+    return;
+  }
+
+  topbar.classList.remove("topbar-attention");
+  topbar.style.display = "none";
+}
+
 function showLineInputFieldsForNewLine() {
   const topbar = document.getElementById("topbar");
   const menubar = document.getElementById("menubar");
@@ -520,14 +540,7 @@ function showLineInputFieldsForNewLine() {
       menubar.classList.remove("hidden");
       menubar.style.display = "";
     }
-    if (topbar) {
-      topbar.classList.remove("hidden");
-      topbar.style.display = "flex";
-      topbar.querySelectorAll(".top-group").forEach(group => {
-        group.classList.remove("hidden");
-        group.style.display = "flex";
-      });
-    }
+    setLineInputMenuVisible(true);
   };
 
   forceVisible();
@@ -583,3 +596,4 @@ loadCitiesFromServer();
 
 startAutosaveLoop();
 setStatus("Editor bereit.");
+setLineInputMenuVisible(false);
