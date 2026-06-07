@@ -139,6 +139,7 @@ const navPanes        = document.querySelectorAll('.nav-menu-pane');
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
+const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -157,9 +158,52 @@ window.addEventListener('DOMContentLoaded', async () => {
   await fetchAndCacheLinesCatalog();
   
   console.log('⏳ Starting background auto-download...');
-  // Auto-Download aller Linien im Hintergrund (nicht blockierend)
-  autoDownloadAllLines().catch(err => console.warn('Auto-download background error:', err));
+  // Auto-Download aller Linien im Hintergrund (nicht blockierend),
+  // aber pro Session/Version nur einmal.
+  if (shouldRunStartupAutoDownload()) {
+    autoDownloadAllLines()
+      .then(() => markStartupAutoDownloadDone())
+      .catch(err => {
+        clearStartupAutoDownloadGuard();
+        console.warn('Auto-download background error:', err);
+      });
+  } else {
+    console.log('⏭️ Startup auto-download skipped (already run in this session/version)');
+  }
 });
+
+function startupDownloadGuardKey() {
+  const version = document.getElementById('versionBadge')?.textContent?.trim() || 'unknown';
+  return STARTUP_DOWNLOAD_GUARD_PREFIX + version;
+}
+
+function shouldRunStartupAutoDownload() {
+  try {
+    const key = startupDownloadGuardKey();
+    if (sessionStorage.getItem(key) === 'done') return false;
+    sessionStorage.setItem(key, 'running');
+    return true;
+  } catch {
+    // Falls sessionStorage nicht verfuegbar ist, nicht blockieren.
+    return true;
+  }
+}
+
+function markStartupAutoDownloadDone() {
+  try {
+    sessionStorage.setItem(startupDownloadGuardKey(), 'done');
+  } catch {
+    // ignore
+  }
+}
+
+function clearStartupAutoDownloadGuard() {
+  try {
+    sessionStorage.removeItem(startupDownloadGuardKey());
+  } catch {
+    // ignore
+  }
+}
 
 function resolveNavPerfDebugEnabled() {
   try {

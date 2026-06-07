@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.133 - 2026-06-07
+- **Fix: Linien werden beim App-Start nicht mehr doppelt geladen**:
+  - Startup-Auto-Download mit Session-Guard abgesichert (pro Version/Tab nur ein Durchlauf)
+  - Verhindert zweiten Download nach SW-bedingtem Reload direkt nach dem ersten Start
+  - Bei Fehler wird der Guard geloescht, damit ein spaeterer Retry weiterhin moeglich ist
+
 ## V2.0.132 - 2026-06-07
 - **Fix: Landscape-Following greift jetzt auch auf groesseren Handys/Tablets**:
   - Starre Breiten-Grenze (`<= 950px`) fuer Landscape-Erkennung entfernt
