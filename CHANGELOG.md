@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.82 - 2026-06-07
+- **iPhone HUD Cleanup (Portrait)** - deutlich aufgeraeumte Darstellung fuer kleine Displays:
+  - Spezielles Layout fuer iPhone-Breite (<=430px) mit weniger visueller Last
+  - Top-HUD neu gebuendelt: kompaktere Karten, weniger Zeilenumbrueche, klarere Hierarchie
+  - Stadtzeile und Ziel-Label ausgeblendet, Fokus auf Linie, Zielname, Abbiegung und Distanz
+  - Rechte Stop-Liste stark reduziert: schmaler, ohne Typ-Label, max. 3 Eintraege
+  - Zeitanzeige oben rechts auf kleinen Displays ausgeblendet, Geschwindigkeit bleibt sichtbar
+
 ## V2.0.81 - 2026-06-07
 - **Vollbild-Modus fürs Handy** - erster Aufräum-Schritt gegen überladene Ansicht:
   - Neuer Vollbild-Button (⛶) in der Topbar zum direkten Ein-/Ausschalten
