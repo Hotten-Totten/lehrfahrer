@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.152 - 2026-06-07
+- **Editor-UX stabilisiert: `Neu` nutzt jetzt eigenes Eingabe-Modal**:
+  - Eigene Eingabemaske (Linie/Route/Richtung/Farbe) erscheint direkt bei `Neu`
+  - Umgeht das persistente Auf/Zu-Problem der Topbar-Eingabe auf einzelnen Browser-Setups
+  - Eingabe ist dadurch sofort und zuverlässig möglich
+
 ## V2.0.151 - 2026-06-07
 - **Editor-Fix: Verhalten nicht mehr von F12/DevTools abhaengig**:
   - Cache-Buster fuer `editor.css` und alle lokalen Editor-Skripte in `index.html` aktiviert
