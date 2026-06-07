@@ -921,25 +921,35 @@ body.is-standalone #fullscreenBtn {
 }
 
 #navTimeSpeed {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'speed unit'
+    'time time';
   align-items: baseline;
-  gap: 6px;
+  justify-items: end;
+  column-gap: 6px;
+  row-gap: 1px;
 }
 
 #navTime {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
+  grid-area: time;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
   font-family: 'Courier New', monospace;
+  line-height: 1.1;
 }
 
 #navSpeed {
+  grid-area: speed;
   font-size: 20px;
   font-weight: 900;
   color: var(--primary);
 }
 
 #navSpeedUnit {
+  grid-area: unit;
   font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -993,13 +1003,13 @@ body.is-standalone #fullscreenBtn {
   right: 8px;
   width: 185px;
   max-height: calc(60vh - 120px);
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
   padding: 12px 8px;
   z-index: 501;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .nav-upcoming-item {
@@ -1500,7 +1510,8 @@ body.nav-mode #navHud {
   }
 
   #navTime {
-    display: none;
+    display: block;
+    font-size: 11px;
   }
 
   #navSpeed {

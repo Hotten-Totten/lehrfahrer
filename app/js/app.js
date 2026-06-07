@@ -1708,10 +1708,17 @@ function buildCompactLineLabel() {
 
   const stops = currentRoute.data?.stops || [];
   const lastStop = stops.length ? (stops[stops.length - 1].name || 'Ziel') : 'Ziel';
-  const totalDist = (navCumDists && navCumDists.length) ? navCumDists[navCumDists.length - 1] : null;
-  const distText = totalDist != null ? navFormatDist(totalDist).replace(' km', ' Km') : '–';
 
-  return `Linie ${lineId} ${lastStop} (in ${distText})`;
+  return `Linie ${lineId} ${lastStop}`;
+}
+
+function formatDriveDuration(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function startNavigation(options = {}) {
@@ -1797,18 +1804,12 @@ function startNavigation(options = {}) {
   if (navTimeInterval) clearInterval(navTimeInterval);
   navTimeInterval = setInterval(() => {
     if (navTimeEl) {
-      const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const mins = String(now.getMinutes()).padStart(2, '0');
-      navTimeEl.textContent = `${hours}:${mins}`;
+      navTimeEl.textContent = `Fahrzeit ${formatDriveDuration(Date.now() - navStartTime)}`;
     }
   }, 1000);
   // Einmal sofort aktualisieren
   if (navTimeEl) {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const mins = String(now.getMinutes()).padStart(2, '0');
-    navTimeEl.textContent = `${hours}:${mins}`;
+    navTimeEl.textContent = 'Fahrzeit 00:00';
   }
 
   if (useSimulation) {
@@ -1885,6 +1886,7 @@ function stopNavigation() {
   navStartTime = 0;
   currentNavLine = null;
   navInputMode = 'gps';
+  if (navTimeEl) navTimeEl.textContent = 'Fahrzeit --:--';
   gpsLastSmoothedPos = null;  // GPS-Smoothing zurücksetzen
   if (navMenuOverlay) navMenuOverlay.classList.add('hidden');  // Close menu
   stopNavDriveLogSession();
@@ -2247,45 +2249,7 @@ function updateNavHud(lat, lon, forcedIdx = null) {
 
 function renderUpcomingStops(currentDist) {
   if (!navUpcomingStopsEl) return;
-
-  const upcoming = navStopDists
-    .filter(s => s.distFromStart > currentDist + 10)
-    .slice(0, 4);
-
-  const list = [];
-  upcoming.forEach(entry => list.push({ kind: 'upcoming', entry }));
-
-  if (!list.length) {
-    navUpcomingStopsEl.replaceChildren();
-    return;
-  }
-
-  const nodes = list.map(({ kind, entry }) => {
-    const card = document.createElement('div');
-    card.className = 'nav-upcoming-item';
-    if (kind === 'destination') card.classList.add('is-destination');
-
-    const type = document.createElement('span');
-    type.className = 'nav-upcoming-type';
-    type.textContent = kind === 'destination' ? 'Ziel' : 'Nächste';
-
-    const name = document.createElement('span');
-    name.className = 'nav-upcoming-name';
-    name.textContent = entry.stop?.name || 'Haltestelle';
-
-    const dist = document.createElement('span');
-    dist.className = 'nav-upcoming-dist';
-    dist.textContent = kind === 'destination'
-      ? navFormatDist(Math.max(0, entry.distFromStart - currentDist))
-      : navFormatDist(Math.max(0, entry.distFromStart - currentDist));
-
-    card.appendChild(type);
-    card.appendChild(name);
-    card.appendChild(dist);
-    return card;
-  });
-
-  navUpcomingStopsEl.replaceChildren(...nodes);
+  navUpcomingStopsEl.replaceChildren();
 }
 
 // ═════════════════════════════════════════════════════════════

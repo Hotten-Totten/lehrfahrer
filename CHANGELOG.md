@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.90 - 2026-06-07
+- **HUD vereinfacht und doppelte Haltestellenanzeige entfernt**:
+  - Distanzangabe aus der oberen Linienkachel entfernt (kein `(in X.X Km)` mehr)
+  - Rechte Sidebar mit "Nächste Haltestelle" deaktiviert (nur untere Haltestellenanzeige bleibt)
+  - Unter der Geschwindigkeit wird jetzt die Fahrzeit angezeigt (`Fahrzeit mm:ss`)
+  - Zeit/Speed-Block auf vertikale Darstellung angepasst (Speed oben, Fahrzeit darunter)
+
 ## V2.0.89 - 2026-06-07
 - **iPhone HUD Lesbarkeit weiter verbessert**:
   - Rechte Nächste-Haltestelle weiter nach oben gesetzt
