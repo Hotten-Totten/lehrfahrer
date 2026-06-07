@@ -24,14 +24,6 @@ function isCatalogStopVisible(catalogStop) {
 
 // Liefert das passende Icon (normal oder hervorgehoben).
 function getCatalogIconForStop(catalogStop, highlighted = false) {
-  if (highlighted) {
-    return ICONS.catalogHighlight || ICONS.catalog;
-  }
-
-  return ICONS.catalog;
-}
-/*
-function getCatalogIconForStop(catalogStop, highlighted = false) {
   const type = normalizeStopType(catalogStop?.type);
 
   if (highlighted) {
@@ -64,7 +56,6 @@ function getCatalogIconForStop(catalogStop, highlighted = false) {
 
   return ICONS.catalog;
 }
-*/
 // ---------- Marker Handling ----------
 
 let catalogUpdateTimer = null;

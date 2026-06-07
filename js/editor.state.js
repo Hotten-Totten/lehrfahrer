@@ -184,6 +184,47 @@ function createStopBadgeIcon(background, border = "#000", size = 20, text = "H")
   });
 }
 
+function normalizeTransitTypeForIcon(type) {
+  return String(type || "").toLowerCase().trim();
+}
+
+function resolveLineStopTransitType(stop) {
+  if (!stop || typeof stop !== "object") return "free";
+
+  const directType = normalizeTransitTypeForIcon(stop.transitType || stop.type);
+  if (["bus", "tram", "bus_tram", "mixed"].includes(directType)) {
+    return directType;
+  }
+
+  if (stop.catalogId) {
+    const catalogEntry = stopCatalog.find(entry => entry.id === stop.catalogId);
+    const catalogType = normalizeTransitTypeForIcon(catalogEntry?.type);
+    if (["bus", "tram", "bus_tram", "mixed"].includes(catalogType)) {
+      return catalogType;
+    }
+  }
+
+  return stop.sourceType === "catalog" ? "bus" : "free";
+}
+
+function getLineStopIcon(stop, selected = false) {
+  const type = resolveLineStopTransitType(stop);
+
+  if (type === "tram") {
+    return selected ? ICONS.stopTramSelected : ICONS.stopTram;
+  }
+
+  if (type === "bus_tram" || type === "mixed") {
+    return selected ? ICONS.stopMixedSelected : ICONS.stopMixed;
+  }
+
+  if (type === "bus") {
+    return selected ? ICONS.stopBusSelected : ICONS.stopBus;
+  }
+
+  return selected ? ICONS.stopSelected : ICONS.stop;
+}
+
 function createTextIcon(text, background, border = "#000", size = 18, fontSize = 11) {
   return L.divIcon({
     className: "",
@@ -211,65 +252,27 @@ function createTextIcon(text, background, border = "#000", size = 18, fontSize =
 
 const ICONS = {
   // ---------- Katalog ----------
-  catalog: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12]
-  }),
+  catalog: createStopBadgeIcon("#7c3aed", "#5b21b6", 20, "B"),
+  catalogHighlight: createStopBadgeIcon("#7c3aed", "#4c1d95", 24, "B"),
 
-  catalogHighlight: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
-  }),
+  catalogBus: createStopBadgeIcon("#7c3aed", "#5b21b6", 20, "B"),
+  catalogBusHighlight: createStopBadgeIcon("#7c3aed", "#4c1d95", 24, "B"),
 
-  catalogBus: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12]
-  }),
+  catalogTram: createStopBadgeIcon("#dc2626", "#991b1b", 20, "T"),
+  catalogTramHighlight: createStopBadgeIcon("#dc2626", "#7f1d1d", 24, "T"),
 
-  catalogBusHighlight: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
-  }),
-
-  catalogTram: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12]
-  }),
-
-  catalogTramHighlight: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
-  }),
-
-  catalogMixed: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12]
-  }),
-
-  catalogMixedHighlight: L.icon({
-    iconUrl: "img/haltestelle-bus.png",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
-  }),
+  catalogMixed: createStopBadgeIcon("#be185d", "#831843", 20, "M"),
+  catalogMixedHighlight: createStopBadgeIcon("#be185d", "#701a75", 24, "M"),
 
   // ---------- Linien-Haltestellen ----------
   stop: createDivIcon("#3b82f6", "#1d4ed8", 16),
   stopSelected: createDivIcon("#22c55e", "#15803d", 20),
+  stopBus: createStopBadgeIcon("#7c3aed", "#5b21b6", 18, "B"),
+  stopBusSelected: createStopBadgeIcon("#7c3aed", "#4c1d95", 22, "B"),
+  stopTram: createStopBadgeIcon("#dc2626", "#991b1b", 18, "T"),
+  stopTramSelected: createStopBadgeIcon("#dc2626", "#7f1d1d", 22, "T"),
+  stopMixed: createStopBadgeIcon("#be185d", "#831843", 18, "M"),
+  stopMixedSelected: createStopBadgeIcon("#be185d", "#701a75", 22, "M"),
 
   // ---------- Routenpunkte ----------
   route: createDivIcon("#f97316", "#7c2d12", 12),

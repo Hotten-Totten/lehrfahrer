@@ -216,7 +216,7 @@ function applyRoutePointIcons() {
 function clearSelectionStyles() {
   state.stops.forEach(stop => {
     if (stop.marker) {
-      stop.marker.setIcon(ICONS.stop);
+      stop.marker.setIcon(getLineStopIcon(stop, false));
     }
   });
 
@@ -242,7 +242,7 @@ function selectStop(stop) {
   };
 
   clearSelectionStyles();
-  stop.marker.setIcon(ICONS.stopSelected);
+  stop.marker.setIcon(getLineStopIcon(stop, true));
 
   noSelection.classList.add("hidden");
   routeEditor.classList.add("hidden");

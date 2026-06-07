@@ -101,7 +101,7 @@ function selectStop(stop) {
 // STOPS MAIN
 // =========================
 
-function addStopToLine({ name, lat, lon, sourceType, catalogId = null }) {
+function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitType = null }) {
   if (!historyRestoreRunning) {
     pushHistorySnapshot("Stop hinzugefügt");
   }
@@ -116,12 +116,13 @@ function addStopToLine({ name, lat, lon, sourceType, catalogId = null }) {
     minuteMode: "auto",
     note: "",
     sourceType,
+    transitType,
     marker: null
   };
 
   const marker = L.marker([lat, lon], {
     draggable: true,
-    icon: ICONS.stop
+    icon: getLineStopIcon(stop, false)
   }).addTo(map);
 
   marker.bindTooltip(stop.name, {
@@ -175,7 +176,8 @@ function addCatalogStopToLine(catalogStop) {
     lat: catalogStop.lat,
     lon: catalogStop.lon,
     sourceType: "catalog",
-    catalogId: catalogStop.id
+    catalogId: catalogStop.id,
+    transitType: catalogStop.type || null
   });
 }
 

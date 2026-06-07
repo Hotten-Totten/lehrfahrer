@@ -24,7 +24,8 @@ function buildHistorySnapshot() {
       lon: stop.lon,
       minuteFromStart: stop.minuteFromStart,
       note: stop.note,
-      sourceType: stop.sourceType
+      sourceType: stop.sourceType,
+      transitType: stop.transitType || null
     })),
 
     routePoints: state.routePoints.map(point => ({
@@ -85,7 +86,8 @@ function applyHistorySnapshot(snapshot) {
         lat: stopData.lat,
         lon: stopData.lon,
         sourceType: stopData.sourceType || "free",
-        catalogId: stopData.catalogId || null
+        catalogId: stopData.catalogId || null,
+        transitType: stopData.transitType || stopData.type || null
       });
 
       stop.id = stopData.id || stop.id;

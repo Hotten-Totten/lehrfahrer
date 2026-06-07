@@ -12,6 +12,11 @@
 function getStopDisplayType(stop) {
   if (!stop) return "unknown";
 
+  const directType = String(stop.transitType || stop.type || "").toLowerCase().trim();
+  if (["bus", "tram", "bus_tram", "mixed"].includes(directType)) {
+    return directType;
+  }
+
   if (stop.sourceType === "free") {
     return "free";
   }
@@ -672,7 +677,8 @@ function loadLineFromData(data) {
       lat: stopData.lat,
       lon: stopData.lon,
       sourceType: stopData.sourceType || "free",
-      catalogId: stopData.catalogId || null
+      catalogId: stopData.catalogId || null,
+      transitType: stopData.transitType || stopData.type || null
     });
 
     stop.id = stopData.id || stop.id;

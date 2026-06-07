@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.159 - 2026-06-07
+- **Haltestellen im Editor klar unterscheidbar gemacht**:
+  - Bus-Haltestellen jetzt Lila mit weißem `B`
+  - Tram-Haltestellen jetzt Rot mit weißem `T`
+  - Katalogmarker und übernommene Linien-Haltestellen nutzen dieselbe Typ-Logik
+  - Typ bleibt bei Laden, Autosave sowie Undo/Redo konsistent erhalten
+
 ## V2.0.158 - 2026-06-07
 - **Tram-Haltestellen wieder korrekt behandelt**:
   - Tram- und Bus/Tram-Haltestellen werden nicht mehr auf das Auto-Straßenprofil gesnappt

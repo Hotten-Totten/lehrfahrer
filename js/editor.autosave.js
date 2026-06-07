@@ -29,7 +29,8 @@ function buildAutosaveData() {
       minuteFromStart: stop.minuteFromStart,
       minuteMode: stop.minuteMode || "auto",
       note: stop.note,
-      sourceType: stop.sourceType
+      sourceType: stop.sourceType,
+      transitType: stop.transitType || null
     })),
 
     routePoints: state.routePoints.map(point => ({
@@ -240,7 +241,8 @@ function loadAutosave() {
         lat: stopData.lat,
         lon: stopData.lon,
         sourceType: stopData.sourceType || "free",
-        catalogId: stopData.catalogId || null
+        catalogId: stopData.catalogId || null,
+        transitType: stopData.transitType || stopData.type || null
       });
 
       stop.id = stopData.id;
