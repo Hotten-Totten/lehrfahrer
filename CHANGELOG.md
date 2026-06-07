@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.130 - 2026-06-07
+- **Fix: SIM startet wieder sauber und bleibt nicht beim ersten Frame stehen**:
+  - Kurze Pause-Input-Sperre direkt nach Navi-Start eingefuehrt
+  - Verhindert Ghost-Taps/Rest-Clicks, die unmittelbar nach SIM-Start ungewollt auf "Pause" schalten
+  - Ergebnis: SIM laeuft nach dem Start wieder kontinuierlich weiter
+
 ## V2.0.129 - 2026-06-07
 - **Landscape-Fokus in Gegenrichtung angepasst (weiter weg)**:
   - Kamera im Querformat bewusst auf "weiter weg" umgestellt

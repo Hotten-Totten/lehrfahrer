@@ -1767,6 +1767,7 @@ function startNavigation(options = {}) {
   currentNavLine = currentRoute.data;
   navInputMode = useSimulation ? 'sim' : 'gps';
   navPaused = false;
+  navPauseInputBlockedUntil = Date.now() + 900;
   resetNavPerfStats(navInputMode);
   startNavDriveLogSession('nav-start');
   renderNavPauseUi();
@@ -2323,6 +2324,7 @@ function renderUpcomingStops(currentDist) {
 // ═════════════════════════════════════════════════════════════
 
 let navPaused = false;
+let navPauseInputBlockedUntil = 0;
 
 function renderNavPauseUi() {
   if (navPauseBtn) {
@@ -2465,6 +2467,10 @@ function updateNavMenuStops() {
 }
 
 function toggleNavPause() {
+  if (Date.now() < navPauseInputBlockedUntil) {
+    return;
+  }
+
   navPaused = !navPaused;
   renderNavPauseUi();
 
