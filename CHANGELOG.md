@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.87 - 2026-06-07
+- **iPhone HUD Feinschliff**:
+  - Maneuver-Pfeil erneut deutlich vergrößert (52px -> 66px)
+  - Distanzanzeige (`in XXX m`) weiter vergrößert (28px -> 30px)
+  - Rechte Nächste-Haltestelle vertikal auf Höhe der Maneuver-Zeile verschoben
+  - Stop-Karte rechts etwas kompakter für saubere Ausrichtung zur Fahrinfo
+
 ## V2.0.86 - 2026-06-07
 - **Maneuver-Pfeile größer und mittig (iPhone)**:
   - Maneuver-Icon im iPhone-Layout deutlich vergrößert (38px -> 52px)

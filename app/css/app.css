@@ -1472,8 +1472,8 @@ body.nav-mode #navHud {
   }
 
   #navArrow {
-    width: 52px;
-    height: 52px;
+    width: 66px;
+    height: 66px;
   }
 
   #navInstruction {
@@ -1489,7 +1489,7 @@ body.nav-mode #navHud {
   }
 
   #navDist {
-    font-size: 28px;
+    font-size: 30px;
   }
 
   #navRightBox {
@@ -1522,9 +1522,9 @@ body.nav-mode #navHud {
   }
 
   #navUpcomingStops {
-    top: calc(var(--safe-top) + 144px);
+    top: calc(var(--safe-top) + 88px);
     right: 4px;
-    width: 112px;
+    width: 106px;
     gap: 5px;
     padding: 6px 4px;
   }
