@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.154 - 2026-06-07
+- **Haltestellen-Import erweitert: optional auf Fahrbahnmitte ausrichten**:
+  - Neuer Schalter im "Katalog laden"-Modal: Haltestellen auf Fahrbahnmitte ausrichten (OSRM)
+  - Neuer Sicherheitswert "Max. Abstand" (z. B. 20 m), damit nur nahe Punkte verschoben werden
+  - Import zeigt Fortschritt und Anzahl der angepassten Haltestellen
+  - Originalkoordinaten werden bei Anpassung mitgespeichert (`originalLat`, `originalLon`)
+
 ## V2.0.153 - 2026-06-07
 - **Editor-Design wiederhergestellt (klassisch)**:
   - `Neu`-Eingabe-Modal wieder entfernt

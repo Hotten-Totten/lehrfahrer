@@ -1218,6 +1218,10 @@ button.danger:hover {
   cursor: pointer;
 }
 
+#fetchStopsSnapMaxM {
+  max-width: 150px;
+}
+
 .fetch-stops-mode-row {
   align-items: flex-start !important;
   margin-top: 2px;

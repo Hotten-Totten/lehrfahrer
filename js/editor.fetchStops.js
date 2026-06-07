@@ -15,6 +15,8 @@
   const lonInput     = document.getElementById("fetchStopsLon");
   const radiusSelect = document.getElementById("fetchStopsRadius");
   const saveCheckbox = document.getElementById("fetchStopsSave");
+  const snapRoadCheckbox = document.getElementById("fetchStopsSnapRoad");
+  const snapMaxDistanceSelect = document.getElementById("fetchStopsSnapMaxM");
   const startBtn     = document.getElementById("fetchStopsStartBtn");
   const statusDiv    = document.getElementById("fetchStopsStatus");
 
@@ -58,6 +60,80 @@
     startBtn.disabled = busy;
     geoBtn.disabled   = busy;
     startBtn.textContent = busy ? "Wird geladen..." : "Katalog laden";
+  }
+
+  async function snapStopToRoad(stop, maxDistanceMeters) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+
+    try {
+      const url =
+        "https://router.project-osrm.org/nearest/v1/driving/" +
+        encodeURIComponent(stop.lon + "," + stop.lat) +
+        "?number=1";
+
+      const res = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal
+      });
+
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || json.code !== "Ok" || !Array.isArray(json.waypoints) || !json.waypoints.length) {
+        return null;
+      }
+
+      const waypoint = json.waypoints[0];
+      const distance = Number(waypoint.distance || 0);
+      const location = waypoint.location;
+
+      if (!Array.isArray(location) || location.length < 2) return null;
+      if (!Number.isFinite(distance) || distance > maxDistanceMeters) return null;
+
+      return {
+        lat: Number(location[1]),
+        lon: Number(location[0]),
+        distance
+      };
+    } catch (_err) {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function snapStopsToRoad(stops, maxDistanceMeters, progressCb) {
+    const output = stops.map(s => ({ ...s }));
+    const concurrency = 8;
+    let cursor = 0;
+    let done = 0;
+    let snapped = 0;
+
+    async function worker() {
+      while (cursor < output.length) {
+        const idx = cursor++;
+        const stop = output[idx];
+        const snap = await snapStopToRoad(stop, maxDistanceMeters);
+        if (snap) {
+          stop.originalLat = stop.lat;
+          stop.originalLon = stop.lon;
+          stop.lat = Number(snap.lat.toFixed(6));
+          stop.lon = Number(snap.lon.toFixed(6));
+          stop.snappedToRoad = true;
+          stop.snapDistanceM = Number(snap.distance.toFixed(1));
+          snapped++;
+        }
+        done++;
+        if (typeof progressCb === "function") progressCb(done, output.length, snapped);
+      }
+    }
+
+    const workers = [];
+    const limit = Math.max(1, Math.min(concurrency, output.length));
+    for (let i = 0; i < limit; i++) workers.push(worker());
+    await Promise.all(workers);
+
+    return { stops: output, snapped };
   }
 
   // Haversine-Distanz in Metern (identisch zur Python-Logik)
@@ -129,6 +205,8 @@
     const lon    = parseFloat(lonInput.value);
     const radius = parseInt(radiusSelect.value, 10);
     const mode   = getModeValue();
+    const snapToRoad = !!(snapRoadCheckbox && snapRoadCheckbox.checked);
+    const snapMaxM = Math.max(5, Math.min(60, parseInt(snapMaxDistanceSelect?.value || "20", 10) || 20));
 
     if (isNaN(lat) || isNaN(lon)) {
       setStatus("Bitte Koordinaten eingeben oder per Suche ermitteln.", "error");
@@ -176,15 +254,34 @@
       }
 
       let finalCount, statusNote;
+      let incomingStops = Array.isArray(json.stops) ? json.stops.slice() : [];
+
+      if (snapToRoad && incomingStops.length) {
+        setStatus(
+          "Ausrichtung auf Fahrbahnmitte läuft: 0/" + incomingStops.length + " ...",
+          ""
+        );
+
+        const snapResult = await snapStopsToRoad(incomingStops, snapMaxM, (done, total, snapped) => {
+          setStatus(
+            "Ausrichtung auf Fahrbahnmitte: " + done + "/" + total + " · " + snapped + " angepasst",
+            ""
+          );
+        });
+
+        incomingStops = snapResult.stops;
+        statusNote = (statusNote ? statusNote + " · " : "") + snapResult.snapped + " auf Fahrbahn ausgerichtet";
+      }
 
       if (mode === "add") {
         // Merge: neue Haltestellen in bestehenden Katalog integrieren
         const existing = stopCatalog.slice();
-        const { result, added, merged } = mergeIntoExisting(existing, json.stops);
+        const { result, added, merged } = mergeIntoExisting(existing, incomingStops);
         stopCatalog.length = 0;
         for (const s of result) stopCatalog.push(s);
         finalCount = result.length;
-        statusNote = added + " neu hinzugefügt, " + merged + " zusammengeführt";
+        const mergeNote = added + " neu hinzugefügt, " + merged + " zusammengeführt";
+        statusNote = statusNote ? mergeNote + " · " + statusNote : mergeNote;
 
         // Bei Merge + Speichern: gesamten gemergten Katalog separat an Server senden
         if (saveCheckbox.checked && finalCount > 0) {
@@ -205,11 +302,14 @@
       } else {
         // Ersetzen (altes Verhalten)
         stopCatalog.length = 0;
-        for (const s of json.stops) stopCatalog.push(s);
+        for (const s of incomingStops) stopCatalog.push(s);
         finalCount = json.count;
-        statusNote = json.saveError
+        const replaceNote = json.saveError
           ? "Speichern fehlgeschlagen: " + json.saveError
           : saveCheckbox.checked ? "als haltestellen.js gespeichert" : "";
+        statusNote = statusNote
+          ? [replaceNote, statusNote].filter(Boolean).join(" · ")
+          : replaceNote;
       }
 
       // Karte aktualisieren
