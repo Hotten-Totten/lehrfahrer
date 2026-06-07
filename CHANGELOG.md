@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.93 - 2026-06-07
+- **iPhone HUD Feintuning**:
+  - `km/h` und `Fahrzeit` von der Mitte ganz nach links verschoben
+  - Restliche HUD-Aufteilung unverändert belassen
+
 ## V2.0.92 - 2026-06-07
 - **iPhone HUD Positionierung**:
   - `km/h` und `Fahrzeit` mittig unter der Zielkachel positioniert
