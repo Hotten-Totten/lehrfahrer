@@ -23,6 +23,12 @@ function formatSavedAt(iso) {
   } catch { return iso; }
 }
 
+function isDiversionLine(line) {
+  const fileBase = String(line?.fileBase || "");
+  const routeName = String(line?.routeName || "");
+  return /umleitung_\d{2}/i.test(fileBase) || /umleitung\s*_?\s*\d{2}/i.test(routeName);
+}
+
 // Rendert die Liste der Linien im Browser-Fenster
 // Enthält Suche, Sortierung, Gruppenansicht nach Ort, Download-Buttons
 function renderLineBrowser(lines) {
@@ -153,6 +159,12 @@ function renderLineBrowser(lines) {
         gpxBadge.className = "lbr-file-badge " + (line.hasGpx ? "lbr-file-badge-gpx" : "lbr-file-badge-missing");
         gpxBadge.textContent = line.hasGpx ? "GPX ✓" : "GPX fehlt";
         fileBadges.appendChild(gpxBadge);
+        if (isDiversionLine(line)) {
+          const diversionBadge = document.createElement("span");
+          diversionBadge.className = "lbr-file-badge lbr-file-badge-diversion";
+          diversionBadge.textContent = "Umleitung";
+          fileBadges.appendChild(diversionBadge);
+        }
 
         info.appendChild(title);
         info.appendChild(meta);

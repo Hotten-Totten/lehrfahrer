@@ -1088,6 +1088,7 @@ button.danger:hover {
 .lbr-file-badge-json { background: #dbeafe; color: #1d4ed8; }
 .lbr-file-badge-gpx  { background: #dcfce7; color: #15803d; }
 .lbr-file-badge-missing { background: #fee2e2; color: #b91c1c; }
+.lbr-file-badge-diversion { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
 .lbr-btn-download {
   background: #f0fdf4;
   border-color: #86efac;

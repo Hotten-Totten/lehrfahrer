@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.141 - 2026-06-07
+- **Editor: Umleitungslabel im Linien-Browser**:
+  - Linien mit `Umleitung_XX` im Dateinamen oder Routennamen erhalten jetzt ein sichtbares Badge `Umleitung`
+  - Badge erscheint direkt neben JSON/GPX-Status und macht Umleitungen sofort erkennbar
+
 ## V2.0.140 - 2026-06-07
 - **Editor-Backend: Originalroute wird bei Aenderungen nicht mehr ueberschrieben**:
   - Beim Speichern auf einer Originaldatei mit gleicher Route/Richtung wird automatisch eine neue Datei mit Suffix `Umleitung_XX` erzeugt
