@@ -260,7 +260,11 @@ function extractStopDirectionText(stop) {
 }
 
 function normalizeStopNameForDirection(value) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  let name = String(value || "").trim().toLowerCase();
+  // Entfernt optionale Stadt-Praefixe wie "Cottbus, ..." fuer stabilere Paarbildung.
+  name = name.replace(/^\s*[^,]{2,30},\s*/u, "");
+  name = name.replace(/\s+/g, " ");
+  return name;
 }
 
 function approxDistanceMeters(lat1, lon1, lat2, lon2) {
@@ -283,34 +287,61 @@ function inferDirectionCodeFromGeometry(stop) {
   const nearSameName = poolSource.filter(s => {
     if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return false;
     if (normalizeStopNameForDirection(s.name) !== nameKey) return false;
-    return approxDistanceMeters(stop.lat, stop.lon, s.lat, s.lon) <= 350;
+    return approxDistanceMeters(stop.lat, stop.lon, s.lat, s.lon) <= 800;
   });
 
-  if (nearSameName.length < 2) return "";
+  if (nearSameName.length >= 2) {
+    let minLat = nearSameName[0].lat;
+    let maxLat = nearSameName[0].lat;
+    let minLon = nearSameName[0].lon;
+    let maxLon = nearSameName[0].lon;
 
-  let minLat = nearSameName[0].lat;
-  let maxLat = nearSameName[0].lat;
-  let minLon = nearSameName[0].lon;
-  let maxLon = nearSameName[0].lon;
+    nearSameName.forEach(s => {
+      minLat = Math.min(minLat, s.lat);
+      maxLat = Math.max(maxLat, s.lat);
+      minLon = Math.min(minLon, s.lon);
+      maxLon = Math.max(maxLon, s.lon);
+    });
 
-  nearSameName.forEach(s => {
-    minLat = Math.min(minLat, s.lat);
-    maxLat = Math.max(maxLat, s.lat);
-    minLon = Math.min(minLon, s.lon);
-    maxLon = Math.max(maxLon, s.lon);
-  });
+    const latSpanM = approxDistanceMeters(minLat, stop.lon, maxLat, stop.lon);
+    const lonSpanM = approxDistanceMeters(stop.lat, minLon, stop.lat, maxLon);
+    if (Math.max(latSpanM, lonSpanM) >= 8) {
+      if (latSpanM >= lonSpanM) {
+        const midLat = (minLat + maxLat) / 2;
+        return stop.lat >= midLat ? "N" : "S";
+      }
 
-  const latSpanM = approxDistanceMeters(minLat, stop.lon, maxLat, stop.lon);
-  const lonSpanM = approxDistanceMeters(stop.lat, minLon, stop.lat, maxLon);
-  if (Math.max(latSpanM, lonSpanM) < 14) return "";
-
-  if (latSpanM >= lonSpanM) {
-    const midLat = (minLat + maxLat) / 2;
-    return stop.lat >= midLat ? "N" : "S";
+      const midLon = (minLon + maxLon) / 2;
+      return stop.lon >= midLon ? "O" : "W";
+    }
   }
 
-  const midLon = (minLon + maxLon) / 2;
-  return stop.lon >= midLon ? "O" : "W";
+  // Letzter Fallback: naechster Nachbar mit gleichem Namen (unabhaengig vom Cluster),
+  // damit der Richtungsindikator nicht komplett leer bleibt.
+  let nearest = null;
+  let nearestDist = Infinity;
+
+  for (const s of poolSource) {
+    if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
+    if (normalizeStopNameForDirection(s.name) !== nameKey) continue;
+    const dist = approxDistanceMeters(stop.lat, stop.lon, s.lat, s.lon);
+    if (dist < 1) continue;
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = s;
+    }
+  }
+
+  if (!nearest || nearestDist > 1500) return "";
+
+  const dLat = nearest.lat - stop.lat;
+  const dLon = (nearest.lon - stop.lon) * Math.cos(stop.lat * Math.PI / 180);
+
+  if (Math.abs(dLat) >= Math.abs(dLon)) {
+    return dLat > 0 ? "S" : "N";
+  }
+
+  return dLon > 0 ? "W" : "O";
 }
 
 function getDirectionCode(directionText, stop) {

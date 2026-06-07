@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.165 - 2026-06-07
+- **Richtungsanzeige robuster gemacht**:
+  - Namensabgleich verbessert (z. B. mit/ohne Stadt-Präfix wie `Cottbus, ...`)
+  - Suchradius und Geometrie-Heuristik erweitert
+  - Zusätzlicher Nearest-Neighbor-Fallback für Fälle ohne klaren Cluster
+  - Ziel: Richtungsdreieck im `B`/`T`-Marker wird deutlich häufiger berechnet
+
 ## V2.0.164 - 2026-06-07
 - **Richtungsanzeige direkt im B/T-Marker integriert**:
   - Richtung wird jetzt als kleines Dreieck im Marker selbst dargestellt (statt externem Badge)
