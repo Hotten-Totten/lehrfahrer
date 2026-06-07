@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.115 - 2026-06-07
+- **Kurvenrotation entruckelt und Geradeaus-Fokus verbessert**:
+  - Ueberaggressive Turn-Boost-Werte reduziert (weniger harte Spruenge)
+  - Kamera-Animationen bei Kurven weiterhin schnell, aber weicher abgestimmt
+  - `map.stop()` nur noch bei sehr extremem Winkelsprung
+  - Ziel: flüssiger in die kommende Gerade einpendeln statt ruckeliges Nachdrehen
+
 ## V2.0.114 - 2026-06-07
 - **Kurvenrotation von "hart" auf "schnell + fluessig" umgestellt**:
   - Harte Bearing-Spruenge entfernt (weniger Ruckeln)

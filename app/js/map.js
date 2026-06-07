@@ -92,34 +92,34 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
   const absDelta = Math.abs(delta);
-  if (absDelta > 25) {
-    navTurnBoostUntil = nowTs + 1400;
+  if (absDelta > 30) {
+    navTurnBoostUntil = nowTs + 1100;
   }
-  let smoothing = (speedKmh != null && speedKmh < 5) ? 0.16 : ((speedKmh != null && speedKmh < 15) ? 0.24 : 0.36);
-  let deadZone = (speedKmh != null && speedKmh < 5) ? 3.2 : ((speedKmh != null && speedKmh < 15) ? 1.7 : 0.9);
-  let maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 26 : ((speedKmh != null && speedKmh < 15) ? 55 : 105);
+  let smoothing = (speedKmh != null && speedKmh < 5) ? 0.15 : ((speedKmh != null && speedKmh < 15) ? 0.23 : 0.34);
+  let deadZone = (speedKmh != null && speedKmh < 5) ? 3.0 : ((speedKmh != null && speedKmh < 15) ? 1.6 : 0.8);
+  let maxTurnRateDegPerSec = (speedKmh != null && speedKmh < 5) ? 24 : ((speedKmh != null && speedKmh < 15) ? 50 : 95);
 
   if (nowTs < navTurnBoostUntil) {
-    smoothing = Math.max(smoothing, 0.48);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 180);
-    deadZone = Math.min(deadZone, 0.9);
+    smoothing = Math.max(smoothing, 0.44);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 165);
+    deadZone = Math.min(deadZone, 0.95);
   }
 
   if (absDelta > 45) {
-    smoothing = Math.max(smoothing, 0.62);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 260);
-    deadZone = Math.min(deadZone, 0.6);
+    smoothing = Math.max(smoothing, 0.56);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 210);
+    deadZone = Math.min(deadZone, 0.65);
   }
   if (absDelta > 80) {
-    smoothing = Math.max(smoothing, 0.78);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 320);
+    smoothing = Math.max(smoothing, 0.68);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 250);
     deadZone = Math.min(deadZone, 0.35);
   }
 
   // Nach dem Abbiegen auf die kommende Gerade zuegig, aber weich einrasten.
-  if (absDelta < 14 && (speedKmh == null || speedKmh >= 8)) {
-    smoothing = Math.max(smoothing, 0.42);
-    deadZone = Math.min(deadZone, 0.28);
+  if (absDelta < 16 && (speedKmh == null || speedKmh >= 8)) {
+    smoothing = Math.max(smoothing, 0.40);
+    deadZone = Math.min(deadZone, 0.32);
   }
 
   if (speedKmh != null && speedKmh < 8 && absDelta > 120 && movedM < 2.5) {
@@ -739,15 +739,15 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const mapBearing = normalizeDeg(map.getBearing());
   const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
 
-  let duration = 520;
-  if (turnDelta > 75) duration = 220;
-  else if (turnDelta > 45) duration = 300;
-  else if (turnDelta > 20) duration = 380;
-  else if (speedKmh != null && speedKmh < 8) duration = 560;
+  let duration = 560;
+  if (turnDelta > 75) duration = 260;
+  else if (turnDelta > 45) duration = 340;
+  else if (turnDelta > 20) duration = 420;
+  else if (speedKmh != null && speedKmh < 8) duration = 600;
 
-  // Nur bei extremem Richtungswechsel laufende Animation abbrechen, sonst weich weiterfuehren.
-  if (turnDelta > 110) map.stop();
-  map.easeTo({ ...opts, duration, easing: t => 1 - Math.pow(1 - t, 3) });
+  // Nur bei wirklich extremen Winkelspruengen abbrechen; sonst Animation weich fortsetzen.
+  if (turnDelta > 145) map.stop();
+  map.easeTo({ ...opts, duration, easing: t => t * t * (3 - 2 * t) });
   updateStopPoiVisibility();
 }
 
