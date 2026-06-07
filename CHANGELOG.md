@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.158 - 2026-06-07
+- **Tram-Haltestellen wieder korrekt behandelt**:
+  - Tram- und Bus/Tram-Haltestellen werden nicht mehr auf das Auto-Straßenprofil gesnappt
+  - Der strenge Snap-Filter entfernt diese Haltestellen nicht mehr
+  - Ergebnis: Tramgassen und gemeinsame Bus/Tram-Führungen bleiben erhalten
+
 ## V2.0.157 - 2026-06-07
 - **Snap-Filter verschärft (auf Wunsch)**:
   - Wenn "Haltestellen auf Fahrbahnmitte ausrichten" aktiv ist, bleiben nur erfolgreich gesnappte Haltestellen erhalten

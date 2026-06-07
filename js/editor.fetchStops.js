@@ -113,6 +113,14 @@
       while (cursor < output.length) {
         const idx = cursor++;
         const stop = output[idx];
+
+        // Tram-/Misch-Haltestellen nicht auf Auto-Strassenprofil zwingen.
+        if (stop && (stop.type === "tram" || stop.type === "bus_tram")) {
+          done++;
+          if (typeof progressCb === "function") progressCb(done, output.length, snapped);
+          continue;
+        }
+
         const snap = await snapStopToRoad(stop, maxDistanceMeters);
         if (snap) {
           stop.originalLat = stop.lat;
@@ -408,7 +416,11 @@
         statusNote = (statusNote ? statusNote + " · " : "") + snapResult.snapped + " auf Fahrbahn ausgerichtet";
 
         const beforeFilter = incomingStops.length;
-        incomingStops = incomingStops.filter(s => s && s.snappedToRoad === true);
+        incomingStops = incomingStops.filter(s => {
+          if (!s) return false;
+          if (s.type === "tram" || s.type === "bus_tram") return true;
+          return s.snappedToRoad === true;
+        });
         const removedUnsnapped = beforeFilter - incomingStops.length;
         if (removedUnsnapped > 0) {
           statusNote += " · " + removedUnsnapped + " ohne Straßensnap entfernt";
