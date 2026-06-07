@@ -151,6 +151,29 @@ function classifyStop($tags) {
     return "bus";
 }
 
+function normalizeDirectionText($value) {
+    $value = trim((string)$value);
+    if ($value === "") return "";
+    $value = preg_replace('/\s+/', ' ', $value);
+    return mb_strtolower($value, 'UTF-8');
+}
+
+function extractDirectionHint($tags) {
+    $candidates = [
+        $tags["towards"] ?? "",
+        $tags["destination"] ?? "",
+        $tags["direction"] ?? "",
+        $tags["local_ref"] ?? "",
+    ];
+
+    foreach ($candidates as $cand) {
+        $normalized = normalizeDirectionText($cand);
+        if ($normalized !== "") return $normalized;
+    }
+
+    return "";
+}
+
 $raw = [];
 foreach ($parsed["elements"] as $el) {
     $tags = $el["tags"] ?? [];
@@ -171,7 +194,13 @@ foreach ($parsed["elements"] as $el) {
         continue;
     }
 
-    $raw[] = ["name" => $name, "lat" => $elLat, "lon" => $elLon, "type" => classifyStop($tags)];
+    $raw[] = [
+        "name" => $name,
+        "lat" => $elLat,
+        "lon" => $elLon,
+        "type" => classifyStop($tags),
+        "direction" => extractDirectionHint($tags),
+    ];
 }
 
 // Merge by name + proximity (8 m)
@@ -180,12 +209,16 @@ foreach ($raw as $stop) {
     $found = false;
     foreach ($merged as &$m) {
         if ($m["name"] !== $stop["name"]) continue;
-        if (distanceMeters($m["lat"], $m["lon"], $stop["lat"], $stop["lon"]) <= $MERGE_RADIUS_M) {
+        $mDir = $m["direction"] ?? "";
+        $sDir = $stop["direction"] ?? "";
+        $dirCompatible = ($mDir !== "" && $sDir !== "") ? ($mDir === $sDir) : true;
+        if ($dirCompatible && distanceMeters($m["lat"], $m["lon"], $stop["lat"], $stop["lon"]) <= $MERGE_RADIUS_M) {
             // weighted centroid
             $n = $m["sourceCount"];
             $m["lat"] = ($m["lat"] * $n + $stop["lat"]) / ($n + 1);
             $m["lon"] = ($m["lon"] * $n + $stop["lon"]) / ($n + 1);
             $m["sourceCount"]++;
+            if (($m["direction"] ?? "") === "" && $sDir !== "") $m["direction"] = $sDir;
             // tram beats bus
             if ($stop["type"] === "tram" || $stop["type"] === "bus_tram") $m["type"] = $stop["type"];
             $found = true;
@@ -195,7 +228,7 @@ foreach ($raw as $stop) {
     unset($m);
     if (!$found) {
         $merged[] = ["name" => $stop["name"], "lat" => $stop["lat"], "lon" => $stop["lon"],
-                     "type" => $stop["type"], "sourceCount" => 1];
+                     "type" => $stop["type"], "direction" => ($stop["direction"] ?? ""), "sourceCount" => 1];
     }
 }
 
@@ -209,6 +242,7 @@ foreach ($merged as $i => $s) {
         "lat"         => round($s["lat"], 6),
         "lon"         => round($s["lon"], 6),
         "type"        => $s["type"],
+        "direction"   => $s["direction"] ?? "",
         "sourceCount" => $s["sourceCount"],
     ];
 }

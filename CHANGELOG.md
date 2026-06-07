@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.155 - 2026-06-07
+- **Haltestellen-Import optimiert: max. 1 Haltestelle pro Richtung**:
+  - Richtungsinfos aus OSM (`towards`/`destination`/`direction`/`local_ref`) werden übernommen
+  - Nahe Duplikate mit gleichem Namen und gleicher Richtung werden auf einen Punkt zusammengeführt
+  - Merge-Schutz ergänzt: Gegenrichtungen werden nicht mehr versehentlich zusammengeführt
+  - Ergebnis-Status zeigt an, wie viele Richtungs-Duplikate entfernt wurden
+
 ## V2.0.154 - 2026-06-07
 - **Haltestellen-Import erweitert: optional auf Fahrbahnmitte ausrichten**:
   - Neuer Schalter im "Katalog laden"-Modal: Haltestellen auf Fahrbahnmitte ausrichten (OSRM)

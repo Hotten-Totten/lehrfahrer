@@ -147,6 +147,60 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  function normalizedDirection(stop) {
+    if (!stop || typeof stop !== "object") return "";
+    const raw = [stop.direction, stop.dir, stop.towards, stop.destination]
+      .find(v => typeof v === "string" && v.trim().length > 0) || "";
+    return raw.trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  // Begrenzt nahe Duplikate pro Name+Richtung auf maximal 1 Eintrag.
+  function dedupeNearbyPerDirection(stops, radiusM) {
+    const result = [];
+    const byKey = new Map();
+    let removed = 0;
+
+    for (const item of stops) {
+      const stop = { ...item };
+      const nameKey = String(stop.name || "").trim().toLowerCase();
+      const dirKey = normalizedDirection(stop);
+
+      if (!nameKey || !dirKey) {
+        result.push(stop);
+        continue;
+      }
+
+      const key = nameKey + "::" + dirKey;
+      const candidateIdx = byKey.get(key) || [];
+      let merged = false;
+
+      for (const idx of candidateIdx) {
+        const ex = result[idx];
+        const d = haversineMeters(ex.lat, ex.lon, stop.lat, stop.lon);
+        if (d <= radiusM) {
+          const n = Number(ex.sourceCount || 1);
+          const m = Number(stop.sourceCount || 1);
+          ex.lat = (ex.lat * n + stop.lat * m) / (n + m);
+          ex.lon = (ex.lon * n + stop.lon * m) / (n + m);
+          ex.sourceCount = n + m;
+          if (!ex.direction && stop.direction) ex.direction = stop.direction;
+          removed++;
+          merged = true;
+          break;
+        }
+      }
+
+      if (!merged) {
+        result.push(stop);
+        const list = byKey.get(key) || [];
+        list.push(result.length - 1);
+        byKey.set(key, list);
+      }
+    }
+
+    return { stops: result, removed };
+  }
+
   // Neue Haltestellen in bestehenden Katalog mergen (8m-Radius, gleicher Name)
   function mergeIntoExisting(existing, incoming, mergeRadiusM) {
     mergeRadiusM = mergeRadiusM || 8;
@@ -155,11 +209,16 @@
     for (const ns of incoming) {
       let found = false;
       for (const ex of result) {
-        if (ex.name === ns.name && haversineMeters(ex.lat, ex.lon, ns.lat, ns.lon) <= mergeRadiusM) {
+        const exDir = normalizedDirection(ex);
+        const nsDir = normalizedDirection(ns);
+        const dirsCompatible = (exDir && nsDir) ? exDir === nsDir : true;
+
+        if (dirsCompatible && ex.name === ns.name && haversineMeters(ex.lat, ex.lon, ns.lat, ns.lon) <= mergeRadiusM) {
           const n = ex.sourceCount || 1;
           ex.lat = (ex.lat * n + ns.lat) / (n + 1);
           ex.lon = (ex.lon * n + ns.lon) / (n + 1);
           ex.sourceCount = n + 1;
+          if (!ex.direction && ns.direction) ex.direction = ns.direction;
           found = true;
           merged++;
           break;
@@ -255,6 +314,13 @@
 
       let finalCount, statusNote;
       let incomingStops = Array.isArray(json.stops) ? json.stops.slice() : [];
+
+      const directionDedupe = dedupeNearbyPerDirection(incomingStops, 45);
+      incomingStops = directionDedupe.stops;
+      if (directionDedupe.removed > 0) {
+        statusNote = (statusNote ? statusNote + " · " : "") +
+          directionDedupe.removed + " Richtungs-Duplikate entfernt";
+      }
 
       if (snapToRoad && incomingStops.length) {
         setStatus(
