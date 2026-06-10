@@ -513,18 +513,39 @@ function createNewLine() {
 }
 
 function showLineInputFieldsForNewLine() {
-  const topbar = document.getElementById("topbar");
-  const menubar = document.getElementById("menubar");
-  if (menubar) {
-    menubar.classList.remove("hidden");
-    menubar.style.display = "";
+  function forceShowInputMask() {
+    const topbar = document.getElementById("topbar");
+    const menubar = document.getElementById("menubar");
+
+    if (menubar) {
+      menubar.classList.remove("hidden");
+      menubar.style.display = "";
+      menubar.style.visibility = "visible";
+      menubar.style.pointerEvents = "auto";
+      menubar.style.opacity = "1";
+    }
+
+    if (topbar) {
+      topbar.classList.remove("hidden");
+      topbar.style.display = "flex";
+      topbar.style.visibility = "visible";
+      topbar.style.pointerEvents = "auto";
+      topbar.style.opacity = "1";
+      topbar.style.maxHeight = "none";
+
+      // Stellt sicher, dass einzelne Feldgruppen nicht in einem versteckten Zustand haengen bleiben.
+      const groups = topbar.querySelectorAll(".top-group");
+      groups.forEach(group => {
+        group.classList.remove("hidden");
+        group.style.display = "flex";
+        group.style.visibility = "visible";
+      });
+    }
+
+    return topbar;
   }
-  if (topbar) {
-    topbar.classList.remove("hidden");
-    topbar.style.display = "flex";
-    topbar.style.visibility = "visible";
-    topbar.style.pointerEvents = "auto";
-  }
+
+  const topbar = forceShowInputMask();
 
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -539,11 +560,15 @@ function showLineInputFieldsForNewLine() {
   }
 
   requestAnimationFrame(() => {
+    forceShowInputMask();
     if (lineNameInput) {
       lineNameInput.focus();
       lineNameInput.select();
     }
   });
+
+  setTimeout(forceShowInputMask, 80);
+  setTimeout(forceShowInputMask, 260);
 
   setStatus("Eingabemenü geöffnet: Bitte oben Linie/Route/Richtung eingeben.");
 }

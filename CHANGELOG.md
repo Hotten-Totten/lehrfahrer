@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.169 - 2026-06-10
+- **Editor-Topbar nach `Neu` verlässlich wiederhergestellt**:
+  - Eingabemaske (`Ort/Linie/Route/Richtung/Farbe/Suche`) wird nach Klick auf `Neu` aktiv erzwungen sichtbar gemacht
+  - Zusätzliche kurze Retry-Wiederherstellung eingebaut, falls ein spaeter UI-State die Topbar erneut ausblendet
+  - Cache-Busting in [index.html](index.html) von `V2.0.165` auf `V2.0.169` angehoben, damit Browser den Fix sicher lädt
+
 ## V2.0.168 - 2026-06-10
 - **Navi-Pfeil und Richtungsansagen an Haltestellen stabilisiert**:
   - Neue Heading-Stabilisierung: Sensor-Heading wird gegen Routentangente plausibilisiert
