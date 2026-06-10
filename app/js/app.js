@@ -138,8 +138,12 @@ const navTabs         = document.querySelectorAll('.nav-menu-tab');
 const navPanes        = document.querySelectorAll('.nav-menu-pane');
 
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
+const markerMotionSelect = document.getElementById('markerMotionSelect');
+const markerTurnSelect = document.getElementById('markerTurnSelect');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
+const MARKER_MOTION_PROFILE_KEY = 'lehrfahrer_marker_motion_profile';
+const MARKER_TURN_PROFILE_KEY = 'lehrfahrer_marker_turn_profile';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 let refreshInProgress = false;
 
@@ -1735,6 +1739,18 @@ function getCameraProfile() {
   return 'balanced';
 }
 
+function getMarkerMotionProfile() {
+  const val = localStorage.getItem(MARKER_MOTION_PROFILE_KEY);
+  if (val === 'calm' || val === 'direct' || val === 'balanced') return val;
+  return 'balanced';
+}
+
+function getMarkerTurnProfile() {
+  const val = localStorage.getItem(MARKER_TURN_PROFILE_KEY);
+  if (val === 'calm' || val === 'direct' || val === 'balanced') return val;
+  return 'balanced';
+}
+
 function initCameraProfileSelect() {
   if (!cameraProfileSelect) return;
   cameraProfileSelect.value = getCameraProfile();
@@ -1744,6 +1760,28 @@ function initCameraProfileSelect() {
       localStorage.setItem(CAMERA_PROFILE_KEY, v);
     }
   });
+}
+
+function initMarkerSmoothingSelects() {
+  if (markerMotionSelect) {
+    markerMotionSelect.value = getMarkerMotionProfile();
+    markerMotionSelect.addEventListener('change', () => {
+      const v = markerMotionSelect.value;
+      if (v === 'calm' || v === 'direct' || v === 'balanced') {
+        localStorage.setItem(MARKER_MOTION_PROFILE_KEY, v);
+      }
+    });
+  }
+
+  if (markerTurnSelect) {
+    markerTurnSelect.value = getMarkerTurnProfile();
+    markerTurnSelect.addEventListener('change', () => {
+      const v = markerTurnSelect.value;
+      if (v === 'calm' || v === 'direct' || v === 'balanced') {
+        localStorage.setItem(MARKER_TURN_PROFILE_KEY, v);
+      }
+    });
+  }
 }
 
 // Heading-Glättung: gleitender Durchschnitt über letzte 5 GPS-Richtungswerte
@@ -1773,6 +1811,7 @@ function smoothHeading(hdg) {
   });
   toggleDriverZoom();
   initCameraProfileSelect();
+  initMarkerSmoothingSelects();
 })();
 
 // Globale Toast-Funktion (wird auch von map.js genutzt)

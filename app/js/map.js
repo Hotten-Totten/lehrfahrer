@@ -121,13 +121,31 @@ function runGpsMarkerAnimation(ts) {
   const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
   state.lastTs = ts;
 
-  const posAlpha = 1 - Math.exp(-dt / 180);
+  let motionProfile = 'balanced';
+  let turnProfile = 'balanced';
+  if (typeof getMarkerMotionProfile === 'function') {
+    motionProfile = getMarkerMotionProfile();
+  }
+  if (typeof getMarkerTurnProfile === 'function') {
+    turnProfile = getMarkerTurnProfile();
+  }
+
+  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 180);
+  const turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 140);
+  const maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 220);
+
+  const posAlpha = 1 - Math.exp(-dt / posTau);
   state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
   state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
 
   const headingDelta = shortestDegDelta(state.currentHeading, state.targetHeading);
-  const headingAlpha = 1 - Math.exp(-dt / 140);
-  state.currentHeading = normalizeDeg(state.currentHeading + headingDelta * headingAlpha);
+  const headingAlpha = 1 - Math.exp(-dt / turnTau);
+  let headingStep = headingDelta * headingAlpha;
+  const maxHeadingStep = maxTurnRate * (dt / 1000);
+  if (Math.abs(headingStep) > maxHeadingStep) {
+    headingStep = Math.sign(headingStep) * maxHeadingStep;
+  }
+  state.currentHeading = normalizeDeg(state.currentHeading + headingStep);
 
   gpsMarker.setLngLat([state.currentLon, state.currentLat]);
   applyGpsHeadingVisuals(state);

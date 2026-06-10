@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.167 - 2026-06-10
+- **Pfeil-Glättung in Einstellungen integriert**:
+  - Neue Optionen in den App-Einstellungen (nicht auf dem Hauptbildschirm)
+  - Separate Profile für Marker-Bewegung (`Ruhig/Normal/Direkt`) und Marker-Drehung (`Ruhig/Normal/Direkt`)
+  - Interpolation und Dreh-Nachführung nutzen diese Profile live in der Navigation
+
 ## V2.0.166 - 2026-06-10
 - **App-Navigationspfeil deutlich fluessiger gemacht**:
   - Markerbewegung von GPS-Fix zu GPS-Fix wird jetzt per `requestAnimationFrame` interpoliert statt sprunghaft gesetzt
