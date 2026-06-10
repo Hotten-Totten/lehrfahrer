@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.168 - 2026-06-10
+- **Navi-Pfeil und Richtungsansagen an Haltestellen stabilisiert**:
+  - Neue Heading-Stabilisierung: Sensor-Heading wird gegen Routentangente plausibilisiert
+  - Grobe Gegensinn-Ausreißer (seitlich/rueckwaerts) werden verworfen
+  - HUD-Fortschritt mit Vorwaerts-Hysterese, damit Richtungsansagen bei GPS-Jitter nicht kurz zurueckspringen
+
 ## V2.0.167 - 2026-06-10
 - **Pfeil-Glättung in Einstellungen integriert**:
   - Neue Optionen in den App-Einstellungen (nicht auf dem Hauptbildschirm)

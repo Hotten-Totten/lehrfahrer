@@ -46,6 +46,7 @@ const NAV_REJOIN_START_M = 78;
 const NAV_REJOIN_BLEND_STEP = 0.20;
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
+const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 
 // Navigation Menu
 let currentNavLine = null;
@@ -1799,6 +1800,51 @@ function smoothHeading(hdg) {
   return (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
 }
 
+function shortestDeltaDeg(fromDeg, toDeg) {
+  return ((toDeg - fromDeg + 540) % 360) - 180;
+}
+
+function navGetRouteHeadingAtIndex(pts, idx) {
+  if (!Array.isArray(pts) || pts.length < 2) return null;
+  const i = Math.max(0, Math.min(pts.length - 1, Math.floor(idx)));
+  const prevIdx = Math.max(0, i - 1);
+  const nextIdx = Math.min(pts.length - 1, i + 1);
+  if (prevIdx === nextIdx) return null;
+
+  const [latA, lonA] = navGetLatLon(pts[prevIdx]);
+  const [latB, lonB] = navGetLatLon(pts[nextIdx]);
+  return bearingDeg(latA, lonA, latB, lonB);
+}
+
+function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
+  const hasRoute = Number.isFinite(routeHeadingDeg);
+  const hasSensor = Number.isFinite(sensorHeadingDeg);
+
+  if (!hasRoute && !hasSensor) return null;
+  if (!hasRoute) return sensorHeadingDeg;
+  if (!hasSensor) return routeHeadingDeg;
+
+  const speedKmh = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps * 3.6 : null;
+  const delta = Math.abs(shortestDeltaDeg(routeHeadingDeg, sensorHeadingDeg));
+
+  // Besonders an Haltestellen/bei geringer Geschwindigkeit auf Routentangent stabilisieren.
+  if (speedKmh != null && speedKmh < 8 && delta > 45) {
+    return routeHeadingDeg;
+  }
+
+  // Grobe Gegensinn-Ausreißer konsequent verwerfen.
+  if (delta > 105) {
+    return routeHeadingDeg;
+  }
+
+  // Bei mittlerer Abweichung weich in Richtung Route ziehen.
+  if (delta > 55) {
+    return (routeHeadingDeg + shortestDeltaDeg(routeHeadingDeg, sensorHeadingDeg) * 0.35 + 360) % 360;
+  }
+
+  return sensorHeadingDeg;
+}
+
 // Fahrersicht-Zoom-Abschnitt ein-/ausblenden je nach gewählter Perspektive
 (function initPerspectiveToggle() {
   function toggleDriverZoom() {
@@ -2064,7 +2110,9 @@ function startNavigation(options = {}) {
 
       const pts = currentRoute.data.routePoints;
       const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
-      const navHeading = smoothHeading(heading);
+      const sensorHeading = smoothHeading(heading);
+      const routeHeading = navGetRouteHeadingAtIndex(pts, tracked.index);
+      const navHeading = resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
 
       recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
@@ -2464,8 +2512,15 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   const idx = Number.isFinite(forcedIdx)
     ? Math.max(0, Math.min(pts.length - 1, Math.floor(forcedIdx)))
     : findNearestNavIdx(lat, lon, pts, navNearestIdx);
-  navNearestIdx     = idx;
-  const currentDist = navCumDists[idx];
+
+  // Kurzzeitige Rueckspruenge durch GPS-Jitter unterdruecken, ohne echte Kehrtwenden zu blockieren.
+  const stableIdx = idx < (navProgressIdx - NAV_INDEX_BACKTRACK_TOLERANCE)
+    ? navProgressIdx
+    : Math.max(navProgressIdx, idx);
+
+  navNearestIdx = stableIdx;
+  navProgressIdx = stableIdx;
+  const currentDist = navCumDists[stableIdx];
 
   // Aktive Abbiegung erst wechseln, wenn aktuelle Kurve sicher passiert wurde.
   // Bei engen Doppelkurven wird der Wechsel trotzdem früh genug freigegeben.
