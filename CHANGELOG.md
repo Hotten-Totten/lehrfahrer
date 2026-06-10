@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.166 - 2026-06-10
+- **App-Navigationspfeil deutlich fluessiger gemacht**:
+  - Markerbewegung von GPS-Fix zu GPS-Fix wird jetzt per `requestAnimationFrame` interpoliert statt sprunghaft gesetzt
+  - Drehung des Pfeils wird weich nachgefuehrt (Heading-Smoothing zwischen Updates)
+  - Gilt fuer normalen GPS-Modus und fuer die routengesnappte Navigationsdarstellung
+  - Animation wird beim Stoppen sauber beendet, damit keine Restbewegungen bleiben
+
 ## V2.0.165 - 2026-06-07
 - **Richtungsanzeige robuster gemacht**:
   - Namensabgleich verbessert (z. B. mit/ohne Stadt-Präfix wie `Cottbus, ...`)

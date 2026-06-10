@@ -11,6 +11,8 @@ let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
 const BUS_HEADING_OFFSET_DEG = 0;
+let gpsAnimFrameId = null;
+let gpsAnimState = null;
 let navCameraBearing = 0;
 let navBearingReady = false;
 let navLastFix = null;
@@ -62,6 +64,105 @@ function resetNavBearingState() {
   navLastBearingTs = 0;
   navCameraViewState = null;
   navTurnBoostUntil = 0;
+}
+
+function ensureGpsAnimState() {
+  if (!gpsAnimState) {
+    gpsAnimState = {
+      currentLon: null,
+      currentLat: null,
+      targetLon: null,
+      targetLat: null,
+      currentHeading: 0,
+      targetHeading: 0,
+      hasHeading: false,
+      lastTs: 0
+    };
+  }
+  return gpsAnimState;
+}
+
+function ensureGpsMarkerExists(lnglat) {
+  if (!map) return null;
+  if (!gpsMarker) {
+    const el = createGpsMarkerElement();
+    gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
+      .setLngLat(lnglat)
+      .addTo(map);
+  }
+  return gpsMarker;
+}
+
+function applyGpsHeadingVisuals(state) {
+  if (!gpsMarker) return;
+  if (state.hasHeading) {
+    gpsMarker.setRotation(normalizeDeg(state.currentHeading));
+    gpsMarker.getElement().classList.add('has-heading');
+  } else {
+    gpsMarker.setRotation(0);
+    gpsMarker.getElement().classList.remove('has-heading');
+  }
+}
+
+function stopGpsMarkerAnimation() {
+  if (gpsAnimFrameId != null) {
+    cancelAnimationFrame(gpsAnimFrameId);
+    gpsAnimFrameId = null;
+  }
+}
+
+function runGpsMarkerAnimation(ts) {
+  if (!gpsMarker || !gpsAnimState) {
+    gpsAnimFrameId = null;
+    return;
+  }
+
+  const state = gpsAnimState;
+  const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
+  state.lastTs = ts;
+
+  const posAlpha = 1 - Math.exp(-dt / 180);
+  state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
+  state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
+
+  const headingDelta = shortestDegDelta(state.currentHeading, state.targetHeading);
+  const headingAlpha = 1 - Math.exp(-dt / 140);
+  state.currentHeading = normalizeDeg(state.currentHeading + headingDelta * headingAlpha);
+
+  gpsMarker.setLngLat([state.currentLon, state.currentLat]);
+  applyGpsHeadingVisuals(state);
+
+  gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
+}
+
+function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+  const marker = ensureGpsMarkerExists([lon, lat]);
+  if (!marker) return;
+
+  const state = ensureGpsAnimState();
+  state.targetLon = lon;
+  state.targetLat = lat;
+  state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
+  state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
+
+  const first = state.currentLon == null || state.currentLat == null;
+  if (first || immediate) {
+    state.currentLon = lon;
+    state.currentLat = lat;
+    if (state.hasHeading) {
+      state.currentHeading = state.targetHeading;
+    } else {
+      state.currentHeading = 0;
+    }
+    marker.setLngLat([state.currentLon, state.currentLat]);
+    applyGpsHeadingVisuals(state);
+  }
+
+  if (gpsAnimFrameId == null) {
+    state.lastTs = 0;
+    gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
+  }
 }
 
 function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
@@ -673,24 +774,16 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
     pos => {
       const lnglat = [pos.coords.longitude, pos.coords.latitude];
       const navMode = document.body.classList.contains('nav-mode');
-
-      if (!gpsMarker) {
-        const el = createGpsMarkerElement();
-        gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
-          .setLngLat(lnglat)
-          .addTo(map);
-      } else if (!navMode) {
-        gpsMarker.setLngLat(lnglat);
-      }
-
-      // Fahrtrichtung anzeigen (wenn Heading vorhanden und Tempo > 0,5 m/s)
       const hdg = pos.coords.heading;
-      if (!navMode && hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5) {
-        gpsMarker.setRotation(normalizeDeg(hdg + BUS_HEADING_OFFSET_DEG));
-        gpsMarker.getElement().classList.add('has-heading');
-      } else if (!navMode) {
-        gpsMarker.setRotation(0);
-        gpsMarker.getElement().classList.remove('has-heading');
+      const headingForMarker = (hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5)
+        ? hdg
+        : null;
+
+      // Im normalen Kartenmodus den Marker weich zwischen Fixes animieren.
+      if (!navMode) {
+        setGpsMarkerTarget(lnglat[0], lnglat[1], headingForMarker, !firstFixSeen);
+      } else {
+        ensureGpsMarkerExists(lnglat);
       }
 
       if (!firstFixSeen) {
@@ -721,6 +814,8 @@ function stopGPS() {
     gpsMarker.remove();
     gpsMarker = null;
   }
+  stopGpsMarkerAnimation();
+  gpsAnimState = null;
   resetNavBearingState();
 }
 
@@ -938,20 +1033,5 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
 function setSimulatedGPS(lon, lat, headingDeg) {
   if (!map) return;
-  const lnglat = [lon, lat];
-  if (!gpsMarker) {
-    const el = createGpsMarkerElement();
-    gpsMarker = new maplibregl.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' })
-      .setLngLat(lnglat)
-      .addTo(map);
-  } else {
-    gpsMarker.setLngLat(lnglat);
-  }
-  if (headingDeg != null && Number.isFinite(headingDeg)) {
-    gpsMarker.setRotation(normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG));
-    gpsMarker.getElement().classList.add('has-heading');
-  } else {
-    gpsMarker.setRotation(0);
-    gpsMarker.getElement().classList.remove('has-heading');
-  }
+  setGpsMarkerTarget(lon, lat, headingDeg, false);
 }
