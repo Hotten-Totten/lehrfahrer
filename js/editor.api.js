@@ -571,6 +571,113 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
   }
 }
 
+let vbbImportAutoCloseTimer = null;
+
+function getVbbImportModalRefs() {
+  return {
+    modal: document.getElementById("vbbImportModal"),
+    box: document.querySelector("#vbbImportModal .vbb-import-box"),
+    title: document.getElementById("vbbImportTitle"),
+    subtitle: document.getElementById("vbbImportSubtitle"),
+    message: document.getElementById("vbbImportMessage"),
+    timeline: document.getElementById("vbbImportTimeline"),
+    spinner: document.getElementById("vbbImportSpinner"),
+    closeBtn: document.getElementById("vbbImportCloseBtn")
+  };
+}
+
+function closeVbbImportProgressPopup() {
+  const refs = getVbbImportModalRefs();
+  if (!refs.modal) return;
+
+  if (vbbImportAutoCloseTimer) {
+    clearTimeout(vbbImportAutoCloseTimer);
+    vbbImportAutoCloseTimer = null;
+  }
+
+  refs.modal.classList.add("hidden");
+}
+
+function showVbbImportProgressPopup(lineQuery) {
+  const refs = getVbbImportModalRefs();
+  if (!refs.modal || !refs.box) return;
+
+  if (vbbImportAutoCloseTimer) {
+    clearTimeout(vbbImportAutoCloseTimer);
+    vbbImportAutoCloseTimer = null;
+  }
+
+  refs.modal.classList.remove("hidden");
+  refs.modal.setAttribute("aria-busy", "true");
+  refs.box.classList.remove("vbb-import-state-success", "vbb-import-state-warn", "vbb-import-state-error");
+  refs.box.classList.add("vbb-import-state-info");
+
+  if (refs.title) refs.title.textContent = `VBB-Import Linie ${lineQuery}`;
+  if (refs.subtitle) refs.subtitle.textContent = "Import wird vorbereitet …";
+  if (refs.message) refs.message.textContent = "Startet …";
+  if (refs.timeline) refs.timeline.innerHTML = "";
+  if (refs.spinner) refs.spinner.classList.remove("hidden");
+
+  if (refs.closeBtn) {
+    refs.closeBtn.disabled = true;
+    refs.closeBtn.onclick = closeVbbImportProgressPopup;
+  }
+}
+
+function updateVbbImportProgressPopup(stepText, options = {}) {
+  const {
+    level = "info",
+    busy = true,
+    subtitle = "",
+    allowClose = false,
+    autoCloseMs = 0
+  } = options;
+
+  const refs = getVbbImportModalRefs();
+  if (!refs.modal || !refs.box) return;
+
+  refs.modal.classList.remove("hidden");
+  refs.modal.setAttribute("aria-busy", busy ? "true" : "false");
+
+  refs.box.classList.remove("vbb-import-state-info", "vbb-import-state-success", "vbb-import-state-warn", "vbb-import-state-error");
+  refs.box.classList.add(`vbb-import-state-${level}`);
+
+  if (refs.subtitle && subtitle) {
+    refs.subtitle.textContent = subtitle;
+  }
+  if (refs.message) {
+    refs.message.textContent = stepText;
+  }
+
+  if (refs.spinner) {
+    refs.spinner.classList.toggle("hidden", !busy);
+  }
+
+  if (refs.closeBtn) {
+    refs.closeBtn.disabled = !allowClose;
+  }
+
+  if (refs.timeline) {
+    const line = document.createElement("div");
+    const now = new Date();
+    const stamp = now.toLocaleTimeString("de-DE", { hour12: false });
+    line.className = `vbb-import-line vbb-line-${level}`;
+    line.textContent = `[${stamp}] ${stepText}`;
+    refs.timeline.appendChild(line);
+    refs.timeline.scrollTop = refs.timeline.scrollHeight;
+  }
+
+  if (vbbImportAutoCloseTimer) {
+    clearTimeout(vbbImportAutoCloseTimer);
+    vbbImportAutoCloseTimer = null;
+  }
+  if (autoCloseMs > 0) {
+    vbbImportAutoCloseTimer = setTimeout(() => {
+      closeVbbImportProgressPopup();
+    }, autoCloseMs);
+  }
+}
+
 async function importLineFromVbbPrompt() {
   try {
     const VBB_ACCESS_ID_STORAGE_KEY = "lehrfahrer_vbb_access_id";
@@ -585,6 +692,12 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
+    showVbbImportProgressPopup(lineQuery);
+    updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} …`, {
+      level: "info",
+      busy: true,
+      subtitle: "VBB-Suche"
+    });
     setStatus(`VBB-Suche läuft für Linie ${lineQuery} …`);
 
     const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
@@ -623,16 +736,35 @@ async function importLineFromVbbPrompt() {
     const missingAccessId = searchErrorText.includes("access-id fehlt") || searchErrorText.includes("access id fehlt");
 
     if ((!searchRes.ok || !searchResult.ok) && missingAccessId) {
+      updateVbbImportProgressPopup("Access-ID wird benötigt. Bitte Eingabe bestätigen …", {
+        level: "warn",
+        busy: false,
+        subtitle: "Zugangsdaten"
+      });
       const enteredAccessId = prompt(
         "VBB Access-ID fehlt auf dem Server.\nBitte hier eingeben (wird optional lokal im Browser gespeichert):"
       );
       if (enteredAccessId === null) {
+        updateVbbImportProgressPopup("VBB-Import abgebrochen (keine Access-ID eingegeben).", {
+          level: "warn",
+          busy: false,
+          allowClose: true,
+          subtitle: "Abgebrochen",
+          autoCloseMs: 5000
+        });
         setStatus("VBB-Import abgebrochen (keine Access-ID eingegeben).", "warn");
         return;
       }
 
       accessIdOverride = String(enteredAccessId || "").trim();
       if (!accessIdOverride) {
+        updateVbbImportProgressPopup("VBB-Import abgebrochen (leere Access-ID).", {
+          level: "warn",
+          busy: false,
+          allowClose: true,
+          subtitle: "Abgebrochen",
+          autoCloseMs: 5000
+        });
         setStatus("VBB-Import abgebrochen (leere Access-ID).", "warn");
         return;
       }
@@ -643,6 +775,11 @@ async function importLineFromVbbPrompt() {
         // Ignorieren, wenn Storage nicht verfügbar ist.
       }
 
+      updateVbbImportProgressPopup("Access-ID gespeichert. Suche wird erneut gestartet …", {
+        level: "info",
+        busy: true,
+        subtitle: "VBB-Suche"
+      });
       ({ response: searchRes, result: searchResult } = await postVbb("search"));
     }
 
@@ -652,9 +789,22 @@ async function importLineFromVbbPrompt() {
 
     const candidates = Array.isArray(searchResult.candidates) ? searchResult.candidates : [];
     if (!candidates.length) {
+      updateVbbImportProgressPopup(`Keine VBB-Linie gefunden für: ${lineQuery}`, {
+        level: "warn",
+        busy: false,
+        allowClose: true,
+        subtitle: "Keine Treffer",
+        autoCloseMs: 6500
+      });
       setStatus(`Keine VBB-Linie gefunden für: ${lineQuery}`, "warn");
       return;
     }
+
+    updateVbbImportProgressPopup(`${candidates.length} Treffer gefunden. Auswahl wird abgefragt …`, {
+      level: "info",
+      busy: false,
+      subtitle: "Trefferliste"
+    });
 
     const maxOptions = Math.min(12, candidates.length);
     const optionsText = candidates.slice(0, maxOptions).map((entry, idx) => {
@@ -669,17 +819,36 @@ async function importLineFromVbbPrompt() {
       "1"
     );
     if (selectionRaw === null) {
+      updateVbbImportProgressPopup("VBB-Import abgebrochen.", {
+        level: "warn",
+        busy: false,
+        allowClose: true,
+        subtitle: "Abgebrochen",
+        autoCloseMs: 5000
+      });
       setStatus("VBB-Import abgebrochen.", "warn");
       return;
     }
 
     const selectedIndex = Number(selectionRaw);
     if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > maxOptions) {
+      updateVbbImportProgressPopup("Ungültige Auswahl für VBB-Import.", {
+        level: "warn",
+        busy: false,
+        allowClose: true,
+        subtitle: "Auswahlfehler",
+        autoCloseMs: 5000
+      });
       setStatus("Ungültige Auswahl für VBB-Import.", "warn");
       return;
     }
 
     const selected = candidates[selectedIndex - 1];
+    updateVbbImportProgressPopup(`Fahrt ${selected.name} wird geladen …`, {
+      level: "info",
+      busy: true,
+      subtitle: "Import läuft"
+    });
 
     const { response: importRes, result: importResult } = await postVbb("import", {
       lineId: selected.id
@@ -693,9 +862,22 @@ async function importLineFromVbbPrompt() {
     }
 
     loadLineFromData(importResult.line);
+    updateVbbImportProgressPopup(`Import abgeschlossen: ${selected.name} (${importResult.stopCount || 0} Stops)`, {
+      level: "success",
+      busy: false,
+      allowClose: true,
+      subtitle: "Fertig",
+      autoCloseMs: 4500
+    });
     setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops)`);
   } catch (err) {
     error("VBB-Import fehlgeschlagen", err);
+    updateVbbImportProgressPopup(err.message || "VBB-Import fehlgeschlagen.", {
+      level: "error",
+      busy: false,
+      allowClose: true,
+      subtitle: "Fehler"
+    });
     setStatus(err.message || "VBB-Import fehlgeschlagen.", "error");
   }
 }

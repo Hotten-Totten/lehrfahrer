@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.206 - 2026-06-11
+- **VBB-Import mit sichtbarem Fortschritts-Popup**:
+  - Neues Live-Popup zeigt während des Imports den aktuellen Schritt (Suche, Zugriff, Treffer, Laden, Abschluss)
+  - Bei "keine Treffer" und Fehlern wird der Grund klar im Popup angezeigt statt nur im Debug-Panel
+  - Spinner + Timeline machen den Importstatus transparent und nachvollziehbar
+
 ## V2.0.205 - 2026-06-11
 - **VBB-Import-Fallback für Deployment ohne lokale Config**:
   - `api/import_vbb_line.php` akzeptiert jetzt optional `accessId` aus dem Request-Body
