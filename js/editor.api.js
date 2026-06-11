@@ -666,6 +666,7 @@ function getVbbImportModalRefs() {
     searchOptions: document.getElementById("vbbImportSearchOptions"),
     searchDayToday: document.getElementById("vbbSearchDayToday"),
     searchDayTomorrow: document.getElementById("vbbSearchDayTomorrow"),
+    searchModeVariants: document.getElementById("vbbSearchModeVariants"),
     searchAllDay: document.getElementById("vbbSearchAllDay"),
     searchTimeFromInput: document.getElementById("vbbSearchTimeFromInput"),
     searchTimeToInput: document.getElementById("vbbSearchTimeToInput"),
@@ -796,12 +797,13 @@ function formatVbbCandidateMeta(entry) {
 function chooseVbbSearchOptionsInPopup() {
   const refs = getVbbImportModalRefs();
   if (!refs.searchOptions || !refs.searchStartBtn || !refs.searchCancelBtn || !refs.closeBtn) {
-    return Promise.resolve({ searchDate: null, searchTimeFrom: null, searchTimeTo: null, allDay: true });
+    return Promise.resolve({ searchDate: null, searchTimeFrom: null, searchTimeTo: null, allDay: true, searchMode: "variants" });
   }
 
   refs.searchOptions.classList.remove("hidden");
   if (refs.searchDayToday) refs.searchDayToday.checked = true;
   if (refs.searchDayTomorrow) refs.searchDayTomorrow.checked = false;
+  if (refs.searchModeVariants) refs.searchModeVariants.checked = true;
   if (refs.searchAllDay) refs.searchAllDay.checked = true;
   if (refs.searchTimeFromInput) {
     refs.searchTimeFromInput.disabled = true;
@@ -814,14 +816,20 @@ function chooseVbbSearchOptionsInPopup() {
 
   const updateTimeEnabled = () => {
     if (!refs.searchAllDay) return;
+    const variantsMode = !!refs.searchModeVariants?.checked;
+    if (refs.searchAllDay) refs.searchAllDay.disabled = variantsMode;
     const disabled = !!refs.searchAllDay.checked;
-    if (refs.searchTimeFromInput) refs.searchTimeFromInput.disabled = disabled;
-    if (refs.searchTimeToInput) refs.searchTimeToInput.disabled = disabled;
+    if (refs.searchTimeFromInput) refs.searchTimeFromInput.disabled = variantsMode || disabled;
+    if (refs.searchTimeToInput) refs.searchTimeToInput.disabled = variantsMode || disabled;
   };
 
   if (refs.searchAllDay) {
     refs.searchAllDay.addEventListener("change", updateTimeEnabled);
   }
+  if (refs.searchModeVariants) {
+    refs.searchModeVariants.addEventListener("change", updateTimeEnabled);
+  }
+  updateTimeEnabled();
 
   return new Promise((resolve) => {
     const prevCloseHandler = refs.closeBtn.onclick;
@@ -829,6 +837,9 @@ function chooseVbbSearchOptionsInPopup() {
     const cleanup = () => {
       if (refs.searchAllDay) {
         refs.searchAllDay.removeEventListener("change", updateTimeEnabled);
+      }
+      if (refs.searchModeVariants) {
+        refs.searchModeVariants.removeEventListener("change", updateTimeEnabled);
       }
       refs.searchStartBtn.removeEventListener("click", onStart);
       refs.searchCancelBtn.removeEventListener("click", onCancel);
@@ -842,7 +853,8 @@ function chooseVbbSearchOptionsInPopup() {
     };
 
     const onStart = () => {
-      const allDay = !!refs.searchAllDay?.checked;
+      const variantsMode = !!refs.searchModeVariants?.checked;
+      const allDay = variantsMode ? true : !!refs.searchAllDay?.checked;
       const dayOffset = refs.searchDayTomorrow?.checked ? 1 : 0;
       const dateObj = new Date();
       dateObj.setDate(dateObj.getDate() + dayOffset);
@@ -864,7 +876,7 @@ function chooseVbbSearchOptionsInPopup() {
         searchTimeTo = toRaw;
       }
 
-      finish({ searchDate, searchTimeFrom, searchTimeTo, allDay });
+      finish({ searchDate, searchTimeFrom, searchTimeTo, allDay, searchMode: variantsMode ? "variants" : "window" });
     };
 
     const onCancel = () => finish(null);
@@ -1001,10 +1013,13 @@ async function importLineFromVbbPrompt() {
     const searchTimeFrom = options.searchTimeFrom ? String(options.searchTimeFrom).trim() : "";
     const searchTimeTo = options.searchTimeTo ? String(options.searchTimeTo).trim() : "";
     const allDay = !!options.allDay;
+    const searchMode = String(options.searchMode || "window").trim();
     const dateLabel = searchDate ? searchDate : "heute";
-    const modeLabel = allDay
-      ? `ganztägig (${dateLabel})`
-      : `von ${searchTimeFrom} bis ${searchTimeTo} (${dateLabel})`;
+    const modeLabel = searchMode === "variants"
+      ? `als Linienverläufe (Hin/Rück) (${dateLabel})`
+      : (allDay
+        ? `ganztägig (${dateLabel})`
+        : `von ${searchTimeFrom} bis ${searchTimeTo} (${dateLabel})`);
 
     updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} ${modeLabel} …`, {
       level: "info",
@@ -1031,6 +1046,7 @@ async function importLineFromVbbPrompt() {
       if (searchDate) {
         payload.searchDate = searchDate;
       }
+      payload.searchMode = searchMode;
       payload.allDay = !!allDay;
       if (!allDay && searchTimeFrom) {
         payload.searchTimeFrom = searchTimeFrom;
@@ -1118,9 +1134,12 @@ async function importLineFromVbbPrompt() {
     const serverSearchTimeTo = String(searchResult?.searchTimeTo || "").trim();
     const serverSearchDate = String(searchResult?.searchDate || "").trim();
     const serverAllDay = !!searchResult?.allDay;
-    const serverLabel = serverAllDay
-      ? `${serverSearchDate || "heute"}, ganztägig`
-      : ((serverSearchTimeFrom && serverSearchTimeTo) ? `${serverSearchDate || "heute"} ${serverSearchTimeFrom}-${serverSearchTimeTo}` : "");
+    const serverSearchMode = String(searchResult?.searchMode || "window").trim();
+    const serverLabel = serverSearchMode === "variants"
+      ? `${serverSearchDate || "heute"}, Linienverläufe`
+      : (serverAllDay
+        ? `${serverSearchDate || "heute"}, ganztägig`
+        : ((serverSearchTimeFrom && serverSearchTimeTo) ? `${serverSearchDate || "heute"} ${serverSearchTimeFrom}-${serverSearchTimeTo}` : ""));
     updateVbbImportProgressPopup(
       `${candidates.length} Treffer gefunden${serverLabel ? ` (${serverLabel})` : ""}. Auswahl im Popup …`,
       {

@@ -1288,6 +1288,10 @@ button.danger:hover {
   color: #0f172a;
 }
 
+.vbb-search-choice input#vbbSearchModeVariants + span {
+  font-weight: 700;
+}
+
 .vbb-search-time-wrap {
   display: inline-flex;
   align-items: center;

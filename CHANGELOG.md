@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.224 - 2026-06-11
+- **VBB-Import: Fokus auf Linienverläufe statt Startzeiten**:
+  - Neuer Suchmodus `Alle Linienverläufe (Hin + Rück), Zeiten ignorieren` (im Popup standardmäßig aktiv)
+  - Variantenmodus sammelt deutlich breiter (mehr Stops, Departures + Arrivals) und dedupliziert nach Richtung/Verlauf statt Uhrzeit
+  - Ziel bleibt durch journeyDetail-Anreicherung stabil, Trefferliste priorisiert damit echte Richtungsvarianten
+  - Zeitfenster `Von/Bis` bleibt für den gezielten Fahrten-Modus weiterhin verfügbar
+
 ## V2.0.223 - 2026-06-11
 - **VBB-Trefferliste korrigiert: Ziel + Richtung (Hotfix)**:
   - Kandidaten werden serverseitig mit `journeyDetail` angereichert, um echte Fahrt-Terminals zu erhalten

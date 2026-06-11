@@ -565,6 +565,34 @@ function vbb_enrich_candidates_with_terminals(array $cfg, array $candidates, int
     return $candidates;
 }
 
+function vbb_reduce_to_direction_variants(array $candidates, int $maxItems = 120): array {
+    $out = [];
+    $seen = [];
+
+    foreach ($candidates as $candidate) {
+        $line = strtolower(trim(strval($candidate['name'] ?? '')));
+        $start = strtolower(trim(strval($candidate['startStop'] ?? $candidate['origin'] ?? '')));
+        $dest = strtolower(trim(strval($candidate['destination'] ?? $candidate['direction'] ?? '')));
+
+        $key = $line . '|' . $start . '|' . $dest;
+        if ($line !== '' && $dest !== '') {
+            $key = $line . '|*|' . $dest;
+        }
+
+        if (isset($seen[$key])) {
+            continue;
+        }
+
+        $seen[$key] = true;
+        $out[] = $candidate;
+        if (count($out) >= $maxItems) {
+            break;
+        }
+    }
+
+    return $out;
+}
+
 function vbb_parse_datetime_to_minutes(string $date, string $time): ?int {
     $date = trim($date);
     $time = trim($time);
@@ -766,7 +794,10 @@ $city = trim(strtolower(strval($input['city'] ?? 'cottbus')));
 $searchTimeFrom = vbb_normalize_hhmm(strval($input['searchTimeFrom'] ?? $input['searchTime'] ?? ''));
 $searchTimeTo = vbb_normalize_hhmm(strval($input['searchTimeTo'] ?? ''));
 $searchDate = vbb_normalize_ymd(strval($input['searchDate'] ?? ''));
+$searchMode = trim(strtolower(strval($input['searchMode'] ?? 'window')));
+$searchMode = ($searchMode === 'variants') ? 'variants' : 'window';
 $allDay = !empty($input['allDay']);
+$effectiveAllDay = ($searchMode === 'variants') ? true : $allDay;
 $window = vbb_build_window($searchDate, $allDay, $searchTimeFrom, $searchTimeTo);
 if ($city === '') {
     $city = 'cottbus';
@@ -782,23 +813,31 @@ if (!$stopsByCity) {
     vbb_json_error(502, 'VBB-Ortssuche fehlgeschlagen oder lieferte keine Haltestellen.');
 }
 
-$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, $window, 30, false);
+$window = vbb_build_window($searchDate, $effectiveAllDay, $searchTimeFrom, $searchTimeTo);
+
+$baseStops = ($searchMode === 'variants') ? 72 : 30;
+$baseWithArrivals = ($searchMode === 'variants');
+$expandedStopsLimit = ($searchMode === 'variants') ? 120 : 50;
+$arrivalBoostStops = ($searchMode === 'variants') ? 100 : 42;
+$minCandidateTarget = ($searchMode === 'variants') ? 40 : 24;
+
+$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, $window, $baseStops, $baseWithArrivals);
 // Auch bei vorhandenen, aber wenigen/einseitigen Treffern zusätzliche Nearby-Suche nutzen.
 $needExpandedPass = !$candidates
-    || count($candidates) < 24
+    || count($candidates) < $minCandidateTarget
     || vbb_count_candidate_directions($candidates) < 2;
 
 if ($needExpandedPass) {
     $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 20);
     if ($expandedStops) {
-        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, 50, false);
+        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, $expandedStopsLimit, false);
         $candidates = vbb_merge_candidates($candidates, $extraCandidates);
 
         // Nur falls weiterhin zu wenig/zu einseitig: kleiner Ankunfts-Ergänzungslauf.
-        $needsArrivalBoost = count($candidates) < 24
+        $needsArrivalBoost = count($candidates) < $minCandidateTarget
             || vbb_count_candidate_directions($candidates) < 2;
         if ($needsArrivalBoost) {
-            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, 42, true);
+            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, $arrivalBoostStops, true);
             $candidates = vbb_merge_candidates($candidates, $arrivalCandidates);
         }
     }
@@ -806,6 +845,10 @@ if ($needExpandedPass) {
 
 // Für die sichtbare Trefferauswahl echte Start-/Zielpunkte aus journeyDetail nachziehen.
 $candidates = vbb_enrich_candidates_with_terminals($cfg, $candidates, 40);
+
+if ($searchMode === 'variants') {
+    $candidates = vbb_reduce_to_direction_variants($candidates, 120);
+}
 if (!$candidates) {
     echo json_encode([
         'ok' => true,
@@ -823,6 +866,7 @@ if ($action === 'search') {
         'searchTimeTo' => $window['to'],
         'searchDate' => $window['date'],
         'allDay' => $window['allDay'],
+        'searchMode' => $searchMode,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
