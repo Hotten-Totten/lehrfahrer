@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.207 - 2026-06-11
+- **VBB-Import praxisnäher gemacht**:
+  - Neue Menüeinträge zum dauerhaften Speichern/Löschen der VBB Access-ID im Browser
+  - Nach dem VBB-Import wird automatisch eine Straßenroute berechnet (statt nur grober Luftlinie)
+  - Fortschritts-Popup zeigt jetzt auch die Nachbearbeitung der Route und meldet klar, ob die Route vollständig erzeugt wurde
+
 ## V2.0.206 - 2026-06-11
 - **VBB-Import mit sichtbarem Fortschritts-Popup**:
   - Neues Live-Popup zeigt während des Imports den aktuellen Schritt (Suche, Zugriff, Treffer, Laden, Abschluss)

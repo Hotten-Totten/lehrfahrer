@@ -572,6 +572,76 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
 }
 
 let vbbImportAutoCloseTimer = null;
+const VBB_ACCESS_ID_STORAGE_KEY = "lehrfahrer_vbb_access_id";
+
+function getStoredVbbAccessId() {
+  try {
+    return String(localStorage.getItem(VBB_ACCESS_ID_STORAGE_KEY) || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function setStoredVbbAccessId(accessId) {
+  const value = String(accessId || "").trim();
+  if (!value) return false;
+  try {
+    localStorage.setItem(VBB_ACCESS_ID_STORAGE_KEY, value);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function clearStoredVbbAccessId() {
+  try {
+    localStorage.removeItem(VBB_ACCESS_ID_STORAGE_KEY);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function setVbbAccessIdViaPrompt() {
+  const current = getStoredVbbAccessId();
+  const input = prompt(
+    "VBB Access-ID eingeben (wird lokal im Browser gespeichert):",
+    current || ""
+  );
+  if (input === null) return;
+
+  const accessId = String(input || "").trim();
+  if (!accessId) {
+    setStatus("Keine VBB Access-ID eingegeben.", "warn");
+    return;
+  }
+
+  if (!setStoredVbbAccessId(accessId)) {
+    setStatus("VBB Access-ID konnte nicht gespeichert werden.", "error");
+    return;
+  }
+
+  setStatus("VBB Access-ID lokal gespeichert.", "success");
+}
+
+function clearVbbAccessIdViaPrompt() {
+  const current = getStoredVbbAccessId();
+  if (!current) {
+    setStatus("Keine VBB Access-ID gespeichert.", "warn");
+    return;
+  }
+
+  if (!confirm("Gespeicherte VBB Access-ID lokal löschen?")) {
+    return;
+  }
+
+  if (!clearStoredVbbAccessId()) {
+    setStatus("VBB Access-ID konnte nicht gelöscht werden.", "error");
+    return;
+  }
+
+  setStatus("VBB Access-ID lokal gelöscht.", "success");
+}
 
 function getVbbImportModalRefs() {
   return {
@@ -680,7 +750,6 @@ function updateVbbImportProgressPopup(stepText, options = {}) {
 
 async function importLineFromVbbPrompt() {
   try {
-    const VBB_ACCESS_ID_STORAGE_KEY = "lehrfahrer_vbb_access_id";
     const lineQueryRaw = prompt("Welche VBB-Linie soll importiert werden?\nBeispiel: 10");
     if (lineQueryRaw === null) {
       return;
@@ -703,12 +772,7 @@ async function importLineFromVbbPrompt() {
     const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
     const headers = withApiAuthHeaders({ "Content-Type": "application/json" });
 
-    let accessIdOverride = "";
-    try {
-      accessIdOverride = String(localStorage.getItem(VBB_ACCESS_ID_STORAGE_KEY) || "").trim();
-    } catch (_) {
-      accessIdOverride = "";
-    }
+    let accessIdOverride = getStoredVbbAccessId();
 
     async function postVbb(action, extra = {}) {
       const payload = {
@@ -769,11 +833,7 @@ async function importLineFromVbbPrompt() {
         return;
       }
 
-      try {
-        localStorage.setItem(VBB_ACCESS_ID_STORAGE_KEY, accessIdOverride);
-      } catch (_) {
-        // Ignorieren, wenn Storage nicht verfügbar ist.
-      }
+      setStoredVbbAccessId(accessIdOverride);
 
       updateVbbImportProgressPopup("Access-ID gespeichert. Suche wird erneut gestartet …", {
         level: "info",
@@ -866,10 +926,56 @@ async function importLineFromVbbPrompt() {
       level: "success",
       busy: false,
       allowClose: true,
-      subtitle: "Fertig",
-      autoCloseMs: 4500
+      subtitle: "Daten geladen"
     });
-    setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops)`);
+
+    // Nach dem VBB-Import automatisch Straßenroute erzeugen, damit keine grobe Luftlinie bleibt.
+    if (typeof buildStreetRouteFromStops === "function") {
+      updateVbbImportProgressPopup("Straßenroute wird automatisch berechnet …", {
+        level: "info",
+        busy: true,
+        allowClose: false,
+        subtitle: "Nachbearbeitung"
+      });
+
+      try {
+        await buildStreetRouteFromStops();
+      } catch (routeErr) {
+        warn("Automatisches Straßenrouting nach VBB-Import fehlgeschlagen: " + routeErr.message);
+      }
+
+      const routePointCount = Array.isArray(state.routePoints) ? state.routePoints.length : 0;
+      const hasStreetRoute = state.routeMode === "street" && routePointCount > Math.max(2, state.stops.length);
+
+      if (hasStreetRoute) {
+        updateVbbImportProgressPopup(`Import + Straßenroute fertig (${state.stops.length} Stops, ${routePointCount} Routenpunkte)`, {
+          level: "success",
+          busy: false,
+          allowClose: true,
+          subtitle: "Fertig",
+          autoCloseMs: 5500
+        });
+        setStatus(`VBB-Import + Straßenroute fertig: ${selected.name} (${state.stops.length} Stops, ${routePointCount} Punkte)`);
+      } else {
+        updateVbbImportProgressPopup("Import fertig, aber Straßenroute konnte nicht vollständig erzeugt werden. Du kannst sie über 'Route zeichnen' neu berechnen.", {
+          level: "warn",
+          busy: false,
+          allowClose: true,
+          subtitle: "Teilweise fertig",
+          autoCloseMs: 7000
+        });
+        setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops). Straßenroute bitte ggf. manuell erzeugen.`, "warn");
+      }
+    } else {
+      updateVbbImportProgressPopup(`Import abgeschlossen: ${selected.name} (${importResult.stopCount || 0} Stops)`, {
+        level: "success",
+        busy: false,
+        allowClose: true,
+        subtitle: "Fertig",
+        autoCloseMs: 4500
+      });
+      setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops)`);
+    }
   } catch (err) {
     error("VBB-Import fehlgeschlagen", err);
     updateVbbImportProgressPopup(err.message || "VBB-Import fehlgeschlagen.", {
