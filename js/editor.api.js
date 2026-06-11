@@ -198,6 +198,8 @@ const stops = state.stops.map((stop, index) => ({
   departureMinute: Number(stop.minuteFromStart || 0),
 
   note: stop.note || "",
+  isGhostPoint: !!stop.isGhostPoint,
+  isGhost: !!stop.isGhostPoint,
 
   isTimingPoint: index === 0 || index === state.stops.length - 1
 }));
@@ -700,7 +702,8 @@ function loadLineFromData(data) {
       sourceType: stopData.sourceType || "free",
       catalogId: stopData.catalogId || null,
       transitType: stopData.transitType || stopData.type || null,
-      directionHint: stopData.directionHint || stopData.direction || null
+      directionHint: stopData.directionHint || stopData.direction || null,
+      isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost || stopData.sourceType === "ghost")
     });
 
     stop.id = stopData.id || stop.id;
@@ -712,6 +715,7 @@ function loadLineFromData(data) {
     stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
     stop.minuteMode = stopData.minuteMode || "auto";
     stop.note = stopData.note || "";
+    stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost || stopData.sourceType === "ghost");
     updateStopMarkerTooltip(stop);
 
     const n = Number(String(stop.id).replace("stop_", ""));

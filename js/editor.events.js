@@ -164,6 +164,16 @@ saveStopBtn.addEventListener("click", () => {
 
   stop.name = stopNameInput.value.trim() || stop.name;
   stop.note = stopNoteInput.value.trim();
+  stop.isGhostPoint = !!stopGhostInput.checked;
+
+  if (stop.marker) {
+    const isSelectedStop = state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id;
+    stop.marker.setIcon(getLineStopIcon(stop, !!isSelectedStop));
+  }
+
+  stopSourceInput.value = stop.isGhostPoint
+    ? "Ghostpunkt"
+    : (stop.sourceType === "catalog" ? "Katalog-Haltestelle" : "Freie Haltestelle");
 
   updateStopMarkerTooltip(stop);
   renderStopOrderList();

@@ -1,5 +1,16 @@
 # Changelog
 
+## V2.0.193 - 2026-06-11
+- **Ghostpunkte für den Streckenverlauf hinzugefügt**:
+  - Im Stop-Editor gibt es jetzt eine Option `Als Ghostpunkt nutzen`
+  - Ghostpunkte bleiben Teil der Route, werden aber in der App nicht als Haltestellen angezeigt
+- **Speicherformat erweitert**:
+  - Stop-Datensätze speichern die Kennzeichnung als `isGhostPoint` (kompatibel zusätzlich als `isGhost`)
+  - Beim Laden vorhandener Linien wird die Ghost-Markierung wieder korrekt übernommen
+- **Navigation/App-UI angepasst**:
+  - Marker, Haltestellenliste und Navigations-Haltestellen ignorieren Ghostpunkte
+  - Ziel-/Endhaltestellenlogik nutzt nur sichtbare Haltestellen
+
 ## V2.0.192 - 2026-06-11
 - **City-Auswahl im Linienbrowser korrigiert**:
   - Der gewählte Stadtfilter wird jetzt zuverlässig verwendet (nicht mehr nur die erste Stadt)

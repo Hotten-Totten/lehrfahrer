@@ -251,11 +251,14 @@ function selectStop(stop) {
   stopNameInput.value = stop.name;
   stopMinuteInput.value = Number(stop.minuteFromStart || 0);
   stopNoteInput.value = stop.note;
+  stopGhostInput.checked = !!stop.isGhostPoint;
   stopLatInput.value = stop.lat.toFixed(6);
   stopLonInput.value = stop.lon.toFixed(6);
-  stopSourceInput.value = stop.sourceType === "catalog"
-    ? "Katalog-Haltestelle"
-    : "Freie Haltestelle";
+  stopSourceInput.value = stop.isGhostPoint
+    ? "Ghostpunkt"
+    : (stop.sourceType === "catalog"
+      ? "Katalog-Haltestelle"
+      : "Freie Haltestelle");
 
   renderStopOrderList();
   setStatus(`Haltestelle ausgewählt: ${stop.name}`);

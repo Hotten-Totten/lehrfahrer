@@ -81,10 +81,12 @@ function selectStop(stop) {
   stopNameInput.value = stop.name;
   stopMinuteInput.value = stop.minuteFromStart;
   stopNoteInput.value = stop.note;
+  stopGhostInput.checked = !!stop.isGhostPoint;
   stopLatInput.value = stop.lat.toFixed(6);
   stopLonInput.value = stop.lon.toFixed(6);
-  stopSourceInput.value =
-    stop.sourceType === "catalog" ? "Katalog-Haltestelle" : "Freie Haltestelle";
+  stopSourceInput.value = stop.isGhostPoint
+    ? "Ghostpunkt"
+    : (stop.sourceType === "catalog" ? "Katalog-Haltestelle" : "Freie Haltestelle");
 
   renderStopOrderList();
 
@@ -101,7 +103,7 @@ function selectStop(stop) {
 // STOPS MAIN
 // =========================
 
-function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitType = null, directionHint = null }) {
+function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitType = null, directionHint = null, isGhostPoint = false }) {
   if (!historyRestoreRunning) {
     pushHistorySnapshot("Stop hinzugefügt");
   }
@@ -116,6 +118,7 @@ function addStopToLine({ name, lat, lon, sourceType, catalogId = null, transitTy
     minuteMode: "auto",
     note: "",
     sourceType,
+    isGhostPoint: !!isGhostPoint,
     transitType,
     directionHint,
     marker: null
@@ -213,7 +216,8 @@ function renderStopOrderList() {
     }
 
     const main = document.createElement("div");
-    main.textContent = `${index + 1}. ${stop.name}`;
+    const ghostSuffix = stop.isGhostPoint ? " [Ghost]" : "";
+    main.textContent = `${index + 1}. ${stop.name}${ghostSuffix}`;
 
     main.addEventListener("click", function () {
   selectStop(stop);

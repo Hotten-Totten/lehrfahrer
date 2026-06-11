@@ -1512,23 +1512,23 @@ async function refreshLinesNow() {
 
 // ── Route darstellen ─────────────────────────────────────────
 function displayRoute(data) {
+  const visibleStops = getVisibleStops(data.stops || []);
+
   // Karte
   if (data.routePoints && data.routePoints.length) {
     showRoute(data.routePoints);
   }
-  if (data.stops && data.stops.length) {
-    showStops(data.stops, (i, stop) => {
-      flyToStop(stop);
-      highlightStopInList(i);
-    });
-  }
+  showStops(visibleStops, (i, stop) => {
+    flyToStop(stop);
+    highlightStopInList(i);
+  });
 
   // Panel-Header
   panelTitle.textContent = data.lineName  || 'Route';
   panelMeta.textContent  = data.routeName || '';
 
   // Haltestellenliste
-  renderStopList(data.stops || []);
+  renderStopList(visibleStops);
   setPanelOpen(true);
 
   // Navi-Button freischalten
@@ -1543,6 +1543,14 @@ function displayRoute(data) {
     console.log('❌ No routePoints, hiding navigateToStartBtn');
     navigateToStartBtn.style.display = 'none';
   }
+}
+
+function isGhostStop(stop) {
+  return !!(stop && (stop.isGhostPoint || stop.isGhost || stop.sourceType === 'ghost'));
+}
+
+function getVisibleStops(stops) {
+  return (Array.isArray(stops) ? stops : []).filter(stop => !isGhostStop(stop));
 }
 
 function renderStopList(stops) {
@@ -2102,7 +2110,7 @@ function buildCompactLineLabel() {
     lineId += `/${routeMatch[1].padStart(2, '0')}`;
   }
 
-  const stops = currentRoute.data?.stops || [];
+  const stops = getVisibleStops(currentRoute.data?.stops || []);
   const lastStop = stops.length ? (stops[stops.length - 1].name || 'Ziel') : 'Ziel';
 
   return `Linie ${lineId} ${lastStop}`;
@@ -2126,9 +2134,10 @@ function startNavigation(options = {}) {
   }
 
   const pts    = currentRoute.data.routePoints;
+  const navStops = getVisibleStops(currentRoute.data.stops || []);
   navCumDists  = buildNavCumDists(pts);
   navTurns     = detectNavTurns(pts, navCumDists);
-  navStopDists = buildNavStopDists(currentRoute.data.stops || [], pts, navCumDists);
+  navStopDists = buildNavStopDists(navStops, pts, navCumDists);
 
   navActive   = true;
   navFirstFix = false;
@@ -2137,7 +2146,11 @@ function startNavigation(options = {}) {
   navRejoinBlend = 0;
   navProgressIdx = 0;
   navStartTime = Date.now();
-  currentNavLine = currentRoute.data;
+  currentNavLine = {
+    ...currentRoute.data,
+    points: currentRoute.data.routePoints || [],
+    stops: navStops
+  };
   navInputMode = useSimulation ? 'sim' : 'gps';
   navPaused = false;
   navPauseInputBlockedUntil = Date.now() + 900;
@@ -2172,8 +2185,8 @@ function startNavigation(options = {}) {
   }
 
   // Display Destination (last stop)
-  if (navDestinationNameEl && currentRoute.data?.stops && currentRoute.data.stops.length) {
-    const lastStop = currentRoute.data.stops[currentRoute.data.stops.length - 1];
+  if (navDestinationNameEl && navStops.length) {
+    const lastStop = navStops[navStops.length - 1];
     navDestinationNameEl.textContent = lastStop.name || 'Zielstation';
     
     // Calculate distance to last stop
@@ -2184,6 +2197,11 @@ function startNavigation(options = {}) {
       navDestinationDistEl.textContent = '–';
     }
     console.log('🎯 Destination set to:', navDestinationNameEl.textContent);
+  } else if (navDestinationNameEl) {
+    navDestinationNameEl.textContent = 'Endstation';
+    if (navDestinationDistEl) {
+      navDestinationDistEl.textContent = '–';
+    }
   }
 
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
@@ -2683,8 +2701,9 @@ function updateNavHud(lat, lon, forcedIdx = null) {
     navStopNameEl.textContent = nextStop.stop.name;
     navStopDistEl.textContent = navFormatDist(nextStop.distFromStart - currentDist);
   } else {
-    navStopNameEl.textContent = (currentRoute.data.stops && currentRoute.data.stops.length
-      ? currentRoute.data.stops[currentRoute.data.stops.length - 1].name
+    const visibleStops = getVisibleStops(currentRoute.data.stops || []);
+    navStopNameEl.textContent = (visibleStops.length
+      ? visibleStops[visibleStops.length - 1].name
       : null) || 'Endstation';
     navStopDistEl.textContent = 'Ziel';
   }

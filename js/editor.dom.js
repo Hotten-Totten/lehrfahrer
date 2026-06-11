@@ -45,6 +45,7 @@ const routeEditor = document.getElementById("routeEditor");
 const stopNameInput = document.getElementById("stopName");
 const stopMinuteInput = document.getElementById("stopMinute");
 const stopNoteInput = document.getElementById("stopNote");
+const stopGhostInput = document.getElementById("stopGhost");
 const stopLatInput = document.getElementById("stopLat");
 const stopLonInput = document.getElementById("stopLon");
 const stopSourceInput = document.getElementById("stopSource");

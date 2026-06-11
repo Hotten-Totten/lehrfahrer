@@ -515,6 +515,20 @@ button.danger:hover {
   background: #eff6ff;
 }
 
+.stop-ghost-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  margin: 4px 0 6px;
+}
+
+.stop-ghost-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .stop-order-actions {
   display: flex;
   flex-direction: row;

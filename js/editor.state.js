@@ -392,6 +392,12 @@ function createTransitStopIcon(stop, size) {
 }
 
 function getLineStopIcon(stop, selected = false) {
+  if (stop && stop.isGhostPoint) {
+    return selected
+      ? (ICONS.stopGhostSelected || ICONS.stopGhost || ICONS.stop)
+      : (ICONS.stopGhost || ICONS.stop);
+  }
+
   return createTransitStopIcon(stop, selected ? 22 : 18);
 }
 
@@ -443,6 +449,8 @@ const ICONS = {
   stopTramSelected: createStopBadgeIcon("#dc2626", "#7f1d1d", 22, "T"),
   stopMixed: createStopBadgeIcon("#be185d", "#831843", 18, "M"),
   stopMixedSelected: createStopBadgeIcon("#be185d", "#701a75", 22, "M"),
+  stopGhost: createStopBadgeIcon("#64748b", "#334155", 18, "G"),
+  stopGhostSelected: createStopBadgeIcon("#64748b", "#0f172a", 22, "G"),
 
   // ---------- Routenpunkte ----------
   route: createDivIcon("#f97316", "#7c2d12", 12),
