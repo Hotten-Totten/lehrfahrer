@@ -423,4 +423,40 @@ async function openLineBrowser() {
       }
     });
   }
+
+  const normalizeGhostBtn = document.getElementById("lineBrowserNormalizeGhostBtn");
+  if (normalizeGhostBtn) {
+    normalizeGhostBtn.addEventListener("click", async () => {
+      const city = String(lineBrowserSelectedCity || "").trim();
+      const scopeText = city ? `für ${city}` : "für alle Städte";
+      const ok = confirm(`Alte freie Standardpunkte ${scopeText} jetzt als Ghostpunkte bereinigen?`);
+      if (!ok) return;
+
+      normalizeGhostBtn.disabled = true;
+      const prevText = normalizeGhostBtn.textContent;
+      normalizeGhostBtn.textContent = "Ghostpunkte werden bereinigt…";
+
+      try {
+        const response = await fetch("api/normalize_ghost_points.php", {
+          method: "POST",
+          headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ city })
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Ghostpunkt-Bereinigung fehlgeschlagen");
+        }
+
+        setStatus(`Ghostpunkt-Bereinigung fertig: ${result.modifiedStopCount || 0} Stops in ${result.modifiedLineCount || 0} Linien (${result.cityScope || "alle Städte"})`);
+        await openLineBrowser();
+      } catch (err) {
+        error("Ghostpunkt-Bereinigung fehlgeschlagen", err);
+        setStatus(err.message || "Ghostpunkt-Bereinigung fehlgeschlagen.", "error");
+      } finally {
+        normalizeGhostBtn.disabled = false;
+        normalizeGhostBtn.textContent = prevText;
+      }
+    });
+  }
 })();

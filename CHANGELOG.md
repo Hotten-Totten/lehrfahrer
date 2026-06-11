@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.0.197 - 2026-06-11
+- **Alte Routen direkt im Ladebildschirm bereinigbar**:
+  - Neuer Button `Ghostpunkte bereinigen` im Linienbrowser
+  - Markiert in vorhandenen Linien alte freie Standardpunkte (`Freie Haltestelle X`) automatisch als Ghostpunkte
+  - Bereinigung funktioniert stadtweise (aktiver Filter) oder für alle Städte
+- **Umlaut-/Sonderzeichen-Anzeige erneut stabilisiert**:
+  - Zeichenkodierung in `index.html` erneut bereinigt
+  - Toolbar-Texte und Tooltips werden wieder korrekt angezeigt
+
 ## V2.0.196 - 2026-06-11
 - **Ghostpunkte jetzt wirklich standardmäßig unsichtbar**:
   - Neu erstellte freie Punkte (`Freie Haltestelle X`) werden im Editor automatisch als Ghostpunkt angelegt
