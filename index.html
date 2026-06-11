@@ -9,9 +9,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
 
-  <link rel="stylesheet" href="editor.css?v=V2.0.194">
+  <link rel="stylesheet" href="editor.css?v=V2.0.195">
 </head>
-<body data-editor-version="V2.0.194">
+<body data-editor-version="V2.0.195">
 
   <div id="menubar">
 
@@ -20,28 +20,28 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen â€¦</button>
-          <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen â€¦</button>
-          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="PrÃ¼ft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
-          <button type="button" class="menu-item" onclick="clearApiTokenViaPrompt()" title="LÃ¶scht den lokal gespeicherten API-Token im Browser">API-Token lÃ¶schen</button>
+          <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
+          <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen …</button>
+          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
+          <button type="button" class="menu-item" onclick="clearApiTokenViaPrompt()" title="Löscht den lokal gespeicherten API-Token im Browser">API-Token löschen</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="loadLineBtn" title="Gespeicherte Linien vom Server anzeigen und in den Editor laden">Route laden / Inhalt</button>
           <button type="button" class="menu-item" data-click-target="saveLineBtn" title="Die aktuelle Route mit allen Haltestellen auf dem Server speichern">Route speichern</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="exportBtn" title="Aktuelle Route als JSON-Datei auf diesen Computer herunterladen">JSON exportieren</button>
-          <button type="button" class="menu-item" data-click-target="exportGpxBtn" title="Aktuelle Route als GPX-Datei herunterladen (z. B. fÃ¼r GPS-GerÃ¤te)">GPX herunterladen</button>
+          <button type="button" class="menu-item" data-click-target="exportGpxBtn" title="Aktuelle Route als GPX-Datei herunterladen (z. B. für GPS-Geräte)">GPX herunterladen</button>
         </div>
       </div>
 
       <div class="menu-root">
         <button class="menu-button" type="button">Bearbeiten</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="undoBtn" title="Letzten Schritt rÃ¼ckgÃ¤ngig machen">ZurÃ¼ck</button>
-          <button type="button" class="menu-item" data-click-target="redoBtn" title="RÃ¼ckgÃ¤ngig gemachten Schritt wiederherstellen">Vor</button>
-          <button type="button" class="menu-item" data-click-target="clearBtn" title="Alle Haltestellen, Routenpunkte und Felder lÃ¶schen â€“ komplett neu starten">Alles lÃ¶schen</button>
+          <button type="button" class="menu-item" data-click-target="undoBtn" title="Letzten Schritt rückgängig machen">Zurück</button>
+          <button type="button" class="menu-item" data-click-target="redoBtn" title="Rückgängig gemachten Schritt wiederherstellen">Vor</button>
+          <button type="button" class="menu-item" data-click-target="clearBtn" title="Alle Haltestellen, Routenpunkte und Felder löschen – komplett neu starten">Alles löschen</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="loadAutosaveBtn" title="Den letzten automatisch gespeicherten lokalen Zwischenstand wiederherstellen">Autosave laden</button>
-          <button type="button" class="menu-item" data-click-target="clearAutosaveBtn" title="Den lokalen Autosave-Zwischenstand dauerhaft lÃ¶schen">Autosave lÃ¶schen</button>
+          <button type="button" class="menu-item" data-click-target="clearAutosaveBtn" title="Den lokalen Autosave-Zwischenstand dauerhaft löschen">Autosave löschen</button>
           <button type="button" class="menu-item" data-click-target="exportAutosaveBtn" title="Den aktuellen Autosave als JSON-Datei auf diesen Computer herunterladen">Autosave exportieren</button>
         </div>
       </div>
@@ -49,9 +49,9 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Route</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Automatisch eine StraÃŸenroute zwischen den Haltestellen berechnen">StraÃŸenroute erzeugen</button>
-          <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glÃ¤tten">Route glÃ¤tten</button>
-          <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verÃ¤ndern">Route vereinfachen</button>
+          <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Automatisch eine Straßenroute zwischen den Haltestellen berechnen">Straßenroute erzeugen</button>
+          <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
+          <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
           <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
         </div>
       </div>
@@ -61,20 +61,20 @@
         <div class="menu-dropdown">
           <button type="button" class="menu-item" data-click-target="modeFreeStopBtn" title="Modus: Haltestelle frei auf der Karte setzen">Haltestelle</button>
           <button type="button" class="menu-item" data-click-target="autoMinutesBtn" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">Minuten automatisch</button>
-          <button type="button" class="menu-item" data-click-target="snapStopToRouteBtn" title="AusgewÃ¤hlte Haltestelle an den nÃ¤chsten Routenpunkt snappen">Haltestelle an Route snappen</button>
-          <button type="button" class="menu-item" data-click-target="deleteStopBtn" title="AusgewÃ¤hlte Haltestelle aus der Linie entfernen">Haltestelle lÃ¶schen</button>
-          <button type="button" class="menu-item" data-click-target="deleteRoutePointBtn" title="AusgewÃ¤hlten Routenpunkt entfernen">Routenpunkt lÃ¶schen</button>
+          <button type="button" class="menu-item" data-click-target="snapStopToRouteBtn" title="Ausgewählte Haltestelle an den nächsten Routenpunkt snappen">Haltestelle an Route snappen</button>
+          <button type="button" class="menu-item" data-click-target="deleteStopBtn" title="Ausgewählte Haltestelle aus der Linie entfernen">Haltestelle löschen</button>
+          <button type="button" class="menu-item" data-click-target="deleteRoutePointBtn" title="Ausgewählten Routenpunkt entfernen">Routenpunkt löschen</button>
           <hr class="menu-separator">
-          <button type="button" class="menu-item" id="openFetchStopsModalBtn" title="Haltestellen-Katalog aus OpenStreetMap fÃ¼r einen Bereich laden oder aktualisieren">Katalog aktualisierenâ€¦</button>
+          <button type="button" class="menu-item" id="openFetchStopsModalBtn" title="Haltestellen-Katalog aus OpenStreetMap für einen Bereich laden oder aktualisieren">Katalog aktualisieren…</button>
         </div>
       </div>
 
       <div class="menu-root">
         <button class="menu-button" type="button">Ansicht</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="showOriginalRouteBtn" title="Die ursprÃ¼ngliche ungekÃ¼rzte Route auf der Karte anzeigen">Original anzeigen</button>
+          <button type="button" class="menu-item" data-click-target="showOriginalRouteBtn" title="Die ursprüngliche ungekürzte Route auf der Karte anzeigen">Original anzeigen</button>
           <button type="button" class="menu-item" data-click-target="showSimplifiedRouteBtn" title="Die vereinfachte Route mit weniger Punkten anzeigen">Vereinfachte anzeigen</button>
-          <button type="button" class="menu-item" data-click-target="modeSelectBtn" title="Modus: Routenpunkte auf der Karte auswÃ¤hlen und bearbeiten">Routenpunkte Auswahl</button>
+          <button type="button" class="menu-item" data-click-target="modeSelectBtn" title="Modus: Routenpunkte auf der Karte auswählen und bearbeiten">Routenpunkte Auswahl</button>
           <button type="button" class="menu-item" data-click-target="modeRouteBtn" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route zeichnen</button>
         </div>
       </div>
@@ -82,42 +82,42 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Hilfe</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="helpBtn" title="Hilfe und ErklÃ¤rungen zum Editor Ã¶ffnen">Hilfe Ã¶ffnen</button>
+          <button type="button" class="menu-item" data-click-target="helpBtn" title="Hilfe und Erklärungen zum Editor öffnen">Hilfe öffnen</button>
         </div>
       </div>
 
     </div>
 
     <div id="quickbar">
-      <button id="quickNewBtn" type="button" title="Alle Felder und die Karte leeren â€“ neue Linie beginnen">Neu</button>
+      <button id="quickNewBtn" type="button" title="Alle Felder und die Karte leeren – neue Linie beginnen">Neu</button>
 
       <span class="qb-sep"></span>
 
-      <button id="undoBtn" type="button" title="Letzten Schritt rÃ¼ckgÃ¤ngig machen">â†¶</button>
-      <button id="redoBtn" type="button" title="RÃ¼ckgÃ¤ngig gemachten Schritt wiederherstellen">â†·</button>
+      <button id="undoBtn" type="button" title="Letzten Schritt rückgängig machen">↶</button>
+      <button id="redoBtn" type="button" title="Rückgängig gemachten Schritt wiederherstellen">↷</button>
 
       <span class="qb-sep"></span>
 
-      <button id="modeFreeStopBtn" type="button" title="Modus: Haltestelle frei auf der Karte setzen oder aus dem Katalog auswÃ¤hlen">Haltestelle Auswahl</button>
+      <button id="modeFreeStopBtn" type="button" title="Modus: Haltestelle frei auf der Karte setzen oder aus dem Katalog auswählen">Haltestelle Auswahl</button>
       <button id="modeRouteBtn" type="button" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route manuell</button>
       <button id="startTrackBetweenStopsBtn" type="button" title="Sondertrasse zwischen zwei Haltestellen zeichnen (z. B. Wendeschleife)">Sondertrasse zeichnen</button>
-      <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschlieÃŸen und speichern">Sondertrasse fertig</button>
+      <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschließen und speichern">Sondertrasse fertig</button>
 
       <span class="qb-sep"></span>
 
-      <button id="buildStreetRouteBtn" type="button" title="Automatisch eine StraÃŸenroute zwischen den Haltestellen berechnen">Route zeichnen</button>
-      <button id="cancelRoutingBtn" type="button" title="Laufendes Routing abbrechen" style="display:none">âœ• Abbrechen</button>
-      <button id="smoothRouteBtn" type="button" title="Kleine Ungenauigkeiten in der Route glÃ¤tten">Route glÃ¤tten</button>
+      <button id="buildStreetRouteBtn" type="button" title="Automatisch eine Straßenroute zwischen den Haltestellen berechnen">Route zeichnen</button>
+      <button id="cancelRoutingBtn" type="button" title="Laufendes Routing abbrechen" style="display:none">✕ Abbrechen</button>
+      <button id="smoothRouteBtn" type="button" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
 
       <span class="qb-sep"></span>
 
-      <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">â± Fahrzeiten</button>
+      <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
 
-      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.0.194</span>
+      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.0.195</span>
       <span id="apiTokenStatus" class="token-status token-status-off" title="Status des lokal gespeicherten API-Tokens">API-Token: aus</span>
       <span
         class="token-help"
-        title="WofÃ¼r ist der API-Token?&#10;Der Token schÃ¼tzt Schreibaktionen (Speichern, LÃ¶schen, Orte anlegen) auf dem Server.&#10;Nur wer den Token kennt, darf Ã„nderungen an den Linien-Daten vornehmen.&#10;Der Token wird lokal in diesem Browser gespeichert und bei API-Anfragen mitgesendet."
+        title="Wofür ist der API-Token?&#10;Der Token schützt Schreibaktionen (Speichern, Löschen, Orte anlegen) auf dem Server.&#10;Nur wer den Token kennt, darf Änderungen an den Linien-Daten vornehmen.&#10;Der Token wird lokal in diesem Browser gespeichert und bei API-Anfragen mitgesendet."
         aria-label="Hilfe zum API-Token"
       >?</span>
     </div>
@@ -128,7 +128,7 @@
 
     <div class="top-group">
       <label>Ort</label>
-      <select id="citySelect" title="WÃ¤hle den Ort (Stadt), unter dem die Linie gespeichert wird"></select>
+      <select id="citySelect" title="Wähle den Ort (Stadt), unter dem die Linie gespeichert wird"></select>
     </div>
 
     <input id="newCityInput" type="hidden">
@@ -136,7 +136,7 @@
 
     <div class="top-group line-group">
       <label>Linie</label>
-      <div class="prefix-input-wrap" title="Liniennummer eingeben â€“ wird automatisch als &#39;Linie XX&#39; gespeichert und bestimmt den Ordnernamen auf dem Server">
+      <div class="prefix-input-wrap" title="Liniennummer eingeben – wird automatisch als &#39;Linie XX&#39; gespeichert und bestimmt den Ordnernamen auf dem Server">
         <span class="field-prefix">Linie</span>
         <input id="lineName" placeholder="16" value="">
       </div>
@@ -144,7 +144,7 @@
 
     <div class="top-group route-group">
       <label>Route</label>
-      <div class="prefix-input-wrap" title="Routennummer eingeben â€“ wird automatisch als &#39;Route XX&#39; gespeichert und ist Teil des Dateinamens">
+      <div class="prefix-input-wrap" title="Routennummer eingeben – wird automatisch als &#39;Route XX&#39; gespeichert und ist Teil des Dateinamens">
         <span class="field-prefix">Route</span>
         <input id="routeName" placeholder="01" value="">
       </div>
@@ -152,23 +152,23 @@
 
     <div class="top-group direction-group">
       <label>Richtung</label>
-      <input id="directionName" placeholder="Start- und Zielpunkt" title="Beschreibung der Fahrtrichtung, z. B. &#39;Hauptbahnhof â€“ Branitz&#39; â€“ wird Teil des Dateinamens">
+      <input id="directionName" placeholder="Start- und Zielpunkt" title="Beschreibung der Fahrtrichtung, z. B. &#39;Hauptbahnhof – Branitz&#39; – wird Teil des Dateinamens">
     </div>
 
     <div class="top-group color-group">
       <label>Farbe</label>
-      <input id="lineColor" type="color" value="#d32f2f" title="Linienfarbe fÃ¼r die Anzeige auf der Karte">
+      <input id="lineColor" type="color" value="#d32f2f" title="Linienfarbe für die Anzeige auf der Karte">
     </div>
 
     <div class="top-group search-group">
       <label>Haltestelle suchen</label>
-      <input id="stopSearchInput" placeholder="z. B. Stadtpromenade" title="Haltestelle aus dem Katalog suchen und zur Linie hinzufÃ¼gen">
+      <input id="stopSearchInput" placeholder="z. B. Stadtpromenade" title="Haltestelle aus dem Katalog suchen und zur Linie hinzufügen">
       <div id="searchResults" class="search-results hidden"></div>
     </div>
 
     <input id="loadLineInput" type="file" accept=".json" class="hidden">
 
-    <!-- versteckte Buttons fÃ¼r DOM-Referenzen -->
+    <!-- versteckte Buttons für DOM-Referenzen -->
     <button id="snapStopToRouteBtn" type="button" class="hidden"></button>
     <button id="deleteRoutePointBtn" type="button" class="hidden"></button>
     <button id="deleteStopBtn" type="button" class="hidden"></button>
@@ -207,7 +207,7 @@
           Als Ghostpunkt nutzen (in App nicht als Haltestelle anzeigen)
         </label>
         <input id="stopLat" placeholder="Breitengrad">
-        <input id="stopLon" placeholder="LÃ¤ngengrad">
+        <input id="stopLon" placeholder="Längengrad">
         <input id="stopSource" disabled placeholder="Quelle">
         <button id="saveStopBtn" type="button">Speichern</button>
       </div>
@@ -215,10 +215,10 @@
       <div id="routeEditor" class="editor-section hidden">
         <input id="routeType" disabled placeholder="Punkt-Typ">
         <input id="routeLat" placeholder="Breitengrad">
-        <input id="routeLon" placeholder="LÃ¤ngengrad">
+        <input id="routeLon" placeholder="Längengrad">
       </div>
 
-      <div id="noSelection">Nichts ausgewÃ¤hlt.</div>
+      <div id="noSelection">Nichts ausgewählt.</div>
 
       <h4>Haltestellen-Reihenfolge</h4>
       <div id="stopOrderList"></div>
@@ -229,10 +229,10 @@
         <div>Haltestellen in Linie: <span id="stopCount">0</span></div>
         <div>Routenpunkte: <span id="routePointCount">0</span></div>
         <div>Katalog-Haltestellen: <span id="catalogCount">0</span></div>
-        <div>LinienlÃ¤nge: <span id="routeLengthKm">0.00</span> km</div>
+        <div>Linienlänge: <span id="routeLengthKm">0.00</span> km</div>
         <div>Fahrzeit grob: <span id="estimatedDriveMinutes">0</span> min</div>
-        <div>StreckenlÃ¤nge: <span id="routeLength">0 km</span></div>
-        <div>Ã˜ Geschwindigkeit: <span id="avgSpeed">20 km/h</span></div>
+        <div>Streckenlänge: <span id="routeLength">0 km</span></div>
+        <div>Ø Geschwindigkeit: <span id="avgSpeed">20 km/h</span></div>
         <div>Fahrzeit gesamt: <span id="totalTime">0 min</span></div>
         <div>Modus: <span id="currentModeText"></span></div>
       </div>
@@ -246,7 +246,7 @@
     <div class="help-modal-content">
       <div class="help-modal-header">
         <h3>Editor-Hilfe</h3>
-        <button id="helpCloseBtn" type="button">SchlieÃŸen</button>
+        <button id="helpCloseBtn" type="button">Schließen</button>
       </div>
       <pre id="helpModalBody" class="help-modal-body"></pre>
     </div>
@@ -257,7 +257,7 @@
     <div class="help-modal-content fetch-stops-modal-content">
       <div class="help-modal-header">
         <h3>Haltestellen-Katalog aktualisieren</h3>
-        <button id="fetchStopsCloseBtn" type="button">SchlieÃŸen</button>
+        <button id="fetchStopsCloseBtn" type="button">Schließen</button>
       </div>
       <div class="fetch-stops-body">
         <p class="fetch-stops-hint">Gib einen Ort und einen Radius ein. Die Haltestellen werden von OpenStreetMap geladen.</p>
@@ -271,7 +271,7 @@
           <input id="fetchStopsLat" type="number" step="0.0001" placeholder="51.7563">
         </div>
         <div class="fetch-stops-row">
-          <label for="fetchStopsLon">LÃ¤ngengrad</label>
+          <label for="fetchStopsLon">Längengrad</label>
           <input id="fetchStopsLon" type="number" step="0.0001" placeholder="14.3329">
         </div>
         <div class="fetch-stops-row">
@@ -315,7 +315,7 @@
           <div class="fetch-stops-mode-options">
             <label class="fetch-stops-mode-opt">
               <input type="radio" name="fetchStopsMode" id="fetchStopsModeAdd" value="add" checked>
-              <span>Zum Katalog <strong>hinzufÃ¼gen</strong> (Merge)</span>
+              <span>Zum Katalog <strong>hinzufügen</strong> (Merge)</span>
             </label>
             <label class="fetch-stops-mode-opt fetch-stops-mode-warn">
               <input type="radio" name="fetchStopsMode" id="fetchStopsModeReplace" value="replace">
@@ -336,16 +336,16 @@
       <div class="help-modal-header">
         <h3>Gespeicherte Linien</h3>
         <div class="lbr-header-actions">
-          <button id="lineBrowserRebuildPdfBtn" type="button" class="lbr-refresh-btn" title="Erstellt fehlende PDF- und GPX-Dateien fÃ¼r vorhandene Linien neu">PDF/GPX nacherzeugen</button>
+          <button id="lineBrowserRebuildPdfBtn" type="button" class="lbr-refresh-btn" title="Erstellt fehlende PDF- und GPX-Dateien für vorhandene Linien neu">PDF/GPX nacherzeugen</button>
           <button id="lineBrowserRefreshBtn" type="button" class="lbr-refresh-btn" title="Liste neu laden">&#8635; Aktualisieren</button>
-          <button id="lineBrowserCloseBtn" type="button">SchlieÃŸen</button>
+          <button id="lineBrowserCloseBtn" type="button">Schließen</button>
         </div>
       </div>
       <div id="lineBrowserBody" class="line-browser-body"></div>
     </div>
   </div>
 
-  <!-- Speichern-BestÃ¤tigungs-Dialog -->
+  <!-- Speichern-Bestätigungs-Dialog -->
   <div id="saveConfirmModal" class="modal-overlay hidden">
     <div class="save-confirm-box">
       <div class="save-confirm-header">
@@ -366,7 +366,7 @@
           <span id="saveConfirmStops" class="save-confirm-value"></span>
         </div>
         <div class="save-confirm-row">
-          <span class="save-confirm-label">StreckenlÃ¤nge</span>
+          <span class="save-confirm-label">Streckenlänge</span>
           <span id="saveConfirmLength" class="save-confirm-value"></span>
         </div>
         <div class="save-confirm-badges">
@@ -388,7 +388,7 @@
       <span>Debug-Panel</span>
       <div class="debug-panel-actions">
         <button id="debugClearBtn" type="button">Leeren</button>
-        <button id="debugClearCacheBtn" type="button" class="debug-btn-danger" title="Leert Cache/Storage/ServiceWorker und lÃ¤dt den Editor neu">Cache reset</button>
+        <button id="debugClearCacheBtn" type="button" class="debug-btn-danger" title="Leert Cache/Storage/ServiceWorker und lädt den Editor neu">Cache reset</button>
       </div>
     </div>
     <div id="debugPanelBody" class="debug-panel-body"></div>
@@ -454,29 +454,30 @@
     })();
   </script>
 
-  <script src="data/haltestellen.js?v=V2.0.194"></script>
+  <script src="data/haltestellen.js?v=V2.0.195"></script>
 
-  <script src="js/editor.state.js?v=V2.0.194"></script>
-  <script src="js/editor.dom.js?v=V2.0.194"></script>
-  <script src="js/editor.debug.js?v=V2.0.194"></script>
-  <script src="js/editor.ui.js?v=V2.0.194"></script>
-  <script src="js/editor.selection.js?v=V2.0.194"></script>
-  <script src="js/editor.stops.js?v=V2.0.194"></script>
-  <script src="js/editor.route.js?v=V2.0.194"></script>
-  <script src="js/editor.routing.js?v=V2.0.194"></script>
-  <script src="js/editor.search.js?v=V2.0.194"></script>
-  <script src="js/editor.autosave.js?v=V2.0.194"></script>
-  <script src="js/editor.api.js?v=V2.0.194"></script>
-  <script src="js/editor.lineBrowser.js?v=V2.0.194"></script>
-  <script src="js/editor.help.js?v=V2.0.194"></script>
-  <script src="js/editor.history.js?v=V2.0.194"></script>
-  <script src="js/editor.linelogic.js?v=V2.0.194"></script>
-  <script src="js/editor.main.js?v=V2.0.194"></script>
-  <script src="js/editor.events.js?v=V2.0.194"></script>
-  <script src="js/editor.fetchStops.js?v=V2.0.194"></script>
+  <script src="js/editor.state.js?v=V2.0.195"></script>
+  <script src="js/editor.dom.js?v=V2.0.195"></script>
+  <script src="js/editor.debug.js?v=V2.0.195"></script>
+  <script src="js/editor.ui.js?v=V2.0.195"></script>
+  <script src="js/editor.selection.js?v=V2.0.195"></script>
+  <script src="js/editor.stops.js?v=V2.0.195"></script>
+  <script src="js/editor.route.js?v=V2.0.195"></script>
+  <script src="js/editor.routing.js?v=V2.0.195"></script>
+  <script src="js/editor.search.js?v=V2.0.195"></script>
+  <script src="js/editor.autosave.js?v=V2.0.195"></script>
+  <script src="js/editor.api.js?v=V2.0.195"></script>
+  <script src="js/editor.lineBrowser.js?v=V2.0.195"></script>
+  <script src="js/editor.help.js?v=V2.0.195"></script>
+  <script src="js/editor.history.js?v=V2.0.195"></script>
+  <script src="js/editor.linelogic.js?v=V2.0.195"></script>
+  <script src="js/editor.main.js?v=V2.0.195"></script>
+  <script src="js/editor.events.js?v=V2.0.195"></script>
+  <script src="js/editor.fetchStops.js?v=V2.0.195"></script>
 
 </body>
 </html>
+
 
 
 

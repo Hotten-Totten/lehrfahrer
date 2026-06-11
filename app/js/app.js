@@ -141,10 +141,12 @@ const navPanes        = document.querySelectorAll('.nav-menu-pane');
 const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 const markerMotionSelect = document.getElementById('markerMotionSelect');
 const markerTurnSelect = document.getElementById('markerTurnSelect');
+const showGhostStopsToggle = document.getElementById('showGhostStopsToggle');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 const MARKER_MOTION_PROFILE_KEY = 'lehrfahrer_marker_motion_profile';
 const MARKER_TURN_PROFILE_KEY = 'lehrfahrer_marker_turn_profile';
+const GHOST_STOPS_VISIBLE_KEY = 'lehrfahrer_show_ghost_stops';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 let refreshInProgress = false;
 
@@ -1550,7 +1552,32 @@ function isGhostStop(stop) {
 }
 
 function getVisibleStops(stops) {
-  return (Array.isArray(stops) ? stops : []).filter(stop => !isGhostStop(stop));
+  const list = Array.isArray(stops) ? stops : [];
+  if (getGhostStopsVisible()) return list;
+  return list.filter(stop => !isGhostStop(stop));
+}
+
+function getGhostStopsVisible() {
+  return localStorage.getItem(GHOST_STOPS_VISIBLE_KEY) === '1';
+}
+
+function setGhostStopsVisible(value) {
+  localStorage.setItem(GHOST_STOPS_VISIBLE_KEY, value ? '1' : '0');
+}
+
+function rerenderCurrentRouteWithGhostSetting() {
+  if (!currentRoute || !currentRoute.data) return;
+
+  displayRoute(currentRoute.data);
+
+  if (navActive && currentRoute.data.routePoints && currentRoute.data.routePoints.length) {
+    const navStops = getVisibleStops(currentRoute.data.stops || []);
+    navStopDists = buildNavStopDists(navStops, currentRoute.data.routePoints, navCumDists);
+
+    if (currentNavLine) {
+      currentNavLine.stops = navStops;
+    }
+  }
 }
 
 function renderStopList(stops) {
@@ -1854,6 +1881,9 @@ function setPanelOpen(isOpen) {
 
 // ── Einstellungen ─────────────────────────────────────────────
 function openSettings() {
+  if (showGhostStopsToggle) {
+    showGhostStopsToggle.checked = getGhostStopsVisible();
+  }
   settingsOverlay.classList.remove('hidden');
   displayAvailableLines();
 }
@@ -1925,6 +1955,16 @@ function initMarkerSmoothingSelects() {
       }
     });
   }
+}
+
+function initGhostStopsToggle() {
+  if (!showGhostStopsToggle) return;
+
+  showGhostStopsToggle.checked = getGhostStopsVisible();
+  showGhostStopsToggle.addEventListener('change', () => {
+    setGhostStopsVisible(!!showGhostStopsToggle.checked);
+    rerenderCurrentRouteWithGhostSetting();
+  });
 }
 
 // Heading-Glättung: gleitender Durchschnitt über letzte 5 GPS-Richtungswerte
@@ -2000,6 +2040,7 @@ function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
   toggleDriverZoom();
   initCameraProfileSelect();
   initMarkerSmoothingSelects();
+  initGhostStopsToggle();
 })();
 
 // Globale Toast-Funktion (wird auch von map.js genutzt)

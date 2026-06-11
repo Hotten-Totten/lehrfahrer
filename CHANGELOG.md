@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.0.195 - 2026-06-11
+- **Editor-Umlaute/Sonderzeichen stabilisiert**:
+  - Mojibake-Anzeigen in der Topbar/Quickbar und Tooltips von `index.html` bereinigt
+  - Pfeilsymbole und Trennstriche werden wieder korrekt dargestellt
+- **Ghostpunkte in der App jetzt optional sichtbar**:
+  - Standard: Ghostpunkte bleiben weiterhin unsichtbar (Karte, Liste, Navigation)
+  - Neu in Einstellungen: `Ghostpunkte anzeigen` zum Ein-/Ausblenden
+  - Schalterzustand wird lokal gespeichert
+
 ## V2.0.194 - 2026-06-11
 - **Encoding/Umlaute im Editor repariert**:
   - Fehlerhafte Zeichenkodierung in `index.html` behoben (z. B. `glÃ¤tten`, `â†¶`)
