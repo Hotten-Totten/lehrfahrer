@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.209 - 2026-06-11
+- **VBB-Suche robuster bei "Linie existiert, aber kein Treffer"**:
+  - Scan über deutlich mehr Haltestellen im Stadtgebiet (statt nur wenige frühe Treffer)
+  - Größeres Abfahrtsfenster (`duration=1440`) bei `departureBoard`
+  - Tolerantere Linienerkennung für Varianten wie `37`, `37E`, `N37`, `EV37`
+  - Früher Abbruch bei ausreichend Kandidaten, damit die Suche trotzdem performant bleibt
+
 ## V2.0.208 - 2026-06-11
 - **Ghostpunkt-Assistent hinzugefügt**:
   - Neuer Menüpunkt `Haltestellen -> Ghostpunkt-Assistent …`

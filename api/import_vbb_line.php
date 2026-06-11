@@ -137,8 +137,30 @@ function vbb_slug_to_city_query(string $citySlug): string {
 
 function vbb_normalize_line(string $value): string {
     $v = strtoupper(trim($value));
+    $v = preg_replace('/^LINIE\s+/i', '', $v);
     $v = preg_replace('/\s+/', '', $v);
     return $v;
+}
+
+function vbb_line_matches_query(string $lineValue, string $lineQuery): bool {
+    $lineNorm = vbb_normalize_line($lineValue);
+    $targetNorm = vbb_normalize_line($lineQuery);
+
+    if ($lineNorm === '' || $targetNorm === '') {
+        return false;
+    }
+
+    // Exakter Treffer (häufigster Fall)
+    if ($lineNorm === $targetNorm) {
+        return true;
+    }
+
+    // Fallback für Varianten wie "37E", "N37", "EV37"
+    if (preg_match('/(^|\D)' . preg_quote($targetNorm, '/') . '(\D|$)/', $lineNorm)) {
+        return true;
+    }
+
+    return false;
 }
 
 function vbb_extract_stops_by_city(array $cfg, string $cityQuery): array {
@@ -184,10 +206,12 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
     $target = vbb_normalize_line($lineQuery);
     $out = [];
 
-    foreach (array_slice($stops, 0, 12) as $stop) {
+    foreach (array_slice($stops, 0, 36) as $stop) {
         $depRes = vbb_request($cfg, '/departureBoard', [
             'id' => $stop['id'],
-            'maxJourneys' => 80,
+            'maxJourneys' => 120,
+            // Größeres Zeitfenster erhöht die Trefferchance, wenn nicht sofort etwas fährt.
+            'duration' => 1440,
         ]);
         if (!$depRes['ok']) {
             continue;
@@ -203,8 +227,8 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
                 continue;
             }
 
-            $line = vbb_normalize_line(strval($dep['Product']['line'] ?? $dep['name'] ?? ''));
-            if ($line !== $target) {
+            $lineRaw = strval($dep['Product']['line'] ?? $dep['name'] ?? '');
+            if (!vbb_line_matches_query($lineRaw, $target)) {
                 continue;
             }
 
@@ -222,6 +246,11 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
                 'date' => strval($dep['date'] ?? ''),
                 'time' => strval($dep['time'] ?? ''),
             ];
+        }
+
+        // Früher beenden, sobald genug Kandidaten gesammelt wurden.
+        if (count($out) >= 40) {
+            break;
         }
     }
 
