@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.211 - 2026-06-11
+- **Hotfix VBB-Import (keine Treffer bei allen Linien)**:
+  - Ursache behoben: `departureBoard` mit `duration=1440` liefert auf dieser VBB-Instanz HTTP 400
+  - Neue robuste Logik: zuerst Versuch mit `duration`, bei Fehler automatischer Fallback ohne `duration`
+  - Dadurch laufen Stadtlinien-Suchen wieder statt pauschal auf "Keine Treffer" zu fallen
+
 ## V2.0.210 - 2026-06-11
 - **VBB-Treffersuche räumlich erweitert**:
   - Wenn im Stadt-Stopset keine Treffer gefunden werden, wird automatisch ein Nearby-Fallback über `location.nearbystops` ausgeführt

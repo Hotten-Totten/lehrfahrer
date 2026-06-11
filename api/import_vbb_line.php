@@ -258,23 +258,39 @@ function vbb_expand_stops_with_nearby(array $cfg, array $baseStops, int $maxSeed
     return array_values($byId);
 }
 
+function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
+    $firstTry = vbb_request($cfg, '/departureBoard', [
+        'id' => $stopId,
+        'maxJourneys' => 120,
+        // Nicht von allen HAFAS-Instanzen unterstützt.
+        'duration' => 1440,
+    ]);
+
+    if ($firstTry['ok']) {
+        $deps = $firstTry['data']['Departure'] ?? [];
+        return is_array($deps) ? $deps : [];
+    }
+
+    // Fallback ohne duration, damit Suchlauf nicht komplett ausfällt.
+    $fallback = vbb_request($cfg, '/departureBoard', [
+        'id' => $stopId,
+        'maxJourneys' => 120,
+    ]);
+    if (!$fallback['ok']) {
+        return [];
+    }
+
+    $deps = $fallback['data']['Departure'] ?? [];
+    return is_array($deps) ? $deps : [];
+}
+
 function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
 
     foreach (array_slice($stops, 0, 36) as $stop) {
-        $depRes = vbb_request($cfg, '/departureBoard', [
-            'id' => $stop['id'],
-            'maxJourneys' => 120,
-            // Größeres Zeitfenster erhöht die Trefferchance, wenn nicht sofort etwas fährt.
-            'duration' => 1440,
-        ]);
-        if (!$depRes['ok']) {
-            continue;
-        }
-
-        $deps = $depRes['data']['Departure'] ?? [];
-        if (!is_array($deps)) {
+        $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
+        if (!$deps) {
             continue;
         }
 
