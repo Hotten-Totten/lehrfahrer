@@ -43,9 +43,11 @@ jobs:
         shell: bash
         run: |
           TARGET="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}:${{ secrets.STRATO_TARGET_PATH }}"
+          SSH_CMD="ssh -p ${{ secrets.STRATO_PORT }} -o UpdateHostKeys=no -o StrictHostKeyChecking=accept-new"
+          RSYNC_FLAGS="-az --omit-dir-times --no-perms --no-owner --no-group"
 
           if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
-            rsync -az \
+            rsync $RSYNC_FLAGS \
               --exclude ".git/" \
               --exclude ".github/" \
               --exclude "WorkingSystem/" \
@@ -56,11 +58,11 @@ jobs:
               --exclude "app6/" \
               --exclude "node_modules/" \
               --exclude "*.log" \
-              -e "ssh -i ~/.ssh/id_rsa -p ${{ secrets.STRATO_PORT }}" \
+              -e "$SSH_CMD -i ~/.ssh/id_rsa" \
               ./ "$TARGET"
           else
             export SSHPASS="${{ secrets.STRATO_PASSWORD }}"
-            sshpass -e rsync -az \
+            sshpass -e rsync $RSYNC_FLAGS \
               --exclude ".git/" \
               --exclude ".github/" \
               --exclude "WorkingSystem/" \
@@ -71,6 +73,6 @@ jobs:
               --exclude "app6/" \
               --exclude "node_modules/" \
               --exclude "*.log" \
-              -e "ssh -p ${{ secrets.STRATO_PORT }}" \
+              -e "$SSH_CMD" \
               ./ "$TARGET"
           fi

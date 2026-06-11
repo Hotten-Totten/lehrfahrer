@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.174 - 2026-06-11
+- **Strato Deploy: Permission-denied und Hostkey-Warnung abgefedert**:
+  - Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) nutzt jetzt Shared-Hosting-taugliche `rsync`-Flags:
+    - `--omit-dir-times --no-perms --no-owner --no-group`
+  - SSH-Aufruf ergänzt um `-o UpdateHostKeys=no`, um die gemeldete RSA-Prove-Warnung zu umgehen
+  - Ziel: weniger Abbrüche auf Strato bei eingeschränkten Dateirechten/Attributen
+
 ## V2.0.173 - 2026-06-11
 - **Strato Deploy-Fehler bei `tmp*`-Ordnern behoben**:
   - `rsync --delete` im Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) entfernt
