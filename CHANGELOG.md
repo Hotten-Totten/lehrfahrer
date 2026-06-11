@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.218 - 2026-06-11
+- **VBB-Treffersuche nicht mehr nur „ab jetzt“ (Hotfix)**:
+  - Board-Abfrage läuft jetzt für den ganzen Tag ab 00:00 (statt nur zukünftige Fahrten)
+  - Zusätzlich werden neben Abfahrten auch Ankünfte berücksichtigt, um Gegenrichtungen besser zu erfassen
+  - Performance verbessert: gestufte Stopsuche (24 City-Stops + 36 erweiterte Stops)
+  - Erwartung: deutlich mehr als 4 Abend-Treffer und bessere Chance auf Rückfahrten
+
 ## V2.0.217 - 2026-06-11
 - **VBB-Richtungssuche weiter verbessert (Hotfix)**:
   - Nearby-Haltestellen-Suche wird jetzt auch dann ausgeführt, wenn bereits Treffer da sind, aber zu wenige/zu einseitige Richtungen vorliegen

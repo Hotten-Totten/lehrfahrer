@@ -258,44 +258,74 @@ function vbb_expand_stops_with_nearby(array $cfg, array $baseStops, int $maxSeed
     return array_values($byId);
 }
 
-function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
-    $firstTry = vbb_request($cfg, '/departureBoard', [
+function vbb_fetch_board_for_stop(array $cfg, string $stopId, string $boardType): array {
+    $isArrival = ($boardType === 'arrival');
+    $endpoint = $isArrival ? '/arrivalBoard' : '/departureBoard';
+    $resultKey = $isArrival ? 'Arrival' : 'Departure';
+
+    $baseParams = [
         'id' => $stopId,
-        'maxJourneys' => 120,
+        'maxJourneys' => 200,
+        // Ganzen Tag ab Mitternacht anfragen, nicht nur "ab jetzt".
+        'date' => date('Y-m-d'),
+        'time' => '00:00',
+    ];
+
+    $firstTry = vbb_request($cfg, $endpoint, $baseParams + [
         // Nicht von allen HAFAS-Instanzen unterstützt.
         'duration' => 1440,
     ]);
 
     if ($firstTry['ok']) {
-        $deps = $firstTry['data']['Departure'] ?? [];
-        return is_array($deps) ? $deps : [];
+        $rows = $firstTry['data'][$resultKey] ?? [];
+        return is_array($rows) ? $rows : [];
     }
 
-    // Fallback ohne duration, damit Suchlauf nicht komplett ausfällt.
-    $fallback = vbb_request($cfg, '/departureBoard', [
+    // Fallback ohne duration.
+    $fallback = vbb_request($cfg, $endpoint, $baseParams);
+    if ($fallback['ok']) {
+        $rows = $fallback['data'][$resultKey] ?? [];
+        return is_array($rows) ? $rows : [];
+    }
+
+    // Letzter Fallback: nur Standardabfrage, falls date/time nicht unterstützt wird.
+    $plain = vbb_request($cfg, $endpoint, [
         'id' => $stopId,
-        'maxJourneys' => 120,
+        'maxJourneys' => 200,
     ]);
-    if (!$fallback['ok']) {
+    if (!$plain['ok']) {
         return [];
     }
 
-    $deps = $fallback['data']['Departure'] ?? [];
-    return is_array($deps) ? $deps : [];
+    $rows = $plain['data'][$resultKey] ?? [];
+    return is_array($rows) ? $rows : [];
 }
 
-function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): array {
+function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
+    return vbb_fetch_board_for_stop($cfg, $stopId, 'departure');
+}
+
+function vbb_fetch_arrivals_for_stop(array $cfg, string $stopId): array {
+    return vbb_fetch_board_for_stop($cfg, $stopId, 'arrival');
+}
+
+function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops, int $maxStops = 36): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
-    $directionKeys = [];
 
-    foreach (array_slice($stops, 0, 120) as $stop) {
+    foreach (array_slice($stops, 0, $maxStops) as $stop) {
         $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
-        if (!$deps) {
+        $arrs = vbb_fetch_arrivals_for_stop($cfg, strval($stop['id'] ?? ''));
+        $boards = array_merge(
+            is_array($deps) ? $deps : [],
+            is_array($arrs) ? $arrs : []
+        );
+
+        if (!$boards) {
             continue;
         }
 
-        foreach ($deps as $dep) {
+        foreach ($boards as $dep) {
             if (!is_array($dep)) {
                 continue;
             }
@@ -311,10 +341,6 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
             }
 
             $direction = strval($dep['direction'] ?? '');
-            $dirKey = strtolower(trim($direction));
-            if ($dirKey !== '') {
-                $directionKeys[$dirKey] = true;
-            }
 
             $out[$ref] = [
                 'id' => $ref,
@@ -578,7 +604,7 @@ if (!$stopsByCity) {
     vbb_json_error(502, 'VBB-Ortssuche fehlgeschlagen oder lieferte keine Haltestellen.');
 }
 
-$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity);
+$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, 24);
 // Auch bei vorhandenen, aber wenigen/einseitigen Treffern zusätzliche Nearby-Suche nutzen.
 $needExpandedPass = !$candidates
     || count($candidates) < 24
@@ -587,7 +613,7 @@ $needExpandedPass = !$candidates
 if ($needExpandedPass) {
     $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 20);
     if ($expandedStops) {
-        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops);
+        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 36);
         $candidates = vbb_merge_candidates($candidates, $extraCandidates);
     }
 }
