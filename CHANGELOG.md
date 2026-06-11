@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.204 - 2026-06-11
+- **VBB-Import auf reale Demo-API angepasst**:
+  - Import nutzt jetzt die tatsächlich verfügbaren HAFAS-2.52-Endpunkte (`location.name`, `departureBoard`, `journeyDetail`)
+  - Linienkandidaten werden über echte Abfahrten ermittelt und dann als Fahrt in den Editor importiert
+  - Beispielkonfiguration auf korrekte BaseURL `.../api/fahrinfo/2.52` aktualisiert
+
 ## V2.0.203 - 2026-06-11
 - **Optionaler VBB-Import (zweigleisig)**:
   - Neuer Menüpunkt `VBB-Linie importieren …` im Server-Menü

@@ -14,7 +14,7 @@ function vbb_json_error(int $status, string $message): void {
 
 function vbb_load_config(): array {
     $cfg = [
-        'baseUrl' => 'https://vbb-demo.demo2.hafas.cloud/api/fahrinfo/latest',
+        'baseUrl' => 'https://vbb-demo.demo2.hafas.cloud/api/fahrinfo/2.52',
         'accessId' => '',
         'timeoutSeconds' => 20,
     ];
@@ -93,8 +93,11 @@ function vbb_request(array $cfg, string $path, array $query): array {
     $path = '/' . ltrim($path, '/');
     $params = $query;
     $params['accessId'] = $cfg['accessId'];
-    $url = $cfg['baseUrl'] . $path . '?' . http_build_query($params);
+    if (!isset($params['format'])) {
+        $params['format'] = 'json';
+    }
 
+    $url = $cfg['baseUrl'] . $path . '?' . http_build_query($params);
     $res = vbb_http_get($url, $cfg['timeoutSeconds']);
     if (!$res['ok']) {
         return ['ok' => false, 'error' => $res['error'] ?? 'HTTP-Fehler', 'url' => $url];
@@ -111,10 +114,10 @@ function vbb_request(array $cfg, string $path, array $query): array {
         ];
     }
 
-    if (($res['status'] ?? 500) >= 400) {
+    if (($res['status'] ?? 500) >= 400 || isset($json['errorCode'])) {
         return [
             'ok' => false,
-            'error' => $json['error'] ?? ('VBB-HTTP-Fehler ' . $res['status']),
+            'error' => ($json['errorText'] ?? $json['error'] ?? ('VBB-HTTP-Fehler ' . $res['status'])),
             'status' => $res['status'],
             'url' => $url,
             'payload' => $json
@@ -124,188 +127,190 @@ function vbb_request(array $cfg, string $path, array $query): array {
     return ['ok' => true, 'data' => $json, 'url' => $url];
 }
 
-function vbb_get_first(array $arr, array $keys, $default = null) {
-    foreach ($keys as $key) {
-        if (array_key_exists($key, $arr) && $arr[$key] !== null && $arr[$key] !== '') {
-            return $arr[$key];
+function vbb_slug_to_city_query(string $citySlug): string {
+    $clean = str_replace(['-', '_'], ' ', strtolower(trim($citySlug)));
+    if ($clean === '') {
+        return 'Cottbus';
+    }
+    return ucwords($clean);
+}
+
+function vbb_normalize_line(string $value): string {
+    $v = strtoupper(trim($value));
+    $v = preg_replace('/\s+/', '', $v);
+    return $v;
+}
+
+function vbb_extract_stops_by_city(array $cfg, string $cityQuery): array {
+    $res = vbb_request($cfg, '/location.name', [
+        'input' => $cityQuery,
+        'type' => 'S',
+        'maxNo' => 80,
+    ]);
+    if (!$res['ok']) {
+        return [];
+    }
+
+    $rows = [];
+    $items = $res['data']['stopLocationOrCoordLocation'] ?? [];
+    if (!is_array($items)) {
+        return [];
+    }
+
+    foreach ($items as $item) {
+        $stop = $item['StopLocation'] ?? null;
+        if (!is_array($stop)) {
+            continue;
         }
-    }
-    return $default;
-}
 
-function vbb_extract_lat_lon($item): ?array {
-    if (!is_array($item)) {
-        return null;
-    }
+        $name = trim(strval($stop['name'] ?? ''));
+        $id = trim(strval($stop['id'] ?? ''));
+        if ($name === '' || $id === '') {
+            continue;
+        }
 
-    $lat = null;
-    $lon = null;
-
-    if (isset($item['location']) && is_array($item['location'])) {
-        $lat = vbb_get_first($item['location'], ['latitude', 'lat'], null);
-        $lon = vbb_get_first($item['location'], ['longitude', 'lon', 'lng'], null);
-    }
-
-    if ($lat === null) $lat = vbb_get_first($item, ['latitude', 'lat'], null);
-    if ($lon === null) $lon = vbb_get_first($item, ['longitude', 'lon', 'lng'], null);
-
-    if ($lat === null || $lon === null) {
-        return null;
-    }
-
-    return [floatval($lat), floatval($lon)];
-}
-
-function vbb_extract_candidates(array $payload): array {
-    $lines = [];
-
-    if (isset($payload['lines']) && is_array($payload['lines'])) {
-        $lines = $payload['lines'];
-    } elseif (isset($payload['data']) && is_array($payload['data'])) {
-        $lines = $payload['data'];
-    }
-
-    $out = [];
-    foreach ($lines as $line) {
-        if (!is_array($line)) continue;
-
-        $id = strval(vbb_get_first($line, ['id', 'lineId', 'journeyRef', 'tripId'], ''));
-        if ($id === '') continue;
-
-        $name = trim(strval(vbb_get_first($line, ['name', 'label', 'number', 'line'], '')));
-        $direction = trim(strval(vbb_get_first($line, ['direction', 'directionName', 'towards'], '')));
-        $product = trim(strval(vbb_get_first($line, ['productName', 'product', 'mode'], '')));
-
-        $out[] = [
+        $rows[] = [
             'id' => $id,
-            'name' => $name !== '' ? $name : $id,
-            'direction' => $direction,
-            'product' => $product,
-            'raw' => $line,
+            'name' => $name,
+            'lat' => isset($stop['lat']) ? floatval($stop['lat']) : null,
+            'lon' => isset($stop['lon']) ? floatval($stop['lon']) : null,
         ];
     }
 
-    return $out;
+    return $rows;
 }
 
-function vbb_extract_stops(array $line): array {
-    $stops = [];
+function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): array {
+    $target = vbb_normalize_line($lineQuery);
+    $out = [];
 
-    $candidates = [];
-    if (isset($line['stops']) && is_array($line['stops'])) $candidates[] = $line['stops'];
-    if (isset($line['route']) && is_array($line['route']) && isset($line['route']['stops']) && is_array($line['route']['stops'])) {
-        $candidates[] = $line['route']['stops'];
-    }
-    if (isset($line['routes']) && is_array($line['routes']) && isset($line['routes'][0]) && is_array($line['routes'][0])) {
-        if (isset($line['routes'][0]['stops']) && is_array($line['routes'][0]['stops'])) {
-            $candidates[] = $line['routes'][0]['stops'];
-        }
-    }
-
-    foreach ($candidates as $list) {
-        $tmp = [];
-        foreach ($list as $idx => $stop) {
-            if (!is_array($stop)) continue;
-            $latLon = vbb_extract_lat_lon($stop);
-            if (!$latLon) continue;
-
-            $name = trim(strval(vbb_get_first($stop, ['name', 'label'], 'Haltestelle ' . ($idx + 1))));
-            $sid = strval(vbb_get_first($stop, ['id', 'stationId', 'evaNr'], ''));
-
-            $tmp[] = [
-                'id' => $sid !== '' ? $sid : null,
-                'name' => $name,
-                'lat' => $latLon[0],
-                'lon' => $latLon[1],
-            ];
+    foreach (array_slice($stops, 0, 12) as $stop) {
+        $depRes = vbb_request($cfg, '/departureBoard', [
+            'id' => $stop['id'],
+            'maxJourneys' => 80,
+        ]);
+        if (!$depRes['ok']) {
+            continue;
         }
 
-        if (count($tmp) >= 2) {
-            $stops = $tmp;
-            break;
+        $deps = $depRes['data']['Departure'] ?? [];
+        if (!is_array($deps)) {
+            continue;
         }
-    }
 
-    return $stops;
-}
+        foreach ($deps as $dep) {
+            if (!is_array($dep)) {
+                continue;
+            }
 
-function vbb_extract_route_points(array $line, array $stops): array {
-    $points = [];
+            $line = vbb_normalize_line(strval($dep['Product']['line'] ?? $dep['name'] ?? ''));
+            if ($line !== $target) {
+                continue;
+            }
 
-    $polyline = $line['polyline'] ?? null;
-    if (is_array($polyline) && isset($polyline['coordinates']) && is_array($polyline['coordinates'])) {
-        foreach ($polyline['coordinates'] as $coord) {
-            if (!is_array($coord) || count($coord) < 2) continue;
-            $points[] = [
-                'lat' => floatval($coord[1]),
-                'lon' => floatval($coord[0]),
-                'sourceType' => 'imported'
+            $ref = trim(strval($dep['JourneyDetailRef']['ref'] ?? ''));
+            if ($ref === '' || isset($out[$ref])) {
+                continue;
+            }
+
+            $out[$ref] = [
+                'id' => $ref,
+                'name' => strval($dep['Product']['line'] ?? $dep['name'] ?? $lineQuery),
+                'direction' => strval($dep['direction'] ?? ''),
+                'product' => strval($dep['Product']['catOut'] ?? $dep['Product']['catOutL'] ?? ''),
+                'origin' => $stop['name'],
+                'date' => strval($dep['date'] ?? ''),
+                'time' => strval($dep['time'] ?? ''),
             ];
         }
     }
 
-    if (!$points) {
-        foreach ($stops as $stop) {
-            $points[] = [
-                'lat' => floatval($stop['lat']),
-                'lon' => floatval($stop['lon']),
-                'sourceType' => 'imported'
-            ];
-        }
-    }
-
-    return $points;
+    return array_values($out);
 }
 
-function vbb_map_to_editor_line(array $line, string $lineQuery, string $city): array {
-    $stopsRaw = vbb_extract_stops($line);
-    $routePoints = vbb_extract_route_points($line, $stopsRaw);
-
-    $lineName = trim(strval(vbb_get_first($line, ['name', 'label', 'number', 'line'], $lineQuery)));
-    $directionName = trim(strval(vbb_get_first($line, ['direction', 'directionName', 'towards'], 'VBB-Import')));
+function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, string $city, string $fallbackDirection): array {
+    $stopItems = $journey['Stops']['Stop'] ?? [];
+    if (!is_array($stopItems)) {
+        $stopItems = [];
+    }
 
     $stops = [];
-    foreach ($stopsRaw as $idx => $stop) {
+    $routePoints = [];
+
+    foreach ($stopItems as $idx => $stop) {
+        if (!is_array($stop)) {
+            continue;
+        }
+
+        if (!isset($stop['lat'], $stop['lon'])) {
+            continue;
+        }
+
+        $name = trim(strval($stop['name'] ?? ('Haltestelle ' . ($idx + 1))));
+        $id = trim(strval($stop['id'] ?? ''));
+
+        $lat = round(floatval($stop['lat']), 6);
+        $lon = round(floatval($stop['lon']), 6);
+
         $stops[] = [
-            'id' => 'stop_' . ($idx + 1),
-            'catalogId' => $stop['id'] ?? null,
+            'id' => 'stop_' . (count($stops) + 1),
+            'catalogId' => $id !== '' ? $id : null,
             'sourceType' => 'catalog',
             'type' => 'bus',
-            'name' => $stop['name'],
-            'lat' => round(floatval($stop['lat']), 6),
-            'lon' => round(floatval($stop['lon']), 6),
-            'order' => $idx + 1,
-            'minuteFromStart' => $idx * 2,
+            'name' => $name,
+            'lat' => $lat,
+            'lon' => $lon,
+            'order' => count($stops) + 1,
+            'minuteFromStart' => count($stops) * 2,
             'minuteMode' => 'auto',
-            'segmentMinutes' => $idx === 0 ? 0 : 2,
-            'arrivalMinute' => $idx * 2,
-            'departureMinute' => $idx * 2,
+            'segmentMinutes' => count($stops) === 0 ? 0 : 2,
+            'arrivalMinute' => count($stops) * 2,
+            'departureMinute' => count($stops) * 2,
             'note' => '',
             'isGhostPoint' => false,
             'isGhost' => false,
-            'isTimingPoint' => ($idx === 0 || $idx === count($stopsRaw) - 1),
+            'isTimingPoint' => false,
+        ];
+
+        $routePoints[] = [
+            'lat' => $lat,
+            'lon' => $lon,
+            'sourceType' => 'imported'
         ];
     }
 
+    $stopCount = count($stops);
+    if ($stopCount > 0) {
+        $stops[0]['isTimingPoint'] = true;
+        $stops[$stopCount - 1]['isTimingPoint'] = true;
+    }
+
+    $lineNameRaw = trim(strval($journey['Names']['Name'][0]['name'] ?? $lineQuery));
+    $lineLabel = preg_replace('/^Linie\s+/i', '', $lineNameRaw);
+    $lineLabel = trim($lineLabel) !== '' ? trim($lineLabel) : trim($lineQuery);
+    $lineName = 'Linie ' . $lineLabel;
+
+    $direction = trim($fallbackDirection) !== '' ? trim($fallbackDirection) : 'VBB-Import';
+
     return [
         'city' => $city,
-        'lineName' => 'Linie ' . preg_replace('/^Linie\s+/i', '', $lineName),
+        'lineName' => $lineName,
         'routeName' => 'Route 01',
-        'directionName' => $directionName !== '' ? $directionName : 'VBB-Import',
+        'directionName' => $direction,
         'color' => '#d32f2f',
         'routeMode' => 'imported',
         'stops' => $stops,
         'routePoints' => $routePoints,
         'routePointsSimplified' => [],
         'line' => [
-            'lineName' => 'Linie ' . preg_replace('/^Linie\s+/i', '', $lineName),
+            'lineName' => $lineName,
             'routeName' => 'Route 01',
-            'directionName' => $directionName !== '' ? $directionName : 'VBB-Import',
+            'directionName' => $direction,
             'color' => '#d32f2f',
             'routeMode' => 'imported'
         ],
         'meta' => [
-            'source' => 'VBB API Import',
+            'source' => 'VBB API Import (HAFAS 2.52)',
             'importedAt' => date('c')
         ]
     ];
@@ -325,28 +330,26 @@ if (!is_array($input)) {
 $action = trim(strtolower(strval($input['action'] ?? 'search')));
 $lineQuery = trim(strval($input['lineQuery'] ?? ''));
 $city = trim(strtolower(strval($input['city'] ?? 'cottbus')));
-if ($city === '') $city = 'cottbus';
+if ($city === '') {
+    $city = 'cottbus';
+}
 
 if ($lineQuery === '') {
     vbb_json_error(400, 'Bitte eine Linie angeben.');
 }
 
-$search = vbb_request($cfg, '/lines', [
-    'query' => $lineQuery,
-    'results' => 20,
-    'remarks' => 'false'
-]);
-
-if (!$search['ok']) {
-    vbb_json_error(502, 'VBB-Suche fehlgeschlagen: ' . ($search['error'] ?? 'Unbekannter Fehler'));
+$cityQuery = vbb_slug_to_city_query($city);
+$stopsByCity = vbb_extract_stops_by_city($cfg, $cityQuery);
+if (!$stopsByCity) {
+    vbb_json_error(502, 'VBB-Ortssuche fehlgeschlagen oder lieferte keine Haltestellen.');
 }
 
-$candidates = vbb_extract_candidates($search['data']);
+$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity);
 if (!$candidates) {
     echo json_encode([
         'ok' => true,
         'candidates' => [],
-        'message' => 'Keine Linien gefunden.'
+        'message' => 'Keine passenden Abfahrten für diese Linie gefunden.'
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -354,14 +357,7 @@ if (!$candidates) {
 if ($action === 'search') {
     echo json_encode([
         'ok' => true,
-        'candidates' => array_map(function ($line) {
-            return [
-                'id' => $line['id'],
-                'name' => $line['name'],
-                'direction' => $line['direction'],
-                'product' => $line['product']
-            ];
-        }, $candidates)
+        'candidates' => array_slice($candidates, 0, 20)
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -372,42 +368,32 @@ if ($lineId === '') {
 }
 
 $selected = null;
-foreach ($candidates as $line) {
-    if (strval($line['id']) === $lineId) {
-        $selected = $line;
+foreach ($candidates as $candidate) {
+    if (strval($candidate['id']) === $lineId) {
+        $selected = $candidate;
         break;
     }
 }
 if (!$selected) {
-    vbb_json_error(404, 'Gewählte Linie wurde in den Suchergebnissen nicht gefunden.');
+    vbb_json_error(404, 'Gewählte Fahrt wurde nicht gefunden.');
 }
 
-$detail = vbb_request($cfg, '/lines/' . rawurlencode($lineId), [
-    'remarks' => 'false'
+$detail = vbb_request($cfg, '/journeyDetail', [
+    'id' => $lineId
 ]);
-
-$linePayload = $selected['raw'];
-if ($detail['ok'] && isset($detail['data']) && is_array($detail['data'])) {
-    $linePayload = $detail['data']['line'] ?? $detail['data'];
-    if (!is_array($linePayload)) {
-        $linePayload = $selected['raw'];
-    }
+if (!$detail['ok']) {
+    vbb_json_error(502, 'Journey-Detail konnte nicht geladen werden: ' . ($detail['error'] ?? 'Unbekannter Fehler'));
 }
 
-$mapped = vbb_map_to_editor_line($linePayload, $lineQuery, $city);
+$mapped = vbb_map_journey_to_editor_line($detail['data'], $lineQuery, $city, strval($selected['direction'] ?? ''));
 if (count($mapped['stops']) < 2) {
-    vbb_json_error(422, 'Linie gefunden, aber ohne nutzbare Stop-/Geometriedaten für den Import.');
+    vbb_json_error(422, 'Fahrt gefunden, aber ohne nutzbare Stopdaten für den Import.');
 }
 
 echo json_encode([
     'ok' => true,
     'line' => $mapped,
-    'selected' => [
-        'id' => $selected['id'],
-        'name' => $selected['name'],
-        'direction' => $selected['direction'],
-        'product' => $selected['product']
-    ],
+    'selected' => $selected,
     'stopCount' => count($mapped['stops']),
     'routePointCount' => count($mapped['routePoints'])
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
