@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.187 - 2026-06-11
+- **PDF-Speichern weiter gehärtet**:
+  - Speichert PDF jetzt mit mehreren Fallback-Pfaden (Linienordner und `gpx`-Unterordner)
+  - Schreibt zuerst über temp+rename, dann Direct-Write als zusätzlicher Fallback
+- **Bessere Diagnose im Editor**:
+  - Status/Debug zeigen jetzt gespeicherten PDF-Pfad bzw. alle versuchten Pfade und Fehler an
+- **API/App-Fallbacks**:
+  - `list_lines.php` erkennt PDF auch im `gpx`-Unterordner
+  - `download_line_pdf.php` lädt PDF ebenfalls aus `gpx`-Fallbackpfad
+
 ## V2.0.186 - 2026-06-11
 - **PDF-Speichern stabilisiert**:
   - PDF-Erzeugung in `save_line.php` kompatibler umgesetzt (ohne `iconv`-Abhängigkeit, ohne moderne PHP-Arrow-Funktionen)

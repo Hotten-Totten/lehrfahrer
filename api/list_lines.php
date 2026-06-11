@@ -59,8 +59,15 @@ foreach ($cities as $city) {
                 $fileMtime = @filemtime($file);
                 $gpxPath  = $subPath . '/' . $fileBase . '.gpx';
                 $pdfPath  = $subPath . '/' . $fileBase . '.pdf';
+                $pdfPathGpx = $subPath . '/gpx/' . $fileBase . '.pdf';
                 $hasGpx   = file_exists($gpxPath);
-                $hasPdf   = file_exists($pdfPath);
+                $hasPdf   = file_exists($pdfPath) || file_exists($pdfPathGpx);
+                $pdfFileName = null;
+                if (file_exists($pdfPath)) {
+                    $pdfFileName = basename($pdfPath);
+                } elseif (file_exists($pdfPathGpx)) {
+                    $pdfFileName = basename($pdfPathGpx);
+                }
 
                 $lines[] = [
                     'city'              => $city,
@@ -79,7 +86,7 @@ foreach ($cities as $city) {
                     'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
                     'hasGpx'            => $hasGpx,
                     'hasPdf'            => $hasPdf,
-                    'pdfFile'           => $hasPdf ? basename($pdfPath) : null,
+                    'pdfFile'           => $pdfFileName,
                 ];
             }
         }
@@ -96,8 +103,15 @@ foreach ($cities as $city) {
         $fileMtime = @filemtime($file);
         $gpxPath  = $cityDir . '/gpx/' . $fileBase . '.gpx';
         $pdfPath  = $cityDir . '/' . $fileBase . '.pdf';
+        $pdfPathGpx = $cityDir . '/gpx/' . $fileBase . '.pdf';
         $hasGpx   = file_exists($gpxPath);
-        $hasPdf   = file_exists($pdfPath);
+        $hasPdf   = file_exists($pdfPath) || file_exists($pdfPathGpx);
+        $pdfFileName = null;
+        if (file_exists($pdfPath)) {
+            $pdfFileName = basename($pdfPath);
+        } elseif (file_exists($pdfPathGpx)) {
+            $pdfFileName = basename($pdfPathGpx);
+        }
 
         $lines[] = [
             'city'              => $city,
@@ -116,7 +130,7 @@ foreach ($cities as $city) {
             'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
             'hasGpx'            => $hasGpx,
             'hasPdf'            => $hasPdf,
-            'pdfFile'           => $hasPdf ? basename($pdfPath) : null,
+            'pdfFile'           => $pdfFileName,
         ];
     }
 }

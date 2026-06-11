@@ -40,8 +40,12 @@ $pdfPath = '';
 
 if ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/' . $line . '.pdf';
+} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf')) {
+    $pdfPath = $lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
 } elseif (file_exists($lineDir . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $line . '.pdf';
+} elseif (file_exists($lineDir . '/gpx/' . $line . '.pdf')) {
+    $pdfPath = $lineDir . '/gpx/' . $line . '.pdf';
 }
 
 if ($pdfPath === '' || !file_exists($pdfPath)) {

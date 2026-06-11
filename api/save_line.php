@@ -384,13 +384,49 @@ $pdfSaved = false;
 $pdfFile = $fileBase . '.pdf';
 $pdfPath = $lineDir . '/' . $pdfFile;
 $pdfError = null;
+$pdfSavedPath = null;
+$pdfTriedPaths = [];
 
 try {
     $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
-    $pdfWriteResult = @file_put_contents($pdfPath, $pdfBinary);
-    $pdfSaved = ($pdfWriteResult !== false);
+
+    $candidates = [];
+    $candidates[] = $lineDir . '/' . $pdfFile;
+
+    $gpxDir = $lineDir . '/gpx';
+    if (!is_dir($gpxDir)) {
+        @mkdir($gpxDir, 0775, true);
+    }
+    if (is_dir($gpxDir)) {
+        $candidates[] = $gpxDir . '/' . $pdfFile;
+    }
+
+    foreach ($candidates as $candidatePath) {
+        $pdfTriedPaths[] = $candidatePath;
+
+        $tmpPath = $candidatePath . '.tmp';
+        $tmpWrite = @file_put_contents($tmpPath, $pdfBinary);
+        if ($tmpWrite !== false && @rename($tmpPath, $candidatePath)) {
+            $pdfSaved = true;
+            $pdfSavedPath = $candidatePath;
+            $pdfPath = $candidatePath;
+            break;
+        }
+        if (is_file($tmpPath)) {
+            @unlink($tmpPath);
+        }
+
+        $directWrite = @file_put_contents($candidatePath, $pdfBinary);
+        if ($directWrite !== false) {
+            $pdfSaved = true;
+            $pdfSavedPath = $candidatePath;
+            $pdfPath = $candidatePath;
+            break;
+        }
+    }
+
     if (!$pdfSaved) {
-        $pdfError = 'PDF konnte nicht geschrieben werden';
+        $pdfError = 'PDF konnte nicht geschrieben werden (Pruefe Rechte/Pfad)';
     }
 } catch (Throwable $pdfException) {
     $pdfError = $pdfException->getMessage();
@@ -403,6 +439,8 @@ echo json_encode([
     'pdfFile' => $pdfFile,
     'pdfSaved' => $pdfSaved,
     'pdfError' => $pdfError,
+    'pdfPath' => $pdfSavedPath,
+    'pdfTriedPaths' => $pdfTriedPaths,
     'fileBase' => $fileBase,
     'lineFolder' => $lineFolder,
     'city' => $city,
