@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.184 - 2026-06-11
+- **Haltestellenliste modernisiert**:
+  - Reihenfolge per Drag-and-drop mit Anfasser (`⋮⋮`) statt Pfeiltasten
+  - Visuelles Feedback beim Ziehen (Quelle + Drop-Ziel)
+  - Löschen-Button (`✕`) bleibt unverändert erhalten
+
 ## V2.0.183 - 2026-06-11
 - **Haltestellen-Button wieder im Standard-Look**:
   - Helllila Spezialfarbe wieder entfernt

@@ -196,6 +196,8 @@ function createFreeStop(lat, lon) {
 // ORDER LIST
 // =========================
 
+let stopOrderDragIndex = -1;
+
 function renderStopOrderList() {
   stopOrderList.innerHTML = "";
 
@@ -217,17 +219,62 @@ function renderStopOrderList() {
   selectStop(stop);
 });
 
+    item.addEventListener("dragover", function (e) {
+      if (stopOrderDragIndex < 0) return;
+      e.preventDefault();
+      item.classList.add("drag-over");
+    });
+
+    item.addEventListener("dragleave", function () {
+      item.classList.remove("drag-over");
+    });
+
+    item.addEventListener("drop", function (e) {
+      e.preventDefault();
+      item.classList.remove("drag-over");
+
+      const fromIndex = stopOrderDragIndex;
+      const toIndex = index;
+
+      stopOrderDragIndex = -1;
+
+      if (fromIndex < 0 || fromIndex === toIndex) return;
+      if (fromIndex >= state.stops.length || toIndex >= state.stops.length) return;
+
+      const movedStop = state.stops[fromIndex];
+      state.stops.splice(fromIndex, 1);
+
+      const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+      state.stops.splice(insertIndex, 0, movedStop);
+
+      renderStopOrderList();
+      updateStats();
+      setStatus(`Reihenfolge geändert: ${movedStop.name}`);
+    });
+
     const actions = document.createElement("div");
+    actions.className = "stop-order-actions";
 
-    const upBtn = document.createElement("button");
-    upBtn.textContent = "↑";
-    upBtn.disabled = index === 0;
-    upBtn.onclick = () => moveStopUp(index);
-
-    const downBtn = document.createElement("button");
-    downBtn.textContent = "↓";
-    downBtn.disabled = index === state.stops.length - 1;
-    downBtn.onclick = () => moveStopDown(index);
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "stop-drag-handle";
+    dragHandle.textContent = "⋮⋮";
+    dragHandle.title = "Per Ziehen verschieben";
+    dragHandle.draggable = true;
+    dragHandle.addEventListener("dragstart", function (e) {
+      stopOrderDragIndex = index;
+      item.classList.add("drag-source");
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(index));
+      }
+    });
+    dragHandle.addEventListener("dragend", function () {
+      stopOrderDragIndex = -1;
+      item.classList.remove("drag-source");
+      stopOrderList.querySelectorAll(".stop-order-item.drag-over").forEach(el => el.classList.remove("drag-over"));
+      stopOrderList.querySelectorAll(".stop-order-item.drag-source").forEach(el => el.classList.remove("drag-source"));
+    });
 
     const delBtn = document.createElement("button");
     delBtn.textContent = "✕";
@@ -243,8 +290,7 @@ function renderStopOrderList() {
       setStatus(`Gelöscht: ${stopToDelete.name}`);
     };
 
-    actions.appendChild(upBtn);
-    actions.appendChild(downBtn);
+    actions.appendChild(dragHandle);
     actions.appendChild(delBtn);
 
     item.appendChild(main);

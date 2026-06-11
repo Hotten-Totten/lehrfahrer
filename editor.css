@@ -517,7 +517,7 @@ button.danger:hover {
 
 .stop-order-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 4px;
 }
 
@@ -525,6 +525,25 @@ button.danger:hover {
   margin: 0;
   padding: 4px 8px;
   font-size: 12px;
+}
+
+.stop-drag-handle {
+  cursor: grab;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.stop-drag-handle:active {
+  cursor: grabbing;
+}
+
+.stop-order-item.drag-source {
+  opacity: 0.65;
+}
+
+.stop-order-item.drag-over {
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 /* =========================
