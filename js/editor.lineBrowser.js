@@ -5,6 +5,7 @@
 // Zeigt alle gespeicherten Linien vom Server an und ermöglicht Laden/Löschen/Umbenennen
 
 let lineBrowserRequestSeq = 0;
+let lineBrowserSelectedCity = "";
 
 // Schließt das Linien-Browser-Fenster
 function closeLineBrowser() {
@@ -80,7 +81,9 @@ function renderLineBrowser(lines) {
     opt.textContent = city.charAt(0).toUpperCase() + city.slice(1);
     cityFilterSelect.appendChild(opt);
   });
-  cityFilterSelect.value = cityValues.includes(currentCityValue) ? currentCityValue : "";
+  const preferredCityValue = String(lineBrowserSelectedCity || currentCityValue || "").trim();
+  cityFilterSelect.value = cityValues.includes(preferredCityValue) ? preferredCityValue : "";
+  lineBrowserSelectedCity = cityFilterSelect.value || "";
 
   toolbar.appendChild(searchInput);
   toolbar.appendChild(cityFilterSelect);
@@ -94,7 +97,7 @@ function renderLineBrowser(lines) {
     const q = searchInput.value.toLowerCase().trim();
     const sort = sortSelect.value;
     let filtered = currentLines.filter(line => {
-      if (cityFilterSelect.value && String(line.city || "").trim() !== cityFilterSelect.value) {
+      if (lineBrowserSelectedCity && String(line.city || "").trim() !== lineBrowserSelectedCity) {
         return false;
       }
       if (!q) return true;
@@ -344,7 +347,10 @@ function renderLineBrowser(lines) {
   }
 
   searchInput.addEventListener("input", renderList);
-  cityFilterSelect.addEventListener("change", renderList);
+  cityFilterSelect.addEventListener("change", () => {
+    lineBrowserSelectedCity = cityFilterSelect.value || "";
+    renderList();
+  });
   sortSelect.addEventListener("change", renderList);
   renderList();
 }
@@ -385,14 +391,14 @@ async function openLineBrowser() {
   const rebuildBtn = document.getElementById("lineBrowserRebuildPdfBtn");
   if (rebuildBtn) {
     rebuildBtn.addEventListener("click", async () => {
-      const city = String(citySelect?.value || "").trim();
+      const city = String(lineBrowserSelectedCity || "").trim();
       const scopeText = city ? `für ${city}` : "für alle Städte";
-      const ok = confirm(`Fehlende PDF-Dateien ${scopeText} jetzt nacherzeugen?`);
+      const ok = confirm(`Fehlende PDF- und GPX-Dateien ${scopeText} jetzt nacherzeugen?`);
       if (!ok) return;
 
       rebuildBtn.disabled = true;
       const prevText = rebuildBtn.textContent;
-      rebuildBtn.textContent = "PDFs werden erstellt…";
+      rebuildBtn.textContent = "Dateien werden erstellt…";
 
       try {
         const response = await fetch("api/regenerate_pdfs.php", {
@@ -406,11 +412,11 @@ async function openLineBrowser() {
           throw new Error(result.error || "PDF-Nacherzeugung fehlgeschlagen");
         }
 
-        setStatus(`PDF-Nacherzeugung fertig: ${result.generatedCount}/${result.totalLines} erstellt (${result.cityScope || "alle Städte"})`);
+        setStatus(`Nacherzeugung fertig: PDF ${result.generatedPdfCount || 0}, GPX ${result.generatedGpxCount || 0} von ${result.totalLines} Linien (${result.cityScope || "alle Städte"})`);
         await openLineBrowser();
       } catch (err) {
         error("PDF-Nacherzeugung fehlgeschlagen", err);
-        setStatus(err.message || "PDF-Nacherzeugung fehlgeschlagen.", "error");
+        setStatus(err.message || "Datei-Nacherzeugung fehlgeschlagen.", "error");
       } finally {
         rebuildBtn.disabled = false;
         rebuildBtn.textContent = prevText;

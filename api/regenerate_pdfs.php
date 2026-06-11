@@ -238,6 +238,105 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     return buildSimplePdf($pages);
 }
 
+function escapeXml(string $value): string {
+    return str_replace(
+        ['&', '<', '>', '"', "'"],
+        ['&amp;', '&lt;', '&gt;', '&quot;', '&apos;'],
+        $value
+    );
+}
+
+function normalizeRoutePoints(array $lineData): array {
+    $route = [];
+
+    if (isset($lineData['route']) && is_array($lineData['route']) && isset($lineData['route']['simplified']) && is_array($lineData['route']['simplified']) && count($lineData['route']['simplified']) > 1) {
+        $route = $lineData['route']['simplified'];
+    } elseif (isset($lineData['routePoints']) && is_array($lineData['routePoints']) && count($lineData['routePoints']) > 1) {
+        $route = $lineData['routePoints'];
+    } elseif (isset($lineData['stops']) && is_array($lineData['stops']) && count($lineData['stops']) > 1) {
+        $route = $lineData['stops'];
+    }
+
+    $points = [];
+    foreach ($route as $entry) {
+        if (is_array($entry) && isset($entry['lat']) && isset($entry['lon'])) {
+            $points[] = ['lat' => floatval($entry['lat']), 'lon' => floatval($entry['lon'])];
+            continue;
+        }
+        if (is_array($entry) && isset($entry[0]) && isset($entry[1])) {
+            $points[] = ['lat' => floatval($entry[0]), 'lon' => floatval($entry[1])];
+        }
+    }
+
+    return $points;
+}
+
+function buildGpxFromLineData(array $lineData): ?string {
+    $points = normalizeRoutePoints($lineData);
+    if (count($points) < 2) {
+        return null;
+    }
+
+    $lineName = trim((string)getLineValue($lineData, 'lineName', 'Linie'));
+    $routeName = trim((string)getLineValue($lineData, 'routeName', ''));
+    $directionName = trim((string)getLineValue($lineData, 'directionName', ''));
+    $color = trim((string)getLineValue($lineData, 'color', '#d32f2f'));
+
+    $titleParts = [];
+    if ($lineName !== '') $titleParts[] = $lineName;
+    if ($routeName !== '') $titleParts[] = $routeName;
+    if ($directionName !== '') $titleParts[] = $directionName;
+    $fullName = count($titleParts) ? implode(' - ', $titleParts) : 'Linie';
+
+    $waypointXml = '';
+    $stops = is_array($lineData['stops'] ?? null) ? $lineData['stops'] : [];
+    foreach ($stops as $index => $stop) {
+        if (!is_array($stop) || !isset($stop['lat']) || !isset($stop['lon'])) {
+            continue;
+        }
+        $stopName = trim((string)($stop['name'] ?? ('Haltestelle ' . ($index + 1))));
+        $minute = isset($stop['minuteFromStart']) ? intval($stop['minuteFromStart']) : 0;
+        $note = trim((string)($stop['note'] ?? ''));
+        $sourceType = trim((string)($stop['sourceType'] ?? ''));
+        $desc = 'Stopp ' . ($index + 1) . ' | SollMinute: ' . $minute;
+        if ($sourceType !== '') {
+            $desc .= ' | Typ: ' . $sourceType;
+        }
+        if ($note !== '') {
+            $desc .= ' | Info: ' . $note;
+        }
+
+        $waypointXml .= "\n  <wpt lat=\"" . floatval($stop['lat']) . "\" lon=\"" . floatval($stop['lon']) . "\">"
+          . "\n    <name>" . escapeXml($stopName) . "</name>"
+          . "\n    <cmt>" . escapeXml('SollMinute:' . $minute . ';Stop:' . ($index + 1)) . "</cmt>"
+          . "\n    <desc>" . escapeXml($desc) . "</desc>"
+          . "\n  </wpt>";
+    }
+
+    $trackXml = '';
+    foreach ($points as $pt) {
+        $trackXml .= "\n      <trkpt lat=\"" . $pt['lat'] . "\" lon=\"" . $pt['lon'] . "\"></trkpt>";
+    }
+
+    $gpx = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      . "<gpx version=\"1.1\" creator=\"Lehrfahrer Linieneditor\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
+      . "  <metadata>\n"
+      . "    <name>" . escapeXml($fullName) . "</name>\n"
+      . "    <desc>" . escapeXml('Export aus dem Lehrfahrer Linieneditor | Farbe: ' . $color) . "</desc>\n"
+      . "  </metadata>"
+      . $waypointXml . "\n"
+      . "  <trk>\n"
+      . "    <name>" . escapeXml($fullName) . "</name>\n"
+      . "    <desc>" . escapeXml('Route für Maps.me Offline-Nutzung') . "</desc>\n"
+      . "    <trkseg>"
+      . $trackXml . "\n"
+      . "    </trkseg>\n"
+      . "  </trk>\n"
+      . "</gpx>";
+
+    return $gpx;
+}
+
 function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
     $entries = @scandir($cityDir);
     $lines = [];
@@ -313,7 +412,8 @@ if ($requestedCity !== '') {
 }
 
 $totalLines = 0;
-$generatedCount = 0;
+$generatedPdfCount = 0;
+$generatedGpxCount = 0;
 $errors = [];
 
 foreach ($cities as $citySlug) {
@@ -345,6 +445,16 @@ foreach ($cities as $citySlug) {
 
         $pdfFile = buildPdfStorageFileName($entry['lineFolder'], $entry['fileBase']);
         $targetPdfPath = $cityPdfDir . '/' . $pdfFile;
+        $targetGpxPath = '';
+        if ($entry['lineFolder'] !== '') {
+            $targetGpxPath = $cityDir . '/' . $entry['lineFolder'] . '/' . $entry['fileBase'] . '.gpx';
+        } else {
+            $legacyGpxDir = $cityDir . '/gpx';
+            if (!is_dir($legacyGpxDir)) {
+                @mkdir($legacyGpxDir, 0775, true);
+            }
+            $targetGpxPath = $legacyGpxDir . '/' . $entry['fileBase'] . '.gpx';
+        }
 
         try {
             $pdfBinary = buildLineOverviewPdf($lineData, $citySlug, $entry['lineFolder'] ?: '-');
@@ -359,7 +469,16 @@ foreach ($cities as $citySlug) {
                 continue;
             }
 
-            $generatedCount++;
+            $generatedPdfCount++;
+
+            $gpxText = buildGpxFromLineData($lineData);
+            if ($gpxText !== null && $targetGpxPath !== '') {
+                $gpxWriteOk = @file_put_contents($targetGpxPath, $gpxText);
+                clearstatcache(true, $targetGpxPath);
+                if ($gpxWriteOk !== false && is_file($targetGpxPath) && filesize($targetGpxPath) > 0) {
+                    $generatedGpxCount++;
+                }
+            }
         } catch (Throwable $err) {
             $errors[] = [
                 'file' => $entry['jsonPath'],
@@ -373,7 +492,8 @@ foreach ($cities as $citySlug) {
 echo json_encode([
     'ok' => true,
     'totalLines' => $totalLines,
-    'generatedCount' => $generatedCount,
+    'generatedPdfCount' => $generatedPdfCount,
+    'generatedGpxCount' => $generatedGpxCount,
     'cityScope' => $requestedCity ?: 'alle',
     'errors' => array_slice($errors, 0, 50)
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

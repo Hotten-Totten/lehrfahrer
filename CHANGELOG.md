@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.192 - 2026-06-11
+- **City-Auswahl im Linienbrowser korrigiert**:
+  - Der gewählte Stadtfilter wird jetzt zuverlässig verwendet (nicht mehr nur die erste Stadt)
+  - Laden/Löschen greifen korrekt auf die Stadt der jeweiligen Linie zu
+- **GPX-Nacherzeugung ergänzt**:
+  - `PDF/GPX nacherzeugen` erstellt jetzt fehlende PDFs **und** GPX-Dateien aus vorhandenen JSON-Linien
+  - Statusmeldung zeigt getrennte Zähler für PDF und GPX
+
 ## V2.0.191 - 2026-06-11
 - **Laden jetzt nutzerfreundlicher (Stadt + Linie)**:
   - Linienbrowser lädt standardmäßig alle Städte
