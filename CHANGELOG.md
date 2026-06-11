@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.217 - 2026-06-11
+- **VBB-Richtungssuche weiter verbessert (Hotfix)**:
+  - Nearby-Haltestellen-Suche wird jetzt auch dann ausgeführt, wenn bereits Treffer da sind, aber zu wenige/zu einseitige Richtungen vorliegen
+  - Treffer aus Stadt- und Nearby-Suche werden zusammengeführt statt überschrieben
+  - Ziel: Rückfahrten deutlich zuverlässiger in der Auswahlliste sichtbar machen
+
 ## V2.0.216 - 2026-06-11
 - **VBB-Import zeigt jetzt alle verfügbaren Treffer im eigenen Popup**:
   - Such-API liefert die komplette Kandidatenliste (kein Slice auf 20 mehr)

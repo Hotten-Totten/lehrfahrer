@@ -333,6 +333,39 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
     return array_values($out);
 }
 
+function vbb_count_candidate_directions(array $candidates): int {
+    $keys = [];
+    foreach ($candidates as $candidate) {
+        $dir = strtolower(trim(strval($candidate['direction'] ?? '')));
+        if ($dir !== '') {
+            $keys[$dir] = true;
+        }
+    }
+    return count($keys);
+}
+
+function vbb_merge_candidates(array $base, array $extra): array {
+    $byId = [];
+
+    foreach ($base as $item) {
+        $id = trim(strval($item['id'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        $byId[$id] = $item;
+    }
+
+    foreach ($extra as $item) {
+        $id = trim(strval($item['id'] ?? ''));
+        if ($id === '' || isset($byId[$id])) {
+            continue;
+        }
+        $byId[$id] = $item;
+    }
+
+    return array_values($byId);
+}
+
 function vbb_parse_datetime_to_minutes(string $date, string $time): ?int {
     $date = trim($date);
     $time = trim($time);
@@ -546,10 +579,16 @@ if (!$stopsByCity) {
 }
 
 $candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity);
-if (!$candidates) {
-    $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 12);
+// Auch bei vorhandenen, aber wenigen/einseitigen Treffern zusätzliche Nearby-Suche nutzen.
+$needExpandedPass = !$candidates
+    || count($candidates) < 24
+    || vbb_count_candidate_directions($candidates) < 2;
+
+if ($needExpandedPass) {
+    $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 20);
     if ($expandedStops) {
-        $candidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops);
+        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops);
+        $candidates = vbb_merge_candidates($candidates, $extraCandidates);
     }
 }
 if (!$candidates) {
