@@ -316,15 +316,19 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
     ];
 }
 
-$cfg = vbb_load_config();
-if ($cfg['accessId'] === '') {
-    vbb_json_error(400, 'VBB Access-ID fehlt. Bitte api/_vbb_config.local.php konfigurieren.');
-}
-
 $raw = file_get_contents('php://input');
 $input = json_decode($raw ?: '{}', true);
 if (!is_array($input)) {
     $input = [];
+}
+
+$cfg = vbb_load_config();
+$requestAccessId = trim(strval($input['accessId'] ?? ''));
+if ($requestAccessId !== '') {
+    $cfg['accessId'] = $requestAccessId;
+}
+if ($cfg['accessId'] === '') {
+    vbb_json_error(400, 'VBB Access-ID fehlt. Bitte im Import-Dialog eingeben oder serverseitig konfigurieren.');
 }
 
 $action = trim(strtolower(strval($input['action'] ?? 'search')));

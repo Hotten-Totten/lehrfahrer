@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.205 - 2026-06-11
+- **VBB-Import-Fallback für Deployment ohne lokale Config**:
+  - `api/import_vbb_line.php` akzeptiert jetzt optional `accessId` aus dem Request-Body
+  - Frontend fragt bei fehlender Access-ID einmalig nach und wiederholt die Suche automatisch
+  - Eingegebene Access-ID wird optional lokal im Browser gespeichert und für weitere Importe genutzt
+
 ## V2.0.204 - 2026-06-11
 - **VBB-Import auf reale Demo-API angepasst**:
   - Import nutzt jetzt die tatsächlich verfügbaren HAFAS-2.52-Endpunkte (`location.name`, `departureBoard`, `journeyDetail`)

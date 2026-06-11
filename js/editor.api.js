@@ -573,6 +573,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
 
 async function importLineFromVbbPrompt() {
   try {
+    const VBB_ACCESS_ID_STORAGE_KEY = "lehrfahrer_vbb_access_id";
     const lineQueryRaw = prompt("Welche VBB-Linie soll importiert werden?\nBeispiel: 10");
     if (lineQueryRaw === null) {
       return;
@@ -589,17 +590,62 @@ async function importLineFromVbbPrompt() {
     const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
     const headers = withApiAuthHeaders({ "Content-Type": "application/json" });
 
-    const searchRes = await fetch(API_VBB_IMPORT_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        action: "search",
-        lineQuery,
-        city
-      })
-    });
+    let accessIdOverride = "";
+    try {
+      accessIdOverride = String(localStorage.getItem(VBB_ACCESS_ID_STORAGE_KEY) || "").trim();
+    } catch (_) {
+      accessIdOverride = "";
+    }
 
-    const searchResult = await searchRes.json();
+    async function postVbb(action, extra = {}) {
+      const payload = {
+        action,
+        lineQuery,
+        city,
+        ...extra
+      };
+      if (accessIdOverride) {
+        payload.accessId = accessIdOverride;
+      }
+
+      const response = await fetch(API_VBB_IMPORT_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      return { response, result };
+    }
+
+    let { response: searchRes, result: searchResult } = await postVbb("search");
+    const searchErrorText = String(searchResult?.error || "").toLowerCase();
+    const missingAccessId = searchErrorText.includes("access-id fehlt") || searchErrorText.includes("access id fehlt");
+
+    if ((!searchRes.ok || !searchResult.ok) && missingAccessId) {
+      const enteredAccessId = prompt(
+        "VBB Access-ID fehlt auf dem Server.\nBitte hier eingeben (wird optional lokal im Browser gespeichert):"
+      );
+      if (enteredAccessId === null) {
+        setStatus("VBB-Import abgebrochen (keine Access-ID eingegeben).", "warn");
+        return;
+      }
+
+      accessIdOverride = String(enteredAccessId || "").trim();
+      if (!accessIdOverride) {
+        setStatus("VBB-Import abgebrochen (leere Access-ID).", "warn");
+        return;
+      }
+
+      try {
+        localStorage.setItem(VBB_ACCESS_ID_STORAGE_KEY, accessIdOverride);
+      } catch (_) {
+        // Ignorieren, wenn Storage nicht verfügbar ist.
+      }
+
+      ({ response: searchRes, result: searchResult } = await postVbb("search"));
+    }
+
     if (!searchRes.ok || !searchResult.ok) {
       throw new Error(searchResult.error || "VBB-Liniensuche fehlgeschlagen");
     }
@@ -635,18 +681,9 @@ async function importLineFromVbbPrompt() {
 
     const selected = candidates[selectedIndex - 1];
 
-    const importRes = await fetch(API_VBB_IMPORT_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        action: "import",
-        lineQuery,
-        lineId: selected.id,
-        city
-      })
+    const { response: importRes, result: importResult } = await postVbb("import", {
+      lineId: selected.id
     });
-
-    const importResult = await importRes.json();
     if (!importRes.ok || !importResult.ok) {
       throw new Error(importResult.error || "VBB-Import fehlgeschlagen");
     }
