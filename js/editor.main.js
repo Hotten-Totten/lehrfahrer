@@ -607,7 +607,29 @@ function startInputMaskWatchdog() {
   }, 1000);
 }
 
+function forceScrollToEditorTop() {
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  } catch {
+    window.scrollTo(0, 0);
+  }
+
+  if (document.documentElement) {
+    document.documentElement.scrollTop = 0;
+  }
+  if (document.body) {
+    document.body.scrollTop = 0;
+  }
+
+  const menubar = document.getElementById("menubar");
+  if (menubar) {
+    menubar.scrollIntoView({ behavior: "auto", block: "start" });
+  }
+}
+
 async function createNewLine() {
+  forceScrollToEditorTop();
+
   const ok = await showConfirmDialog({
     title: "Neue Linie erstellen",
     message: "Wirklich eine neue Linie erstellen?<br><br>Ungespeicherte Änderungen gehen dabei verloren.",
@@ -616,6 +638,8 @@ async function createNewLine() {
   });
 
   if (!ok) return;
+
+  forceScrollToEditorTop();
 
   if (!historyRestoreRunning) {
     pushHistorySnapshot("Neue Linie erstellt");
@@ -688,12 +712,7 @@ function showLineInputFieldsForNewLine() {
   }
 
   const topbar = forceShowInputMask();
-
-  try {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  } catch {
-    window.scrollTo(0, 0);
-  }
+  forceScrollToEditorTop();
 
   if (topbar) {
     topbar.classList.add("topbar-attention");
@@ -714,6 +733,9 @@ function showLineInputFieldsForNewLine() {
   setTimeout(forceShowInputMask, 900);
   setTimeout(forceShowInputMask, 1800);
   setTimeout(forceShowInputMask, 3200);
+  setTimeout(forceScrollToEditorTop, 80);
+  setTimeout(forceScrollToEditorTop, 260);
+  setTimeout(forceScrollToEditorTop, 900);
 
   setStatus("Eingabemenü geöffnet: Bitte oben Linie/Route/Richtung eingeben.");
 }

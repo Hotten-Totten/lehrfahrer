@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.181 - 2026-06-11
+- **Neu-Flow scrollt jetzt zuverlässig nach oben**:
+  - Harter Scroll-to-top-Helper ergänzt (window/document/menubar)
+  - Beim Klick auf `Neu` wird vor und nach Bestätigung sofort nach oben gescrollt
+  - Zusätzliche Delayed-Scrolls direkt nach dem Wiederanzeigen der Eingabemaske
+  - Ziel: Eingabezeile ist nach `Neu` immer direkt sichtbar, auch wenn zuvor nach unten gescrollt wurde
+
 ## V2.0.180 - 2026-06-11
 - **Neu-Problem weiter abgesichert (Eingabemaske)**:
   - Neuer Quickbar-Button `Eingabemaske`, der die obere Eingabeleiste jederzeit manuell wieder öffnet
