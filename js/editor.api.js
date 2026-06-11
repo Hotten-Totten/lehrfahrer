@@ -317,6 +317,7 @@ function exportJson() {
 // Speichert die Linie auf dem Server (PHP API)
 // Zeigt zuerst einen Bestätigungs-Dialog, dann wird gespeichert
 async function saveLineToServer() {
+  const SAVE_TARGET_STORAGE_KEY = "lehrfahrer_last_save_target";
   const initialData = buildExportData();
   const initialCity = initialData.city || citySelect?.value || "cottbus";
 
@@ -329,17 +330,37 @@ async function saveLineToServer() {
   if (routeNameInput) routeNameInput.value = target.routeSuffix;
   if (directionNameInput) directionNameInput.value = target.directionName;
 
+  try {
+    localStorage.setItem(SAVE_TARGET_STORAGE_KEY, JSON.stringify(target));
+  } catch (_) {
+    // Ignorieren, wenn Storage nicht verfügbar ist.
+  }
+
   const data = buildExportData();
   const city = data.city || citySelect?.value || "cottbus";
   const fileBase = data.fileBase || buildLineFileBase();
   const lineFolder = data.lineFolder || buildLineFolder();
 
+  let forceOverwrite = false;
+  const existingEntry = await findExistingLineEntry(city, lineFolder, fileBase);
+  if (existingEntry) {
+    const overwriteOk = confirm(
+      `Diese Datei existiert bereits:\n${lineFolder}/${fileBase}.json\n\nWirklich überschreiben?`
+    );
+    if (!overwriteOk) {
+      setStatus("Speichern abgebrochen (Überschreiben nicht bestätigt).", "warn");
+      return;
+    }
+    forceOverwrite = true;
+  }
+
   // ---------- Tatsächlich speichern ----------
-  await _doSaveLineToServer(data, city, fileBase, lineFolder);
+  await _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwrite);
 }
 
 // Zeigt den Speichern-Dialog und wartet auf Bestätigung (Promise<object|null>)
 function showSaveConfirmDialog({ data, city }) {
+  const SAVE_TARGET_STORAGE_KEY = "lehrfahrer_last_save_target";
   return new Promise(resolve => {
     const modal   = document.getElementById("saveConfirmModal");
     const okBtn   = document.getElementById("saveConfirmOkBtn");
@@ -350,9 +371,17 @@ function showSaveConfirmDialog({ data, city }) {
     const directionInput = document.getElementById("saveConfirmDirectionInput");
     const fileInfo = document.getElementById("saveConfirmFile");
 
-    const initialLine = String(lineNameInput?.value || "").trim();
-    const initialRoute = String(routeNameInput?.value || "").trim();
-    const initialDirection = String(directionNameInput?.value || "").trim();
+    let lastTarget = null;
+    try {
+      lastTarget = JSON.parse(localStorage.getItem(SAVE_TARGET_STORAGE_KEY) || "null");
+    } catch (_) {
+      lastTarget = null;
+    }
+
+    const initialLine = String(lastTarget?.lineSuffix ?? lineNameInput?.value ?? "").trim();
+    const initialRoute = String(lastTarget?.routeSuffix ?? routeNameInput?.value ?? "").trim();
+    const initialDirection = String(lastTarget?.directionName ?? directionNameInput?.value ?? "").trim();
+    const initialTargetCity = String(lastTarget?.city || city || "").trim() || "cottbus";
 
     cityPicker.innerHTML = "";
     if (citySelect && citySelect.options) {
@@ -363,7 +392,7 @@ function showSaveConfirmDialog({ data, city }) {
         cityPicker.appendChild(clone);
       });
     }
-    cityPicker.value = city || cityPicker.value || "cottbus";
+    cityPicker.value = initialTargetCity || cityPicker.value || "cottbus";
 
     lineInput.value = initialLine;
     routeInput.value = initialRoute;
@@ -408,10 +437,21 @@ function showSaveConfirmDialog({ data, city }) {
       resolve(result);
     }
     function onOk() {
+      const lineSuffix = String(lineInput.value || "").trim();
+      const routeSuffix = String(routeInput.value || "").trim();
+      if (!lineSuffix || !routeSuffix) {
+        const proceed = confirm(
+          "Linie oder Route ist leer. Möchtest du trotzdem speichern?"
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+
       cleanup({
         city: String(cityPicker.value || "").trim() || "cottbus",
-        lineSuffix: String(lineInput.value || "").trim(),
-        routeSuffix: String(routeInput.value || "").trim(),
+        lineSuffix,
+        routeSuffix,
         directionName: String(directionInput.value || "").trim()
       });
     }
@@ -428,16 +468,51 @@ function showSaveConfirmDialog({ data, city }) {
   });
 }
 
+async function findExistingLineEntry(city, lineFolder, fileBase) {
+  try {
+    const params = new URLSearchParams();
+    params.set("city", String(city || "").trim());
+    params.set("_ts", String(Date.now()));
+
+    const response = await fetch(
+      `${API_LIST_LINES_URL}?${params.toString()}`,
+      { cache: "no-store" }
+    );
+    const result = await response.json();
+
+    if (!response.ok || !result?.ok || !Array.isArray(result.lines)) {
+      return null;
+    }
+
+    const wantedFolder = String(lineFolder || "").trim().toLowerCase();
+    const wantedBase = String(fileBase || "").trim().toLowerCase();
+
+    return result.lines.find(entry => {
+      const entryFolder = String(entry?.lineFolder || "").trim().toLowerCase();
+      const entryBase = String(entry?.fileBase || "").trim().toLowerCase();
+      return entryFolder === wantedFolder && entryBase === wantedBase;
+    }) || null;
+  } catch (err) {
+    warn("Konnte bestehende Datei vor dem Speichern nicht prüfen: " + err.message);
+    return null;
+  }
+}
+
 // Führt den eigentlichen Speicher-Vorgang durch (intern)
-async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
+async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwrite = false) {
   try {
     setStatus("Speichern …");
+
+    const payload = {
+      ...data,
+      forceOverwrite: !!forceOverwrite
+    };
 
     // ---------- JSON speichern ----------
     const response = await fetch(API_SAVE_LINE_URL, {
       method: "POST",
       headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
 
     const result = await response.json();

@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.200 - 2026-06-11
+- **Speichern mit zusätzlicher Sicherheit**:
+  - Beim Speichern wird jetzt gefragt, wenn das Ziel bereits existiert und überschrieben würde
+  - Bestätigtes Überschreiben wird serverseitig gezielt umgesetzt
+- **Mehr Komfort im Speichern-Dialog**:
+  - Letztes Speicherziel (Ort/Linie/Route/Richtung) wird lokal gemerkt und beim nächsten Öffnen vorausgefüllt
+  - Warnung vor dem Speichern, wenn Linie oder Route leer ist
+
 ## V2.0.199 - 2026-06-11
 - **Speichern mit Zielauswahl direkt im Dialog**:
   - Beim Speichern können Ort, Linie, Route und Richtung direkt im Speichern-Dialog ausgewählt/angepasst werden

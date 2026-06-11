@@ -309,13 +309,15 @@ if ($fileBase === '') {
 
 $data['savedAt'] = date('c');
 
+$forceOverwrite = !empty($data['forceOverwrite']);
+
 $filePath = $lineDir . '/' . $fileBase . '.json';
 
 // Konfliktvermeidung:
 // - Andere Route im selben Dateinamen -> freier Dateiname mit Zählsuffix
 // - Selbe Route/Direction auf Original-Datei -> neue Umleitung (Umleitung_XX)
 // - Bereits Umleitung_XX -> darf überschrieben werden
-if (file_exists($filePath)) {
+if (file_exists($filePath) && !$forceOverwrite) {
     $existingRaw  = @file_get_contents($filePath);
     $existingData = $existingRaw ? @json_decode($existingRaw, true) : null;
     if (is_array($existingData)) {
