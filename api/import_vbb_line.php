@@ -329,6 +329,89 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
     return array_values($out);
 }
 
+function vbb_parse_datetime_to_minutes(string $date, string $time): ?int {
+    $date = trim($date);
+    $time = trim($time);
+    if ($date === '' || $time === '') {
+        return null;
+    }
+
+    $dt = DateTime::createFromFormat('Y-m-d H:i:s', $date . ' ' . $time);
+    if (!$dt) {
+        $dt = DateTime::createFromFormat('Y-m-d H:i', $date . ' ' . $time);
+    }
+    if (!$dt) {
+        return null;
+    }
+
+    return intdiv($dt->getTimestamp(), 60);
+}
+
+function vbb_extract_stop_timestamp_minutes(array $stop): ?int {
+    $candidates = [
+        [strval($stop['rtDepDate'] ?? ''), strval($stop['rtDepTime'] ?? '')],
+        [strval($stop['rtArrDate'] ?? ''), strval($stop['rtArrTime'] ?? '')],
+        [strval($stop['depDate'] ?? ''), strval($stop['depTime'] ?? '')],
+        [strval($stop['arrDate'] ?? ''), strval($stop['arrTime'] ?? '')],
+    ];
+
+    foreach ($candidates as [$date, $time]) {
+        $minutes = vbb_parse_datetime_to_minutes($date, $time);
+        if ($minutes !== null) {
+            return $minutes;
+        }
+    }
+
+    return null;
+}
+
+function vbb_build_minute_offsets(array $stopItems): array {
+    $offsets = [];
+    $absolute = [];
+
+    foreach ($stopItems as $idx => $stop) {
+        if (!is_array($stop)) {
+            $absolute[$idx] = null;
+            continue;
+        }
+        $absolute[$idx] = vbb_extract_stop_timestamp_minutes($stop);
+    }
+
+    $start = null;
+    foreach ($absolute as $value) {
+        if ($value !== null) {
+            $start = $value;
+            break;
+        }
+    }
+
+    if ($start === null) {
+        foreach ($stopItems as $idx => $_stop) {
+            $offsets[$idx] = $idx * 2;
+        }
+        return $offsets;
+    }
+
+    $lastOffset = 0;
+    foreach ($stopItems as $idx => $_stop) {
+        $abs = $absolute[$idx] ?? null;
+        if ($abs === null) {
+            $lastOffset += 2;
+            $offsets[$idx] = $lastOffset;
+            continue;
+        }
+
+        $offset = max(0, $abs - $start);
+        if ($idx > 0 && $offset < $lastOffset) {
+            $offset = $lastOffset;
+        }
+        $offsets[$idx] = $offset;
+        $lastOffset = $offset;
+    }
+
+    return $offsets;
+}
+
 function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, string $city, string $fallbackDirection): array {
     $stopItems = $journey['Stops']['Stop'] ?? [];
     if (!is_array($stopItems)) {
@@ -337,6 +420,8 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
 
     $stops = [];
     $routePoints = [];
+
+    $minuteOffsets = vbb_build_minute_offsets($stopItems);
 
     foreach ($stopItems as $idx => $stop) {
         if (!is_array($stop)) {
@@ -352,6 +437,9 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
 
         $lat = round(floatval($stop['lat']), 6);
         $lon = round(floatval($stop['lon']), 6);
+        $minuteFromStart = intval($minuteOffsets[$idx] ?? (count($stops) * 2));
+        $prevMinute = count($stops) > 0 ? intval($stops[count($stops) - 1]['minuteFromStart']) : 0;
+        $segmentMinutes = count($stops) === 0 ? 0 : max(0, $minuteFromStart - $prevMinute);
 
         $stops[] = [
             'id' => 'stop_' . (count($stops) + 1),
@@ -362,11 +450,11 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
             'lat' => $lat,
             'lon' => $lon,
             'order' => count($stops) + 1,
-            'minuteFromStart' => count($stops) * 2,
-            'minuteMode' => 'auto',
-            'segmentMinutes' => count($stops) === 0 ? 0 : 2,
-            'arrivalMinute' => count($stops) * 2,
-            'departureMinute' => count($stops) * 2,
+            'minuteFromStart' => $minuteFromStart,
+            'minuteMode' => 'manual',
+            'segmentMinutes' => $segmentMinutes,
+            'arrivalMinute' => $minuteFromStart,
+            'departureMinute' => $minuteFromStart,
             'note' => '',
             'isGhostPoint' => false,
             'isGhost' => false,

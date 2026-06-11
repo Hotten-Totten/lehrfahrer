@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.213 - 2026-06-11
+- **VBB-Import übernimmt jetzt echte Fahrzeiten aus HAFAS**:
+  - `minuteFromStart` wird aus `journeyDetail`-Zeitfeldern berechnet (priorisiert Echtzeit `rtDep/rtArr`, dann Planzeit `dep/arr`)
+  - Keine starre 2-Minuten-Schätzung mehr bei importierten Linien
+  - Fallback bleibt aktiv, falls einzelne Stop-Zeiten fehlen
+
 ## V2.0.212 - 2026-06-11
 - **VBB-Import-Popup visuell überarbeitet**:
   - Modernes Card-Design mit klarerer Hierarchie (Titel, Status, Timeline)
