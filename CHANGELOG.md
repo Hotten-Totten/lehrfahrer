@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.182 - 2026-06-11
+- **Haltestellen-Modus klarer sichtbar**:
+  - Wenn der manuelle Haltestellenmodus aktiv ist (`freeStop`), wird der Quickbar-Button helllila hervorgehoben
+  - Das Button-Label wechselt dann auf `Haltestelle Manuell`
+  - In allen anderen Zuständen bleibt das Label `Haltestelle Auswahl`
+
 ## V2.0.181 - 2026-06-11
 - **Neu-Flow scrollt jetzt zuverlässig nach oben**:
   - Harter Scroll-to-top-Helper ergänzt (window/document/menubar)

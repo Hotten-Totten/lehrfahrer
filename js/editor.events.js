@@ -43,7 +43,7 @@ if (redoBtn) redoBtn.addEventListener("click", redoHistory);
 
 // ---------- Modus ----------
 
-if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle"));
+if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle manuell"));
 if (modeRouteBtn) modeRouteBtn.addEventListener("click", switchToManualRouteMode);
 if (modeSelectBtn) modeSelectBtn.addEventListener("click", () => setMode("select", "Modus: Auswählen"));
 if (startTrackBetweenStopsBtn) {
