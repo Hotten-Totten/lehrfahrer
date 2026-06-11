@@ -83,6 +83,7 @@ const API_BASE = "api";
 const API_SAVE_LINE_URL = `${API_BASE}/save_line.php`;
 const API_LOAD_LINE_URL = `${API_BASE}/load_line.php`;
 const API_LIST_LINES_URL = `${API_BASE}/list_lines.php`;
+const API_VBB_IMPORT_URL = `${API_BASE}/import_vbb_line.php`;
 const API_TOKEN_STORAGE_KEY = "lehrfahrer_api_token";
 
 function getApiToken() {

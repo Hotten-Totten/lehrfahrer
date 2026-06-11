@@ -571,6 +571,98 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
   }
 }
 
+async function importLineFromVbbPrompt() {
+  try {
+    const lineQueryRaw = prompt("Welche VBB-Linie soll importiert werden?\nBeispiel: 10");
+    if (lineQueryRaw === null) {
+      return;
+    }
+
+    const lineQuery = String(lineQueryRaw || "").trim();
+    if (!lineQuery) {
+      setStatus("VBB-Import abgebrochen: keine Linie eingegeben.", "warn");
+      return;
+    }
+
+    setStatus(`VBB-Suche läuft für Linie ${lineQuery} …`);
+
+    const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
+    const headers = withApiAuthHeaders({ "Content-Type": "application/json" });
+
+    const searchRes = await fetch(API_VBB_IMPORT_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        action: "search",
+        lineQuery,
+        city
+      })
+    });
+
+    const searchResult = await searchRes.json();
+    if (!searchRes.ok || !searchResult.ok) {
+      throw new Error(searchResult.error || "VBB-Liniensuche fehlgeschlagen");
+    }
+
+    const candidates = Array.isArray(searchResult.candidates) ? searchResult.candidates : [];
+    if (!candidates.length) {
+      setStatus(`Keine VBB-Linie gefunden für: ${lineQuery}`, "warn");
+      return;
+    }
+
+    const maxOptions = Math.min(12, candidates.length);
+    const optionsText = candidates.slice(0, maxOptions).map((entry, idx) => {
+      const dir = String(entry.direction || "").trim();
+      const product = String(entry.product || "").trim();
+      const suffix = [dir, product].filter(Boolean).join(" | ");
+      return `${idx + 1}. ${entry.name}${suffix ? " (" + suffix + ")" : ""}`;
+    }).join("\n");
+
+    const selectionRaw = prompt(
+      `Gefundene Linien:\n${optionsText}\n\nBitte Nummer wählen (1-${maxOptions}).`,
+      "1"
+    );
+    if (selectionRaw === null) {
+      setStatus("VBB-Import abgebrochen.", "warn");
+      return;
+    }
+
+    const selectedIndex = Number(selectionRaw);
+    if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > maxOptions) {
+      setStatus("Ungültige Auswahl für VBB-Import.", "warn");
+      return;
+    }
+
+    const selected = candidates[selectedIndex - 1];
+
+    const importRes = await fetch(API_VBB_IMPORT_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        action: "import",
+        lineQuery,
+        lineId: selected.id,
+        city
+      })
+    });
+
+    const importResult = await importRes.json();
+    if (!importRes.ok || !importResult.ok) {
+      throw new Error(importResult.error || "VBB-Import fehlgeschlagen");
+    }
+
+    if (!importResult.line || typeof importResult.line !== "object") {
+      throw new Error("VBB-Import lieferte keine gültigen Liniendaten.");
+    }
+
+    loadLineFromData(importResult.line);
+    setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops)`);
+  } catch (err) {
+    error("VBB-Import fehlgeschlagen", err);
+    setStatus(err.message || "VBB-Import fehlgeschlagen.", "error");
+  }
+}
+
 // Lädt die Liste aller gespeicherten Linien vom Server
 // Wird für den Linien-Browser verwendet
 async function fetchLineListFromServer(cityFilter = null) {

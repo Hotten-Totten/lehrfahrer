@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.203 - 2026-06-11
+- **Optionaler VBB-Import (zweigleisig)**:
+  - Neuer Menüpunkt `VBB-Linie importieren …` im Server-Menü
+  - Linie kann gesucht und aus einer Trefferliste ausgewählt werden
+  - Import lädt die Linie direkt in den Editor, ohne den manuellen Workflow zu ersetzen
+- **Sichere Token-Strategie vorbereitet**:
+  - Neues Endpoint `api/import_vbb_line.php` nutzt serverseitige Konfiguration
+  - Beispielkonfiguration `api/_vbb_config.example.php` hinzugefügt
+  - Lokale Secret-Datei `api/_vbb_config.local.php` ist per `.gitignore` ausgeschlossen
+
 ## V2.0.202 - 2026-06-11
 - **Editor-Eingabemaske bleibt dauerhaft sichtbar**:
   - Topbar mit Ort/Linie/Route/Richtung ist jetzt dauerhaft sticky unter der Menüleiste

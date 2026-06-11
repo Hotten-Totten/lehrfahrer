@@ -21,6 +21,9 @@ __pycache__/
 # Logs
 *.log
 
+# Local API connector settings (tokens/access ids)
+api/_vbb_config.local.php
+
 # Temporary files
 *.tmp
 *.bak
