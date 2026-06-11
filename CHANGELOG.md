@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.175 - 2026-06-11
+- **Strato-Zielpfad robust normalisiert**:
+  - In [deploy-strato.yml](.github/workflows/deploy-strato.yml) wird `STRATO_TARGET_PATH` jetzt auf einen relativen Pfad zum Startverzeichnis normalisiert
+  - Ein fuehrender Slash (`/htdocs`) wird automatisch zu einem relativen Ziel (`./htdocs`) umgebaut
+  - Ziel: `Permission denied` bei absoluten Root-Pfaden auf Strato-Shared-Hosting vermeiden
+
 ## V2.0.174 - 2026-06-11
 - **Strato Deploy: Permission-denied und Hostkey-Warnung abgefedert**:
   - Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) nutzt jetzt Shared-Hosting-taugliche `rsync`-Flags:
