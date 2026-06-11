@@ -198,6 +198,26 @@ function createFreeStop(lat, lon) {
   });
 }
 
+function setStopGhostState(stop, enabled) {
+  stop.isGhostPoint = !!enabled;
+  stop.isGhost = !!enabled;
+
+  if (stop.marker) {
+    const isSelectedStop = state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id;
+    stop.marker.setIcon(getLineStopIcon(stop, !!isSelectedStop));
+  }
+
+  if (state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id) {
+    stopGhostInput.checked = !!stop.isGhostPoint;
+    stopSourceInput.value = stop.isGhostPoint
+      ? "Ghostpunkt"
+      : (stop.sourceType === "catalog" ? "Katalog-Haltestelle" : "Freie Haltestelle");
+  }
+
+  renderStopOrderList();
+  updateStopMarkerTooltip(stop);
+}
+
 // =========================
 // ORDER LIST
 // =========================
@@ -219,8 +239,40 @@ function renderStopOrderList() {
     }
 
     const main = document.createElement("div");
+    main.className = "stop-order-main";
+
+    const indexValue = document.createElement("span");
+    indexValue.className = "stop-order-row-index";
+    indexValue.textContent = `${index + 1}.`;
+
+    const ghostToggle = document.createElement("input");
+    ghostToggle.type = "checkbox";
+    ghostToggle.className = "stop-order-ghost-checkbox";
+    ghostToggle.checked = !!stop.isGhostPoint;
+    ghostToggle.title = "Ghostpunkt an/aus";
+    ghostToggle.setAttribute("aria-label", `Ghostpunkt für ${stop.name} an/aus`);
+    ghostToggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+    ghostToggle.addEventListener("change", function (e) {
+      e.stopPropagation();
+
+      if (!historyRestoreRunning) {
+        pushHistorySnapshot("Ghostpunkt umgeschaltet");
+      }
+
+      setStopGhostState(stop, ghostToggle.checked);
+      setStatus(`Ghostpunkt ${ghostToggle.checked ? "aktiv" : "deaktiviert"}: ${stop.name}`);
+    });
+
+    const name = document.createElement("span");
+    name.className = "stop-order-row-name";
     const ghostSuffix = stop.isGhostPoint ? " [Ghost]" : "";
-    main.textContent = `${index + 1}. ${stop.name}${ghostSuffix}`;
+    name.textContent = `${stop.name}${ghostSuffix}`;
+
+    main.appendChild(indexValue);
+    main.appendChild(ghostToggle);
+    main.appendChild(name);
 
     main.addEventListener("click", function () {
   selectStop(stop);

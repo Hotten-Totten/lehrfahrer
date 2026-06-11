@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.198 - 2026-06-11
+- **Ghostpunkte in der Haltestellenliste direkt umschaltbar**:
+  - Jede Haltestellenzeile hat jetzt eine eigene Ghost-Checkbox (zwischen Positionswert und Name)
+  - Beim Umschalten wird die Markierung sofort übernommen
+  - Das Label `[Ghost]` wird dabei direkt ein-/ausgeblendet
+- **Ghostpunkt-Haken standardmäßig aktiv**:
+  - Die Ghost-Option im Stop-Editor startet standardmäßig angehakt
+
 ## V2.0.197 - 2026-06-11
 - **Alte Routen direkt im Ladebildschirm bereinigbar**:
   - Neuer Button `Ghostpunkte bereinigen` im Linienbrowser

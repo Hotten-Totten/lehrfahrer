@@ -485,7 +485,33 @@ button.danger:hover {
 }
 
 .stop-order-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
+}
+
+.stop-order-row-index {
+  color: #475569;
+  font-size: 13px;
+  min-width: 22px;
+}
+
+.stop-order-ghost-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.stop-order-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stop-order-index {

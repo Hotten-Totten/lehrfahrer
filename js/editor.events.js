@@ -165,6 +165,7 @@ saveStopBtn.addEventListener("click", () => {
   stop.name = stopNameInput.value.trim() || stop.name;
   stop.note = stopNoteInput.value.trim();
   stop.isGhostPoint = !!stopGhostInput.checked;
+  stop.isGhost = !!stopGhostInput.checked;
 
   if (stop.marker) {
     const isSelectedStop = state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id;
