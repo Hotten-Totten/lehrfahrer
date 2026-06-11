@@ -662,7 +662,14 @@ function getVbbImportModalRefs() {
     pickerHint: document.getElementById("vbbImportCandidateHint"),
     pickerList: document.getElementById("vbbImportCandidateList"),
     pickerSelectBtn: document.getElementById("vbbImportCandidateSelectBtn"),
-    pickerCancelBtn: document.getElementById("vbbImportCandidateCancelBtn")
+    pickerCancelBtn: document.getElementById("vbbImportCandidateCancelBtn"),
+    searchOptions: document.getElementById("vbbImportSearchOptions"),
+    searchDayToday: document.getElementById("vbbSearchDayToday"),
+    searchDayTomorrow: document.getElementById("vbbSearchDayTomorrow"),
+    searchAllDay: document.getElementById("vbbSearchAllDay"),
+    searchTimeInput: document.getElementById("vbbSearchTimeInput"),
+    searchStartBtn: document.getElementById("vbbSearchStartBtn"),
+    searchCancelBtn: document.getElementById("vbbSearchCancelBtn")
   };
 }
 
@@ -672,6 +679,11 @@ function hideVbbCandidatePicker() {
   if (refs.pickerList) refs.pickerList.innerHTML = "";
   if (refs.pickerHint) refs.pickerHint.textContent = "Treffer auswählen";
   if (refs.pickerSelectBtn) refs.pickerSelectBtn.disabled = true;
+}
+
+function hideVbbSearchOptions() {
+  const refs = getVbbImportModalRefs();
+  if (refs.searchOptions) refs.searchOptions.classList.add("hidden");
 }
 
 function closeVbbImportProgressPopup() {
@@ -707,6 +719,7 @@ function showVbbImportProgressPopup(lineQuery) {
   if (refs.timeline) refs.timeline.innerHTML = "";
   if (refs.spinner) refs.spinner.classList.remove("hidden");
   hideVbbCandidatePicker();
+  hideVbbSearchOptions();
 
   if (refs.closeBtn) {
     refs.closeBtn.disabled = true;
@@ -769,12 +782,89 @@ function updateVbbImportProgressPopup(stepText, options = {}) {
 }
 
 function formatVbbCandidateMeta(entry) {
-  const direction = String(entry?.direction || "").trim();
   const product = String(entry?.product || "").trim();
-  const origin = String(entry?.origin || "").trim();
+  const startStop = String(entry?.startStop || entry?.origin || "").trim();
+  const destination = String(entry?.destination || entry?.direction || "").trim();
   const time = String(entry?.time || "").trim();
-  const parts = [direction, product, origin ? `ab ${origin}` : "", time].filter(Boolean);
+  const routeLabel = (startStop && destination) ? `${startStop} -> ${destination}` : (destination || startStop);
+  const parts = [routeLabel, product, time].filter(Boolean);
   return parts.join(" | ");
+}
+
+function chooseVbbSearchOptionsInPopup() {
+  const refs = getVbbImportModalRefs();
+  if (!refs.searchOptions || !refs.searchStartBtn || !refs.searchCancelBtn || !refs.closeBtn) {
+    return Promise.resolve({ searchDate: null, searchTime: null, allDay: true });
+  }
+
+  refs.searchOptions.classList.remove("hidden");
+  if (refs.searchDayToday) refs.searchDayToday.checked = true;
+  if (refs.searchDayTomorrow) refs.searchDayTomorrow.checked = false;
+  if (refs.searchAllDay) refs.searchAllDay.checked = true;
+  if (refs.searchTimeInput) {
+    refs.searchTimeInput.disabled = true;
+    refs.searchTimeInput.value = refs.searchTimeInput.value || "08:00";
+  }
+
+  const updateTimeEnabled = () => {
+    if (!refs.searchTimeInput || !refs.searchAllDay) return;
+    refs.searchTimeInput.disabled = !!refs.searchAllDay.checked;
+  };
+
+  if (refs.searchAllDay) {
+    refs.searchAllDay.addEventListener("change", updateTimeEnabled);
+  }
+
+  return new Promise((resolve) => {
+    const prevCloseHandler = refs.closeBtn.onclick;
+
+    const cleanup = () => {
+      if (refs.searchAllDay) {
+        refs.searchAllDay.removeEventListener("change", updateTimeEnabled);
+      }
+      refs.searchStartBtn.removeEventListener("click", onStart);
+      refs.searchCancelBtn.removeEventListener("click", onCancel);
+      refs.closeBtn.onclick = prevCloseHandler;
+    };
+
+    const finish = (value) => {
+      cleanup();
+      hideVbbSearchOptions();
+      resolve(value);
+    };
+
+    const onStart = () => {
+      const allDay = !!refs.searchAllDay?.checked;
+      const dayOffset = refs.searchDayTomorrow?.checked ? 1 : 0;
+      const dateObj = new Date();
+      dateObj.setDate(dateObj.getDate() + dayOffset);
+      const yyyy = dateObj.getFullYear();
+      const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const dd = String(dateObj.getDate()).padStart(2, "0");
+      const searchDate = `${yyyy}-${mm}-${dd}`;
+
+      let searchTime = null;
+      if (!allDay) {
+        const raw = String(refs.searchTimeInput?.value || "").trim();
+        if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(raw)) {
+          setStatus("Ungültige Uhrzeit. Bitte HH:MM verwenden.", "warn");
+          return;
+        }
+        searchTime = raw;
+      }
+
+      finish({ searchDate, searchTime, allDay });
+    };
+
+    const onCancel = () => finish(null);
+
+    refs.searchStartBtn.addEventListener("click", onStart);
+    refs.searchCancelBtn.addEventListener("click", onCancel);
+    refs.closeBtn.onclick = () => {
+      finish(null);
+      closeVbbImportProgressPopup();
+    };
+  });
 }
 
 function chooseVbbCandidateInPopup(candidates) {
@@ -876,26 +966,38 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    const searchTimeRaw = prompt(
-      "Optional: Uhrzeit für die Fahrtsuche (HH:MM), z. B. 14:30.\nLeer lassen = ganzer Tag.",
-      ""
-    );
-    const searchTimeText = searchTimeRaw === null ? "" : String(searchTimeRaw || "").trim();
-    const searchTime = searchTimeText ? (/^([01]?\d|2[0-3]):[0-5]\d$/.test(searchTimeText) ? searchTimeText : null) : "";
-    if (searchTime === null) {
-      setStatus("Ungültige Uhrzeit. Bitte Format HH:MM verwenden.", "warn");
+    showVbbImportProgressPopup(lineQuery);
+    updateVbbImportProgressPopup("Bitte Suchoptionen wählen …", {
+      level: "info",
+      busy: false,
+      subtitle: "VBB-Suche"
+    });
+
+    const options = await chooseVbbSearchOptionsInPopup();
+    if (!options) {
+      updateVbbImportProgressPopup("VBB-Import abgebrochen.", {
+        level: "warn",
+        busy: false,
+        allowClose: true,
+        subtitle: "Abgebrochen",
+        autoCloseMs: 4500
+      });
+      setStatus("VBB-Import abgebrochen.", "warn");
       return;
     }
 
-    showVbbImportProgressPopup(lineQuery);
-    updateVbbImportProgressPopup(
-      searchTime ? `Suche läuft für Linie ${lineQuery} ab ${searchTime} …` : `Suche läuft für Linie ${lineQuery} (ganztägig) …`,
-      {
+    const searchDate = String(options.searchDate || "").trim();
+    const searchTime = options.searchTime ? String(options.searchTime).trim() : "";
+    const allDay = !!options.allDay;
+    const dateLabel = searchDate ? searchDate : "heute";
+    const modeLabel = allDay ? `ganztägig (${dateLabel})` : `ab ${searchTime} (${dateLabel})`;
+
+    updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} ${modeLabel} …`, {
       level: "info",
       busy: true,
       subtitle: "VBB-Suche"
     });
-    setStatus(searchTime ? `VBB-Suche läuft für Linie ${lineQuery} ab ${searchTime} …` : `VBB-Suche läuft für Linie ${lineQuery} (ganztägig) …`);
+    setStatus(`VBB-Suche läuft für Linie ${lineQuery} ${modeLabel} …`);
 
     const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
     const headers = withApiAuthHeaders({ "Content-Type": "application/json" });
@@ -912,7 +1014,11 @@ async function importLineFromVbbPrompt() {
       if (accessIdOverride) {
         payload.accessId = accessIdOverride;
       }
-      if (searchTime) {
+      if (searchDate) {
+        payload.searchDate = searchDate;
+      }
+      payload.allDay = !!allDay;
+      if (!allDay && searchTime) {
         payload.searchTime = searchTime;
       }
 
@@ -992,8 +1098,13 @@ async function importLineFromVbbPrompt() {
     }
 
     const serverSearchTime = String(searchResult?.searchTime || "").trim();
+    const serverSearchDate = String(searchResult?.searchDate || "").trim();
+    const serverAllDay = !!searchResult?.allDay;
+    const serverLabel = serverAllDay
+      ? `${serverSearchDate || "heute"}, ganztägig`
+      : (serverSearchTime ? `${serverSearchDate || "heute"} ab ${serverSearchTime}` : "");
     updateVbbImportProgressPopup(
-      `${candidates.length} Treffer gefunden${serverSearchTime ? ` (ab ${serverSearchTime})` : ""}. Auswahl im Popup …`,
+      `${candidates.length} Treffer gefunden${serverLabel ? ` (${serverLabel})` : ""}. Auswahl im Popup …`,
       {
       level: "info",
       busy: false,

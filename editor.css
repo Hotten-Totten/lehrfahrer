@@ -1246,6 +1246,70 @@ button.danger:hover {
   color: #0f172a;
 }
 
+.vbb-search-options {
+  margin-bottom: 12px;
+  border: 1px solid #c7d7ea;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 10px;
+}
+
+.vbb-search-options.hidden {
+  display: none !important;
+}
+
+.vbb-search-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.vbb-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.vbb-search-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  min-width: 28px;
+}
+
+.vbb-search-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.vbb-search-time-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.vbb-search-time-wrap input {
+  border: 1px solid #b7c8dd;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.vbb-search-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
 .vbb-import-timeline {
   max-height: 230px;
   overflow-y: auto;

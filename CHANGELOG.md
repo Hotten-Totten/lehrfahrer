@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.221 - 2026-06-11
+- **VBB-Import-Popup erweitert: Zeitsteuerung + Start/Ziel**:
+  - Neue Suchoptionen direkt im Popup: Heute/Morgen
+  - Option `Ganztags` oder gezielte Uhrzeit (HH:MM)
+  - Suchlauf nutzt den gewählten Tag/Zeitpunkt serverseitig für Boards
+  - Trefferliste zeigt jetzt klar `Start -> Ziel` je Fahrt
+  - Ziel: Rückfahrten gezielter finden und besser verständliche Auswahl
+
 ## V2.0.220 - 2026-06-11
 - **VBB-Import: Suchzeitpunkt jetzt frei wählbar**:
   - Beim Import kann optional eine Uhrzeit (HH:MM) angegeben werden
