@@ -415,3 +415,197 @@ function snapSelectedStopToRoute() {
   renderStopOrderList();
   setStatus(`Gesnappt: ${stop.name}`);
 }
+
+// =========================
+// GHOST ASSISTANT
+// =========================
+
+function insertGhostStopAtIndex(insertIndex, lat, lon, name) {
+  const stop = {
+    id: "stop_" + stopIdCounter++,
+    catalogId: null,
+    name,
+    lat,
+    lon,
+    minuteFromStart: 0,
+    minuteMode: "auto",
+    note: "",
+    sourceType: "free",
+    isGhostPoint: true,
+    isGhost: true,
+    transitType: null,
+    directionHint: null,
+    marker: null
+  };
+
+  const marker = L.marker([lat, lon], {
+    draggable: true,
+    icon: getLineStopIcon(stop, false)
+  }).addTo(map);
+
+  marker.bindTooltip(stop.name, {
+    permanent: true,
+    direction: "top",
+    offset: [0, -10]
+  });
+
+  marker.on("click", function () {
+    selectStop(stop);
+    renderStopOrderList();
+  });
+
+  marker.on("dragend", function (e) {
+    const newPos = e.target.getLatLng();
+    stop.lat = newPos.lat;
+    stop.lon = newPos.lng;
+
+    if (state.routeMode === "auto") {
+      rebuildAutoRouteFromStops();
+    } else {
+      setStatus("Ghostpunkt verschoben.");
+    }
+
+    renderStopOrderList();
+    updateStats();
+  });
+
+  stop.marker = marker;
+  state.stops.splice(insertIndex, 0, stop);
+  return stop;
+}
+
+function findNearestRouteIndexInRange(startIdx, endIdx, targetDistance, cumulative) {
+  let bestIdx = startIdx;
+  let bestGap = Infinity;
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const gap = Math.abs((cumulative[i] || 0) - targetDistance);
+    if (gap < bestGap) {
+      bestGap = gap;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
+function suggestGhostPointsFromRoute() {
+  if (!state.stops || state.stops.length < 2) {
+    setStatus("Ghostpunkt-Assistent: mindestens 2 Haltestellen benötigt.", "warn");
+    return;
+  }
+
+  if (!state.routePoints || state.routePoints.length < 3) {
+    setStatus("Ghostpunkt-Assistent: zuerst eine Straßenroute erzeugen.", "warn");
+    return;
+  }
+
+  const spacingRaw = prompt(
+    "Abstand zwischen automatischen Ghostpunkten in Metern:\n\nEmpfehlung: 350 bis 550",
+    "450"
+  );
+  if (spacingRaw === null) {
+    setStatus("Ghostpunkt-Assistent abgebrochen.", "warn");
+    return;
+  }
+
+  const spacingMeters = Math.max(150, Math.min(2000, Number(spacingRaw) || 450));
+  const minStopDistanceMeters = 85;
+
+  const stopRouteIndices = [];
+  let searchStartIndex = 0;
+  for (const stop of state.stops) {
+    const idx = findNearestRoutePointIndexFrom(searchStartIndex, stop);
+    if (idx < 0) {
+      stopRouteIndices.push(searchStartIndex);
+      continue;
+    }
+    stopRouteIndices.push(idx);
+    searchStartIndex = Math.max(searchStartIndex, idx);
+  }
+
+  const planned = [];
+  const usedRouteIndices = new Set();
+
+  for (let i = 0; i < state.stops.length - 1; i++) {
+    const fromIdx = stopRouteIndices[i];
+    const toIdx = stopRouteIndices[i + 1];
+    if (!Number.isInteger(fromIdx) || !Number.isInteger(toIdx)) continue;
+    if (toIdx <= fromIdx + 1) continue;
+
+    const cumulative = [];
+    cumulative[fromIdx] = 0;
+    let segmentLength = 0;
+
+    for (let rp = fromIdx + 1; rp <= toIdx; rp++) {
+      segmentLength += distanceMetersBetween(state.routePoints[rp - 1], state.routePoints[rp]);
+      cumulative[rp] = segmentLength;
+    }
+
+    if (segmentLength < spacingMeters * 1.35) {
+      continue;
+    }
+
+    const suggestionCount = Math.min(8, Math.floor(segmentLength / spacingMeters));
+    if (suggestionCount <= 0) continue;
+
+    for (let n = 1; n <= suggestionCount; n++) {
+      const targetDist = (segmentLength * n) / (suggestionCount + 1);
+      const routeIndex = findNearestRouteIndexInRange(fromIdx + 1, toIdx - 1, targetDist, cumulative);
+      if (usedRouteIndices.has(routeIndex)) continue;
+
+      const point = state.routePoints[routeIndex];
+      if (!point) continue;
+
+      const tooCloseToExistingStop = state.stops.some(stop =>
+        distanceMetersBetween(stop, point) < minStopDistanceMeters
+      );
+      if (tooCloseToExistingStop) continue;
+
+      usedRouteIndices.add(routeIndex);
+
+      planned.push({
+        insertAfterIndex: i,
+        routeIndex,
+        lat: point.lat,
+        lon: point.lon,
+        name: `Ghostpunkt ${i + 1}.${n}`
+      });
+    }
+  }
+
+  if (!planned.length) {
+    setStatus("Ghostpunkt-Assistent: keine sinnvollen Punkte gefunden.", "warn");
+    return;
+  }
+
+  const proceed = confirm(
+    `Ghostpunkt-Assistent hat ${planned.length} Vorschläge gefunden.\n\nJetzt als Ghostpunkte einfügen?`
+  );
+  if (!proceed) {
+    setStatus("Ghostpunkt-Assistent: Vorschläge nicht übernommen.", "warn");
+    return;
+  }
+
+  if (!historyRestoreRunning) {
+    pushHistorySnapshot("Ghostpunkte automatisch gesetzt");
+  }
+
+  const sorted = planned
+    .slice()
+    .sort((a, b) => (b.insertAfterIndex - a.insertAfterIndex) || (b.routeIndex - a.routeIndex));
+
+  sorted.forEach(item => {
+    const insertIndex = item.insertAfterIndex + 1;
+    insertGhostStopAtIndex(insertIndex, item.lat, item.lon, item.name);
+  });
+
+  if (typeof autoAssignStopMinutes === "function") {
+    autoAssignStopMinutes(false);
+  }
+
+  renderStopOrderList();
+  updateStats();
+  updateLineMetricsUI();
+  setStatus(`Ghostpunkt-Assistent: ${planned.length} Ghostpunkte eingefügt.`, "success");
+}

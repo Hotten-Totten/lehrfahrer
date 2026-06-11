@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.208 - 2026-06-11
+- **Ghostpunkt-Assistent hinzugefügt**:
+  - Neuer Menüpunkt `Haltestellen -> Ghostpunkt-Assistent …`
+  - Setzt auf langen Abschnitten zwischen Haltestellen automatisch Ghostpunkte entlang der berechneten Route
+  - Abstand ist einstellbar (Standard 450 m), Punkte nahe bestehender Haltestellen werden ausgelassen
+  - Nach Einfügen werden Minuten automatisch nachberechnet
+
 ## V2.0.207 - 2026-06-11
 - **VBB-Import praxisnäher gemacht**:
   - Neue Menüeinträge zum dauerhaften Speichern/Löschen der VBB Access-ID im Browser
