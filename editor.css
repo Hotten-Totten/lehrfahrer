@@ -1153,12 +1153,12 @@ button.danger:hover {
    VBB-IMPORT-POPUP
 ========================= */
 .vbb-import-box {
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.28);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 16px;
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.30);
   width: min(520px, 96vw);
   overflow: hidden;
-  border: 1px solid #dbe3ef;
+  border: 1px solid #d7e2ef;
 }
 
 .vbb-import-header {
@@ -1166,29 +1166,35 @@ button.danger:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 12px;
+  padding: 16px 18px 13px;
   border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(120deg, #e0ecff, #f8fbff);
+  background: linear-gradient(120deg, #dbeafe 0%, #ecfeff 100%);
 }
 
 .vbb-import-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 32px;
+  line-height: 1.05;
+  letter-spacing: 0.2px;
+  font-weight: 800;
   color: #0f172a;
 }
 
 .vbb-import-subtitle {
-  margin-top: 3px;
-  font-size: 12.5px;
+  margin-top: 6px;
+  font-size: 13px;
   color: #334155;
+  font-weight: 600;
 }
 
 .vbb-import-close {
-  padding: 6px 10px;
-  border-radius: 7px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid #b9c8dd;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .vbb-import-close:disabled {
@@ -1196,15 +1202,24 @@ button.danger:hover {
   cursor: not-allowed;
 }
 
+.vbb-import-close:not(:disabled):hover {
+  background: linear-gradient(180deg, #eff6ff 0%, #e2e8f0 100%);
+  border-color: #93c5fd;
+}
+
 .vbb-import-body {
-  padding: 14px 16px 16px;
+  padding: 16px 18px 18px;
 }
 
 .vbb-import-live-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: rgba(239, 246, 255, 0.65);
 }
 
 .vbb-import-spinner {
@@ -1226,30 +1241,43 @@ button.danger:hover {
 }
 
 .vbb-import-message {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .vbb-import-timeline {
-  max-height: 220px;
+  max-height: 230px;
   overflow-y: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 8px 10px;
+  border: 1px solid #d8e2ef;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 10px 12px;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12.5px;
 }
 
 .vbb-import-line {
-  margin: 4px 0;
+  margin: 5px 0;
   color: #334155;
+  border-left: 3px solid #94a3b8;
+  padding: 2px 0 2px 8px;
 }
 
-.vbb-import-line.vbb-line-success { color: #166534; }
-.vbb-import-line.vbb-line-warn { color: #92400e; }
-.vbb-import-line.vbb-line-error { color: #b91c1c; }
+.vbb-import-line.vbb-line-success {
+  color: #166534;
+  border-left-color: #22c55e;
+}
+
+.vbb-import-line.vbb-line-warn {
+  color: #92400e;
+  border-left-color: #f59e0b;
+}
+
+.vbb-import-line.vbb-line-error {
+  color: #b91c1c;
+  border-left-color: #ef4444;
+}
 
 .vbb-import-state-success .vbb-import-header {
   background: linear-gradient(120deg, #dcfce7, #f0fdf4);

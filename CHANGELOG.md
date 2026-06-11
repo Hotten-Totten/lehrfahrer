@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.212 - 2026-06-11
+- **VBB-Import-Popup visuell überarbeitet**:
+  - Modernes Card-Design mit klarerer Hierarchie (Titel, Status, Timeline)
+  - Bessere Lesbarkeit im Verlauf (Zeitzeilen mit farbiger Zustandsmarkierung)
+  - Schöneres Header-/Button-Styling für Erfolg/Warnung/Fehlerzustände
+
 ## V2.0.211 - 2026-06-11
 - **Hotfix VBB-Import (keine Treffer bei allen Linien)**:
   - Ursache behoben: `departureBoard` mit `duration=1440` liefert auf dieser VBB-Instanz HTTP 400
