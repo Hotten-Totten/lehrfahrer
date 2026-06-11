@@ -289,7 +289,7 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
     $out = [];
     $directionKeys = [];
 
-    foreach (array_slice($stops, 0, 36) as $stop) {
+    foreach (array_slice($stops, 0, 120) as $stop) {
         $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
         if (!$deps) {
             continue;
@@ -327,10 +327,7 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
             ];
         }
 
-        // Erst dann früh beenden, wenn genug Kandidaten UND Richtungsvielfalt vorhanden sind.
-        if (count($out) >= 40 && count($directionKeys) >= 2) {
-            break;
-        }
+        // Kein früher Abbruch: User möchte alle verfügbaren Treffer sehen.
     }
 
     return array_values($out);
@@ -567,7 +564,7 @@ if (!$candidates) {
 if ($action === 'search') {
     echo json_encode([
         'ok' => true,
-        'candidates' => array_slice($candidates, 0, 20)
+        'candidates' => $candidates
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

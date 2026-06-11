@@ -657,8 +657,21 @@ function getVbbImportModalRefs() {
     message: document.getElementById("vbbImportMessage"),
     timeline: document.getElementById("vbbImportTimeline"),
     spinner: document.getElementById("vbbImportSpinner"),
-    closeBtn: document.getElementById("vbbImportCloseBtn")
+    closeBtn: document.getElementById("vbbImportCloseBtn"),
+    picker: document.getElementById("vbbImportCandidatePicker"),
+    pickerHint: document.getElementById("vbbImportCandidateHint"),
+    pickerList: document.getElementById("vbbImportCandidateList"),
+    pickerSelectBtn: document.getElementById("vbbImportCandidateSelectBtn"),
+    pickerCancelBtn: document.getElementById("vbbImportCandidateCancelBtn")
   };
+}
+
+function hideVbbCandidatePicker() {
+  const refs = getVbbImportModalRefs();
+  if (refs.picker) refs.picker.classList.add("hidden");
+  if (refs.pickerList) refs.pickerList.innerHTML = "";
+  if (refs.pickerHint) refs.pickerHint.textContent = "Treffer auswählen";
+  if (refs.pickerSelectBtn) refs.pickerSelectBtn.disabled = true;
 }
 
 function closeVbbImportProgressPopup() {
@@ -670,6 +683,7 @@ function closeVbbImportProgressPopup() {
     vbbImportAutoCloseTimer = null;
   }
 
+  hideVbbCandidatePicker();
   refs.modal.classList.add("hidden");
 }
 
@@ -692,6 +706,7 @@ function showVbbImportProgressPopup(lineQuery) {
   if (refs.message) refs.message.textContent = "Startet …";
   if (refs.timeline) refs.timeline.innerHTML = "";
   if (refs.spinner) refs.spinner.classList.remove("hidden");
+  hideVbbCandidatePicker();
 
   if (refs.closeBtn) {
     refs.closeBtn.disabled = true;
@@ -751,6 +766,101 @@ function updateVbbImportProgressPopup(stepText, options = {}) {
       closeVbbImportProgressPopup();
     }, autoCloseMs);
   }
+}
+
+function formatVbbCandidateMeta(entry) {
+  const direction = String(entry?.direction || "").trim();
+  const product = String(entry?.product || "").trim();
+  const origin = String(entry?.origin || "").trim();
+  const time = String(entry?.time || "").trim();
+  const parts = [direction, product, origin ? `ab ${origin}` : "", time].filter(Boolean);
+  return parts.join(" | ");
+}
+
+function chooseVbbCandidateInPopup(candidates) {
+  const refs = getVbbImportModalRefs();
+  if (!refs.picker || !refs.pickerList || !refs.pickerSelectBtn || !refs.pickerCancelBtn || !refs.closeBtn) {
+    return Promise.resolve(candidates?.[0] || null);
+  }
+
+  refs.picker.classList.remove("hidden");
+  refs.pickerList.innerHTML = "";
+  refs.pickerSelectBtn.disabled = true;
+  if (refs.pickerHint) {
+    refs.pickerHint.textContent = `${candidates.length} Treffer gefunden. Bitte Fahrt auswählen.`;
+  }
+
+  let selectedId = "";
+  const groupName = `vbb-candidate-${Date.now()}`;
+
+  candidates.forEach((entry, idx) => {
+    const row = document.createElement("label");
+    row.className = "vbb-candidate-row";
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = groupName;
+    radio.value = String(entry.id || "");
+
+    if (idx === 0) {
+      radio.checked = true;
+      selectedId = radio.value;
+      refs.pickerSelectBtn.disabled = !selectedId;
+    }
+
+    const textWrap = document.createElement("div");
+    const main = document.createElement("div");
+    main.className = "vbb-candidate-main";
+    main.textContent = `${idx + 1}. ${String(entry.name || "Linie")}`;
+
+    const meta = document.createElement("div");
+    meta.className = "vbb-candidate-meta";
+    meta.textContent = formatVbbCandidateMeta(entry);
+
+    textWrap.appendChild(main);
+    textWrap.appendChild(meta);
+
+    radio.addEventListener("change", () => {
+      if (radio.checked) {
+        selectedId = radio.value;
+        refs.pickerSelectBtn.disabled = !selectedId;
+      }
+    });
+
+    row.appendChild(radio);
+    row.appendChild(textWrap);
+    refs.pickerList.appendChild(row);
+  });
+
+  return new Promise((resolve) => {
+    const prevCloseHandler = refs.closeBtn.onclick;
+
+    const cleanup = () => {
+      refs.pickerSelectBtn.removeEventListener("click", onSelect);
+      refs.pickerCancelBtn.removeEventListener("click", onCancel);
+      refs.closeBtn.onclick = prevCloseHandler;
+    };
+
+    const finish = (value) => {
+      cleanup();
+      hideVbbCandidatePicker();
+      resolve(value);
+    };
+
+    const onSelect = () => {
+      const chosen = candidates.find(item => String(item.id || "") === selectedId) || null;
+      finish(chosen);
+    };
+
+    const onCancel = () => finish(null);
+
+    refs.pickerSelectBtn.addEventListener("click", onSelect);
+    refs.pickerCancelBtn.addEventListener("click", onCancel);
+    refs.closeBtn.onclick = () => {
+      finish(null);
+      closeVbbImportProgressPopup();
+    };
+  });
 }
 
 async function importLineFromVbbPrompt() {
@@ -865,25 +975,14 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    updateVbbImportProgressPopup(`${candidates.length} Treffer gefunden. Auswahl wird abgefragt …`, {
+    updateVbbImportProgressPopup(`${candidates.length} Treffer gefunden. Auswahl im Popup …`, {
       level: "info",
       busy: false,
       subtitle: "Trefferliste"
     });
 
-    const maxOptions = Math.min(12, candidates.length);
-    const optionsText = candidates.slice(0, maxOptions).map((entry, idx) => {
-      const dir = String(entry.direction || "").trim();
-      const product = String(entry.product || "").trim();
-      const suffix = [dir, product].filter(Boolean).join(" | ");
-      return `${idx + 1}. ${entry.name}${suffix ? " (" + suffix + ")" : ""}`;
-    }).join("\n");
-
-    const selectionRaw = prompt(
-      `Gefundene Linien:\n${optionsText}\n\nBitte Nummer wählen (1-${maxOptions}).`,
-      "1"
-    );
-    if (selectionRaw === null) {
+    const selected = await chooseVbbCandidateInPopup(candidates);
+    if (!selected) {
       updateVbbImportProgressPopup("VBB-Import abgebrochen.", {
         level: "warn",
         busy: false,
@@ -895,20 +994,6 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    const selectedIndex = Number(selectionRaw);
-    if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > maxOptions) {
-      updateVbbImportProgressPopup("Ungültige Auswahl für VBB-Import.", {
-        level: "warn",
-        busy: false,
-        allowClose: true,
-        subtitle: "Auswahlfehler",
-        autoCloseMs: 5000
-      });
-      setStatus("Ungültige Auswahl für VBB-Import.", "warn");
-      return;
-    }
-
-    const selected = candidates[selectedIndex - 1];
     updateVbbImportProgressPopup(`Fahrt ${selected.name} wird geladen …`, {
       level: "info",
       busy: true,

@@ -1291,6 +1291,93 @@ button.danger:hover {
   background: linear-gradient(120deg, #fee2e2, #fff1f2);
 }
 
+.vbb-candidate-picker {
+  margin-top: 12px;
+  border: 1px solid #c7d7ea;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 10px;
+}
+
+.vbb-candidate-picker.hidden {
+  display: none !important;
+}
+
+.vbb-candidate-hint {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.vbb-candidate-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #dbe7f4;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 4px;
+}
+
+.vbb-candidate-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vbb-candidate-row:hover {
+  background: #eaf3ff;
+}
+
+.vbb-candidate-row input[type="radio"] {
+  margin-top: 2px;
+}
+
+.vbb-candidate-main {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.vbb-candidate-meta {
+  font-size: 12px;
+  color: #475569;
+}
+
+.vbb-candidate-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vbb-candidate-btn {
+  border: 1px solid #b7c8dd;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.vbb-candidate-btn-cancel {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.vbb-candidate-btn-ok {
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+.vbb-candidate-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .prompt-fallback-input {
   width: 100%;
   padding: 9px 10px;

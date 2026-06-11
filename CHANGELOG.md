@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.216 - 2026-06-11
+- **VBB-Import zeigt jetzt alle verfügbaren Treffer im eigenen Popup**:
+  - Such-API liefert die komplette Kandidatenliste (kein Slice auf 20 mehr)
+  - Kandidatensammlung bricht nicht mehr frühzeitig ab und durchsucht deutlich mehr Haltestellen
+  - Browser-`prompt()` für die Linienwahl ersetzt durch integrierte, scrollbare Auswahl im VBB-Import-Popup
+  - Dadurch sind Hin- und Rückrichtungen sowie weitere Fahrten direkt auswählbar
+
 ## V2.0.215 - 2026-06-11
 - **VBB-Import findet jetzt zuverlässiger beide Fahrtrichtungen**:
   - Kandidatensuche beendet den Lauf nicht mehr zu früh bei einseitigen Treffern
