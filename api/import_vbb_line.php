@@ -508,6 +508,63 @@ function vbb_merge_candidates(array $base, array $extra): array {
     return array_values($byId);
 }
 
+function vbb_extract_journey_terminals(array $journeyData): array {
+    $stops = $journeyData['Stops']['Stop'] ?? [];
+    if (!is_array($stops) || !$stops) {
+        return [null, null];
+    }
+
+    $firstName = null;
+    $lastName = null;
+
+    foreach ($stops as $stop) {
+        if (!is_array($stop)) continue;
+        $name = trim(strval($stop['name'] ?? ''));
+        if ($name === '') continue;
+        if ($firstName === null) {
+            $firstName = $name;
+        }
+        $lastName = $name;
+    }
+
+    return [$firstName, $lastName];
+}
+
+function vbb_enrich_candidates_with_terminals(array $cfg, array $candidates, int $maxEnrich = 40): array {
+    $limit = min(count($candidates), max(0, $maxEnrich));
+    if ($limit <= 0) {
+        return $candidates;
+    }
+
+    for ($i = 0; $i < $limit; $i++) {
+        $item = $candidates[$i] ?? null;
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $ref = trim(strval($item['id'] ?? ''));
+        if ($ref === '') {
+            continue;
+        }
+
+        $detail = vbb_request($cfg, '/journeyDetail', ['id' => $ref]);
+        if (!$detail['ok']) {
+            continue;
+        }
+
+        [$tripStart, $tripEnd] = vbb_extract_journey_terminals($detail['data']);
+        if ($tripStart !== null && $tripStart !== '') {
+            $candidates[$i]['startStop'] = $tripStart;
+        }
+        if ($tripEnd !== null && $tripEnd !== '') {
+            $candidates[$i]['destination'] = $tripEnd;
+            $candidates[$i]['direction'] = $tripEnd;
+        }
+    }
+
+    return $candidates;
+}
+
 function vbb_parse_datetime_to_minutes(string $date, string $time): ?int {
     $date = trim($date);
     $time = trim($time);
@@ -741,11 +798,14 @@ if ($needExpandedPass) {
         $needsArrivalBoost = count($candidates) < 24
             || vbb_count_candidate_directions($candidates) < 2;
         if ($needsArrivalBoost) {
-            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, 18, true);
+            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, $window, 42, true);
             $candidates = vbb_merge_candidates($candidates, $arrivalCandidates);
         }
     }
 }
+
+// Für die sichtbare Trefferauswahl echte Start-/Zielpunkte aus journeyDetail nachziehen.
+$candidates = vbb_enrich_candidates_with_terminals($cfg, $candidates, 40);
 if (!$candidates) {
     echo json_encode([
         'ok' => true,

@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.223 - 2026-06-11
+- **VBB-Trefferliste korrigiert: Ziel + Richtung (Hotfix)**:
+  - Kandidaten werden serverseitig mit `journeyDetail` angereichert, um echte Fahrt-Terminals zu erhalten
+  - Treffer zeigen dadurch verlässlichere `Start -> Ziel`-Informationen statt leerem Ziel
+  - Richtungs-Boost erweitert (mehr Arrival-Pass), um einseitige Trefferlisten zu reduzieren
+
 ## V2.0.222 - 2026-06-11
 - **VBB-Suche: Von-Bis-Fenster + bessere Zielanzeige**:
   - Suchoptionen im Popup erweitert auf `Von` und `Bis` (statt nur einer Uhrzeit)
