@@ -1,5 +1,17 @@
 # Changelog
 
+## V2.0.185 - 2026-06-11
+- **Beim Speichern wird jetzt automatisch eine Linien-PDF erzeugt**:
+  - API speichert neben `.json` und `.gpx` nun auch `.pdf` im Linienordner
+  - PDF enthält Linien-Übersicht mit Ort, Linie, Route, Richtung, Länge und Haltestellenliste
+- **App lädt Linien-PDFs mit herunter**:
+  - Download-Center cached zusätzlich vorhandene PDF-Dateien in IndexedDB
+  - In den verfügbaren Offline-Linien kann je Linie eine PDF geladen/geöffnet werden
+- **API erweitert**:
+  - `list_lines.php` liefert PDF-Metadaten (`hasPdf`, `pdfFile`)
+  - `load_line.php` liefert GPX direkt mit aus
+  - Neues `download_line_pdf.php` für sicheren PDF-Download in der App
+
 ## V2.0.184 - 2026-06-11
 - **Haltestellenliste modernisiert**:
   - Reihenfolge per Drag-and-drop mit Anfasser (`⋮⋮`) statt Pfeiltasten

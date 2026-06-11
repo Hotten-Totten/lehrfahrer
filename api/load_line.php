@@ -69,8 +69,35 @@ if (!$data || !is_array($data)) {
     exit;
 }
 
+$baseName = pathinfo($filePath, PATHINFO_FILENAME);
+$dirName = dirname($filePath);
+
+$gpx = null;
+$gpxPath = $dirName . '/' . $baseName . '.gpx';
+if (!file_exists($gpxPath)) {
+    $legacyGpxPath = $lineDir . '/gpx/' . $baseName . '.gpx';
+    if (file_exists($legacyGpxPath)) {
+        $gpxPath = $legacyGpxPath;
+    }
+}
+if (file_exists($gpxPath)) {
+    $gpxContent = @file_get_contents($gpxPath);
+    if ($gpxContent !== false) {
+        $gpx = $gpxContent;
+    }
+}
+
+$pdfFile = null;
+$pdfPath = $dirName . '/' . $baseName . '.pdf';
+if (file_exists($pdfPath)) {
+    $pdfFile = basename($pdfPath);
+}
+
 echo json_encode([
     'ok' => true,
     'city' => $city,
-    'line' => $data
+    'line' => $data,
+    'gpx' => $gpx,
+    'hasPdf' => $pdfFile !== null,
+    'pdfFile' => $pdfFile
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

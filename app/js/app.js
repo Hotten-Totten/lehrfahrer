@@ -4,7 +4,7 @@
 
 const API_BASE = '../api';
 const DB_NAME  = 'lehrfahrer-offline';
-const DB_VER   = 2;
+const DB_VER   = 3;
 const STORAGE_KEY_LINES_CATALOG = 'lehrfahrer-lines-catalog-version';
 const STORAGE_KEY_DISMISSED_UPDATE = 'lehrfahrer-dismissed-lines-update';
 
@@ -481,6 +481,10 @@ function openDB() {
       if (!d.objectStoreNames.contains('linesGPX')) {
         d.createObjectStore('linesGPX', { keyPath: 'id' });
       }
+      // Lines PDF Object Store
+      if (!d.objectStoreNames.contains('linesPDF')) {
+        d.createObjectStore('linesPDF', { keyPath: 'id' });
+      }
     };
     req.onsuccess = e => { db = e.target.result; resolve(); };
     req.onerror   = () => reject(req.error);
@@ -539,6 +543,8 @@ function dbPutLinesCatalog(catalog) {
           fileBase: line.fileBase,
           lineName: line.lineName,
           routeName: line.routeName,
+          hasPdf: !!line.hasPdf,
+          pdfFile: line.pdfFile || null,
           updatedAt: Number(line.updatedAt) || 0
         });
       });
@@ -602,6 +608,63 @@ function dbGetLineGPX(id) {
     req.onsuccess = () => resolve(req.result?.data ?? null);
     req.onerror = () => reject(req.error);
   });
+}
+
+// ── Lines PDF ─────────────────────────────────────────────────
+function dbPutLinePDF(id, pdfData, fileName = '', sourceUpdatedAt = 0) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesPDF', 'readwrite');
+    const req = tx.objectStore('linesPDF').put({
+      id,
+      data: pdfData,
+      fileName: fileName || null,
+      sourceUpdatedAt: Number(sourceUpdatedAt) || 0,
+      savedAt: Date.now()
+    });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetLinePDFRecord(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('linesPDF', 'readonly');
+    const req = tx.objectStore('linesPDF').get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function buildLineStorageId(line) {
+  const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
+  return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${fileBase}`.replace(/\//g, '_');
+}
+
+async function fetchAndCacheLinePdf(line, dbId) {
+  if (!line || !line.hasPdf) return false;
+
+  try {
+    let pdfUrl = `${API_BASE}/download_line_pdf.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.fileBase || line.file)}`;
+    if (line.lineFolder) pdfUrl += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
+
+    const pdfRes = await fetch(pdfUrl, { cache: 'no-store' });
+    if (!pdfRes.ok) return false;
+
+    const pdfArrayBuffer = await pdfRes.arrayBuffer();
+    if (!pdfArrayBuffer || !pdfArrayBuffer.byteLength) return false;
+
+    await dbPutLinePDF(
+      dbId,
+      pdfArrayBuffer,
+      line.pdfFile || `${(line.fileBase || 'linie')}.pdf`,
+      Number(line.updatedAt) || 0
+    );
+
+    return true;
+  } catch (err) {
+    console.warn('PDF download failed:', err.message);
+    return false;
+  }
 }
 
 // ── Lines Katalog laden und aktualisieren ──────────────────
@@ -701,14 +764,17 @@ async function downloadLineWithGPX(lineId) {
     const lineData = json.line;
 
     // Formatiere die ID konsistent (city_lineFolder_fileBase, mit _ statt /)
-    const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
-    const dbId = `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${fileBase}`.replace(/\//g, '_');
+    const dbId = buildLineStorageId(line);
 
     await dbPutLineData(dbId, lineData, Number(line.updatedAt) || 0);
     
     // Speichere auch GPX falls vorhanden
     if (json.gpx) {
       await dbPutLineGPX(dbId, json.gpx);
+    }
+
+    if (line.hasPdf) {
+      await fetchAndCacheLinePdf(line, dbId);
     }
 
     console.log(`  ✓ ${line.lineName} downloaded and cached`);
@@ -1573,7 +1639,12 @@ async function displayAvailableLines() {
     }
 
     availableLinesContainer.innerHTML = '';
-    allLines.forEach(line => {
+    for (const line of allLines) {
+      const catalogLine = (availableLinesCatalog || []).find(item => buildLineStorageId(item) === line.id) || null;
+      const lineData = line.data || {};
+      const lineName = lineData.lineName || lineData?.line?.lineName || catalogLine?.lineName || line.id;
+      const routeName = lineData.routeName || lineData?.line?.routeName || catalogLine?.routeName || 'Route';
+
       const div = document.createElement('div');
       div.style.cssText = `
         padding: 10px 12px;
@@ -1583,20 +1654,83 @@ async function displayAvailableLines() {
         align-items: center;
         gap: 8px;
       `;
-      
-      div.innerHTML = `
-        <span style="font-size: 18px;">✅</span>
-        <div style="flex: 1;">
-          <div style="font-weight: 600; font-size: 14px;">${line.lineName || line.id}</div>
-          <div style="font-size: 12px; color: var(--text-muted);">${line.routeName || 'Route'}</div>
-        </div>
+
+      const icon = document.createElement('span');
+      icon.style.fontSize = '18px';
+      icon.textContent = '✅';
+
+      const textWrap = document.createElement('div');
+      textWrap.style.flex = '1';
+      textWrap.innerHTML = `
+        <div style="font-weight: 600; font-size: 14px;">${lineName}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">${routeName}</div>
       `;
+
+      div.appendChild(icon);
+      div.appendChild(textWrap);
+
+      if (catalogLine?.hasPdf) {
+        const pdfRecord = await dbGetLinePDFRecord(line.id);
+        const pdfBtn = document.createElement('button');
+        pdfBtn.type = 'button';
+        pdfBtn.textContent = pdfRecord ? 'PDF öffnen' : 'PDF laden';
+        pdfBtn.style.cssText = `
+          padding: 6px 10px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--surface);
+          color: var(--text);
+          font-size: 12px;
+          cursor: pointer;
+        `;
+        pdfBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await openLineOverviewPdf(line.id, catalogLine);
+        });
+        div.appendChild(pdfBtn);
+      }
       
       availableLinesContainer.appendChild(div);
-    });
+    }
   } catch (err) {
     console.error('Error displaying available lines:', err);
     availableLinesContainer.innerHTML = '<p class="hint">Fehler beim Laden der Linien.</p>';
+  }
+}
+
+async function openLineOverviewPdf(storageId, catalogLine = null) {
+  if (!storageId) return;
+
+  try {
+    let pdfRecord = await dbGetLinePDFRecord(storageId);
+
+    if (!pdfRecord && catalogLine?.hasPdf) {
+      const fetched = await fetchAndCacheLinePdf(catalogLine, storageId);
+      if (fetched) {
+        pdfRecord = await dbGetLinePDFRecord(storageId);
+      }
+    }
+
+    if (!pdfRecord || !pdfRecord.data) {
+      showToast('Kein Linien-PDF verfügbar.', 3500);
+      return;
+    }
+
+    const fileName = pdfRecord.fileName || `${storageId}.pdf`;
+    const blob = new Blob([pdfRecord.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('PDF open/download failed:', err);
+    showToast('PDF konnte nicht geöffnet werden.', 3500);
   }
 }
 

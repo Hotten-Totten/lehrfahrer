@@ -58,7 +58,9 @@ foreach ($cities as $city) {
                 $fileBase = pathinfo($file, PATHINFO_FILENAME);
                 $fileMtime = @filemtime($file);
                 $gpxPath  = $subPath . '/' . $fileBase . '.gpx';
+                $pdfPath  = $subPath . '/' . $fileBase . '.pdf';
                 $hasGpx   = file_exists($gpxPath);
+                $hasPdf   = file_exists($pdfPath);
 
                 $lines[] = [
                     'city'              => $city,
@@ -76,6 +78,8 @@ foreach ($cities as $city) {
                     'routePointCount'   => count($data['routePoints'] ?? []),
                     'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
                     'hasGpx'            => $hasGpx,
+                    'hasPdf'            => $hasPdf,
+                    'pdfFile'           => $hasPdf ? basename($pdfPath) : null,
                 ];
             }
         }
@@ -91,7 +95,9 @@ foreach ($cities as $city) {
         $fileBase = pathinfo($file, PATHINFO_FILENAME);
         $fileMtime = @filemtime($file);
         $gpxPath  = $cityDir . '/gpx/' . $fileBase . '.gpx';
+        $pdfPath  = $cityDir . '/' . $fileBase . '.pdf';
         $hasGpx   = file_exists($gpxPath);
+        $hasPdf   = file_exists($pdfPath);
 
         $lines[] = [
             'city'              => $city,
@@ -109,6 +115,8 @@ foreach ($cities as $city) {
             'routePointCount'   => count($data['routePoints'] ?? []),
             'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
             'hasGpx'            => $hasGpx,
+            'hasPdf'            => $hasPdf,
+            'pdfFile'           => $hasPdf ? basename($pdfPath) : null,
         ];
     }
 }

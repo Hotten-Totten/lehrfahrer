@@ -336,7 +336,7 @@ function showSaveConfirmDialog({ data, city, fileBase, lineFolder }) {
     const cancelBtn = document.getElementById("saveConfirmCancelBtn");
 
     document.getElementById("saveConfirmCity").textContent = city.charAt(0).toUpperCase() + city.slice(1);
-    document.getElementById("saveConfirmFile").textContent = (lineFolder ? lineFolder + "/" : "") + fileBase + ".json / .gpx";
+    document.getElementById("saveConfirmFile").textContent = (lineFolder ? lineFolder + "/" : "") + fileBase + ".json / .gpx / .pdf";
     document.getElementById("saveConfirmStops").textContent = (data.stops?.length ?? 0) + " Haltestellen";
 
     const km = data.stats?.routeLengthMeters
@@ -387,6 +387,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
     // ---------- GPX erzeugen + speichern ----------
     const gpx = buildGpxString();
     let gpxSaved = false;
+    const pdfSaved = !!result.pdfSaved;
     try {
       const gpxResult = await saveGpxToServer(`${actualFileBase}.gpx`, gpx, city, lineFolder);
       gpxSaved = !!(gpxResult && gpxResult.ok !== false);
@@ -406,7 +407,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
         savedAt: result.savedAt || new Date().toISOString()
       });
     }
-    setStatus(`Gespeichert: ${lineFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""} (${city})`);
+    setStatus(`Gespeichert: ${lineFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})`);
   } catch (err) {
     error("Fehler beim Server-Speichern", err);
     setStatus(err.message || "Fehler beim Speichern auf Server.", "error");

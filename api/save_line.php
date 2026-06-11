@@ -17,6 +17,210 @@ function hasDiversionSuffix(string $value): bool {
     return (bool)preg_match('/(^|[_\s-])Umleitung[_\s-]?\d{2}($|[_\s-])/i', trim($value));
 }
 
+function getLineValue(array $data, string $key, $default = '') {
+    if (array_key_exists($key, $data)) {
+        return $data[$key];
+    }
+    if (isset($data['line']) && is_array($data['line']) && array_key_exists($key, $data['line'])) {
+        return $data['line'][$key];
+    }
+    return $default;
+}
+
+function extractLatLon($point): ?array {
+    if (is_array($point)) {
+        if (isset($point['lat']) && isset($point['lon'])) {
+            return [floatval($point['lat']), floatval($point['lon'])];
+        }
+        if (isset($point[0]) && isset($point[1])) {
+            return [floatval($point[0]), floatval($point[1])];
+        }
+    }
+    return null;
+}
+
+function haversineMeters(float $lat1, float $lon1, float $lat2, float $lon2): float {
+    $r = 6371000.0;
+    $phi1 = deg2rad($lat1);
+    $phi2 = deg2rad($lat2);
+    $dPhi = deg2rad($lat2 - $lat1);
+    $dLambda = deg2rad($lon2 - $lon1);
+
+    $a = sin($dPhi / 2) * sin($dPhi / 2)
+       + cos($phi1) * cos($phi2) * sin($dLambda / 2) * sin($dLambda / 2);
+    $c = 2 * atan2(sqrt($a), sqrt(max(1 - $a, 0.0)));
+
+    return $r * $c;
+}
+
+function estimateRouteLengthMeters(array $routePoints): float {
+    $sum = 0.0;
+    $last = null;
+
+    foreach ($routePoints as $pt) {
+        $current = extractLatLon($pt);
+        if (!$current) {
+            continue;
+        }
+        if ($last) {
+            $sum += haversineMeters($last[0], $last[1], $current[0], $current[1]);
+        }
+        $last = $current;
+    }
+
+    return $sum;
+}
+
+function wrapPdfLine(string $line, int $maxLen = 94): array {
+    $line = trim(preg_replace('/\s+/u', ' ', str_replace(["\r", "\n", "\t"], ' ', $line)));
+    if ($line === '') {
+        return [''];
+    }
+
+    $wrapped = wordwrap($line, $maxLen, "\n", true);
+    return explode("\n", $wrapped);
+}
+
+function pdfEscapeText(string $text): string {
+    $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT//IGNORE', $text);
+    if ($converted === false) {
+        $converted = preg_replace('/[^\x20-\x7E]/', '?', $text);
+    }
+
+    return str_replace(
+        ['\\', '(', ')'],
+        ['\\\\', '\\(', '\\)'],
+        $converted
+    );
+}
+
+function buildSimplePdf(array $pages): string {
+    $objects = [];
+    $objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+    $objects[2] = '';
+    $objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+    $nextId = 4;
+    $pageRefs = [];
+
+    foreach ($pages as $lines) {
+        $stream = "BT\n/F1 10 Tf\n14 TL\n50 800 Td\n";
+        foreach ($lines as $line) {
+            $stream .= '(' . pdfEscapeText($line) . ") Tj\nT*\n";
+        }
+        $stream .= "ET";
+
+        $contentId = $nextId++;
+        $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
+
+        $pageId = $nextId++;
+        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentId} 0 R >>";
+        $pageRefs[] = $pageId;
+    }
+
+    if (!$pageRefs) {
+        $stream = "BT\n/F1 10 Tf\n14 TL\n50 800 Td\n(Keine Inhalte) Tj\nT*\nET";
+        $contentId = $nextId++;
+        $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
+        $pageId = $nextId++;
+        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentId} 0 R >>";
+        $pageRefs[] = $pageId;
+    }
+
+    $kids = implode(' ', array_map(fn($id) => $id . ' 0 R', $pageRefs));
+    $objects[2] = "<< /Type /Pages /Kids [ {$kids} ] /Count " . count($pageRefs) . " >>";
+
+    $pdf = "%PDF-1.4\n";
+    $offsets = [0];
+
+    for ($i = 1; $i < $nextId; $i++) {
+        $offsets[$i] = strlen($pdf);
+        $obj = $objects[$i] ?? '';
+        $pdf .= $i . " 0 obj\n" . $obj . "\nendobj\n";
+    }
+
+    $xrefPos = strlen($pdf);
+    $pdf .= "xref\n0 {$nextId}\n";
+    $pdf .= "0000000000 65535 f \n";
+    for ($i = 1; $i < $nextId; $i++) {
+        $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
+    }
+
+    $pdf .= "trailer\n<< /Size {$nextId} /Root 1 0 R >>\n";
+    $pdf .= "startxref\n{$xrefPos}\n%%EOF";
+
+    return $pdf;
+}
+
+function buildLineOverviewPdf(array $data, string $city, string $lineFolder): string {
+    $lineName = trim((string)getLineValue($data, 'lineName', ''));
+    $routeName = trim((string)getLineValue($data, 'routeName', ''));
+    $directionName = trim((string)getLineValue($data, 'directionName', ''));
+    $color = trim((string)getLineValue($data, 'color', ''));
+    $savedAt = trim((string)($data['savedAt'] ?? date('c')));
+    $fileBase = trim((string)($data['fileBase'] ?? getLineValue($data, 'id', 'linie')));
+
+    $stops = is_array($data['stops'] ?? null) ? $data['stops'] : [];
+    $routePoints = is_array($data['routePoints'] ?? null) ? $data['routePoints'] : [];
+
+    $routeLengthMeters = null;
+    if (isset($data['stats']) && is_array($data['stats']) && isset($data['stats']['routeLengthMeters'])) {
+        $routeLengthMeters = floatval($data['stats']['routeLengthMeters']);
+    }
+    if (!$routeLengthMeters && !empty($routePoints)) {
+        $routeLengthMeters = estimateRouteLengthMeters($routePoints);
+    }
+
+    $lines = [];
+    $lines[] = 'Lehrfahrer Linienuebersicht';
+    $lines[] = '----------------------------------------';
+    $lines[] = 'Stand: ' . date('d.m.Y H:i:s', strtotime($savedAt));
+    $lines[] = '';
+    $lines[] = 'Ort: ' . $city;
+    $lines[] = 'Linienordner: ' . $lineFolder;
+    $lines[] = 'Datei: ' . $fileBase;
+    $lines[] = 'Linie: ' . ($lineName !== '' ? $lineName : '-');
+    $lines[] = 'Route: ' . ($routeName !== '' ? $routeName : '-');
+    $lines[] = 'Richtung: ' . ($directionName !== '' ? $directionName : '-');
+    $lines[] = 'Farbe: ' . ($color !== '' ? $color : '-');
+    $lines[] = 'Haltestellen: ' . count($stops);
+    $lines[] = 'Routenpunkte: ' . count($routePoints);
+    $lines[] = 'Linienlaenge: ' . ($routeLengthMeters ? number_format($routeLengthMeters / 1000, 2, ',', '.') . ' km' : '-');
+    $lines[] = '';
+    $lines[] = 'Haltestellenliste';
+    $lines[] = '----------------------------------------';
+
+    if (!$stops) {
+        $lines[] = 'Keine Haltestellen vorhanden.';
+    } else {
+        foreach ($stops as $idx => $stop) {
+            $name = trim((string)($stop['name'] ?? ('Haltestelle ' . ($idx + 1))));
+            $minute = isset($stop['minuteFromStart']) ? (string)intval($stop['minuteFromStart']) : '0';
+            $source = trim((string)($stop['sourceType'] ?? ''));
+            $lat = isset($stop['lat']) ? number_format(floatval($stop['lat']), 6, '.', '') : '-';
+            $lon = isset($stop['lon']) ? number_format(floatval($stop['lon']), 6, '.', '') : '-';
+
+            $lines[] = ($idx + 1) . '. ' . $name;
+            $lines[] = '    Minute: ' . $minute . ' | Typ: ' . ($source !== '' ? $source : '-') . ' | Position: ' . $lat . ', ' . $lon;
+        }
+    }
+
+    $wrappedLines = [];
+    foreach ($lines as $line) {
+        foreach (wrapPdfLine($line) as $chunk) {
+            $wrappedLines[] = $chunk;
+        }
+    }
+
+    $maxLinesPerPage = 48;
+    $pages = [];
+    while (!empty($wrappedLines)) {
+        $pages[] = array_splice($wrappedLines, 0, $maxLinesPerPage);
+    }
+
+    return buildSimplePdf($pages);
+}
+
 $baseDir = dirname(__DIR__);
 
 $raw = file_get_contents('php://input');
@@ -167,10 +371,29 @@ if ($result === false) {
     exit;
 }
 
+$pdfSaved = false;
+$pdfFile = $fileBase . '.pdf';
+$pdfPath = $lineDir . '/' . $pdfFile;
+$pdfError = null;
+
+try {
+    $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
+    $pdfWriteResult = @file_put_contents($pdfPath, $pdfBinary);
+    $pdfSaved = ($pdfWriteResult !== false);
+    if (!$pdfSaved) {
+        $pdfError = 'PDF konnte nicht geschrieben werden';
+    }
+} catch (Throwable $pdfException) {
+    $pdfError = $pdfException->getMessage();
+}
+
 echo json_encode([
     'ok' => true,
     'message' => 'Linie gespeichert',
     'file' => basename($filePath),
+    'pdfFile' => $pdfFile,
+    'pdfSaved' => $pdfSaved,
+    'pdfError' => $pdfError,
     'fileBase' => $fileBase,
     'lineFolder' => $lineFolder,
     'city' => $city,
