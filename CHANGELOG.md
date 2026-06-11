@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.0.215 - 2026-06-11
+- **VBB-Import findet jetzt zuverlässiger beide Fahrtrichtungen**:
+  - Kandidatensuche beendet den Lauf nicht mehr zu früh bei einseitigen Treffern
+  - Früher Abbruch erst, wenn genug Treffer und mindestens zwei unterschiedliche Richtungen vorliegen
+
 ## V2.0.214 - 2026-06-11
 - **HAFAS-Fahrplanzeiten bis in die Fahrer-App durchgezogen**:
   - VBB-Import speichert pro Haltestelle HAFAS-Plan-/Echtzeitfelder dauerhaft in den Routendaten

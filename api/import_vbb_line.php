@@ -287,6 +287,7 @@ function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
 function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
+    $directionKeys = [];
 
     foreach (array_slice($stops, 0, 36) as $stop) {
         $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
@@ -309,10 +310,16 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
                 continue;
             }
 
+            $direction = strval($dep['direction'] ?? '');
+            $dirKey = strtolower(trim($direction));
+            if ($dirKey !== '') {
+                $directionKeys[$dirKey] = true;
+            }
+
             $out[$ref] = [
                 'id' => $ref,
                 'name' => strval($dep['Product']['line'] ?? $dep['name'] ?? $lineQuery),
-                'direction' => strval($dep['direction'] ?? ''),
+                'direction' => $direction,
                 'product' => strval($dep['Product']['catOut'] ?? $dep['Product']['catOutL'] ?? ''),
                 'origin' => $stop['name'],
                 'date' => strval($dep['date'] ?? ''),
@@ -320,8 +327,8 @@ function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): ar
             ];
         }
 
-        // Früher beenden, sobald genug Kandidaten gesammelt wurden.
-        if (count($out) >= 40) {
+        // Erst dann früh beenden, wenn genug Kandidaten UND Richtungsvielfalt vorhanden sind.
+        if (count($out) >= 40 && count($directionKeys) >= 2) {
             break;
         }
     }
