@@ -202,6 +202,62 @@ function vbb_extract_stops_by_city(array $cfg, string $cityQuery): array {
     return $rows;
 }
 
+function vbb_expand_stops_with_nearby(array $cfg, array $baseStops, int $maxSeedStops = 10): array {
+    $byId = [];
+
+    foreach ($baseStops as $stop) {
+        $id = trim(strval($stop['id'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        $byId[$id] = $stop;
+    }
+
+    foreach (array_slice($baseStops, 0, $maxSeedStops) as $seed) {
+        if (!isset($seed['lat'], $seed['lon'])) {
+            continue;
+        }
+
+        $nearRes = vbb_request($cfg, '/location.nearbystops', [
+            'originCoordLat' => strval($seed['lat']),
+            'originCoordLong' => strval($seed['lon']),
+            'maxNo' => 80,
+        ]);
+        if (!$nearRes['ok']) {
+            continue;
+        }
+
+        $items = $nearRes['data']['stopLocationOrCoordLocation'] ?? [];
+        if (!is_array($items)) {
+            continue;
+        }
+
+        foreach ($items as $item) {
+            $stop = $item['StopLocation'] ?? null;
+            if (!is_array($stop)) {
+                continue;
+            }
+
+            $id = trim(strval($stop['id'] ?? ''));
+            $name = trim(strval($stop['name'] ?? ''));
+            if ($id === '' || $name === '') {
+                continue;
+            }
+
+            if (!isset($byId[$id])) {
+                $byId[$id] = [
+                    'id' => $id,
+                    'name' => $name,
+                    'lat' => isset($stop['lat']) ? floatval($stop['lat']) : null,
+                    'lon' => isset($stop['lon']) ? floatval($stop['lon']) : null,
+                ];
+            }
+        }
+    }
+
+    return array_values($byId);
+}
+
 function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
@@ -378,6 +434,12 @@ if (!$stopsByCity) {
 }
 
 $candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity);
+if (!$candidates) {
+    $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 12);
+    if ($expandedStops) {
+        $candidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops);
+    }
+}
 if (!$candidates) {
     echo json_encode([
         'ok' => true,

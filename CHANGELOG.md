@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.210 - 2026-06-11
+- **VBB-Treffersuche räumlich erweitert**:
+  - Wenn im Stadt-Stopset keine Treffer gefunden werden, wird automatisch ein Nearby-Fallback über `location.nearbystops` ausgeführt
+  - Kandidatensuche läuft danach erneut mit erweitertem Umland-Stopset
+  - Behebt typische Fälle "Linie existiert, aber keine Treffer" bei Rand-/Umlandlinien
+
 ## V2.0.209 - 2026-06-11
 - **VBB-Suche robuster bei "Linie existiert, aber kein Treffer"**:
   - Scan über deutlich mehr Haltestellen im Stadtgebiet (statt nur wenige frühe Treffer)
