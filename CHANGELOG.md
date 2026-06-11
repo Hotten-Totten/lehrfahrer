@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.196 - 2026-06-11
+- **Ghostpunkte jetzt wirklich standardmäßig unsichtbar**:
+  - Neu erstellte freie Punkte (`Freie Haltestelle X`) werden im Editor automatisch als Ghostpunkt angelegt
+  - In der App werden Ghostpunkte standardmäßig ausgeblendet (Karte, Liste, Navigation)
+  - Auch ältere freie Standardpunkte ohne explizites Flag werden in der App als Ghostpunkte erkannt
+
 ## V2.0.195 - 2026-06-11
 - **Editor-Umlaute/Sonderzeichen stabilisiert**:
   - Mojibake-Anzeigen in der Topbar/Quickbar und Tooltips von `index.html` bereinigt

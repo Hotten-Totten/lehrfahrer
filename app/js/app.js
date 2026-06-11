@@ -1548,7 +1548,18 @@ function displayRoute(data) {
 }
 
 function isGhostStop(stop) {
-  return !!(stop && (stop.isGhostPoint || stop.isGhost || stop.sourceType === 'ghost'));
+  if (!stop) return false;
+
+  if (stop.isGhostPoint || stop.isGhost || stop.sourceType === 'ghost') {
+    return true;
+  }
+
+  // Kompatibilität: ältere Daten mit freien Standardnamen als Ghost behandeln.
+  const isLegacyFreeGhost =
+    stop.sourceType === 'free' &&
+    /^Freie Haltestelle\s+\d+$/i.test(String(stop.name || ''));
+
+  return isLegacyFreeGhost;
 }
 
 function getVisibleStops(stops) {

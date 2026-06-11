@@ -703,7 +703,15 @@ function loadLineFromData(data) {
       catalogId: stopData.catalogId || null,
       transitType: stopData.transitType || stopData.type || null,
       directionHint: stopData.directionHint || stopData.direction || null,
-      isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost || stopData.sourceType === "ghost")
+      isGhostPoint: !!(
+        stopData.isGhostPoint ||
+        stopData.isGhost ||
+        stopData.sourceType === "ghost" ||
+        (
+          (stopData.sourceType || "free") === "free" &&
+          /^Freie Haltestelle\s+\d+$/i.test(String(stopData.name || ""))
+        )
+      )
     });
 
     stop.id = stopData.id || stop.id;
@@ -715,7 +723,15 @@ function loadLineFromData(data) {
     stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
     stop.minuteMode = stopData.minuteMode || "auto";
     stop.note = stopData.note || "";
-    stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost || stopData.sourceType === "ghost");
+    stop.isGhostPoint = !!(
+      stopData.isGhostPoint ||
+      stopData.isGhost ||
+      stopData.sourceType === "ghost" ||
+      (
+        (stopData.sourceType || "free") === "free" &&
+        /^Freie Haltestelle\s+\d+$/i.test(String(stopData.name || ""))
+      )
+    );
     updateStopMarkerTooltip(stop);
 
     const n = Number(String(stop.id).replace("stop_", ""));

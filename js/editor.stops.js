@@ -191,7 +191,10 @@ function createFreeStop(lat, lon) {
     name: "Freie Haltestelle " + (state.stops.length + 1),
     lat,
     lon,
-    sourceType: "free"
+    sourceType: "free",
+    // Freie Zwischenpunkte sind standardmäßig Ghostpunkte,
+    // damit sie nicht als normale Haltestellen in der App auftauchen.
+    isGhostPoint: true
   });
 }
 
