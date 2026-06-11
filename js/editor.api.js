@@ -197,6 +197,11 @@ const stops = state.stops.map((stop, index) => ({
   arrivalMinute: Number(stop.minuteFromStart || 0),
   departureMinute: Number(stop.minuteFromStart || 0),
 
+  hafasPlannedDate: stop.hafasPlannedDate || null,
+  hafasPlannedTime: stop.hafasPlannedTime || null,
+  hafasRealtimeDate: stop.hafasRealtimeDate || null,
+  hafasRealtimeTime: stop.hafasRealtimeTime || null,
+
   note: stop.note || "",
   isGhostPoint: !!stop.isGhostPoint,
   isGhost: !!stop.isGhostPoint,
@@ -276,7 +281,7 @@ const stops = state.stops.map((stop, index) => ({
 
     schedule: {
       timeMode: "relative",
-      startTime: null
+      startTime: state.stops[0]?.hafasRealtimeTime || state.stops[0]?.hafasPlannedTime || null
     },
 
     app: {
@@ -1277,6 +1282,10 @@ function loadLineFromData(data) {
     stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
     stop.minuteMode = stopData.minuteMode || "auto";
     stop.note = stopData.note || "";
+    stop.hafasPlannedDate = stopData.hafasPlannedDate || null;
+    stop.hafasPlannedTime = stopData.hafasPlannedTime || null;
+    stop.hafasRealtimeDate = stopData.hafasRealtimeDate || null;
+    stop.hafasRealtimeTime = stopData.hafasRealtimeTime || null;
     stop.isGhostPoint = !!(
       stopData.isGhostPoint ||
       stopData.isGhost ||

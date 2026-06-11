@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.214 - 2026-06-11
+- **HAFAS-Fahrplanzeiten bis in die Fahrer-App durchgezogen**:
+  - VBB-Import speichert pro Haltestelle HAFAS-Plan-/Echtzeitfelder dauerhaft in den Routendaten
+  - App zeigt optional „zu früh/zu spät“ in der Navigation basierend auf den importierten HAFAS-Zeiten
+  - Neue Schalter in den Einstellungen: Pünktlichkeitsanzeige Ein/Aus (auch im Navi-Menü)
+  - App-Version/Assets auf V2.0.214 angehoben (Cache-Busting)
+
 ## V2.0.213 - 2026-06-11
 - **VBB-Import übernimmt jetzt echte Fahrzeiten aus HAFAS**:
   - `minuteFromStart` wird aus `journeyDetail`-Zeitfeldern berechnet (priorisiert Echtzeit `rtDep/rtArr`, dann Planzeit `dep/arr`)

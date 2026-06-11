@@ -459,6 +459,10 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
             'isGhostPoint' => false,
             'isGhost' => false,
             'isTimingPoint' => false,
+            'hafasPlannedDate' => strval($stop['depDate'] ?? $stop['arrDate'] ?? ''),
+            'hafasPlannedTime' => strval($stop['depTime'] ?? $stop['arrTime'] ?? ''),
+            'hafasRealtimeDate' => strval($stop['rtDepDate'] ?? $stop['rtArrDate'] ?? ''),
+            'hafasRealtimeTime' => strval($stop['rtDepTime'] ?? $stop['rtArrTime'] ?? ''),
         ];
 
         $routePoints[] = [

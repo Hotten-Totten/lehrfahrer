@@ -17,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.0.171">
+  <link rel="stylesheet" href="css/app.css?v=V2.0.214">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.171</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.0.214</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -244,6 +244,17 @@
       </div>
 
       <div class="settings-section">
+        <h3>Fahrplan / Pünktlichkeit</h3>
+        <label class="radio-row">
+          <input id="punctualityToggle" type="checkbox" checked>
+          <span>
+            <strong>Pünktlichkeitsanzeige (HAFAS)</strong>
+            <span class="radio-desc">Zeigt in der Navigation „zu früh/zu spät“ anhand der importierten HAFAS-Zeiten.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="settings-section">
         <h3>✅ Verfügbare Offline-Linien</h3>
         <div id="availableLinesContainer" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
       </div>
@@ -296,6 +307,10 @@
               <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Fahrtzeit (bisher)</label>
               <div id="navInfoTime" style="font-size: 14px; font-weight: 500; color: var(--text);">0:00</div>
             </div>
+            <div style="margin-top: 10px;">
+              <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Pünktlichkeit</label>
+              <div id="navInfoPunctuality" style="font-size: 14px; font-weight: 700; color: var(--accent);">aus</div>
+            </div>
           </div>
         </div>
 
@@ -327,6 +342,12 @@
                 <span style="font-size: 13px;">Bildschirm immer an</span>
               </label>
             </div>
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="navPunctualityToggle" checked>
+                <span style="font-size: 13px;">Pünktlichkeitsanzeige (HAFAS)</span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -336,9 +357,9 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.0.171"></script>
-    <script src="js/app.js?v=V2.0.171"></script>
-    <script src="js/debug-helper.js?v=V2.0.171"></script>
+    <script src="js/map.js?v=V2.0.214"></script>
+    <script src="js/app.js?v=V2.0.214"></script>
+    <script src="js/debug-helper.js?v=V2.0.214"></script>
 </body>
 </html>
 

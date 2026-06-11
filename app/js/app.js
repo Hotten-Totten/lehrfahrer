@@ -52,6 +52,7 @@ const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 let currentNavLine = null;
 let navProgressIdx = 0;
 let navStartTime = 0;
+let navScheduleAnchorMs = null;
 
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
@@ -142,11 +143,15 @@ const cameraProfileSelect = document.getElementById('cameraProfileSelect');
 const markerMotionSelect = document.getElementById('markerMotionSelect');
 const markerTurnSelect = document.getElementById('markerTurnSelect');
 const showGhostStopsToggle = document.getElementById('showGhostStopsToggle');
+const punctualityToggle = document.getElementById('punctualityToggle');
+const navPunctualityToggle = document.getElementById('navPunctualityToggle');
+const navInfoPunctualityEl = document.getElementById('navInfoPunctuality');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
 const MARKER_MOTION_PROFILE_KEY = 'lehrfahrer_marker_motion_profile';
 const MARKER_TURN_PROFILE_KEY = 'lehrfahrer_marker_turn_profile';
 const GHOST_STOPS_VISIBLE_KEY = 'lehrfahrer_show_ghost_stops';
+const PUNCTUALITY_ENABLED_KEY = 'lehrfahrer_show_punctuality';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 let refreshInProgress = false;
 
@@ -1576,6 +1581,78 @@ function setGhostStopsVisible(value) {
   localStorage.setItem(GHOST_STOPS_VISIBLE_KEY, value ? '1' : '0');
 }
 
+function getPunctualityEnabled() {
+  const raw = localStorage.getItem(PUNCTUALITY_ENABLED_KEY);
+  if (raw === null) return true;
+  return raw === '1';
+}
+
+function setPunctualityEnabled(value) {
+  localStorage.setItem(PUNCTUALITY_ENABLED_KEY, value ? '1' : '0');
+}
+
+function applyPunctualityToggleToUi(value) {
+  if (punctualityToggle) punctualityToggle.checked = !!value;
+  if (navPunctualityToggle) navPunctualityToggle.checked = !!value;
+}
+
+function parseHafasTimeToMinutes(timeText) {
+  const raw = String(timeText || '').trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function resolveNavScheduleAnchorMs(stops) {
+  const list = Array.isArray(stops) ? stops : [];
+  if (!list.length) return null;
+
+  const first = list[0] || {};
+  const timeText = first.hafasRealtimeTime || first.hafasPlannedTime || null;
+  const timeMinutes = parseHafasTimeToMinutes(timeText);
+  if (timeMinutes === null) return null;
+
+  const now = new Date();
+  const dayCandidates = [-1, 0, 1].map(offset => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offset);
+    d.setMinutes(timeMinutes);
+    return d.getTime();
+  });
+
+  let best = dayCandidates[0];
+  let bestGap = Math.abs(dayCandidates[0] - now.getTime());
+  for (let i = 1; i < dayCandidates.length; i++) {
+    const gap = Math.abs(dayCandidates[i] - now.getTime());
+    if (gap < bestGap) {
+      best = dayCandidates[i];
+      bestGap = gap;
+    }
+  }
+
+  return best;
+}
+
+function formatPunctuality(deltaMinutes) {
+  if (!Number.isFinite(deltaMinutes)) return '–';
+  if (Math.abs(deltaMinutes) <= 0) return 'pünktlich';
+  if (deltaMinutes > 0) return `${deltaMinutes} min zu spät`;
+  return `${Math.abs(deltaMinutes)} min zu früh`;
+}
+
+function computeNextStopDelayMinutes(nextStop) {
+  if (!nextStop || !nextStop.stop) return null;
+  if (!Number.isFinite(navScheduleAnchorMs)) return null;
+
+  const planMinute = Number(nextStop.stop.minuteFromStart || 0);
+  const expectedMs = navScheduleAnchorMs + (planMinute * 60000);
+  return Math.round((Date.now() - expectedMs) / 60000);
+}
+
 function rerenderCurrentRouteWithGhostSetting() {
   if (!currentRoute || !currentRoute.data) return;
 
@@ -1978,6 +2055,26 @@ function initGhostStopsToggle() {
   });
 }
 
+function initPunctualityToggle() {
+  const enabled = getPunctualityEnabled();
+  applyPunctualityToggleToUi(enabled);
+
+  function onChange(nextValue) {
+    setPunctualityEnabled(nextValue);
+    applyPunctualityToggleToUi(nextValue);
+    if (navActive) {
+      updateNavMenuInfo();
+    }
+  }
+
+  if (punctualityToggle) {
+    punctualityToggle.addEventListener('change', () => onChange(!!punctualityToggle.checked));
+  }
+  if (navPunctualityToggle) {
+    navPunctualityToggle.addEventListener('change', () => onChange(!!navPunctualityToggle.checked));
+  }
+}
+
 // Heading-Glättung: gleitender Durchschnitt über letzte 5 GPS-Richtungswerte
 const _headingBuf = [];
 function smoothHeading(hdg) {
@@ -2052,6 +2149,7 @@ function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
   initCameraProfileSelect();
   initMarkerSmoothingSelects();
   initGhostStopsToggle();
+  initPunctualityToggle();
 })();
 
 // Globale Toast-Funktion (wird auch von map.js genutzt)
@@ -2198,6 +2296,7 @@ function startNavigation(options = {}) {
   navRejoinBlend = 0;
   navProgressIdx = 0;
   navStartTime = Date.now();
+  navScheduleAnchorMs = resolveNavScheduleAnchorMs(navStops);
   currentNavLine = {
     ...currentRoute.data,
     points: currentRoute.data.routePoints || [],
@@ -2751,7 +2850,17 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   const nextStop = navStopDists.find(s => s.distFromStart > currentDist + 10);
   if (nextStop) {
     navStopNameEl.textContent = nextStop.stop.name;
-    navStopDistEl.textContent = navFormatDist(nextStop.distFromStart - currentDist);
+    const baseDistText = navFormatDist(nextStop.distFromStart - currentDist);
+    if (getPunctualityEnabled()) {
+      const delta = computeNextStopDelayMinutes(nextStop);
+      if (Number.isFinite(delta)) {
+        navStopDistEl.textContent = `${baseDistText} · ${formatPunctuality(delta)}`;
+      } else {
+        navStopDistEl.textContent = baseDistText;
+      }
+    } else {
+      navStopDistEl.textContent = baseDistText;
+    }
   } else {
     const visibleStops = getVisibleStops(currentRoute.data.stops || []);
     navStopNameEl.textContent = (visibleStops.length
@@ -2835,12 +2944,14 @@ function updateNavMenuInfo() {
   const traveledEl = document.getElementById('navInfoTraveled');
   const remainingEl = document.getElementById('navInfoRemaining');
   const timeEl = document.getElementById('navInfoTime');
+  const punctualityEl = navInfoPunctualityEl;
 
   if (!currentNavLine) {
     if (distEl) distEl.textContent = '-- km';
     if (traveledEl) traveledEl.textContent = '0 km';
     if (remainingEl) remainingEl.textContent = '-- km';
     if (timeEl) timeEl.textContent = '0:00';
+    if (punctualityEl) punctualityEl.textContent = 'aus';
     return;
   }
 
@@ -2879,6 +2990,19 @@ function updateNavMenuInfo() {
   if (traveledEl) traveledEl.textContent = traveledKm.toFixed(1) + ' km';
   if (remainingEl) remainingEl.textContent = remainingKm.toFixed(1) + ' km';
   if (timeEl) timeEl.textContent = timeStr;
+
+  if (punctualityEl) {
+    if (!getPunctualityEnabled()) {
+      punctualityEl.textContent = 'aus';
+    } else {
+      const nextStop = navStopDists.find(s => s.distFromStart > currentDist + 10) || null;
+      const delta = computeNextStopDelayMinutes(nextStop);
+      punctualityEl.textContent = Number.isFinite(delta) ? formatPunctuality(delta) : 'keine HAFAS-Zeit';
+      punctualityEl.style.color = Number.isFinite(delta)
+        ? (delta > 0 ? '#ef4444' : (delta < 0 ? '#f59e0b' : '#22c55e'))
+        : 'var(--text-muted)';
+    }
+  }
 }
 
 function updateNavMenuStops() {
