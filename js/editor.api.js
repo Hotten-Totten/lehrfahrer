@@ -317,28 +317,75 @@ function exportJson() {
 // Speichert die Linie auf dem Server (PHP API)
 // Zeigt zuerst einen Bestätigungs-Dialog, dann wird gespeichert
 async function saveLineToServer() {
+  const initialData = buildExportData();
+  const initialCity = initialData.city || citySelect?.value || "cottbus";
+
+  // ---------- Bestätigungs-Dialog anzeigen ----------
+  const target = await showSaveConfirmDialog({ data: initialData, city: initialCity });
+  if (!target) return;
+
+  if (citySelect && target.city) citySelect.value = target.city;
+  if (lineNameInput) lineNameInput.value = target.lineSuffix;
+  if (routeNameInput) routeNameInput.value = target.routeSuffix;
+  if (directionNameInput) directionNameInput.value = target.directionName;
+
   const data = buildExportData();
   const city = data.city || citySelect?.value || "cottbus";
   const fileBase = data.fileBase || buildLineFileBase();
   const lineFolder = data.lineFolder || buildLineFolder();
 
-  // ---------- Bestätigungs-Dialog anzeigen ----------
-  const confirmed = await showSaveConfirmDialog({ data, city, fileBase, lineFolder });
-  if (!confirmed) return;
-
   // ---------- Tatsächlich speichern ----------
   await _doSaveLineToServer(data, city, fileBase, lineFolder);
 }
 
-// Zeigt den Speichern-Dialog und wartet auf Bestätigung (Promise<boolean>)
-function showSaveConfirmDialog({ data, city, fileBase, lineFolder }) {
+// Zeigt den Speichern-Dialog und wartet auf Bestätigung (Promise<object|null>)
+function showSaveConfirmDialog({ data, city }) {
   return new Promise(resolve => {
     const modal   = document.getElementById("saveConfirmModal");
     const okBtn   = document.getElementById("saveConfirmOkBtn");
     const cancelBtn = document.getElementById("saveConfirmCancelBtn");
+    const cityPicker = document.getElementById("saveConfirmCitySelect");
+    const lineInput = document.getElementById("saveConfirmLineInput");
+    const routeInput = document.getElementById("saveConfirmRouteInput");
+    const directionInput = document.getElementById("saveConfirmDirectionInput");
+    const fileInfo = document.getElementById("saveConfirmFile");
 
-    document.getElementById("saveConfirmCity").textContent = city.charAt(0).toUpperCase() + city.slice(1);
-    document.getElementById("saveConfirmFile").textContent = (lineFolder ? lineFolder + "/" : "") + fileBase + ".json / .gpx / .pdf";
+    const initialLine = String(lineNameInput?.value || "").trim();
+    const initialRoute = String(routeNameInput?.value || "").trim();
+    const initialDirection = String(directionNameInput?.value || "").trim();
+
+    cityPicker.innerHTML = "";
+    if (citySelect && citySelect.options) {
+      Array.from(citySelect.options).forEach(opt => {
+        const clone = document.createElement("option");
+        clone.value = opt.value;
+        clone.textContent = opt.textContent;
+        cityPicker.appendChild(clone);
+      });
+    }
+    cityPicker.value = city || cityPicker.value || "cottbus";
+
+    lineInput.value = initialLine;
+    routeInput.value = initialRoute;
+    directionInput.value = initialDirection;
+
+    function updateFilePreview() {
+      const lineSuffix = String(lineInput.value || "").trim();
+      const routeSuffix = String(routeInput.value || "").trim();
+      const directionName = String(directionInput.value || "").trim();
+
+      const linePart = lineSuffix ? "Linie_" + lineSuffix : "Linie";
+      const routePart = routeSuffix ? "Route_" + routeSuffix : "";
+      const rawBase = [linePart, routePart, directionName].filter(Boolean).join("_");
+
+      const fileBase = sanitizeFilename(rawBase || "Linie");
+      const lineFolder = sanitizeFilename(lineSuffix ? "Linie_" + lineSuffix : "Linie");
+
+      fileInfo.textContent = (lineFolder ? lineFolder + "/" : "") + fileBase + ".json / .gpx / .pdf";
+    }
+
+    updateFilePreview();
+
     document.getElementById("saveConfirmStops").textContent = (data.stops?.length ?? 0) + " Haltestellen";
 
     const km = data.stats?.routeLengthMeters
@@ -354,15 +401,30 @@ function showSaveConfirmDialog({ data, city, fileBase, lineFolder }) {
       okBtn.removeEventListener("click", onOk);
       cancelBtn.removeEventListener("click", onCancel);
       modal.removeEventListener("click", onOverlay);
+      cityPicker.removeEventListener("change", updateFilePreview);
+      lineInput.removeEventListener("input", updateFilePreview);
+      routeInput.removeEventListener("input", updateFilePreview);
+      directionInput.removeEventListener("input", updateFilePreview);
       resolve(result);
     }
-    function onOk()      { cleanup(true); }
-    function onCancel()  { cleanup(false); }
-    function onOverlay(e){ if (e.target === modal) cleanup(false); }
+    function onOk() {
+      cleanup({
+        city: String(cityPicker.value || "").trim() || "cottbus",
+        lineSuffix: String(lineInput.value || "").trim(),
+        routeSuffix: String(routeInput.value || "").trim(),
+        directionName: String(directionInput.value || "").trim()
+      });
+    }
+    function onCancel()  { cleanup(null); }
+    function onOverlay(e){ if (e.target === modal) cleanup(null); }
 
     okBtn.addEventListener("click", onOk);
     cancelBtn.addEventListener("click", onCancel);
     modal.addEventListener("click", onOverlay);
+    cityPicker.addEventListener("change", updateFilePreview);
+    lineInput.addEventListener("input", updateFilePreview);
+    routeInput.addEventListener("input", updateFilePreview);
+    directionInput.addEventListener("input", updateFilePreview);
   });
 }
 

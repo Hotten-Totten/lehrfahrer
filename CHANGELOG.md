@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.199 - 2026-06-11
+- **Speichern mit Zielauswahl direkt im Dialog**:
+  - Beim Speichern können Ort, Linie, Route und Richtung direkt im Speichern-Dialog ausgewählt/angepasst werden
+  - Die Dateivorschau wird live auf Basis der Auswahl aktualisiert
+  - Die gewählte Zielkombination wird direkt für den tatsächlichen Save verwendet
+
 ## V2.0.198 - 2026-06-11
 - **Ghostpunkte in der Haltestellenliste direkt umschaltbar**:
   - Jede Haltestellenzeile hat jetzt eine eigene Ghost-Checkbox (zwischen Positionswert und Name)
