@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.194 - 2026-06-11
+- **Encoding/Umlaute im Editor repariert**:
+  - Fehlerhafte Zeichenkodierung in `index.html` behoben (z. B. `glÃ¤tten`, `â†¶`)
+  - Umlaute, Pfeilsymbole und Sonderzeichen werden wieder korrekt angezeigt
+  - Version im Editor auf `V2.0.194` angehoben
+
 ## V2.0.193 - 2026-06-11
 - **Ghostpunkte für den Streckenverlauf hinzugefügt**:
   - Im Stop-Editor gibt es jetzt eine Option `Als Ghostpunkt nutzen`
