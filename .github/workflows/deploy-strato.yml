@@ -1,0 +1,47 @@
+name: Deploy to Strato
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-strato-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STRATO_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          if [ -n "${{ secrets.STRATO_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.STRATO_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${{ secrets.STRATO_PORT }}" "${{ secrets.STRATO_HOST }}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Deploy via rsync over SSH
+        shell: bash
+        run: |
+          rsync -az --delete \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude "WorkingSystem/" \
+            --exclude "Offlinekarten/" \
+            --exclude "backup/" \
+            --exclude "_linien/" \
+            --exclude "app5/" \
+            --exclude "app6/" \
+            --exclude "node_modules/" \
+            --exclude "*.log" \
+            -e "ssh -i ~/.ssh/id_rsa -p ${{ secrets.STRATO_PORT }}" \
+            ./ "${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}:${{ secrets.STRATO_TARGET_PATH }}"

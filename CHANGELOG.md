@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.170 - 2026-06-11
+- **GitHub als zentrale Quelle und Strato-Deploy vorbereitet**:
+  - Remote `origin` auf `https://github.com/Hotten-Totten/lehrfahrer.git` eingerichtet und lokaler `main` als aktueller Hauptstand nach GitHub gepusht
+  - Automatisches Live-Deploy per GitHub Actions vorbereitet: neue Workflow-Datei [deploy-strato.yml](.github/workflows/deploy-strato.yml)
+  - Deploy erfolgt bei jedem Push auf `main` via `rsync` ueber SSH auf den Strato-Server
+  - Erforderliche GitHub-Secrets dokumentiert im Workflow: `STRATO_HOST`, `STRATO_PORT`, `STRATO_USER`, `STRATO_SSH_KEY`, `STRATO_TARGET_PATH` (optional `STRATO_KNOWN_HOSTS`)
+
 ## V2.0.169 - 2026-06-10
 - **Editor-Topbar nach `Neu` verlässlich wiederhergestellt**:
   - Eingabemaske (`Ort/Linie/Route/Richtung/Farbe/Suche`) wird nach Klick auf `Neu` aktiv erzwungen sichtbar gemacht
