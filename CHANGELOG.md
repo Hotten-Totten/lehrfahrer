@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.219 - 2026-06-11
+- **VBB-Suche stabilisiert (Hotfix gegen "keine Route")**:
+  - Hauptsuche wieder auf robustem Legacy-Abfahrtslauf (schneller und kompatibler)
+  - Ankünfte nur noch als kleiner Ergänzungslauf bei zu wenig/zu einseitigen Treffern
+  - Erweiterte Stopsuche bleibt aktiv, aber mit gestufter Last zur Vermeidung von Timeouts
+
 ## V2.0.218 - 2026-06-11
 - **VBB-Treffersuche nicht mehr nur „ab jetzt“ (Hotfix)**:
   - Board-Abfrage läuft jetzt für den ganzen Tag ab 00:00 (statt nur zukünftige Fahrten)

@@ -258,68 +258,58 @@ function vbb_expand_stops_with_nearby(array $cfg, array $baseStops, int $maxSeed
     return array_values($byId);
 }
 
-function vbb_fetch_board_for_stop(array $cfg, string $stopId, string $boardType): array {
-    $isArrival = ($boardType === 'arrival');
-    $endpoint = $isArrival ? '/arrivalBoard' : '/departureBoard';
-    $resultKey = $isArrival ? 'Arrival' : 'Departure';
-
-    $baseParams = [
+function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
+    $firstTry = vbb_request($cfg, '/departureBoard', [
         'id' => $stopId,
-        'maxJourneys' => 200,
-        // Ganzen Tag ab Mitternacht anfragen, nicht nur "ab jetzt".
-        'date' => date('Y-m-d'),
-        'time' => '00:00',
-    ];
-
-    $firstTry = vbb_request($cfg, $endpoint, $baseParams + [
+        'maxJourneys' => 140,
         // Nicht von allen HAFAS-Instanzen unterstützt.
         'duration' => 1440,
     ]);
 
     if ($firstTry['ok']) {
-        $rows = $firstTry['data'][$resultKey] ?? [];
-        return is_array($rows) ? $rows : [];
+        $deps = $firstTry['data']['Departure'] ?? [];
+        return is_array($deps) ? $deps : [];
     }
 
-    // Fallback ohne duration.
-    $fallback = vbb_request($cfg, $endpoint, $baseParams);
-    if ($fallback['ok']) {
-        $rows = $fallback['data'][$resultKey] ?? [];
-        return is_array($rows) ? $rows : [];
-    }
-
-    // Letzter Fallback: nur Standardabfrage, falls date/time nicht unterstützt wird.
-    $plain = vbb_request($cfg, $endpoint, [
+    // Fallback ohne duration, damit Suchlauf nicht komplett ausfällt.
+    $fallback = vbb_request($cfg, '/departureBoard', [
         'id' => $stopId,
-        'maxJourneys' => 200,
+        'maxJourneys' => 140,
     ]);
-    if (!$plain['ok']) {
+    if (!$fallback['ok']) {
         return [];
     }
 
-    $rows = $plain['data'][$resultKey] ?? [];
-    return is_array($rows) ? $rows : [];
-}
-
-function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
-    return vbb_fetch_board_for_stop($cfg, $stopId, 'departure');
+    $deps = $fallback['data']['Departure'] ?? [];
+    return is_array($deps) ? $deps : [];
 }
 
 function vbb_fetch_arrivals_for_stop(array $cfg, string $stopId): array {
-    return vbb_fetch_board_for_stop($cfg, $stopId, 'arrival');
+    $res = vbb_request($cfg, '/arrivalBoard', [
+        'id' => $stopId,
+        'maxJourneys' => 80,
+    ]);
+    if (!$res['ok']) {
+        return [];
+    }
+    $arrs = $res['data']['Arrival'] ?? [];
+    return is_array($arrs) ? $arrs : [];
 }
 
-function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops, int $maxStops = 36): array {
+function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops, int $maxStops = 36, bool $withArrivals = false): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
 
     foreach (array_slice($stops, 0, $maxStops) as $stop) {
         $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
-        $arrs = vbb_fetch_arrivals_for_stop($cfg, strval($stop['id'] ?? ''));
-        $boards = array_merge(
-            is_array($deps) ? $deps : [],
-            is_array($arrs) ? $arrs : []
-        );
+        $boards = is_array($deps) ? $deps : [];
+
+        if ($withArrivals) {
+            $arrs = vbb_fetch_arrivals_for_stop($cfg, strval($stop['id'] ?? ''));
+            if (is_array($arrs) && $arrs) {
+                $boards = array_merge($boards, $arrs);
+            }
+        }
 
         if (!$boards) {
             continue;
@@ -604,7 +594,7 @@ if (!$stopsByCity) {
     vbb_json_error(502, 'VBB-Ortssuche fehlgeschlagen oder lieferte keine Haltestellen.');
 }
 
-$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, 24);
+$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, 30, false);
 // Auch bei vorhandenen, aber wenigen/einseitigen Treffern zusätzliche Nearby-Suche nutzen.
 $needExpandedPass = !$candidates
     || count($candidates) < 24
@@ -613,8 +603,16 @@ $needExpandedPass = !$candidates
 if ($needExpandedPass) {
     $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 20);
     if ($expandedStops) {
-        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 36);
+        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 50, false);
         $candidates = vbb_merge_candidates($candidates, $extraCandidates);
+
+        // Nur falls weiterhin zu wenig/zu einseitig: kleiner Ankunfts-Ergänzungslauf.
+        $needsArrivalBoost = count($candidates) < 24
+            || vbb_count_candidate_directions($candidates) < 2;
+        if ($needsArrivalBoost) {
+            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 18, true);
+            $candidates = vbb_merge_candidates($candidates, $arrivalCandidates);
+        }
     }
 }
 if (!$candidates) {
