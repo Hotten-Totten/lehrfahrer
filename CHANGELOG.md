@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.201 - 2026-06-11
+- **Versionsanzeige stabilisiert**:
+  - Editor-Badge wird nicht mehr auf eine ältere Version zurückgesetzt
+  - Nachgeladenes `VERSION` wird nur übernommen, wenn es gleich oder neuer als die HTML-Fallback-Version ist
+  - `VERSION` auf `V2.0.201` synchronisiert
+
 ## V2.0.200 - 2026-06-11
 - **Speichern mit zusätzlicher Sicherheit**:
   - Beim Speichern wird jetzt gefragt, wenn das Ziel bereits existiert und überschrieben würde

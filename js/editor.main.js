@@ -214,6 +214,26 @@ function setEditorVersionBadge(versionText) {
   }
 }
 
+function compareVersionNumbers(a, b) {
+  const parse = value => String(value || "")
+    .replace(/^v/i, "")
+    .split(".")
+    .map(part => parseInt(part, 10))
+    .filter(Number.isFinite);
+
+  const va = parse(a);
+  const vb = parse(b);
+  const maxLen = Math.max(va.length, vb.length);
+
+  for (let i = 0; i < maxLen; i++) {
+    const na = va[i] || 0;
+    const nb = vb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
 async function loadEditorVersionBadge() {
   const fallback = document.body?.dataset?.editorVersion || "unbekannt";
   setEditorVersionBadge(fallback);
@@ -230,7 +250,7 @@ async function loadEditorVersionBadge() {
       .map(line => line.trim())
       .find(Boolean);
 
-    if (version) {
+    if (version && compareVersionNumbers(version, fallback) >= 0) {
       setEditorVersionBadge(version);
     }
   } catch (_err) {
