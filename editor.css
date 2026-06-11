@@ -1296,6 +1296,10 @@ button.danger:hover {
   color: #334155;
 }
 
+.vbb-search-time-wrap span {
+  min-width: 24px;
+}
+
 .vbb-search-time-wrap input {
   border: 1px solid #b7c8dd;
   border-radius: 7px;

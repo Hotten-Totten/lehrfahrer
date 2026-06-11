@@ -667,7 +667,8 @@ function getVbbImportModalRefs() {
     searchDayToday: document.getElementById("vbbSearchDayToday"),
     searchDayTomorrow: document.getElementById("vbbSearchDayTomorrow"),
     searchAllDay: document.getElementById("vbbSearchAllDay"),
-    searchTimeInput: document.getElementById("vbbSearchTimeInput"),
+    searchTimeFromInput: document.getElementById("vbbSearchTimeFromInput"),
+    searchTimeToInput: document.getElementById("vbbSearchTimeToInput"),
     searchStartBtn: document.getElementById("vbbSearchStartBtn"),
     searchCancelBtn: document.getElementById("vbbSearchCancelBtn")
   };
@@ -696,6 +697,7 @@ function closeVbbImportProgressPopup() {
   }
 
   hideVbbCandidatePicker();
+  hideVbbSearchOptions();
   refs.modal.classList.add("hidden");
 }
 
@@ -786,7 +788,7 @@ function formatVbbCandidateMeta(entry) {
   const startStop = String(entry?.startStop || entry?.origin || "").trim();
   const destination = String(entry?.destination || entry?.direction || "").trim();
   const time = String(entry?.time || "").trim();
-  const routeLabel = (startStop && destination) ? `${startStop} -> ${destination}` : (destination || startStop);
+  const routeLabel = `${startStop || "Start ?"} -> ${destination || "Ziel ?"}`;
   const parts = [routeLabel, product, time].filter(Boolean);
   return parts.join(" | ");
 }
@@ -794,21 +796,27 @@ function formatVbbCandidateMeta(entry) {
 function chooseVbbSearchOptionsInPopup() {
   const refs = getVbbImportModalRefs();
   if (!refs.searchOptions || !refs.searchStartBtn || !refs.searchCancelBtn || !refs.closeBtn) {
-    return Promise.resolve({ searchDate: null, searchTime: null, allDay: true });
+    return Promise.resolve({ searchDate: null, searchTimeFrom: null, searchTimeTo: null, allDay: true });
   }
 
   refs.searchOptions.classList.remove("hidden");
   if (refs.searchDayToday) refs.searchDayToday.checked = true;
   if (refs.searchDayTomorrow) refs.searchDayTomorrow.checked = false;
   if (refs.searchAllDay) refs.searchAllDay.checked = true;
-  if (refs.searchTimeInput) {
-    refs.searchTimeInput.disabled = true;
-    refs.searchTimeInput.value = refs.searchTimeInput.value || "08:00";
+  if (refs.searchTimeFromInput) {
+    refs.searchTimeFromInput.disabled = true;
+    refs.searchTimeFromInput.value = refs.searchTimeFromInput.value || "07:00";
+  }
+  if (refs.searchTimeToInput) {
+    refs.searchTimeToInput.disabled = true;
+    refs.searchTimeToInput.value = refs.searchTimeToInput.value || "10:00";
   }
 
   const updateTimeEnabled = () => {
-    if (!refs.searchTimeInput || !refs.searchAllDay) return;
-    refs.searchTimeInput.disabled = !!refs.searchAllDay.checked;
+    if (!refs.searchAllDay) return;
+    const disabled = !!refs.searchAllDay.checked;
+    if (refs.searchTimeFromInput) refs.searchTimeFromInput.disabled = disabled;
+    if (refs.searchTimeToInput) refs.searchTimeToInput.disabled = disabled;
   };
 
   if (refs.searchAllDay) {
@@ -843,17 +851,20 @@ function chooseVbbSearchOptionsInPopup() {
       const dd = String(dateObj.getDate()).padStart(2, "0");
       const searchDate = `${yyyy}-${mm}-${dd}`;
 
-      let searchTime = null;
+      let searchTimeFrom = null;
+      let searchTimeTo = null;
       if (!allDay) {
-        const raw = String(refs.searchTimeInput?.value || "").trim();
-        if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(raw)) {
-          setStatus("Ungültige Uhrzeit. Bitte HH:MM verwenden.", "warn");
+        const fromRaw = String(refs.searchTimeFromInput?.value || "").trim();
+        const toRaw = String(refs.searchTimeToInput?.value || "").trim();
+        if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(fromRaw) || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(toRaw)) {
+          setStatus("Ungültige Uhrzeit. Bitte HH:MM für Von und Bis verwenden.", "warn");
           return;
         }
-        searchTime = raw;
+        searchTimeFrom = fromRaw;
+        searchTimeTo = toRaw;
       }
 
-      finish({ searchDate, searchTime, allDay });
+      finish({ searchDate, searchTimeFrom, searchTimeTo, allDay });
     };
 
     const onCancel = () => finish(null);
@@ -987,10 +998,13 @@ async function importLineFromVbbPrompt() {
     }
 
     const searchDate = String(options.searchDate || "").trim();
-    const searchTime = options.searchTime ? String(options.searchTime).trim() : "";
+    const searchTimeFrom = options.searchTimeFrom ? String(options.searchTimeFrom).trim() : "";
+    const searchTimeTo = options.searchTimeTo ? String(options.searchTimeTo).trim() : "";
     const allDay = !!options.allDay;
     const dateLabel = searchDate ? searchDate : "heute";
-    const modeLabel = allDay ? `ganztägig (${dateLabel})` : `ab ${searchTime} (${dateLabel})`;
+    const modeLabel = allDay
+      ? `ganztägig (${dateLabel})`
+      : `von ${searchTimeFrom} bis ${searchTimeTo} (${dateLabel})`;
 
     updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} ${modeLabel} …`, {
       level: "info",
@@ -1018,8 +1032,11 @@ async function importLineFromVbbPrompt() {
         payload.searchDate = searchDate;
       }
       payload.allDay = !!allDay;
-      if (!allDay && searchTime) {
-        payload.searchTime = searchTime;
+      if (!allDay && searchTimeFrom) {
+        payload.searchTimeFrom = searchTimeFrom;
+      }
+      if (!allDay && searchTimeTo) {
+        payload.searchTimeTo = searchTimeTo;
       }
 
       const response = await fetch(API_VBB_IMPORT_URL, {
@@ -1097,12 +1114,13 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    const serverSearchTime = String(searchResult?.searchTime || "").trim();
+    const serverSearchTimeFrom = String(searchResult?.searchTimeFrom || "").trim();
+    const serverSearchTimeTo = String(searchResult?.searchTimeTo || "").trim();
     const serverSearchDate = String(searchResult?.searchDate || "").trim();
     const serverAllDay = !!searchResult?.allDay;
     const serverLabel = serverAllDay
       ? `${serverSearchDate || "heute"}, ganztägig`
-      : (serverSearchTime ? `${serverSearchDate || "heute"} ab ${serverSearchTime}` : "");
+      : ((serverSearchTimeFrom && serverSearchTimeTo) ? `${serverSearchDate || "heute"} ${serverSearchTimeFrom}-${serverSearchTimeTo}` : "");
     updateVbbImportProgressPopup(
       `${candidates.length} Treffer gefunden${serverLabel ? ` (${serverLabel})` : ""}. Auswahl im Popup …`,
       {

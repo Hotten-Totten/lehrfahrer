@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.222 - 2026-06-11
+- **VBB-Suche: Von-Bis-Fenster + bessere Zielanzeige**:
+  - Suchoptionen im Popup erweitert auf `Von` und `Bis` (statt nur einer Uhrzeit)
+  - Backend nutzt daraus ein echtes Zeitfenster (`date/time + duration`) für Board-Abfragen
+  - Treffer zeigen konsequent `Start -> Ziel` (mit robuster Ziel-Ermittlung aus mehreren HAFAS-Feldern und Name/Ref-Fallback)
+  - Falls Ziel nicht geliefert wird, bleibt es im UI als `Ziel ?` sichtbar statt still zu fehlen
+
 ## V2.0.221 - 2026-06-11
 - **VBB-Import-Popup erweitert: Zeitsteuerung + Start/Ziel**:
   - Neue Suchoptionen direkt im Popup: Heute/Morgen
