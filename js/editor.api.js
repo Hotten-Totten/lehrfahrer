@@ -388,6 +388,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
     const gpx = buildGpxString();
     let gpxSaved = false;
     const pdfSaved = !!result.pdfSaved;
+    const pdfError = (result.pdfError || "").toString().trim();
     try {
       const gpxResult = await saveGpxToServer(`${actualFileBase}.gpx`, gpx, city, lineFolder);
       gpxSaved = !!(gpxResult && gpxResult.ok !== false);
@@ -395,7 +396,11 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
       warn("GPX konnte nicht gespeichert werden: " + gpxErr.message);
     }
 
-    debug("Linie + GPX auf Server gespeichert", { json: result, gpxSaved, city, fileBase: actualFileBase, lineFolder });
+    debug("Linie + GPX + PDF auf Server gespeichert", { json: result, gpxSaved, pdfSaved, pdfError, city, fileBase: actualFileBase, lineFolder });
+
+    if (!pdfSaved) {
+      warn("PDF konnte nicht gespeichert werden" + (pdfError ? ": " + pdfError : ""));
+    }
 
     if (typeof showSaveToast === "function") {
       showSaveToast({
@@ -407,7 +412,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
         savedAt: result.savedAt || new Date().toISOString()
       });
     }
-    setStatus(`Gespeichert: ${lineFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})`);
+    setStatus(`Gespeichert: ${lineFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})${!pdfSaved && pdfError ? " - PDF-Fehler: " + pdfError : ""}`);
   } catch (err) {
     error("Fehler beim Server-Speichern", err);
     setStatus(err.message || "Fehler beim Speichern auf Server.", "error");

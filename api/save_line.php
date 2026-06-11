@@ -72,7 +72,7 @@ function estimateRouteLengthMeters(array $routePoints): float {
 }
 
 function wrapPdfLine(string $line, int $maxLen = 94): array {
-    $line = trim(preg_replace('/\s+/u', ' ', str_replace(["\r", "\n", "\t"], ' ', $line)));
+    $line = trim(preg_replace('/\s+/', ' ', str_replace(["\r", "\n", "\t"], ' ', $line)));
     if ($line === '') {
         return [''];
     }
@@ -82,10 +82,15 @@ function wrapPdfLine(string $line, int $maxLen = 94): array {
 }
 
 function pdfEscapeText(string $text): string {
-    $converted = @iconv('UTF-8', 'Windows-1252//TRANSLIT//IGNORE', $text);
-    if ($converted === false) {
-        $converted = preg_replace('/[^\x20-\x7E]/', '?', $text);
-    }
+    $converted = strtr($text, [
+        'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue',
+        'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue',
+        'ß' => 'ss',
+        '–' => '-', '—' => '-',
+        '„' => '"', '“' => '"', '‚' => "'", '’' => "'",
+        '°' => ' Grad '
+    ]);
+    $converted = preg_replace('/[^\x20-\x7E]/', '?', $converted);
 
     return str_replace(
         ['\\', '(', ')'],
@@ -127,7 +132,11 @@ function buildSimplePdf(array $pages): string {
         $pageRefs[] = $pageId;
     }
 
-    $kids = implode(' ', array_map(fn($id) => $id . ' 0 R', $pageRefs));
+    $kidRefs = [];
+    foreach ($pageRefs as $id) {
+        $kidRefs[] = $id . ' 0 R';
+    }
+    $kids = implode(' ', $kidRefs);
     $objects[2] = "<< /Type /Pages /Kids [ {$kids} ] /Count " . count($pageRefs) . " >>";
 
     $pdf = "%PDF-1.4\n";

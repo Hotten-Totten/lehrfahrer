@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.186 - 2026-06-11
+- **PDF-Speichern stabilisiert**:
+  - PDF-Erzeugung in `save_line.php` kompatibler umgesetzt (ohne `iconv`-Abhängigkeit, ohne moderne PHP-Arrow-Funktionen)
+  - Damit läuft die Generierung auch auf restriktiveren/älteren PHP-Setups zuverlässiger
+- **Fehlerdiagnose verbessert**:
+  - Editor zeigt beim Speichern den konkreten PDF-Fehlertext direkt in der Statusmeldung/Debug an
+
 ## V2.0.185 - 2026-06-11
 - **Beim Speichern wird jetzt automatisch eine Linien-PDF erzeugt**:
   - API speichert neben `.json` und `.gpx` nun auch `.pdf` im Linienordner
