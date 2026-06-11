@@ -202,6 +202,42 @@ function maskToken(token) {
   return t.slice(0, 3) + "..." + t.slice(-3);
 }
 
+function setEditorVersionBadge(versionText) {
+  const badge = document.getElementById("editorVersionBadge");
+  const normalized = String(versionText || "").trim() || "unbekannt";
+  if (badge) {
+    badge.textContent = `Version: ${normalized}`;
+    badge.title = `Aktuelle Editor-Version (${normalized})`;
+  }
+  if (document.body) {
+    document.body.dataset.editorVersion = normalized;
+  }
+}
+
+async function loadEditorVersionBadge() {
+  const fallback = document.body?.dataset?.editorVersion || "unbekannt";
+  setEditorVersionBadge(fallback);
+
+  try {
+    const response = await fetch("VERSION", { cache: "no-store" });
+    if (!response.ok) {
+      return;
+    }
+
+    const text = await response.text();
+    const version = String(text || "")
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .find(Boolean);
+
+    if (version) {
+      setEditorVersionBadge(version);
+    }
+  } catch (_err) {
+    // Fallback bleibt aktiv, wenn VERSION lokal nicht geladen werden kann.
+  }
+}
+
 function askTextInput({ title, message, defaultValue = "", placeholder = "" }) {
   try {
     const native = prompt(
@@ -579,6 +615,7 @@ function showLineInputFieldsForNewLine() {
 
 initDebugPanel();
 updateApiTokenStatusUI();
+loadEditorVersionBadge();
 
 createCatalogMarkers();
 updateCatalogMarkerVisibilityNow();

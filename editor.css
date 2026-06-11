@@ -127,6 +127,18 @@ body {
   user-select: none;
 }
 
+.version-badge {
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid #64748b;
+  color: #e2e8f0;
+  background: #374151;
+  user-select: text;
+}
+
 .token-status-on {
   background: #e8f7ee;
   border-color: #9bd3b0;

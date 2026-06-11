@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.177 - 2026-06-11
+- **Editor zeigt Versionsnummer automatisch an**:
+  - Versions-Badge in der Editor-Quickbar integriert
+  - Version wird beim Start aus der Datei `VERSION` geladen (mit Fallback auf den im HTML hinterlegten Stand)
+  - Ziel: sichtbare und konsistente Live-Version im Editor ohne manuelles Nachpflegen im JS
+
 ## V2.0.176 - 2026-06-11
 - **Deploy-Nacharbeiten abgeschlossen**:
   - Lokale Public-Key-Datei `strato_actions.pub` aus dem Private-Key neu generiert (Datei bereinigt)
