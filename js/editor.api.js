@@ -434,9 +434,11 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
 
 // Lädt die Liste aller gespeicherten Linien vom Server
 // Wird für den Linien-Browser verwendet
-async function fetchLineListFromServer() {
+async function fetchLineListFromServer(cityFilter = null) {
   try {
-    const city = String(citySelect?.value || "").trim();
+    const city = cityFilter === null
+      ? String(citySelect?.value || "").trim()
+      : String(cityFilter || "").trim();
     const params = new URLSearchParams();
     if (city) {
       params.set("city", city);
@@ -475,14 +477,14 @@ async function fetchLineListFromServer() {
 
 // Lädt eine spezifische Linie vom Server anhand der ID
 // Parst die JSON-Daten und füllt den Editor mit den geladenen Werten
-async function loadLineFromServer(lineId = null, lineFolder = null) {
+async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride = null) {
   try {
     if (!lineId) {
       setStatus("Keine Linien-ID übergeben.", "warn");
       return;
     }
 
-    const city = citySelect?.value || "cottbus";
+    const city = String(cityOverride || citySelect?.value || "cottbus").trim() || "cottbus";
 
     let normalizedLineId = lineId;
 
@@ -539,14 +541,14 @@ async function loadLineFromServer(lineId = null, lineFolder = null) {
 }
 
 // Löscht eine Linie vom Server anhand der ID
-async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFolder = null) {
+async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFolder = null, cityOverride = null) {
   try {
     if (!lineId) {
       setStatus("Keine Linien-ID zum Löschen übergeben.", "warn");
       return false;
     }
 
-    const city = citySelect?.value || "cottbus";
+    const city = String(cityOverride || citySelect?.value || "cottbus").trim() || "cottbus";
 
     let normalizedLineId = lineId;
 
@@ -566,7 +568,7 @@ async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFold
 
     if (!skipConfirm) {
       const ok = confirm(
-        `Linie wirklich löschen?\n\nOrt: ${city}\nLinie: ${normalizedLineId}\n\nJSON und GPX werden gelöscht.`
+        `Linie wirklich löschen?\n\nOrt: ${city}\nLinie: ${normalizedLineId}\n\nJSON, GPX und PDF werden gelöscht.`
       );
       if (!ok) {
         return false;

@@ -1,5 +1,16 @@
 # Changelog
 
+## V2.0.191 - 2026-06-11
+- **Laden jetzt nutzerfreundlicher (Stadt + Linie)**:
+  - Linienbrowser lädt standardmäßig alle Städte
+  - Neuer Stadtfilter im Browser-Toolbar (`Alle Städte` oder konkrete Stadt)
+  - Linie kann direkt stadtübergreifend ausgewählt und geladen werden
+- **PDF-Bestand nacherzeugen**:
+  - Neuer Button `PDFs nacherzeugen` im Linienbrowser
+  - Neuer API-Endpunkt `api/regenerate_pdfs.php` erstellt fehlende PDFs aus bestehenden JSON-Linien neu
+- **Löschen-Hinweis aktualisiert**:
+  - Dialogtext nennt jetzt JSON + GPX + PDF
+
 ## V2.0.190 - 2026-06-11
 - **Neuer fester PDF-Ablageort auf dem Server**:
   - PDFs werden jetzt zentral in `linien/<stadt>/pdf/` gespeichert

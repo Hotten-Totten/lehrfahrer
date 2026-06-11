@@ -66,7 +66,24 @@ function renderLineBrowser(lines) {
     sortSelect.appendChild(opt);
   });
 
+  const cityFilterSelect = document.createElement("select");
+  cityFilterSelect.className = "line-browser-sort";
+  const currentCityValue = String(citySelect?.value || "").trim();
+  const cityValues = Array.from(new Set(currentLines.map(line => String(line.city || "").trim()).filter(Boolean))).sort();
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = "Alle Städte";
+  cityFilterSelect.appendChild(allOpt);
+  cityValues.forEach(city => {
+    const opt = document.createElement("option");
+    opt.value = city;
+    opt.textContent = city.charAt(0).toUpperCase() + city.slice(1);
+    cityFilterSelect.appendChild(opt);
+  });
+  cityFilterSelect.value = cityValues.includes(currentCityValue) ? currentCityValue : "";
+
   toolbar.appendChild(searchInput);
+  toolbar.appendChild(cityFilterSelect);
   toolbar.appendChild(sortSelect);
   lineBrowserBody.appendChild(toolbar);
 
@@ -77,6 +94,9 @@ function renderLineBrowser(lines) {
     const q = searchInput.value.toLowerCase().trim();
     const sort = sortSelect.value;
     let filtered = currentLines.filter(line => {
+      if (cityFilterSelect.value && String(line.city || "").trim() !== cityFilterSelect.value) {
+        return false;
+      }
       if (!q) return true;
       return [line.lineName, line.routeName, line.directionName, line.city]
         .join(" ").toLowerCase().includes(q);
@@ -260,8 +280,12 @@ function renderLineBrowser(lines) {
 
         // Events
         loadBtn.addEventListener("click", async e => {
-          e.stopPropagation(); closeLineBrowser();
-          await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null);
+          e.stopPropagation();
+          closeLineBrowser();
+          if (citySelect && line.city) {
+            citySelect.value = line.city;
+          }
+          await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null, line.city || null);
         });
 
         dlJsonBtn.addEventListener("click", e => {
@@ -301,7 +325,7 @@ function renderLineBrowser(lines) {
         });
 
         confirmYes.addEventListener("click", async () => {
-          const deleted = await deleteLineFromServer(line.fileBase || line.id, true, line.lineFolder || null);
+          const deleted = await deleteLineFromServer(line.fileBase || line.id, true, line.lineFolder || null, line.city || null);
           if (deleted) { currentLines = currentLines.filter(l => (l.fileBase || l.id) !== (line.fileBase || line.id)); renderList(); }
           else deleteConfirm.classList.add("hidden");
         });
@@ -320,6 +344,7 @@ function renderLineBrowser(lines) {
   }
 
   searchInput.addEventListener("input", renderList);
+  cityFilterSelect.addEventListener("change", renderList);
   sortSelect.addEventListener("change", renderList);
   renderList();
 }
@@ -327,12 +352,12 @@ function renderLineBrowser(lines) {
 // Öffnet den Linien-Browser und lädt die Linienliste vom Server
 async function openLineBrowser() {
   const requestSeq = ++lineBrowserRequestSeq;
-  const city = String(citySelect?.value || "").trim();
+  const city = "";
 
   lineBrowserModal.classList.remove("hidden");
-  lineBrowserBody.innerHTML = `<div class="line-browser-empty">Lade gespeicherte Linien${city ? " für " + city : ""}…</div>`;
+  lineBrowserBody.innerHTML = `<div class="line-browser-empty">Lade gespeicherte Linien aller Städte…</div>`;
 
-  const lines = await fetchLineListFromServer();
+  const lines = await fetchLineListFromServer(city);
 
   // Falls zwischenzeitlich erneut geöffnet/aktualisiert wurde: veraltetes Ergebnis ignorieren.
   if (requestSeq !== lineBrowserRequestSeq) {
@@ -355,5 +380,41 @@ async function openLineBrowser() {
   const refreshBtn = document.getElementById("lineBrowserRefreshBtn");
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => openLineBrowser());
+  }
+
+  const rebuildBtn = document.getElementById("lineBrowserRebuildPdfBtn");
+  if (rebuildBtn) {
+    rebuildBtn.addEventListener("click", async () => {
+      const city = String(citySelect?.value || "").trim();
+      const scopeText = city ? `für ${city}` : "für alle Städte";
+      const ok = confirm(`Fehlende PDF-Dateien ${scopeText} jetzt nacherzeugen?`);
+      if (!ok) return;
+
+      rebuildBtn.disabled = true;
+      const prevText = rebuildBtn.textContent;
+      rebuildBtn.textContent = "PDFs werden erstellt…";
+
+      try {
+        const response = await fetch("api/regenerate_pdfs.php", {
+          method: "POST",
+          headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ city })
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "PDF-Nacherzeugung fehlgeschlagen");
+        }
+
+        setStatus(`PDF-Nacherzeugung fertig: ${result.generatedCount}/${result.totalLines} erstellt (${result.cityScope || "alle Städte"})`);
+        await openLineBrowser();
+      } catch (err) {
+        error("PDF-Nacherzeugung fehlgeschlagen", err);
+        setStatus(err.message || "PDF-Nacherzeugung fehlgeschlagen.", "error");
+      } finally {
+        rebuildBtn.disabled = false;
+        rebuildBtn.textContent = prevText;
+      }
+    });
   }
 })();
