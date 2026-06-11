@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.171 - 2026-06-11
+- **Strato-Deploy auch ohne SSH-Key-Feld nutzbar gemacht**:
+  - Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) unterstützt jetzt zwei Modi:
+    - SSH-Key-Deploy über `STRATO_SSH_KEY` (wie bisher)
+    - Passwort-Deploy über `STRATO_PASSWORD` (Fallback für Strato-Oberflächen ohne Public-Key-Eingabe)
+  - Host-Key-Absicherung bleibt aktiv über `STRATO_KNOWN_HOSTS` oder automatisches `ssh-keyscan`
+  - Ziel: automatische Live-Deploys funktionieren auch in Tarifen, die nur SFTP+SSH mit Passwortverwaltung anzeigen
+
 ## V2.0.170 - 2026-06-11
 - **GitHub als zentrale Quelle und Strato-Deploy vorbereitet**:
   - Remote `origin` auf `https://github.com/Hotten-Totten/lehrfahrer.git` eingerichtet und lokaler `main` als aktueller Hauptstand nach GitHub gepusht
