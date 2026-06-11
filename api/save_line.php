@@ -13,6 +13,18 @@ function sanitizeForFilesystem(string $value): string {
     return trim($value, '_');
 }
 
+function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
+    $prefix = trim(sanitizeForFilesystem($lineFolder));
+    $base = trim(sanitizeForFilesystem($fileBase));
+    if ($base === '') {
+        $base = 'linie';
+    }
+    if ($prefix !== '') {
+        return $prefix . '__' . $base . '.pdf';
+    }
+    return $base . '.pdf';
+}
+
 function hasDiversionSuffix(string $value): bool {
     return (bool)preg_match('/(^|[_\s-])Umleitung[_\s-]?\d{2}($|[_\s-])/i', trim($value));
 }
@@ -386,7 +398,7 @@ if ($result === false) {
 }
 
 $pdfSaved = false;
-$pdfFile = $fileBase . '.pdf';
+$pdfFile = buildPdfStorageFileName($lineFolder, $fileBase);
 $pdfPath = $lineDir . '/' . $pdfFile;
 $pdfError = null;
 $pdfSavedPath = null;
@@ -396,14 +408,25 @@ try {
     $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
 
     $candidates = [];
-    $candidates[] = $lineDir . '/' . $pdfFile;
+
+    // Primärer Speicherort: zentraler PDF-Ordner je Stadt (analog alter gpx-Idee).
+    $cityPdfDir = $cityDir . '/pdf';
+    if (!is_dir($cityPdfDir)) {
+        @mkdir($cityPdfDir, 0775, true);
+    }
+    if (is_dir($cityPdfDir)) {
+        $candidates[] = $cityPdfDir . '/' . $pdfFile;
+    }
+
+    // Fallbacks für ältere Struktur / restriktive Hosts.
+    $candidates[] = $lineDir . '/' . $fileBase . '.pdf';
 
     $gpxDir = $lineDir . '/gpx';
     if (!is_dir($gpxDir)) {
         @mkdir($gpxDir, 0775, true);
     }
     if (is_dir($gpxDir)) {
-        $candidates[] = $gpxDir . '/' . $pdfFile;
+        $candidates[] = $gpxDir . '/' . $fileBase . '.pdf';
     }
 
     foreach ($candidates as $candidatePath) {

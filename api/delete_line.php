@@ -13,6 +13,18 @@ function sanitizeForFilesystem(string $value): string {
     return trim($value, '_');
 }
 
+function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
+    $prefix = trim(sanitizeForFilesystem($lineFolder));
+    $base = trim(sanitizeForFilesystem($fileBase));
+    if ($base === '') {
+        $base = 'linie';
+    }
+    if ($prefix !== '') {
+        return $prefix . '__' . $base . '.pdf';
+    }
+    return $base . '.pdf';
+}
+
 $raw = file_get_contents('php://input');
 $data = json_decode($raw, true);
 
@@ -58,10 +70,16 @@ $cityDir  = $baseDir . '/linien/' . $city;
 if ($lineFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $line . '.json')) {
     $jsonPath = $cityDir . '/' . $lineFolder . '/' . $line . '.json';
     $gpxPath  = $cityDir . '/' . $lineFolder . '/' . $line . '.gpx';
+    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName($lineFolder, $line);
+    $legacyPdfPathA = $cityDir . '/' . $lineFolder . '/' . $line . '.pdf';
+    $legacyPdfPathB = $cityDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
     $folderToClean = $cityDir . '/' . $lineFolder;
 } else {
     $jsonPath = $cityDir . '/' . $line . '.json';
     $gpxPath  = $cityDir . '/gpx/' . $line . '.gpx';
+    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName('', $line);
+    $legacyPdfPathA = $cityDir . '/' . $line . '.pdf';
+    $legacyPdfPathB = $cityDir . '/gpx/' . $line . '.pdf';
     $folderToClean = null;
 }
 
@@ -76,9 +94,18 @@ if (!file_exists($jsonPath)) {
 
 $deletedJson = unlink($jsonPath);
 $deletedGpx = false;
+$deletedPdf = false;
 
 if (file_exists($gpxPath)) {
     $deletedGpx = unlink($gpxPath);
+}
+
+foreach ([$pdfPath, $legacyPdfPathA, $legacyPdfPathB] as $candidatePdfPath) {
+    if ($candidatePdfPath && file_exists($candidatePdfPath)) {
+        if (unlink($candidatePdfPath)) {
+            $deletedPdf = true;
+        }
+    }
 }
 
 // Leeren Linienordner aufräumen
@@ -103,5 +130,6 @@ echo json_encode([
     'city' => $city,
     'line' => $line,
     'deletedJson' => $deletedJson,
-    'deletedGpx' => $deletedGpx
+    'deletedGpx' => $deletedGpx,
+    'deletedPdf' => $deletedPdf
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

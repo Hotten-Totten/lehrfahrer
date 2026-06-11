@@ -6,6 +6,28 @@ header('Content-Type: application/json; charset=utf-8');
 $baseDir = dirname(__DIR__);
 $linienBaseDir = $baseDir . '/linien';
 
+function sanitizeForFilesystem(string $value): string {
+    $value = str_replace(
+        ['ä','ö','ü','Ä','Ö','Ü','ß'],
+        ['ae','oe','ue','Ae','Oe','Ue','ss'],
+        $value
+    );
+    $value = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $value);
+    return trim($value, '_');
+}
+
+function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
+    $prefix = trim(sanitizeForFilesystem($lineFolder));
+    $base = trim(sanitizeForFilesystem($fileBase));
+    if ($base === '') {
+        $base = 'linie';
+    }
+    if ($prefix !== '') {
+        return $prefix . '__' . $base . '.pdf';
+    }
+    return $base . '.pdf';
+}
+
 if (!is_dir($linienBaseDir)) {
     echo json_encode([
         'ok' => true,
@@ -58,12 +80,15 @@ foreach ($cities as $city) {
                 $fileBase = pathinfo($file, PATHINFO_FILENAME);
                 $fileMtime = @filemtime($file);
                 $gpxPath  = $subPath . '/' . $fileBase . '.gpx';
+                $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName($entry, $fileBase);
                 $pdfPath  = $subPath . '/' . $fileBase . '.pdf';
                 $pdfPathGpx = $subPath . '/gpx/' . $fileBase . '.pdf';
                 $hasGpx   = file_exists($gpxPath);
-                $hasPdf   = file_exists($pdfPath) || file_exists($pdfPathGpx);
+                $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
                 $pdfFileName = null;
-                if (file_exists($pdfPath)) {
+                if (file_exists($pdfPathCentral)) {
+                    $pdfFileName = basename($pdfPathCentral);
+                } elseif (file_exists($pdfPath)) {
                     $pdfFileName = basename($pdfPath);
                 } elseif (file_exists($pdfPathGpx)) {
                     $pdfFileName = basename($pdfPathGpx);
@@ -102,12 +127,15 @@ foreach ($cities as $city) {
         $fileBase = pathinfo($file, PATHINFO_FILENAME);
         $fileMtime = @filemtime($file);
         $gpxPath  = $cityDir . '/gpx/' . $fileBase . '.gpx';
+        $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName('', $fileBase);
         $pdfPath  = $cityDir . '/' . $fileBase . '.pdf';
         $pdfPathGpx = $cityDir . '/gpx/' . $fileBase . '.pdf';
         $hasGpx   = file_exists($gpxPath);
-        $hasPdf   = file_exists($pdfPath) || file_exists($pdfPathGpx);
+        $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
         $pdfFileName = null;
-        if (file_exists($pdfPath)) {
+        if (file_exists($pdfPathCentral)) {
+            $pdfFileName = basename($pdfPathCentral);
+        } elseif (file_exists($pdfPath)) {
             $pdfFileName = basename($pdfPath);
         } elseif (file_exists($pdfPathGpx)) {
             $pdfFileName = basename($pdfPathGpx);

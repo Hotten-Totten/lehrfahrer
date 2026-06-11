@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.0.190 - 2026-06-11
+- **Neuer fester PDF-Ablageort auf dem Server**:
+  - PDFs werden jetzt zentral in `linien/<stadt>/pdf/` gespeichert
+  - Dateiname enthält den Linienordner als Prefix (`<lineFolder>__<fileBase>.pdf`), damit nichts kollidiert
+- **Löschen synchronisiert alle Formate**:
+  - Beim Löschen einer Linie wird jetzt auch die zugehörige PDF mit gelöscht
+  - Zusätzlich bleiben Legacy-Fallbackpfade für ältere PDF-Ablagen aktiv
+- **API-Konsistenz**:
+  - `list_lines.php`, `load_line.php` und `download_line_pdf.php` berücksichtigen den neuen PDF-Ort
+
 ## V2.0.189 - 2026-06-11
 - **Linienbrowser zeigt PDF jetzt sichtbar an**:
   - Dateibadges erweitert um `PDF ✓` bzw. `PDF fehlt`

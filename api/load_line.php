@@ -11,6 +11,18 @@ function sanitizeForFilesystem(string $value): string {
     return trim($value, '_');
 }
 
+function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
+    $prefix = trim(sanitizeForFilesystem($lineFolder));
+    $base = trim(sanitizeForFilesystem($fileBase));
+    if ($base === '') {
+        $base = 'linie';
+    }
+    if ($prefix !== '') {
+        return $prefix . '__' . $base . '.pdf';
+    }
+    return $base . '.pdf';
+}
+
 $baseDir = dirname(__DIR__);
 
 $city = trim($_GET['city'] ?? 'cottbus');
@@ -88,7 +100,10 @@ if (file_exists($gpxPath)) {
 }
 
 $pdfFile = null;
-$pdfPath = $dirName . '/' . $baseName . '.pdf';
+$pdfPath = $lineDir . '/pdf/' . buildPdfStorageFileName($lineFolder, $baseName);
+if (!file_exists($pdfPath)) {
+    $pdfPath = $dirName . '/' . $baseName . '.pdf';
+}
 if (file_exists($pdfPath)) {
     $pdfFile = basename($pdfPath);
 }

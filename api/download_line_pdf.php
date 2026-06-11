@@ -9,6 +9,18 @@ function sanitizeForFilesystem(string $value): string {
     return trim($value, '_');
 }
 
+function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
+    $prefix = trim(sanitizeForFilesystem($lineFolder));
+    $base = trim(sanitizeForFilesystem($fileBase));
+    if ($base === '') {
+        $base = 'linie';
+    }
+    if ($prefix !== '') {
+        return $prefix . '__' . $base . '.pdf';
+    }
+    return $base . '.pdf';
+}
+
 $baseDir = dirname(__DIR__);
 
 $city = trim($_GET['city'] ?? 'cottbus');
@@ -38,7 +50,11 @@ if ($line === '') {
 $lineDir = $baseDir . '/linien/' . $city;
 $pdfPath = '';
 
-if ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
+$pdfStorageFile = buildPdfStorageFileName($lineFolder, $line);
+
+if (file_exists($lineDir . '/pdf/' . $pdfStorageFile)) {
+    $pdfPath = $lineDir . '/pdf/' . $pdfStorageFile;
+} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/' . $line . '.pdf';
 } elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
