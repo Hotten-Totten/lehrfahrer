@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.176 - 2026-06-11
+- **Deploy-Nacharbeiten abgeschlossen**:
+  - Lokale Public-Key-Datei `strato_actions.pub` aus dem Private-Key neu generiert (Datei bereinigt)
+  - Neue Deploy-Dokumentation [DEPLOY.md](DEPLOY.md) hinzugefuegt mit finalen Secrets, Ablauf und Strato-Hinweisen
+  - Ziel: reproduzierbarer Betrieb fuer Push -> GitHub -> Strato Live-Deploy
+
 ## V2.0.175 - 2026-06-11
 - **Strato-Zielpfad robust normalisiert**:
   - In [deploy-strato.yml](.github/workflows/deploy-strato.yml) wird `STRATO_TARGET_PATH` jetzt auf einen relativen Pfad zum Startverzeichnis normalisiert
