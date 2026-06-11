@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.172 - 2026-06-11
+- **GitHub Actions Node-20 Deprecation-Warnung behoben**:
+  - Deploy-Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) auf `actions/checkout@v5` angehoben
+  - `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` im Workflow gesetzt, damit der Job bereits jetzt auf Node 24 läuft
+  - Ziel: keine Warnung mehr zur Node-20-Abkündigung im Deploy-Run
+
 ## V2.0.171 - 2026-06-11
 - **Strato-Deploy auch ohne SSH-Key-Feld nutzbar gemacht**:
   - Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) unterstützt jetzt zwei Modi:
