@@ -78,6 +78,7 @@ const debugPanelBody = document.getElementById("debugPanelBody");
 const debugToggleBtn = document.getElementById("debugToggleBtn");
 const debugClearBtn = document.getElementById("debugClearBtn");
 const debugClearCacheBtn = document.getElementById("debugClearCacheBtn");
+const showInputsBtn = document.getElementById("showInputsBtn");
 
 // Datei-Aktionen
 const clearBtn = document.getElementById("clearBtn");

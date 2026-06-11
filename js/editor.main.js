@@ -592,6 +592,18 @@ function startInputMaskWatchdog() {
       topbar.style.opacity = "1";
       topbar.style.maxHeight = "none";
     }
+
+    if (topbar) {
+      const groups = topbar.querySelectorAll(".top-group");
+      groups.forEach(group => {
+        if (group.classList.contains("hidden") || group.style.display === "none") {
+          group.classList.remove("hidden");
+          group.style.display = "flex";
+          group.style.visibility = "visible";
+          group.style.opacity = "1";
+        }
+      });
+    }
   }, 1000);
 }
 

@@ -31,6 +31,12 @@ const quickNewBtn = document.getElementById("quickNewBtn");
 if (quickNewBtn) {
   quickNewBtn.addEventListener("click", createNewLine);
 }
+if (showInputsBtn) {
+  showInputsBtn.addEventListener("click", () => {
+    showLineInputFieldsForNewLine();
+    setStatus("Eingabemaske manuell geöffnet.");
+  });
+}
 
 if (undoBtn) undoBtn.addEventListener("click", undoHistory);
 if (redoBtn) redoBtn.addEventListener("click", redoHistory);

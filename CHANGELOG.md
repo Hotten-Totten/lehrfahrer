@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.180 - 2026-06-11
+- **Neu-Problem weiter abgesichert (Eingabemaske)**:
+  - Neuer Quickbar-Button `Eingabemaske`, der die obere Eingabeleiste jederzeit manuell wieder öffnet
+  - Watchdog erweitert: stellt nicht nur `topbar`/`menubar`, sondern auch einzelne `.top-group`-Felder wieder her, falls sie ausgeblendet werden
+  - Ziel: auch im Fehlerfall sofortige Wiederherstellung der Eingabe ohne Seiten-Reload
+
 ## V2.0.179 - 2026-06-11
 - **Neu-Flow stabilisiert (Eingabemaske bleibt nutzbar)**:
   - Browser-`confirm` bei `Neu` durch internen Editor-Dialog ersetzt
