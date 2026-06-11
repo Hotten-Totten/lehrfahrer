@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.189 - 2026-06-11
+- **Linienbrowser zeigt PDF jetzt sichtbar an**:
+  - Dateibadges erweitert um `PDF ✓` bzw. `PDF fehlt`
+  - Neuer `↓ PDF`-Button bei vorhandener PDF-Datei
+  - Download läuft über `api/download_line_pdf.php` (robuster als Direktpfad)
+- **Wichtig für Prüfung**:
+  - Wenn im Linienbrowser `PDF fehlt` steht, ist serverseitig für diese Linie keine PDF gefunden worden
+
 ## V2.0.188 - 2026-06-11
 - **PDF-Erfolg jetzt nur bei echter Datei**:
   - API meldet `pdfSaved=true` nur, wenn die PDF nach dem Schreiben wirklich existiert und >0 Bytes hat

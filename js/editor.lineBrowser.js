@@ -148,7 +148,7 @@ function renderLineBrowser(lines) {
         if (line.savedAt) parts.push(formatSavedAt(line.savedAt));
         meta.textContent = parts.join("  ·  ");
 
-        // Datei-Badges (JSON / GPX)
+        // Datei-Badges (JSON / GPX / PDF)
         const fileBadges = document.createElement("div");
         fileBadges.className = "lbr-file-badges";
         const jsonBadge = document.createElement("span");
@@ -159,6 +159,10 @@ function renderLineBrowser(lines) {
         gpxBadge.className = "lbr-file-badge " + (line.hasGpx ? "lbr-file-badge-gpx" : "lbr-file-badge-missing");
         gpxBadge.textContent = line.hasGpx ? "GPX ✓" : "GPX fehlt";
         fileBadges.appendChild(gpxBadge);
+        const pdfBadge = document.createElement("span");
+        pdfBadge.className = "lbr-file-badge " + (line.hasPdf ? "lbr-file-badge-gpx" : "lbr-file-badge-missing");
+        pdfBadge.textContent = line.hasPdf ? "PDF ✓" : "PDF fehlt";
+        fileBadges.appendChild(pdfBadge);
         if (isDiversionLine(line)) {
           const diversionBadge = document.createElement("span");
           diversionBadge.className = "lbr-file-badge lbr-file-badge-diversion";
@@ -199,6 +203,23 @@ function renderLineBrowser(lines) {
             document.body.appendChild(a); a.click(); a.remove();
           });
           actions.appendChild(dlGpxBtn);
+        }
+        if (line.hasPdf) {
+          const dlPdfBtn = makeBtn("↓ PDF", "lbr-btn-download");
+          dlPdfBtn.addEventListener("click", e => {
+            e.stopPropagation();
+            const params = new URLSearchParams();
+            params.set("city", line.city || "cottbus");
+            params.set("line", line.fileBase || line.id || "");
+            if (line.lineFolder) {
+              params.set("lineFolder", line.lineFolder);
+            }
+            const a = document.createElement("a");
+            a.href = "api/download_line_pdf.php?" + params.toString();
+            a.download = (line.fileBase || line.id || "linie") + ".pdf";
+            document.body.appendChild(a); a.click(); a.remove();
+          });
+          actions.appendChild(dlPdfBtn);
         }
         actions.appendChild(renameBtn);
         actions.appendChild(deleteBtn);
