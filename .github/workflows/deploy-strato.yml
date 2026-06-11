@@ -45,7 +45,7 @@ jobs:
           TARGET="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}:${{ secrets.STRATO_TARGET_PATH }}"
 
           if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
-            rsync -az --delete \
+            rsync -az \
               --exclude ".git/" \
               --exclude ".github/" \
               --exclude "WorkingSystem/" \
@@ -60,7 +60,7 @@ jobs:
               ./ "$TARGET"
           else
             export SSHPASS="${{ secrets.STRATO_PASSWORD }}"
-            sshpass -e rsync -az --delete \
+            sshpass -e rsync -az \
               --exclude ".git/" \
               --exclude ".github/" \
               --exclude "WorkingSystem/" \

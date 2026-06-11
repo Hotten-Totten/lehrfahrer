@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.173 - 2026-06-11
+- **Strato Deploy-Fehler bei `tmp*`-Ordnern behoben**:
+  - `rsync --delete` im Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) entfernt
+  - Ursache: Strato verweigert das Loeschen bestimmter system-/temp-Verzeichnisse im Zielpfad (`Operation not permitted`)
+  - Ergebnis: Deploy aktualisiert Dateien weiterhin, ohne an geschuetzten Server-Ordnern zu scheitern
+
 ## V2.0.172 - 2026-06-11
 - **GitHub Actions Node-20 Deprecation-Warnung behoben**:
   - Deploy-Workflow [deploy-strato.yml](.github/workflows/deploy-strato.yml) auf `actions/checkout@v5` angehoben
