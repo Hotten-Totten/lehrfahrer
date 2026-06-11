@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.179 - 2026-06-11
+- **Neu-Flow stabilisiert (Eingabemaske bleibt nutzbar)**:
+  - Browser-`confirm` bei `Neu` durch internen Editor-Dialog ersetzt
+  - Inputmaske (`topbar` + `menubar`) wird nach `Neu` länger nachgesichert (mehrere Delayed-Restores)
+  - Zusätzlich globaler Watchdog ergänzt, der ein versehentliches Ausblenden der Eingabemaske automatisch rückgängig macht
+  - Ziel: Eingabemaske verschwindet nicht mehr dauerhaft nach dem Anlegen/Speichern und ist über `Neu` zuverlässig wieder verfügbar
+
 ## V2.0.178 - 2026-06-11
 - **Debug-Panel: Cache-Reset-Button ergänzt**:
   - Neuer Button `Cache reset` im Debug-Panel unten rechts

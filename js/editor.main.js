@@ -308,6 +308,66 @@ function askTextInputModal({ title, message, defaultValue = "", placeholder = ""
   });
 }
 
+function showConfirmDialog({
+  title = "Bestätigung",
+  message = "Bist du sicher?",
+  okText = "OK",
+  cancelText = "Abbrechen"
+}) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+
+    const box = document.createElement("div");
+    box.className = "save-confirm-box";
+    box.innerHTML = `
+      <div class="save-confirm-header">
+        <h3>${title}</h3>
+      </div>
+      <div class="save-confirm-body">
+        <div class="save-confirm-row" style="display:block;border-bottom:none;padding-bottom:6px;line-height:1.5;">
+          ${message}
+        </div>
+      </div>
+      <div class="save-confirm-actions">
+        <button type="button" class="save-confirm-btn-cancel" id="inlineConfirmCancelBtn">${cancelText}</button>
+        <button type="button" class="save-confirm-btn-ok" id="inlineConfirmOkBtn">${okText}</button>
+      </div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const okBtn = box.querySelector("#inlineConfirmOkBtn");
+    const cancelBtn = box.querySelector("#inlineConfirmCancelBtn");
+
+    function cleanup(result) {
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onOverlay);
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      resolve(result);
+    }
+
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onOverlay(e) {
+      if (e.target === overlay) cleanup(false);
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") cleanup(false);
+      if (e.key === "Enter") cleanup(true);
+    }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onOverlay);
+    document.addEventListener("keydown", onKeyDown);
+    okBtn.focus();
+  });
+}
+
 function updateApiTokenStatusUI() {
   const el = document.getElementById("apiTokenStatus");
   if (!el) return;
@@ -506,8 +566,42 @@ async function createCityOnServer() {
   }
 }
 
-function createNewLine() {
-  const ok = confirm("Wirklich eine neue Linie erstellen?\n\nUngespeicherte Änderungen gehen dabei verloren.");
+function startInputMaskWatchdog() {
+  if (window.__lehrfahrerInputMaskWatchdogActive) {
+    return;
+  }
+  window.__lehrfahrerInputMaskWatchdogActive = true;
+
+  setInterval(() => {
+    const topbar = document.getElementById("topbar");
+    const menubar = document.getElementById("menubar");
+
+    if (menubar && (menubar.classList.contains("hidden") || menubar.style.display === "none")) {
+      menubar.classList.remove("hidden");
+      menubar.style.display = "";
+      menubar.style.visibility = "visible";
+      menubar.style.pointerEvents = "auto";
+      menubar.style.opacity = "1";
+    }
+
+    if (topbar && (topbar.classList.contains("hidden") || topbar.style.display === "none")) {
+      topbar.classList.remove("hidden");
+      topbar.style.display = "flex";
+      topbar.style.visibility = "visible";
+      topbar.style.pointerEvents = "auto";
+      topbar.style.opacity = "1";
+      topbar.style.maxHeight = "none";
+    }
+  }, 1000);
+}
+
+async function createNewLine() {
+  const ok = await showConfirmDialog({
+    title: "Neue Linie erstellen",
+    message: "Wirklich eine neue Linie erstellen?<br><br>Ungespeicherte Änderungen gehen dabei verloren.",
+    okText: "Neue Linie",
+    cancelText: "Abbrechen"
+  });
 
   if (!ok) return;
 
@@ -605,6 +699,9 @@ function showLineInputFieldsForNewLine() {
 
   setTimeout(forceShowInputMask, 80);
   setTimeout(forceShowInputMask, 260);
+  setTimeout(forceShowInputMask, 900);
+  setTimeout(forceShowInputMask, 1800);
+  setTimeout(forceShowInputMask, 3200);
 
   setStatus("Eingabemenü geöffnet: Bitte oben Linie/Route/Richtung eingeben.");
 }
@@ -616,6 +713,7 @@ function showLineInputFieldsForNewLine() {
 initDebugPanel();
 updateApiTokenStatusUI();
 loadEditorVersionBadge();
+startInputMaskWatchdog();
 
 createCatalogMarkers();
 updateCatalogMarkerVisibilityNow();
