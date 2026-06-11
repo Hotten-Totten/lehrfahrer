@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.0.183 - 2026-06-11
+- **Haltestellen-Button wieder im Standard-Look**:
+  - Helllila Spezialfarbe wieder entfernt
+  - Aktiver Haltestellenmodus wieder mit normaler blauer Hervorhebung
+  - Label bleibt wieder konstant bei `Haltestelle Auswahl`
+- **Quickbar aufgeräumt**:
+  - Zusatzbutton `Eingabemaske` entfernt
+  - Scroll-to-top-Fix über `Neu` bleibt bestehen
+
 ## V2.0.182 - 2026-06-11
 - **Haltestellen-Modus klarer sichtbar**:
   - Wenn der manuelle Haltestellenmodus aktiv ist (`freeStop`), wird der Quickbar-Button helllila hervorgehoben

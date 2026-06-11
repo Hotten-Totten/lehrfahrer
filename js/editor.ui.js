@@ -101,12 +101,7 @@ function updateStats() {
 // Markiert Modus-Buttons passend zum aktuellen Bearbeitungsmodus.
 function updateModeButtons() {
   const currentMode = state.routeMode;
-  const isManualStopMode = currentMode === "freeStop";
-  const isStopMode = isManualStopMode || currentMode === "catalogStop";
-
-  modeFreeStopBtn.classList.toggle("active", isStopMode);
-  modeFreeStopBtn.classList.toggle("active-manual-stop", isManualStopMode);
-  modeFreeStopBtn.textContent = isManualStopMode ? "Haltestelle Manuell" : "Haltestelle Auswahl";
+  modeFreeStopBtn.classList.toggle("active", currentMode === "freeStop" || currentMode === "catalogStop");
   modeRouteBtn.classList.toggle("active", currentMode === "route" || currentMode === "manual");
   if (modeSelectBtn) modeSelectBtn.classList.toggle("active", currentMode === "select");
 

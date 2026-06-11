@@ -116,16 +116,6 @@ body {
   font-weight: bold;
 }
 
-#quickbar button.active-manual-stop {
-  background: #efe3ff;
-  border: 1px solid #8b5cf6;
-  color: #6d28d9;
-}
-
-#quickbar button.active-manual-stop:hover {
-  background: #e8d5ff;
-}
-
 .token-status {
   margin-left: auto;
   align-self: center;

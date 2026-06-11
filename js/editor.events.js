@@ -31,19 +31,13 @@ const quickNewBtn = document.getElementById("quickNewBtn");
 if (quickNewBtn) {
   quickNewBtn.addEventListener("click", createNewLine);
 }
-if (showInputsBtn) {
-  showInputsBtn.addEventListener("click", () => {
-    showLineInputFieldsForNewLine();
-    setStatus("Eingabemaske manuell geöffnet.");
-  });
-}
 
 if (undoBtn) undoBtn.addEventListener("click", undoHistory);
 if (redoBtn) redoBtn.addEventListener("click", redoHistory);
 
 // ---------- Modus ----------
 
-if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle manuell"));
+if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle"));
 if (modeRouteBtn) modeRouteBtn.addEventListener("click", switchToManualRouteMode);
 if (modeSelectBtn) modeSelectBtn.addEventListener("click", () => setMode("select", "Modus: Auswählen"));
 if (startTrackBetweenStopsBtn) {
