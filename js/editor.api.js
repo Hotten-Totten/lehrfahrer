@@ -421,6 +421,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder) {
         stopCount: state.stops.length,
         routePointCount: state.routePoints.length,
         gpxSaved,
+        pdfSaved,
         savedAt: result.savedAt || new Date().toISOString()
       });
     }

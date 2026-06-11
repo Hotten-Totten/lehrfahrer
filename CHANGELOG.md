@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.0.188 - 2026-06-11
+- **PDF-Erfolg jetzt nur bei echter Datei**:
+  - API meldet `pdfSaved=true` nur, wenn die PDF nach dem Schreiben wirklich existiert und >0 Bytes hat
+  - Verhindert "false positive" Statusmeldungen
+- **Speicher-UI korrigiert**:
+  - Save-Bestätigung zeigt jetzt JSON + GPX + PDF
+  - Save-Toast zeigt PDF-Badge, wenn PDF tatsächlich gespeichert wurde
+
 ## V2.0.187 - 2026-06-11
 - **PDF-Speichern weiter gehärtet**:
   - Speichert PDF jetzt mit mehreren Fallback-Pfaden (Linienordner und `gpx`-Unterordner)

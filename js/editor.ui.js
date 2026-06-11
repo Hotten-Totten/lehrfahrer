@@ -17,7 +17,7 @@ function setStatus(text, level = "info") {
 }
 
 // Zeigt einen kurzen Toast nach dem Speichern an.
-// info = { fileBase, city, stopCount, routePointCount, gpxSaved, savedAt }
+// info = { fileBase, city, stopCount, routePointCount, gpxSaved, pdfSaved, savedAt }
 let _saveToastTimer = null;
 function showSaveToast(info) {
   let toast = document.getElementById("saveToast");
@@ -31,16 +31,16 @@ function showSaveToast(info) {
     ? new Date(info.savedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : "";
 
-  const gpxBadge = info.gpxSaved
-    ? '<span class="toast-badge">JSON</span><span class="toast-badge">GPX</span>'
-    : '<span class="toast-badge">JSON</span>';
+  const badges = ['<span class="toast-badge">JSON</span>'];
+  if (info.gpxSaved) badges.push('<span class="toast-badge">GPX</span>');
+  if (info.pdfSaved) badges.push('<span class="toast-badge">PDF</span>');
 
   toast.innerHTML =
     '<div class="toast-title">&#10003; Gespeichert</div>' +
     '<div class="toast-row"><span class="toast-label">Datei:</span> ' + (info.fileBase || "–") + '</div>' +
     '<div class="toast-row"><span class="toast-label">Ort:</span> ' + (info.city || "–") + '</div>' +
     '<div class="toast-row"><span class="toast-label">Haltestellen:</span> ' + (info.stopCount ?? "–") + ' &nbsp;|&nbsp; <span class="toast-label">Punkte:</span> ' + (info.routePointCount ?? "–") + '</div>' +
-    '<div class="toast-row" style="margin-top:4px">' + gpxBadge + (time ? '<span style="opacity:.65;font-size:11px;margin-left:4px">' + time + '</span>' : '') + '</div>';
+    '<div class="toast-row" style="margin-top:4px">' + badges.join('') + (time ? '<span style="opacity:.65;font-size:11px;margin-left:4px">' + time + '</span>' : '') + '</div>';
 
   // Animation
   toast.classList.remove("visible");

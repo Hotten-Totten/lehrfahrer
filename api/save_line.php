@@ -230,6 +230,11 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     return buildSimplePdf($pages);
 }
 
+function isRealPdfFile(string $path): bool {
+    clearstatcache(true, $path);
+    return is_file($path) && filesize($path) > 0;
+}
+
 $baseDir = dirname(__DIR__);
 
 $raw = file_get_contents('php://input');
@@ -406,7 +411,7 @@ try {
 
         $tmpPath = $candidatePath . '.tmp';
         $tmpWrite = @file_put_contents($tmpPath, $pdfBinary);
-        if ($tmpWrite !== false && @rename($tmpPath, $candidatePath)) {
+        if ($tmpWrite !== false && @rename($tmpPath, $candidatePath) && isRealPdfFile($candidatePath)) {
             $pdfSaved = true;
             $pdfSavedPath = $candidatePath;
             $pdfPath = $candidatePath;
@@ -417,7 +422,7 @@ try {
         }
 
         $directWrite = @file_put_contents($candidatePath, $pdfBinary);
-        if ($directWrite !== false) {
+        if ($directWrite !== false && isRealPdfFile($candidatePath)) {
             $pdfSaved = true;
             $pdfSavedPath = $candidatePath;
             $pdfPath = $candidatePath;
@@ -426,7 +431,7 @@ try {
     }
 
     if (!$pdfSaved) {
-        $pdfError = 'PDF konnte nicht geschrieben werden (Pruefe Rechte/Pfad)';
+        $pdfError = 'PDF konnte nicht dauerhaft geschrieben werden (Datei nicht vorhanden oder leer)';
     }
 } catch (Throwable $pdfException) {
     $pdfError = $pdfException->getMessage();
