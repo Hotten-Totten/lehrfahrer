@@ -9,6 +9,11 @@ body {
   color: #222;
 }
 
+:root {
+  --menubar-height: 78px;
+  --editor-chrome-height: 118px;
+}
+
 /* =========================
    MENUBAR (sticky, vertikal gestapelt)
 ========================= */
@@ -193,8 +198,9 @@ body {
   padding: 10px 12px;
   background: #ffffff;
   border-bottom: 1px solid #ccc;
-  position: relative;
-  z-index: 1000;
+  position: sticky;
+  top: var(--menubar-height);
+  z-index: 1500;
 }
 
 #topbar.topbar-attention {
@@ -369,7 +375,7 @@ button.danger:hover {
 ========================= */
 #layout {
   display: flex;
-  height: calc(100vh - 118px);
+  height: calc(100vh - var(--editor-chrome-height));
 }
 
 #mapWrap {
@@ -381,7 +387,7 @@ button.danger:hover {
 
 #map {
   width: 100%;
-  height: calc(100vh - 118px);
+  height: calc(100vh - var(--editor-chrome-height));
   min-height: 500px;
 }
 

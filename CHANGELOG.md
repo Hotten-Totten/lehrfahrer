@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.0.202 - 2026-06-11
+- **Editor-Eingabemaske bleibt dauerhaft sichtbar**:
+  - Topbar mit Ort/Linie/Route/Richtung ist jetzt dauerhaft sticky unter der Menüleiste
+  - Dynamische Höhenberechnung sorgt dafür, dass Map/Layout sauber mit der sichtbaren Eingabemaske arbeiten
+  - Kein "Maske weg"-Effekt mehr beim Arbeiten oder nach Größenänderungen
+
 ## V2.0.201 - 2026-06-11
 - **Versionsanzeige stabilisiert**:
   - Editor-Badge wird nicht mehr auf eine ältere Version zurückgesetzt

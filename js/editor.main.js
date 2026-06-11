@@ -647,7 +647,28 @@ function forceScrollToEditorTop() {
   }
 }
 
+function updateEditorChromeLayoutMetrics() {
+  const menubar = document.getElementById("menubar");
+  const topbar = document.getElementById("topbar");
+  if (!menubar || !topbar) {
+    return;
+  }
+
+  const menubarHeight = Math.ceil(menubar.getBoundingClientRect().height || 0);
+  const topbarHeight = Math.ceil(topbar.getBoundingClientRect().height || 0);
+
+  if (menubarHeight > 0) {
+    document.documentElement.style.setProperty("--menubar-height", `${menubarHeight}px`);
+  }
+
+  const chromeHeight = menubarHeight + topbarHeight;
+  if (chromeHeight > 0) {
+    document.documentElement.style.setProperty("--editor-chrome-height", `${chromeHeight}px`);
+  }
+}
+
 async function createNewLine() {
+  updateEditorChromeLayoutMetrics();
   forceScrollToEditorTop();
 
   const ok = await showConfirmDialog({
@@ -696,6 +717,7 @@ async function createNewLine() {
 
   setMode("freeStop", "Neue Linie erstellt. Modus: Haltestelle");
   showLineInputFieldsForNewLine();
+  updateEditorChromeLayoutMetrics();
 }
 
 function showLineInputFieldsForNewLine() {
@@ -768,6 +790,12 @@ initDebugPanel();
 updateApiTokenStatusUI();
 loadEditorVersionBadge();
 startInputMaskWatchdog();
+updateEditorChromeLayoutMetrics();
+
+window.addEventListener("resize", updateEditorChromeLayoutMetrics);
+setTimeout(updateEditorChromeLayoutMetrics, 80);
+setTimeout(updateEditorChromeLayoutMetrics, 260);
+setTimeout(updateEditorChromeLayoutMetrics, 900);
 
 createCatalogMarkers();
 updateCatalogMarkerVisibilityNow();
