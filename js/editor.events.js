@@ -25,6 +25,7 @@ if (lineBrowserModal) {
 
 if (debugToggleBtn) debugToggleBtn.addEventListener("click", toggleDebugPanel);
 if (debugClearBtn) debugClearBtn.addEventListener("click", clearDebugPanel);
+if (debugClearCacheBtn) debugClearCacheBtn.addEventListener("click", clearLehrfahrerCacheAndReload);
 
 const quickNewBtn = document.getElementById("quickNewBtn");
 if (quickNewBtn) {

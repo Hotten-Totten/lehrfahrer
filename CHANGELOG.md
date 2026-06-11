@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.178 - 2026-06-11
+- **Debug-Panel: Cache-Reset-Button ergänzt**:
+  - Neuer Button `Cache reset` im Debug-Panel unten rechts
+  - Löscht Browser-Caches, Service-Worker-Registrierungen sowie Local-/Session-Storage der Seite
+  - Führt danach automatisch einen harten Reload mit Cache-Busting-Parameter aus
+  - Ziel: schnell und zuverlässig die aktuellste Live-Version laden
+
 ## V2.0.177 - 2026-06-11
 - **Editor zeigt Versionsnummer automatisch an**:
   - Versions-Badge in der Editor-Quickbar integriert

@@ -72,3 +72,63 @@ function clearDebugPanel() {
   debugPanelBody.innerHTML = "";
   debug("Debug-Panel geleert");
 }
+
+async function clearLehrfahrerCacheAndReload() {
+  const confirmed = confirm(
+    "Lehrfahrer-Cache wirklich komplett löschen?\n\n" +
+    "Es werden Browser-Caches, Service Worker sowie Local-/Session-Storage für diese Seite entfernt."
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    if (typeof caches !== "undefined") {
+      const cacheKeys = await caches.keys();
+      await Promise.all(cacheKeys.map(key => caches.delete(key)));
+    }
+
+    if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(registration => registration.unregister()));
+    }
+
+    try {
+      localStorage.clear();
+    } catch (_err) {
+      // Ignorieren, wenn Storage gesperrt ist.
+    }
+
+    try {
+      sessionStorage.clear();
+    } catch (_err) {
+      // Ignorieren, wenn Storage gesperrt ist.
+    }
+
+    if (typeof indexedDB !== "undefined" && typeof indexedDB.databases === "function") {
+      const databases = await indexedDB.databases();
+      await Promise.all(
+        (databases || []).map(db => {
+          if (!db || !db.name) {
+            return Promise.resolve();
+          }
+
+          return new Promise(resolve => {
+            const request = indexedDB.deleteDatabase(db.name);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          });
+        })
+      );
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("cacheReset", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch (err) {
+    error("Cache-Reset fehlgeschlagen", err);
+    setStatus("Cache-Reset fehlgeschlagen: " + (err?.message || err), "error");
+  }
+}

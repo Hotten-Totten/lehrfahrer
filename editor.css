@@ -625,6 +625,22 @@ button.danger:hover {
   font-size: 12px;
 }
 
+.debug-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-btn-danger {
+  border: 1px solid #7f1d1d;
+  background: #991b1b;
+  color: #fee2e2;
+}
+
+.debug-btn-danger:hover {
+  background: #b91c1c;
+}
+
 .debug-panel-body {
   height: calc(100% - 39px);
   overflow-y: auto;
