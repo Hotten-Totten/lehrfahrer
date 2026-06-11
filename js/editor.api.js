@@ -876,13 +876,26 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
+    const searchTimeRaw = prompt(
+      "Optional: Uhrzeit für die Fahrtsuche (HH:MM), z. B. 14:30.\nLeer lassen = ganzer Tag.",
+      ""
+    );
+    const searchTimeText = searchTimeRaw === null ? "" : String(searchTimeRaw || "").trim();
+    const searchTime = searchTimeText ? (/^([01]?\d|2[0-3]):[0-5]\d$/.test(searchTimeText) ? searchTimeText : null) : "";
+    if (searchTime === null) {
+      setStatus("Ungültige Uhrzeit. Bitte Format HH:MM verwenden.", "warn");
+      return;
+    }
+
     showVbbImportProgressPopup(lineQuery);
-    updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} …`, {
+    updateVbbImportProgressPopup(
+      searchTime ? `Suche läuft für Linie ${lineQuery} ab ${searchTime} …` : `Suche läuft für Linie ${lineQuery} (ganztägig) …`,
+      {
       level: "info",
       busy: true,
       subtitle: "VBB-Suche"
     });
-    setStatus(`VBB-Suche läuft für Linie ${lineQuery} …`);
+    setStatus(searchTime ? `VBB-Suche läuft für Linie ${lineQuery} ab ${searchTime} …` : `VBB-Suche läuft für Linie ${lineQuery} (ganztägig) …`);
 
     const city = String(citySelect?.value || "cottbus").trim() || "cottbus";
     const headers = withApiAuthHeaders({ "Content-Type": "application/json" });
@@ -898,6 +911,9 @@ async function importLineFromVbbPrompt() {
       };
       if (accessIdOverride) {
         payload.accessId = accessIdOverride;
+      }
+      if (searchTime) {
+        payload.searchTime = searchTime;
       }
 
       const response = await fetch(API_VBB_IMPORT_URL, {
@@ -975,7 +991,10 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    updateVbbImportProgressPopup(`${candidates.length} Treffer gefunden. Auswahl im Popup …`, {
+    const serverSearchTime = String(searchResult?.searchTime || "").trim();
+    updateVbbImportProgressPopup(
+      `${candidates.length} Treffer gefunden${serverSearchTime ? ` (ab ${serverSearchTime})` : ""}. Auswahl im Popup …`,
+      {
       level: "info",
       busy: false,
       subtitle: "Trefferliste"

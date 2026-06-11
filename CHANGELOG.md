@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.0.220 - 2026-06-11
+- **VBB-Import: Suchzeitpunkt jetzt frei wählbar**:
+  - Beim Import kann optional eine Uhrzeit (HH:MM) angegeben werden
+  - Leere Eingabe bleibt ganztägige Suche (bisheriges Verhalten)
+  - Backend nutzt die Uhrzeit gezielt für Departure/Arrival-Boards und gibt den aktiven Suchzeitpunkt an den Client zurück
+  - Hilft, Fahrten gezielt für gewünschte Tageszeiten zu laden (z. B. Rückfahrten am Vormittag/Abend)
+
 ## V2.0.219 - 2026-06-11
 - **VBB-Suche stabilisiert (Hotfix gegen "keine Route")**:
   - Hauptsuche wieder auf robustem Legacy-Abfahrtslauf (schneller und kompatibler)

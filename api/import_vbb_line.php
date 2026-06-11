@@ -142,6 +142,25 @@ function vbb_normalize_line(string $value): string {
     return $v;
 }
 
+function vbb_normalize_hhmm(string $value): ?string {
+    $raw = trim($value);
+    if ($raw === '') {
+        return null;
+    }
+
+    if (!preg_match('/^(\d{1,2}):(\d{2})$/', $raw, $m)) {
+        return null;
+    }
+
+    $hh = intval($m[1]);
+    $mm = intval($m[2]);
+    if ($hh < 0 || $hh > 23 || $mm < 0 || $mm > 59) {
+        return null;
+    }
+
+    return sprintf('%02d:%02d', $hh, $mm);
+}
+
 function vbb_line_matches_query(string $lineValue, string $lineQuery): bool {
     $lineNorm = vbb_normalize_line($lineValue);
     $targetNorm = vbb_normalize_line($lineQuery);
@@ -258,13 +277,19 @@ function vbb_expand_stops_with_nearby(array $cfg, array $baseStops, int $maxSeed
     return array_values($byId);
 }
 
-function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
-    $firstTry = vbb_request($cfg, '/departureBoard', [
+function vbb_fetch_departures_for_stop(array $cfg, string $stopId, ?string $searchTime = null): array {
+    $params = [
         'id' => $stopId,
         'maxJourneys' => 140,
         // Nicht von allen HAFAS-Instanzen unterstützt.
-        'duration' => 1440,
-    ]);
+        'duration' => ($searchTime !== null ? 360 : 1440),
+    ];
+    if ($searchTime !== null) {
+        $params['date'] = date('Y-m-d');
+        $params['time'] = $searchTime;
+    }
+
+    $firstTry = vbb_request($cfg, '/departureBoard', $params);
 
     if ($firstTry['ok']) {
         $deps = $firstTry['data']['Departure'] ?? [];
@@ -272,10 +297,8 @@ function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
     }
 
     // Fallback ohne duration, damit Suchlauf nicht komplett ausfällt.
-    $fallback = vbb_request($cfg, '/departureBoard', [
-        'id' => $stopId,
-        'maxJourneys' => 140,
-    ]);
+    unset($params['duration']);
+    $fallback = vbb_request($cfg, '/departureBoard', $params);
     if (!$fallback['ok']) {
         return [];
     }
@@ -284,11 +307,17 @@ function vbb_fetch_departures_for_stop(array $cfg, string $stopId): array {
     return is_array($deps) ? $deps : [];
 }
 
-function vbb_fetch_arrivals_for_stop(array $cfg, string $stopId): array {
-    $res = vbb_request($cfg, '/arrivalBoard', [
+function vbb_fetch_arrivals_for_stop(array $cfg, string $stopId, ?string $searchTime = null): array {
+    $params = [
         'id' => $stopId,
         'maxJourneys' => 80,
-    ]);
+    ];
+    if ($searchTime !== null) {
+        $params['date'] = date('Y-m-d');
+        $params['time'] = $searchTime;
+    }
+
+    $res = vbb_request($cfg, '/arrivalBoard', $params);
     if (!$res['ok']) {
         return [];
     }
@@ -296,16 +325,16 @@ function vbb_fetch_arrivals_for_stop(array $cfg, string $stopId): array {
     return is_array($arrs) ? $arrs : [];
 }
 
-function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops, int $maxStops = 36, bool $withArrivals = false): array {
+function vbb_collect_candidates(array $cfg, string $lineQuery, array $stops, int $maxStops = 36, bool $withArrivals = false, ?string $searchTime = null): array {
     $target = vbb_normalize_line($lineQuery);
     $out = [];
 
     foreach (array_slice($stops, 0, $maxStops) as $stop) {
-        $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''));
+        $deps = vbb_fetch_departures_for_stop($cfg, strval($stop['id'] ?? ''), $searchTime);
         $boards = is_array($deps) ? $deps : [];
 
         if ($withArrivals) {
-            $arrs = vbb_fetch_arrivals_for_stop($cfg, strval($stop['id'] ?? ''));
+            $arrs = vbb_fetch_arrivals_for_stop($cfg, strval($stop['id'] ?? ''), $searchTime);
             if (is_array($arrs) && $arrs) {
                 $boards = array_merge($boards, $arrs);
             }
@@ -580,6 +609,7 @@ if ($cfg['accessId'] === '') {
 $action = trim(strtolower(strval($input['action'] ?? 'search')));
 $lineQuery = trim(strval($input['lineQuery'] ?? ''));
 $city = trim(strtolower(strval($input['city'] ?? 'cottbus')));
+$searchTime = vbb_normalize_hhmm(strval($input['searchTime'] ?? ''));
 if ($city === '') {
     $city = 'cottbus';
 }
@@ -594,7 +624,7 @@ if (!$stopsByCity) {
     vbb_json_error(502, 'VBB-Ortssuche fehlgeschlagen oder lieferte keine Haltestellen.');
 }
 
-$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, 30, false);
+$candidates = vbb_collect_candidates($cfg, $lineQuery, $stopsByCity, 30, false, $searchTime);
 // Auch bei vorhandenen, aber wenigen/einseitigen Treffern zusätzliche Nearby-Suche nutzen.
 $needExpandedPass = !$candidates
     || count($candidates) < 24
@@ -603,14 +633,14 @@ $needExpandedPass = !$candidates
 if ($needExpandedPass) {
     $expandedStops = vbb_expand_stops_with_nearby($cfg, $stopsByCity, 20);
     if ($expandedStops) {
-        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 50, false);
+        $extraCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 50, false, $searchTime);
         $candidates = vbb_merge_candidates($candidates, $extraCandidates);
 
         // Nur falls weiterhin zu wenig/zu einseitig: kleiner Ankunfts-Ergänzungslauf.
         $needsArrivalBoost = count($candidates) < 24
             || vbb_count_candidate_directions($candidates) < 2;
         if ($needsArrivalBoost) {
-            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 18, true);
+            $arrivalCandidates = vbb_collect_candidates($cfg, $lineQuery, $expandedStops, 18, true, $searchTime);
             $candidates = vbb_merge_candidates($candidates, $arrivalCandidates);
         }
     }
@@ -627,7 +657,8 @@ if (!$candidates) {
 if ($action === 'search') {
     echo json_encode([
         'ok' => true,
-        'candidates' => $candidates
+        'candidates' => $candidates,
+        'searchTime' => $searchTime,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
