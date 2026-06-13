@@ -82,6 +82,20 @@ if (rerouteSegmentBtn) {
   });
 }
 
+if (startDetourDraftBtn) {
+  startDetourDraftBtn.addEventListener("click", startDetourDraftFromSelectedRoutePoints);
+}
+
+if (finishDetourDraftBtn) {
+  finishDetourDraftBtn.addEventListener("click", async () => {
+    await finishDetourDraft();
+  });
+}
+
+if (cancelDetourDraftBtn) {
+  cancelDetourDraftBtn.addEventListener("click", cancelDetourDraft);
+}
+
 if (snapStopToRouteBtn) snapStopToRouteBtn.addEventListener("click", snapSelectedStopToRoute);
 if (smoothRouteBtn) smoothRouteBtn.addEventListener("click", smoothRouteInteractive);
 if (simplifyRouteBtn) simplifyRouteBtn.addEventListener("click", simplifyCurrentRoute);
@@ -259,6 +273,11 @@ map.on("click", function (e) {
   // =========================
   if (mode === "specialTrackExtend") {
     extendSelectedSpecialTrack(e.latlng);
+    return;
+  }
+
+  if (mode === "detourDraft") {
+    addDetourDraftPoint(e.latlng);
     return;
   }
 

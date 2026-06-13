@@ -145,6 +145,208 @@ function buildRerouteSegmentConfirmMessage(startIndex, endIndex, affectedStops) 
   `;
 }
 
+function findDetourDraftSegment() {
+  const draft = state.detourDraft;
+  if (!draft) return null;
+
+  const indexA = state.routePoints.findIndex(p => p.id === draft.startRoutePointId);
+  const indexB = state.routePoints.findIndex(p => p.id === draft.endRoutePointId);
+  if (indexA === -1 || indexB === -1) return null;
+
+  const startIndex = Math.min(indexA, indexB);
+  const endIndex = Math.max(indexA, indexB);
+  return {
+    startIndex,
+    endIndex,
+    startPoint: state.routePoints[startIndex],
+    endPoint: state.routePoints[endIndex]
+  };
+}
+
+function removeDetourDraftPreview() {
+  if (state.detourDraft && state.detourDraft.polyline && map.hasLayer(state.detourDraft.polyline)) {
+    map.removeLayer(state.detourDraft.polyline);
+  }
+}
+
+function startDetourDraftFromSelectedRoutePoints() {
+  if (state.routeMode === "detourDraft" && state.detourDraft) {
+    setStatus("Umleitung wird bereits gezeichnet.", "warn");
+    return;
+  }
+
+  if (state.routeMode === "specialTrack" || state.routeMode === "specialTrackExtend") {
+    setStatus("Bitte die Sondertrasse zuerst abschlie\u00dfen oder abbrechen.", "warn");
+    return;
+  }
+
+  if (state.selectedRoutePointIds.size !== 2) {
+    setStatus("Bitte genau zwei Routenpunkte als Schnittpunkte ausw\u00e4hlen.", "warn");
+    return;
+  }
+
+  const ids = Array.from(state.selectedRoutePointIds);
+  const indexA = state.routePoints.findIndex(p => p.id === ids[0]);
+  const indexB = state.routePoints.findIndex(p => p.id === ids[1]);
+
+  if (indexA === -1 || indexB === -1) {
+    setStatus("Schnittpunkte nicht gefunden.", "error");
+    return;
+  }
+
+  const startIndex = Math.min(indexA, indexB);
+  const endIndex = Math.max(indexA, indexB);
+  const startPoint = state.routePoints[startIndex];
+  const endPoint = state.routePoints[endIndex];
+
+  removeDetourDraftPreview();
+  state.detourDraft = {
+    startRoutePointId: startPoint.id,
+    endRoutePointId: endPoint.id,
+    points: [],
+    polyline: null
+  };
+  state.routeMode = "detourDraft";
+
+  refreshDetourDraftPreview();
+  updateModeButtons();
+  setStatus(`Umleitung zeichnen: Schnittpunkte ${startIndex} bis ${endIndex}. Zwischenpunkte auf der Karte setzen.`);
+}
+
+function addDetourDraftPoint(latlng) {
+  if (!state.detourDraft) {
+    setStatus("Keine aktive Umleitung vorhanden.", "warn");
+    return;
+  }
+
+  state.detourDraft.points.push([latlng.lat, latlng.lng]);
+  refreshDetourDraftPreview();
+  setStatus(`Umleitungspunkt hinzugef\u00fcgt (${state.detourDraft.points.length}).`);
+}
+
+function refreshDetourDraftPreview() {
+  const draft = state.detourDraft;
+  if (!draft) return;
+
+  const segment = findDetourDraftSegment();
+  if (!segment) {
+    removeDetourDraftPreview();
+    setStatus("Schnittpunkte der Umleitung nicht mehr gefunden.", "error");
+    return;
+  }
+
+  removeDetourDraftPreview();
+  const previewPoints = [
+    [segment.startPoint.lat, segment.startPoint.lon],
+    ...draft.points,
+    [segment.endPoint.lat, segment.endPoint.lon]
+  ];
+
+  draft.polyline = L.polyline(previewPoints, {
+    color: "#f59e0b",
+    weight: 5,
+    dashArray: "8,6"
+  }).addTo(map);
+}
+
+function buildDetourDraftConfirmMessage(startIndex, endIndex, insertedCount, affectedStops) {
+  const replacedRoutePointCount = Math.max(0, endIndex - startIndex - 1);
+  const warningText = "Haltestellen werden nicht gel\u00f6scht oder verschoben, k\u00f6nnen nach der Umleitung aber neben der Route liegen.";
+  const stopsHtml = affectedStops.length
+    ? `<ul style="margin:8px 0 0 18px;padding:0;">${affectedStops.map(({ stop, routeIndex, distanceMeters }) => {
+        const distanceText = Number.isFinite(distanceMeters) ? `, ca. ${Math.round(distanceMeters)} m entfernt` : "";
+        return `<li>${escapeRerouteDialogHtml(stop.name || stop.id || "Haltestelle")} (Route-Index ${routeIndex}${distanceText})</li>`;
+      }).join("")}</ul>`
+    : `<p style="margin:8px 0 0 0;">Keine Haltestellen im Abschnitt erkannt.</p>`;
+
+  return `
+    <p style="margin:0 0 8px 0;">Der Abschnitt zwischen den Schnittpunkten wird durch die gezeichnete Umleitung ersetzt.</p>
+    <dl style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 10px 0;">
+      <dt>Startpunkt-Index</dt><dd style="margin:0;">${startIndex}</dd>
+      <dt>Endpunkt-Index</dt><dd style="margin:0;">${endIndex}</dd>
+      <dt>RoutePoints ersetzt</dt><dd style="margin:0;">${replacedRoutePointCount}</dd>
+      <dt>Umleitungspunkte eingef\u00fcgt</dt><dd style="margin:0;">${insertedCount}</dd>
+    </dl>
+    <div>
+      <strong>Vermutlich betroffene Haltestellen</strong>
+      ${stopsHtml}
+    </div>
+    <p style="margin:12px 0 0 0;"><strong>Warnung:</strong> ${warningText}</p>
+  `;
+}
+
+async function finishDetourDraft() {
+  const draft = state.detourDraft;
+  if (!draft) {
+    setStatus("Keine aktive Umleitung vorhanden.", "warn");
+    return;
+  }
+
+  const segment = findDetourDraftSegment();
+  if (!segment) {
+    setStatus("Schnittpunkte der Umleitung nicht mehr gefunden.", "error");
+    return;
+  }
+
+  const insertedCount = draft.points.length;
+  const affectedStops = findStopsProbablyInRouteSegment(segment.startIndex, segment.endIndex);
+  const confirmed = await showConfirmDialog({
+    title: "Umleitung \u00fcbernehmen",
+    message: buildDetourDraftConfirmMessage(segment.startIndex, segment.endIndex, insertedCount, affectedStops),
+    okText: "Umleitung \u00fcbernehmen",
+    cancelText: "Abbrechen"
+  });
+
+  if (!confirmed) {
+    setStatus("Umleitung bleibt im Entwurf. Keine \u00c4nderung an der Route.");
+    return;
+  }
+
+  if (!historyRestoreRunning) {
+    pushHistorySnapshot("Umleitung eingef\u00fcgt");
+  }
+
+  const removed = state.routePoints.splice(segment.startIndex + 1, segment.endIndex - segment.startIndex - 1);
+  removed.forEach(point => {
+    if (point.marker && map.hasLayer(point.marker)) {
+      map.removeLayer(point.marker);
+    }
+  });
+
+  let insertIndex = segment.startIndex + 1;
+  draft.points.forEach(([lat, lon]) => {
+    createRoutePointObject(lat, lon, true, "manual");
+    const createdPoint = state.routePoints.pop();
+    state.routePoints.splice(insertIndex, 0, createdPoint);
+    insertIndex++;
+  });
+
+  removeDetourDraftPreview();
+  state.detourDraft = null;
+  state.routeMode = "freeStop";
+
+  refreshRouteLine();
+  clearRouteMultiSelection();
+  applyRoutePointIcons();
+  updateStats();
+  updateModeButtons();
+
+  setStatus(`Umleitung eingef\u00fcgt: ${insertedCount} Zwischenpunkte, ${removed.length} RoutePoints ersetzt.`);
+}
+
+function cancelDetourDraft() {
+  if (!state.detourDraft) {
+    setStatus("Keine aktive Umleitung vorhanden.", "warn");
+    return;
+  }
+
+  removeDetourDraftPreview();
+  state.detourDraft = null;
+  state.routeMode = "freeStop";
+  updateModeButtons();
+  setStatus("Umleitung abgebrochen. Route unver\u00e4ndert.");
+}
+
 async function rerouteSelectedSegment() {
   if (state.selectedRoutePointIds.size !== 2) {
     setStatus("Bitte genau zwei Routenpunkte auswählen.");

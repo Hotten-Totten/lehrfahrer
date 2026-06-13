@@ -134,6 +134,10 @@ function clearEditorData() {
     map.removeLayer(state.currentSpecialTrack.polyline);
   }
 
+  if (state.detourDraft && state.detourDraft.polyline) {
+    map.removeLayer(state.detourDraft.polyline);
+  }
+
   // Sicherheitsnetz: alle verbleibenden Polylines mit Sondertrassen-Farben von der Karte räumen
   map.eachLayer(function (layer) {
     if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
@@ -157,6 +161,7 @@ function clearEditorData() {
   state.simplifiedRoutePoints = [];
   state.specialTracks = [];
   state.currentSpecialTrack = null;
+  state.detourDraft = null;
   state.selected = null;
   state.routeMode = "auto";
   state.previewMode = "original";

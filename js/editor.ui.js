@@ -159,7 +159,8 @@ function updateStats() {
     manual: "Route zeichnen (manuell)",
     select: "Auswählen",
     specialTrack: "Sondertrasse zeichnen",
-    specialTrackExtend: "Sondertrasse erweitern"
+    specialTrackExtend: "Sondertrasse erweitern",
+    detourDraft: "Umleitung zeichnen"
   };
 
   currentModeText.textContent = modeLabels[currentMode] || currentMode || "-";
@@ -177,10 +178,20 @@ function updateModeButtons() {
   if (modeSelectBtn) modeSelectBtn.classList.toggle("active", currentMode === "select");
 
   const inSpecialTrack = currentMode === "specialTrack" || currentMode === "specialTrackExtend";
-  if (startTrackBetweenStopsBtn) startTrackBetweenStopsBtn.style.display = inSpecialTrack ? "none" : "";
+  const inDetourDraft = currentMode === "detourDraft";
+  if (startTrackBetweenStopsBtn) startTrackBetweenStopsBtn.style.display = (inSpecialTrack || inDetourDraft) ? "none" : "";
   if (finishSpecialTrackBtn) {
     finishSpecialTrackBtn.style.display = inSpecialTrack ? "block" : "none";
     finishSpecialTrackBtn.classList.toggle("active", inSpecialTrack);
+  }
+  if (startDetourDraftBtn) startDetourDraftBtn.style.display = (inSpecialTrack || inDetourDraft) ? "none" : "";
+  if (finishDetourDraftBtn) {
+    finishDetourDraftBtn.style.display = inDetourDraft ? "block" : "none";
+    finishDetourDraftBtn.classList.toggle("active", inDetourDraft);
+  }
+  if (cancelDetourDraftBtn) {
+    cancelDetourDraftBtn.style.display = inDetourDraft ? "block" : "none";
+    cancelDetourDraftBtn.classList.toggle("active", inDetourDraft);
   }
 
   updateStats();
@@ -188,6 +199,10 @@ function updateModeButtons() {
 
 // Wechselt den Editor-Modus inklusive optionaler Statusmeldung.
 function setMode(newMode, statusText = "") {
+  if (state.routeMode === "detourDraft" && newMode !== "detourDraft" && state.detourDraft && typeof cancelDetourDraft === "function") {
+    cancelDetourDraft();
+  }
+
   state.routeMode = newMode;
 
   updateModeButtons();

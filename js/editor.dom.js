@@ -34,6 +34,9 @@ const showOriginalRouteBtn = document.getElementById("showOriginalRouteBtn");
 const showSimplifiedRouteBtn = document.getElementById("showSimplifiedRouteBtn");
 const startTrackBetweenStopsBtn = document.getElementById("startTrackBetweenStopsBtn");
 const finishSpecialTrackBtn = document.getElementById("finishSpecialTrackBtn");
+const startDetourDraftBtn = document.getElementById("startDetourDraftBtn");
+const finishDetourDraftBtn = document.getElementById("finishDetourDraftBtn");
+const cancelDetourDraftBtn = document.getElementById("cancelDetourDraftBtn");
 const undoBtn = document.getElementById("undoBtn");
 const redoBtn = document.getElementById("redoBtn");
 

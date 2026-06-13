@@ -35,7 +35,7 @@ if (catalogCluster) {
 // GLOBALS / STATE
 // =========================
 
-let mode = "freeStop"; // freeStop | route | select | specialTrack | specialTrackExtend
+let mode = "freeStop"; // freeStop | route | select | specialTrack | specialTrackExtend | detourDraft
 
 const state = {
   stops: [],
@@ -43,6 +43,7 @@ const state = {
   simplifiedRoutePoints: [],
   specialTracks: [],
   currentSpecialTrack: null,
+  detourDraft: null,
   selected: null,
 selectedStopIds: new Set(),
 visibleCatalogMarkers: new Map(),
