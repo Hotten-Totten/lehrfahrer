@@ -797,11 +797,10 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
         ? hdg
         : null;
 
-      // Im normalen Kartenmodus den Marker weich zwischen Fixes animieren.
+      // Im Nav-Modus setzt navCenterOn() den Marker ausschliesslich auf die
+      // gesnappte/tracked Position, damit kein Roh-GPS-Zielflattern entsteht.
       if (!navMode) {
         setGpsMarkerTarget(lnglat[0], lnglat[1], headingForMarker, !firstFixSeen);
-      } else {
-        ensureGpsMarkerExists(lnglat);
       }
 
       if (!firstFixSeen) {
@@ -868,6 +867,7 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   const isLandscapeMobile = isLandscapeTouchDevice();
+  setGpsMarkerTarget(lon, lat, bearing, false);
 
   // Strict-Follow fuer Landscape: verhindert Animationsdrift,
   // wodurch der Marker sporadisch oben/aus dem Fokus landen kann.
