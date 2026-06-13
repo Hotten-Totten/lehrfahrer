@@ -462,25 +462,63 @@ async function testApiWriteAuth() {
     const text = await response.text();
     let result = null;
     try { result = JSON.parse(text); } catch (_err) {}
+    const apiErrorText = result && result.error ? String(result.error) : text;
+    const serverTokenMissing = apiErrorText.includes("LEHRFAHRER_API_TOKEN fehlt");
 
     if (response.status === 403) {
+      showInfoPopup({
+        title: "Schreibzugriff gesperrt, Token überprüfen",
+        message: "Der gespeicherte API-Token fehlt oder passt nicht zum Server.",
+        level: "error"
+      });
+
+      if (serverTokenMissing) {
+        setStatus("Server-Token fehlt: LEHRFAHRER_API_TOKEN ist nicht konfiguriert.", "error");
+        showInfoPopup({
+          title: "Server-Token fehlt",
+          message: "Der Server hat keinen LEHRFAHRER_API_TOKEN gefunden. Bitte api/_secret.php auf dem Server prüfen.",
+          level: "error"
+        });
+        return;
+      }
+
       setStatus("Schreibzugriff gesperrt: Token fehlt oder ist ungültig.", "error");
       return;
     }
 
     if (response.status === 400 && result && result.ok === false) {
       setStatus("Schreibzugriff ok: Authentifizierung erfolgreich.", "success");
+      showInfoPopup({
+        title: "Schreibzugriff ok",
+        message: "Der API-Token wurde akzeptiert. Schreibzugriffe sind authentifiziert.",
+        level: "success"
+      });
       return;
     }
 
     if (response.ok) {
       setStatus("API-Test erfolgreich.", "success");
+      showInfoPopup({
+        title: "Schreibzugriff ok",
+        message: "Der API-Token wurde akzeptiert.",
+        level: "success"
+      });
       return;
     }
 
     setStatus("API-Test fehlgeschlagen (HTTP " + response.status + ").", "error");
+    showInfoPopup({
+      title: "API-Test fehlgeschlagen",
+      message: "HTTP " + response.status + (apiErrorText ? ": " + apiErrorText : ""),
+      level: "error"
+    });
   } catch (err) {
     setStatus("API-Test fehlgeschlagen: " + err.message, "error");
+    showInfoPopup({
+      title: "API nicht erreichbar",
+      message: "Der API-Test konnte nicht ausgeführt werden: " + err.message,
+      level: "error"
+    });
   }
 }
 

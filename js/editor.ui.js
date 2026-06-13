@@ -16,6 +16,77 @@ function setStatus(text, level = "info") {
   }
 }
 
+function escapeInfoPopupHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
+function showInfoPopup({ title = "Hinweis", message = "", level = "info" } = {}) {
+  const levels = {
+    success: { color: "#15803d", icon: "&#10003;" },
+    warning: { color: "#b45309", icon: "!" },
+    error: { color: "#b91c1c", icon: "!" },
+    info: { color: "#2563eb", icon: "i" }
+  };
+  const config = levels[level] || levels.info;
+
+  const previous = document.getElementById("infoPopupOverlay");
+  if (previous) previous.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "infoPopupOverlay";
+  overlay.className = "modal-overlay";
+
+  const box = document.createElement("div");
+  box.className = "save-confirm-box";
+  box.innerHTML = `
+    <div class="save-confirm-header">
+      <h3 style="display:flex;align-items:center;gap:10px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${config.color};color:#fff;font-size:14px;font-weight:700;line-height:1;">${config.icon}</span>
+        <span>${escapeInfoPopupHtml(title)}</span>
+      </h3>
+    </div>
+    <div class="save-confirm-body">
+      <div class="save-confirm-row" style="display:block;border-bottom:none;padding-bottom:6px;line-height:1.5;">
+        ${escapeInfoPopupHtml(message)}
+      </div>
+    </div>
+    <div class="save-confirm-actions">
+      <button type="button" class="save-confirm-btn-ok" id="infoPopupOkBtn">OK</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const okBtn = box.querySelector("#infoPopupOkBtn");
+
+  function cleanup() {
+    okBtn.removeEventListener("click", onOk);
+    overlay.removeEventListener("click", onOverlay);
+    document.removeEventListener("keydown", onKeyDown);
+    overlay.remove();
+  }
+
+  function onOk() { cleanup(); }
+  function onOverlay(e) {
+    if (e.target === overlay) cleanup();
+  }
+  function onKeyDown(e) {
+    if (e.key === "Escape" || e.key === "Enter") cleanup();
+  }
+
+  okBtn.addEventListener("click", onOk);
+  overlay.addEventListener("click", onOverlay);
+  document.addEventListener("keydown", onKeyDown);
+  okBtn.focus();
+}
+
 // Zeigt einen kurzen Toast nach dem Speichern an.
 // info = { fileBase, city, stopCount, routePointCount, gpxSaved, pdfSaved, savedAt }
 let _saveToastTimer = null;
