@@ -130,9 +130,9 @@ function runGpsMarkerAnimation(ts) {
     turnProfile = getMarkerTurnProfile();
   }
 
-  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 180);
-  const turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 140);
-  const maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 220);
+  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 140);
+  const turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
+  const maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
   const posAlpha = 1 - Math.exp(-dt / posTau);
   state.currentLon += (state.targetLon - state.currentLon) * posAlpha;

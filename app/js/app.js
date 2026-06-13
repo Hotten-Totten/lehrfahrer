@@ -38,7 +38,7 @@ const NAV_SNAP_WINDOW = 24;
 const NAV_TURN_DEFAULT_PASS_BUFFER_M = 38;
 const NAV_TURN_CLOSE_GAP_M = 90;
 const NAV_TURN_MIN_PASS_BUFFER_M = 8;
-const NAV_TURN_NOW_WINDOW_M = 18;
+const NAV_TURN_NOW_WINDOW_M = 10;
 // Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
 // aber weiterhin klarer OFF->REJOIN->ON Verlauf.
 const NAV_OFF_ROUTE_ENTER_M = 145;
