@@ -162,7 +162,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 App starting...');
   initFullscreenUi();
   registerServiceWorker();
-  await openDB();
+  try {
+    await openDB();
+  } catch (err) {
+    db = null;
+    console.warn('IndexedDB nicht verfuegbar. Offline-Speicher ist deaktiviert:', err);
+  }
   initMap();
   initNavPerfDebugHud();
   bindEvents();
@@ -471,6 +476,11 @@ function registerServiceWorker() {
 // ── IndexedDB ────────────────────────────────────────────────
 function openDB() {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB ist nicht verfuegbar.'));
+      return;
+    }
+
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = e => {
       const d = e.target.result;
@@ -500,9 +510,16 @@ function openDB() {
   });
 }
 
+function requireDB() {
+  if (!db) {
+    throw new Error('IndexedDB ist nicht verfuegbar.');
+  }
+  return db;
+}
+
 function dbPut(key, data) {
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction('routes', 'readwrite');
+    const tx  = requireDB().transaction('routes', 'readwrite');
     const req = tx.objectStore('routes').put({ key, data, savedAt: Date.now() });
     req.onsuccess = () => resolve();
     req.onerror   = () => reject(req.error);
@@ -511,7 +528,11 @@ function dbPut(key, data) {
 
 function dbGet(key) {
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction('routes', 'readonly');
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    const tx  = requireDB().transaction('routes', 'readonly');
     const req = tx.objectStore('routes').get(key);
     req.onsuccess = () => resolve(req.result?.data ?? null);
     req.onerror   = () => reject(req.error);
@@ -520,7 +541,11 @@ function dbGet(key) {
 
 function dbGetAll() {
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction('routes', 'readonly');
+    if (!db) {
+      resolve([]);
+      return;
+    }
+    const tx  = requireDB().transaction('routes', 'readonly');
     const req = tx.objectStore('routes').getAll();
     req.onsuccess = () => resolve(req.result);
     req.onerror   = () => reject(req.error);
@@ -529,7 +554,7 @@ function dbGetAll() {
 
 function dbDelete(key) {
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction('routes', 'readwrite');
+    const tx  = requireDB().transaction('routes', 'readwrite');
     const req = tx.objectStore('routes').delete(key);
     req.onsuccess = () => resolve();
     req.onerror   = () => reject(req.error);
@@ -539,7 +564,7 @@ function dbDelete(key) {
 // ── Lines Catalog (Metadaten) ─────────────────────────────────
 function dbPutLinesCatalog(catalog) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesCatalog', 'readwrite');
+    const tx = requireDB().transaction('linesCatalog', 'readwrite');
     const req = tx.objectStore('linesCatalog').clear();
     req.onsuccess = () => {
       catalog.forEach(line => {
@@ -565,7 +590,11 @@ function dbPutLinesCatalog(catalog) {
 
 function dbGetLinesCatalog() {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesCatalog', 'readonly');
+    if (!db) {
+      resolve([]);
+      return;
+    }
+    const tx = requireDB().transaction('linesCatalog', 'readonly');
     const req = tx.objectStore('linesCatalog').getAll();
     req.onsuccess = () => resolve(req.result || []);
     req.onerror = () => reject(req.error);
@@ -575,7 +604,7 @@ function dbGetLinesCatalog() {
 // ── Lines Data (JSON-Inhalt) ──────────────────────────────────
 function dbPutLineData(id, lineData, sourceUpdatedAt = 0) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesData', 'readwrite');
+    const tx = requireDB().transaction('linesData', 'readwrite');
     const req = tx.objectStore('linesData').put({
       id,
       data: lineData,
@@ -589,7 +618,11 @@ function dbPutLineData(id, lineData, sourceUpdatedAt = 0) {
 
 function dbGetLineData(id) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesData', 'readonly');
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    const tx = requireDB().transaction('linesData', 'readonly');
     const req = tx.objectStore('linesData').get(id);
     req.onsuccess = () => resolve(req.result?.data ?? null);
     req.onerror = () => reject(req.error);
@@ -599,7 +632,7 @@ function dbGetLineData(id) {
 // ── Lines GPX ─────────────────────────────────────────────────
 function dbPutLineGPX(id, gpxData) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesGPX', 'readwrite');
+    const tx = requireDB().transaction('linesGPX', 'readwrite');
     const req = tx.objectStore('linesGPX').put({
       id,
       data: gpxData,
@@ -612,7 +645,11 @@ function dbPutLineGPX(id, gpxData) {
 
 function dbGetLineGPX(id) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesGPX', 'readonly');
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    const tx = requireDB().transaction('linesGPX', 'readonly');
     const req = tx.objectStore('linesGPX').get(id);
     req.onsuccess = () => resolve(req.result?.data ?? null);
     req.onerror = () => reject(req.error);
@@ -622,7 +659,7 @@ function dbGetLineGPX(id) {
 // ── Lines PDF ─────────────────────────────────────────────────
 function dbPutLinePDF(id, pdfData, fileName = '', sourceUpdatedAt = 0) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesPDF', 'readwrite');
+    const tx = requireDB().transaction('linesPDF', 'readwrite');
     const req = tx.objectStore('linesPDF').put({
       id,
       data: pdfData,
@@ -637,7 +674,11 @@ function dbPutLinePDF(id, pdfData, fileName = '', sourceUpdatedAt = 0) {
 
 function dbGetLinePDFRecord(id) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('linesPDF', 'readonly');
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    const tx = requireDB().transaction('linesPDF', 'readonly');
     const req = tx.objectStore('linesPDF').get(id);
     req.onsuccess = () => resolve(req.result || null);
     req.onerror = () => reject(req.error);
@@ -706,8 +747,12 @@ async function fetchAndCacheLinesCatalog() {
     
     console.log(`📋 Deduplication: ${result.lines.length} → ${uniqueLines.length} unique lines`);
     
-    // In IndexedDB speichern
-    await dbPutLinesCatalog(uniqueLines);
+    // In IndexedDB speichern, falls verfuegbar.
+    if (db) {
+      await dbPutLinesCatalog(uniqueLines);
+    } else {
+      console.warn('Linienkatalog nur im Speicher verfuegbar: IndexedDB ist deaktiviert.');
+    }
     availableLinesCatalog = uniqueLines;
     console.log(`✓ Cached ${uniqueLines.length} lines to IndexedDB`);
     
@@ -1039,7 +1084,7 @@ async function autoDownloadAllLines() {
 
     const available = availableLinesCatalog || [];
 
-    const tx = db.transaction('linesData', 'readonly');
+    const tx = requireDB().transaction('linesData', 'readonly');
     const req = tx.objectStore('linesData').getAll();
     const cachedData = await new Promise((resolve, reject) => {
       req.onsuccess = () => resolve(req.result || []);
@@ -1748,7 +1793,7 @@ async function displayAvailableLines() {
   
   try {
     // Hole die heruntergeladenen Linien aus linesData store
-    const tx = db.transaction('linesData', 'readonly');
+    const tx = requireDB().transaction('linesData', 'readonly');
     const req = tx.objectStore('linesData').getAll();
     const allLines = await new Promise((resolve, reject) => {
       req.onsuccess = () => resolve(req.result || []);

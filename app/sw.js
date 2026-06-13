@@ -14,7 +14,7 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css',
+  './css/app.css?v=V2.0.224',
   './js/app.js?v=V2.0.224',
   './js/map.js?v=V2.0.224',
   './js/debug-helper.js?v=V2.0.224',
@@ -71,8 +71,10 @@ self.addEventListener('fetch', event => {
 async function networkFirstAPI(request) {
   try {
     const response = await fetch(request.clone());
-    const cache = await caches.open(CACHE_API);
-    cache.put(request, response.clone());
+    if (response.ok) {
+      const cache = await caches.open(CACHE_API);
+      cache.put(request, response.clone());
+    }
     return response;
   } catch {
     const cached = await caches.match(request);
