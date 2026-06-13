@@ -2702,9 +2702,6 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
     };
   }
 
-  navNearestIdx = snap.index;
-  navProgressIdx = snap.index;
-
   if (snap.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
     navOffRouteActive = true;
     navRejoinBlend = 0;
@@ -2735,13 +2732,20 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
     ? (navRejoinBlend > 0 ? 'REJOIN' : 'OFF')
     : 'ON';
 
+  let reportedIdx = navNearestIdx;
+  if (snapAppliedNow || !navOffRouteActive) {
+    reportedIdx = snap.index;
+    navNearestIdx = snap.index;
+    navProgressIdx = snap.index;
+  }
+
   noteNavRouteState(routeState, navRejoinBlend);
   noteNavSnap(snap.distanceM, snapAppliedNow);
 
   return {
     lat: displayLat,
     lon: displayLon,
-    index: snap.index,
+    index: reportedIdx,
     routeState,
     snapDistanceM: snap.distanceM,
     snapApplied: snapAppliedNow
@@ -3064,7 +3068,7 @@ function updateNavMenuInfo() {
 
 function updateNavMenuStops() {
   const listEl = document.getElementById('navUpcomingList');
-  if (!listEl || !navStopDists || !navStopDists.length) {
+  if (!listEl || !navStopDists || !navStopDists.length || !currentNavLine || !Array.isArray(currentNavLine.points) || !currentNavLine.points.length) {
     if (listEl) listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Keine Haltestellen</div>';
     return;
   }
