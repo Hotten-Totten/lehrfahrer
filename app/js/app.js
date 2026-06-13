@@ -147,6 +147,8 @@ const markerTurnSelect = document.getElementById('markerTurnSelect');
 const showGhostStopsToggle = document.getElementById('showGhostStopsToggle');
 const punctualityToggle = document.getElementById('punctualityToggle');
 const navPunctualityToggle = document.getElementById('navPunctualityToggle');
+const punctualityDepartureTimeInput = document.getElementById('punctualityDepartureTime');
+const navPunctualityDepartureTimeInput = document.getElementById('navPunctualityDepartureTime');
 const navInfoPunctualityEl = document.getElementById('navInfoPunctuality');
 
 const CAMERA_PROFILE_KEY = 'lehrfahrer_camera_profile';
@@ -154,6 +156,7 @@ const MARKER_MOTION_PROFILE_KEY = 'lehrfahrer_marker_motion_profile';
 const MARKER_TURN_PROFILE_KEY = 'lehrfahrer_marker_turn_profile';
 const GHOST_STOPS_VISIBLE_KEY = 'lehrfahrer_show_ghost_stops';
 const PUNCTUALITY_ENABLED_KEY = 'lehrfahrer_show_punctuality';
+const PUNCTUALITY_DEPARTURE_TIME_KEY = 'lehrfahrer_punctuality_departure_time';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 let refreshInProgress = false;
 
@@ -1627,7 +1630,7 @@ function setGhostStopsVisible(value) {
 
 function getPunctualityEnabled() {
   const raw = localStorage.getItem(PUNCTUALITY_ENABLED_KEY);
-  if (raw === null) return true;
+  if (raw === null) return false;
   return raw === '1';
 }
 
@@ -1640,7 +1643,35 @@ function applyPunctualityToggleToUi(value) {
   if (navPunctualityToggle) navPunctualityToggle.checked = !!value;
 }
 
-function parseHafasTimeToMinutes(timeText) {
+function formatTimeInputValue(date = new Date()) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function getPunctualityDepartureTime() {
+  const stored = localStorage.getItem(PUNCTUALITY_DEPARTURE_TIME_KEY);
+  if (parseTimeToMinutes(stored) !== null) return stored;
+
+  const current = formatTimeInputValue();
+  localStorage.setItem(PUNCTUALITY_DEPARTURE_TIME_KEY, current);
+  return current;
+}
+
+function setPunctualityDepartureTime(value) {
+  if (parseTimeToMinutes(value) === null) {
+    localStorage.removeItem(PUNCTUALITY_DEPARTURE_TIME_KEY);
+    navScheduleAnchorMs = null;
+    return;
+  }
+  localStorage.setItem(PUNCTUALITY_DEPARTURE_TIME_KEY, value);
+  navScheduleAnchorMs = resolveManualScheduleAnchorMs(value);
+}
+
+function applyPunctualityDepartureTimeToUi(value) {
+  if (punctualityDepartureTimeInput) punctualityDepartureTimeInput.value = value || '';
+  if (navPunctualityDepartureTimeInput) navPunctualityDepartureTimeInput.value = value || '';
+}
+
+function parseTimeToMinutes(timeText) {
   const raw = String(timeText || '').trim();
   const m = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (!m) return null;
@@ -1650,13 +1681,8 @@ function parseHafasTimeToMinutes(timeText) {
   return hh * 60 + mm;
 }
 
-function resolveNavScheduleAnchorMs(stops) {
-  const list = Array.isArray(stops) ? stops : [];
-  if (!list.length) return null;
-
-  const first = list[0] || {};
-  const timeText = first.hafasRealtimeTime || first.hafasPlannedTime || null;
-  const timeMinutes = parseHafasTimeToMinutes(timeText);
+function resolveManualScheduleAnchorMs(timeText = getPunctualityDepartureTime()) {
+  const timeMinutes = parseTimeToMinutes(timeText);
   if (timeMinutes === null) return null;
 
   const now = new Date();
@@ -2101,11 +2127,22 @@ function initGhostStopsToggle() {
 
 function initPunctualityToggle() {
   const enabled = getPunctualityEnabled();
+  const departureTime = getPunctualityDepartureTime();
   applyPunctualityToggleToUi(enabled);
+  applyPunctualityDepartureTimeToUi(departureTime);
 
   function onChange(nextValue) {
     setPunctualityEnabled(nextValue);
     applyPunctualityToggleToUi(nextValue);
+    navScheduleAnchorMs = nextValue ? resolveManualScheduleAnchorMs() : null;
+    if (navActive) {
+      updateNavMenuInfo();
+    }
+  }
+
+  function onDepartureTimeChange(nextValue) {
+    setPunctualityDepartureTime(nextValue);
+    applyPunctualityDepartureTimeToUi(nextValue);
     if (navActive) {
       updateNavMenuInfo();
     }
@@ -2116,6 +2153,12 @@ function initPunctualityToggle() {
   }
   if (navPunctualityToggle) {
     navPunctualityToggle.addEventListener('change', () => onChange(!!navPunctualityToggle.checked));
+  }
+  if (punctualityDepartureTimeInput) {
+    punctualityDepartureTimeInput.addEventListener('change', () => onDepartureTimeChange(punctualityDepartureTimeInput.value));
+  }
+  if (navPunctualityDepartureTimeInput) {
+    navPunctualityDepartureTimeInput.addEventListener('change', () => onDepartureTimeChange(navPunctualityDepartureTimeInput.value));
   }
 }
 
@@ -2341,7 +2384,7 @@ function startNavigation(options = {}) {
   navProgressIdx = 0;
   navDestinationHitCount = 0;
   navStartTime = Date.now();
-  navScheduleAnchorMs = resolveNavScheduleAnchorMs(navStops);
+  navScheduleAnchorMs = getPunctualityEnabled() ? resolveManualScheduleAnchorMs() : null;
   currentNavLine = {
     ...currentRoute.data,
     points: currentRoute.data.routePoints || [],
@@ -3183,7 +3226,7 @@ function updateNavMenuInfo() {
     } else {
       const nextStop = navStopDists.find(s => s.distFromStart > currentDist + 10) || null;
       const delta = computeNextStopDelayMinutes(nextStop);
-      punctualityEl.textContent = Number.isFinite(delta) ? formatPunctuality(delta) : 'keine HAFAS-Zeit';
+      punctualityEl.textContent = Number.isFinite(delta) ? formatPunctuality(delta) : 'aus';
       punctualityEl.style.color = Number.isFinite(delta)
         ? (delta > 0 ? '#ef4444' : (delta < 0 ? '#f59e0b' : '#22c55e'))
         : 'var(--text-muted)';

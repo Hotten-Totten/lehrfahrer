@@ -274,11 +274,15 @@
       <div class="settings-section">
         <h3>Fahrplan / Pünktlichkeit</h3>
         <label class="radio-row">
-          <input id="punctualityToggle" type="checkbox" checked>
+          <input id="punctualityToggle" type="checkbox">
           <span>
-            <strong>Pünktlichkeitsanzeige (HAFAS)</strong>
-            <span class="radio-desc">Zeigt in der Navigation „zu früh/zu spät“ anhand der importierten HAFAS-Zeiten.</span>
+            <strong>Pünktlichkeitsanzeige</strong>
+            <span class="radio-desc">Zeigt in der Navigation zu früh/zu spät anhand deiner Abfahrtszeit.</span>
           </span>
+        </label>
+        <label class="radio-row" style="margin-top:8px">
+          <span style="min-width:96px;font-size:13px">Abfahrtszeit</span>
+          <input id="punctualityDepartureTime" type="time" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
         </label>
       </div>
 
@@ -372,8 +376,14 @@
             </div>
             <div style="margin-bottom: 12px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="navPunctualityToggle" checked>
-                <span style="font-size: 13px;">Pünktlichkeitsanzeige (HAFAS)</span>
+                <input type="checkbox" id="navPunctualityToggle">
+                <span style="font-size: 13px;">Pünktlichkeitsanzeige</span>
+              </label>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <span style="font-size: 13px;">Abfahrtszeit</span>
+                <input type="time" id="navPunctualityDepartureTime" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px">
               </label>
             </div>
           </div>
