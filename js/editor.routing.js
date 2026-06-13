@@ -93,14 +93,62 @@ async function fetchStreetSegment(fromStop, toStop) {
 
 // Berechnet eine Teilstrecke der Route neu
 // Benutzer wählt zwei Routenpunkte aus, dazwischen wird neu geroutet
+function escapeRerouteDialogHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function findStopsProbablyInRouteSegment(startIndex, endIndex) {
+  if (!Array.isArray(state.stops) || !Array.isArray(state.routePoints) || state.routePoints.length === 0) {
+    return [];
+  }
+
+  return state.stops
+    .map(stop => {
+      const routeIndex = findNearestRoutePointIndexFrom(0, stop);
+      if (routeIndex < startIndex || routeIndex > endIndex) return null;
+
+      const routePoint = state.routePoints[routeIndex];
+      const distanceMeters = routePoint ? distanceMetersBetween(stop, routePoint) : null;
+      return { stop, routeIndex, distanceMeters };
+    })
+    .filter(Boolean);
+}
+
+function buildRerouteSegmentConfirmMessage(startIndex, endIndex, affectedStops) {
+  const replacedRoutePointCount = Math.max(0, endIndex - startIndex - 1);
+  const warningText = "Haltestellen werden nicht gel\u00f6scht, aber k\u00f6nnen nach der Umleitung neben der Route liegen.";
+  const stopsHtml = affectedStops.length
+    ? `<ul style="margin:8px 0 0 18px;padding:0;">${affectedStops.map(({ stop, routeIndex, distanceMeters }) => {
+        const distanceText = Number.isFinite(distanceMeters) ? `, ca. ${Math.round(distanceMeters)} m entfernt` : "";
+        return `<li>${escapeRerouteDialogHtml(stop.name || stop.id || "Haltestelle")} (Route-Index ${routeIndex}${distanceText})</li>`;
+      }).join("")}</ul>`
+    : `<p style="margin:8px 0 0 0;">Keine Haltestellen im Abschnitt erkannt.</p>`;
+
+  return `
+    <p style="margin:0 0 8px 0;">Der ausgew\u00e4hlte Abschnitt wird nach Best\u00e4tigung neu geroutet.</p>
+    <dl style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 10px 0;">
+      <dt>Startpunkt-Index</dt><dd style="margin:0;">${startIndex}</dd>
+      <dt>Endpunkt-Index</dt><dd style="margin:0;">${endIndex}</dd>
+      <dt>RoutePoints ersetzt</dt><dd style="margin:0;">${replacedRoutePointCount}</dd>
+    </dl>
+    <div>
+      <strong>Vermutlich betroffene Haltestellen</strong>
+      ${stopsHtml}
+    </div>
+    <p style="margin:12px 0 0 0;"><strong>Warnung:</strong> ${warningText}</p>
+  `;
+}
+
 async function rerouteSelectedSegment() {
   if (state.selectedRoutePointIds.size !== 2) {
     setStatus("Bitte genau zwei Routenpunkte auswählen.");
     return;
-  }
-
-  if (!historyRestoreRunning) {
-    pushHistorySnapshot("Teilstrecke neu berechnet");
   }
 
   const ids = Array.from(state.selectedRoutePointIds);
@@ -118,13 +166,35 @@ async function rerouteSelectedSegment() {
 
   const startPoint = state.routePoints[startIndex];
   const endPoint = state.routePoints[endIndex];
+  const affectedStops = findStopsProbablyInRouteSegment(startIndex, endIndex);
+  const confirmed = await showConfirmDialog({
+    title: "Abschnitt pr\u00fcfen & neu routen",
+    message: buildRerouteSegmentConfirmMessage(startIndex, endIndex, affectedStops),
+    okText: "Neu routen",
+    cancelText: "Abbrechen"
+  });
+
+  if (!confirmed) {
+    setStatus("Teilstrecke neu berechnen abgebrochen.");
+    return;
+  }
+
+  if (!historyRestoreRunning) {
+    pushHistorySnapshot("Teilstrecke neu berechnet");
+  }
 
   try {
     setStatus("Teilstrecke wird neu berechnet...");
     debug("Teilstrecke wird neu berechnet", {
       startIndex,
       endIndex,
-      selectedPoints: Array.from(state.selectedRoutePointIds)
+      selectedPoints: Array.from(state.selectedRoutePointIds),
+      affectedStops: affectedStops.map(({ stop, routeIndex, distanceMeters }) => ({
+        id: stop.id,
+        name: stop.name,
+        routeIndex,
+        distanceMeters
+      }))
     });
 
     const segment = await fetchStreetSegment(
