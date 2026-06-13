@@ -26,6 +26,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  --topbar-total-h: calc(var(--safe-top) + var(--topbar-h));
 }
 
 html, body {
@@ -41,13 +42,13 @@ html, body {
 #topbar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: var(--topbar-h);
+  height: var(--topbar-total-h);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(var(--safe-top) + 0px) calc(var(--safe-right) + 12px) 0 calc(var(--safe-left) + 12px);
+  padding: var(--safe-top) calc(var(--safe-right) + 12px) 0 calc(var(--safe-left) + 12px);
   z-index: 100;
 }
 
@@ -111,10 +112,39 @@ body.is-standalone #fullscreenBtn {
   display: none !important;
 }
 
+#mobileSettingsBtn {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  #mobileSettingsBtn {
+    position: fixed;
+    right: calc(var(--safe-right) + 16px);
+    bottom: calc(var(--safe-bottom) + 16px);
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 450;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    cursor: pointer;
+  }
+
+  body.nav-mode #mobileSettingsBtn {
+    display: none !important;
+  }
+}
+
 /* ── Banner für neue Linien ─────────────────── */
 .banner-new-lines {
   position: fixed;
-  top: calc(var(--topbar-h) + var(--safe-top));
+  top: var(--topbar-total-h);
   left: 0; right: 0;
   background: linear-gradient(135deg, #ff9500 0%, #ff8c00 100%);
   color: #fff;
@@ -251,7 +281,7 @@ body.is-standalone #fullscreenBtn {
 /* ── Auswahlleiste ──────────────────────────── */
 #selectionBar {
   position: fixed;
-  top: calc(var(--topbar-h) + var(--safe-top) + var(--banner-h, 0px));
+  top: calc(var(--topbar-total-h) + var(--banner-h, 0px));
   left: 0; right: 0;
   height: var(--sel-h);
   background: var(--surface);
@@ -315,7 +345,7 @@ body.is-standalone #fullscreenBtn {
 /* ── Karte ──────────────────────────────────── */
 #map {
   position: fixed;
-  top: calc(var(--safe-top) + var(--topbar-h) + var(--sel-h));
+  top: calc(var(--topbar-total-h) + var(--sel-h));
   left: 0; right: 0;
   bottom: calc(var(--panel-peek) + var(--safe-bottom));
 }
@@ -1363,7 +1393,7 @@ body.nav-mode #navHud {
   }
 
   #panel {
-    top: calc(var(--safe-top) + var(--topbar-h) + var(--sel-h) + 6px);
+    top: calc(var(--topbar-total-h) + var(--sel-h) + 6px);
     bottom: calc(var(--safe-bottom) + 6px);
     left: auto;
     right: calc(var(--safe-right) + 6px);

@@ -96,6 +96,7 @@ const simBtn           = document.getElementById('simBtn');
 const refreshLinesBtn  = document.getElementById('refreshLinesBtn');
 const fullscreenBtn    = document.getElementById('fullscreenBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
+const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
 const startupDownloadOverlay = document.getElementById('startupDownloadOverlay');
 const startupDownloadText = document.getElementById('startupDownloadText');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -1211,7 +1212,8 @@ function bindEvents() {
   gpsBtn.addEventListener('click', toggleGPS);
   if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
   if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreenMode);
-  settingsBtn.addEventListener('click', openSettings);
+  if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
+  if (mobileSettingsBtn) mobileSettingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   settingsOverlay.addEventListener('click', e => {
     if (e.target === settingsOverlay) closeSettings();
