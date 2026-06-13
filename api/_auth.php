@@ -49,9 +49,30 @@ function lehrfahrer_is_local_request(): bool {
         || in_array($serverAddr, $localAddrs, true);
 }
 
-function lehrfahrer_require_write_auth(): void {
+function lehrfahrer_get_write_token(): string {
     $expected = getenv('LEHRFAHRER_API_TOKEN');
     $expected = is_string($expected) ? trim($expected) : '';
+
+    if ($expected !== '') {
+        return $expected;
+    }
+
+    $secretFile = __DIR__ . '/_secret.php';
+    if (!is_file($secretFile)) {
+        return '';
+    }
+
+    $secret = include $secretFile;
+    if (!is_array($secret)) {
+        return '';
+    }
+
+    $fileToken = $secret['LEHRFAHRER_API_TOKEN'] ?? '';
+    return is_string($fileToken) ? trim($fileToken) : '';
+}
+
+function lehrfahrer_require_write_auth(): void {
+    $expected = lehrfahrer_get_write_token();
 
     if ($expected === '') {
         if (lehrfahrer_is_local_request()) {
