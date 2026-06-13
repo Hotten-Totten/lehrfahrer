@@ -625,6 +625,8 @@ body.is-standalone #fullscreenBtn {
 }
 .nav-menu-overlay.hidden { display: none !important; }
 
+#downloadProgress.hidden { display: none !important; }
+
 .nav-menu-modal {
   background: var(--surface);
   border-radius: 16px;

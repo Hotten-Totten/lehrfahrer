@@ -793,11 +793,6 @@ async function downloadLineWithGPX(lineId) {
 }
 
 // ── Notification für neue Linien ──────────────────────────────
-function showNewLinesNotification() {
-  // TODO: Implementieren - Banner oben anzeigen
-  console.log('New lines available!');
-}
-
 // ── Neue Linien Banner zeigen ──────────────────────────────────
 async function showNewLinesBanner(newLineCount) {
   const banner = document.getElementById('newLinesBanner');
@@ -922,7 +917,9 @@ async function showDownloadCenterModal() {
     lineItem.appendChild(checkbox);
     lineItem.appendChild(label);
     
-    lineItem.onclick = () => checkbox.click();
+    lineItem.onclick = event => {
+      if (event.target !== checkbox) checkbox.click();
+    };
     container.appendChild(lineItem);
   });
   
@@ -2878,7 +2875,64 @@ function updateNavHud(lat, lon, forcedIdx = null) {
 
 function renderUpcomingStops(currentDist) {
   if (!navUpcomingStopsEl) return;
-  navUpcomingStopsEl.replaceChildren();
+
+  const currentMeters = Number.isFinite(currentDist) ? currentDist : 0;
+  const upcoming = (navStopDists || [])
+    .filter(item => item && item.stop && item.distFromStart > currentMeters + 10)
+    .slice(0, 4);
+
+  if (!upcoming.length) {
+    const visibleStops = getVisibleStops(currentRoute?.data?.stops || []);
+    const destination = visibleStops.length ? visibleStops[visibleStops.length - 1] : null;
+    if (!destination) {
+      navUpcomingStopsEl.replaceChildren();
+      return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'nav-upcoming-item is-destination';
+
+    const type = document.createElement('span');
+    type.className = 'nav-upcoming-type';
+    type.textContent = 'Ziel';
+
+    const name = document.createElement('span');
+    name.className = 'nav-upcoming-name';
+    name.textContent = destination.name || 'Endstation';
+
+    const dist = document.createElement('span');
+    dist.className = 'nav-upcoming-dist';
+    dist.textContent = 'erreicht';
+
+    card.append(type, name, dist);
+    navUpcomingStopsEl.replaceChildren(card);
+    return;
+  }
+
+  const nodes = upcoming.map((item, index) => {
+    const card = document.createElement('div');
+    card.className = 'nav-upcoming-item';
+    if (index === upcoming.length - 1 && item === navStopDists[navStopDists.length - 1]) {
+      card.classList.add('is-destination');
+    }
+
+    const type = document.createElement('span');
+    type.className = 'nav-upcoming-type';
+    type.textContent = index === 0 ? 'Nächster Halt' : `Halt ${index + 1}`;
+
+    const name = document.createElement('span');
+    name.className = 'nav-upcoming-name';
+    name.textContent = item.stop.name || `Haltestelle ${index + 1}`;
+
+    const dist = document.createElement('span');
+    dist.className = 'nav-upcoming-dist';
+    dist.textContent = navFormatDist(Math.max(0, item.distFromStart - currentMeters));
+
+    card.append(type, name, dist);
+    return card;
+  });
+
+  navUpcomingStopsEl.replaceChildren(...nodes);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -2977,6 +3031,9 @@ function updateNavMenuInfo() {
   }
   const traveledKm = traveledDist / 1000;
   const remainingKm = Math.max(0, totalDistKm - traveledKm);
+  const currentDist = Number.isFinite(navCumDists[navProgressIdx])
+    ? navCumDists[navProgressIdx]
+    : traveledDist;
 
   // Calculate elapsed time
   const elapsedMs = Date.now() - navStartTime;
@@ -3007,7 +3064,7 @@ function updateNavMenuInfo() {
 
 function updateNavMenuStops() {
   const listEl = document.getElementById('navUpcomingList');
-  if (!listEl || !currentNavLine || !currentNavLine.stops) {
+  if (!listEl || !navStopDists || !navStopDists.length) {
     if (listEl) listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Keine Haltestellen</div>';
     return;
   }
@@ -3022,7 +3079,10 @@ function updateNavMenuStops() {
     }
   }
 
-  const nodes = currentNavLine.stops.map(stop => {
+  const stopsWithDists = navStopDists.filter(item => item && item.stop);
+
+  const nodes = stopsWithDists.map(item => {
+    const stop = item.stop;
     const card = document.createElement('div');
     card.style.cssText = 'padding: 10px; background: var(--surface2); border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;';
 
@@ -3032,7 +3092,7 @@ function updateNavMenuStops() {
 
     const dist = document.createElement('div');
     dist.style.cssText = 'font-size: 12px; color: var(--accent); font-weight: 500;';
-    const remaining = Math.max(0, stop.distFromStart - currentDist);
+    const remaining = Math.max(0, item.distFromStart - currentDist);
     dist.textContent = navFormatDist(remaining);
 
     card.appendChild(name);
