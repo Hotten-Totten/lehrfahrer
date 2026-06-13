@@ -53,6 +53,7 @@ let currentNavLine = null;
 let navProgressIdx = 0;
 let navStartTime = 0;
 let navScheduleAnchorMs = null;
+let navDestinationHitCount = 0;
 
 // Entwickler-Debug-HUD (nur sichtbar bei explizitem Debug-Flag)
 const navPerfDebugEnabled   = resolveNavPerfDebugEnabled();
@@ -2292,6 +2293,7 @@ function startNavigation(options = {}) {
   navOffRouteActive = false;
   navRejoinBlend = 0;
   navProgressIdx = 0;
+  navDestinationHitCount = 0;
   navStartTime = Date.now();
   navScheduleAnchorMs = resolveNavScheduleAnchorMs(navStops);
   currentNavLine = {
@@ -2463,6 +2465,7 @@ function stopNavigation() {
   navOffRouteActive = false;
   navRejoinBlend = 0;
   navProgressIdx = 0;
+  navDestinationHitCount = 0;
   navStartTime = 0;
   navPaused = false;
   renderNavPauseUi();
@@ -2872,9 +2875,50 @@ function updateNavHud(lat, lon, forcedIdx = null) {
 
   renderUpcomingStops(currentDist);
 
+  if (checkNavDestinationReached(currentDist, lat, lon)) {
+    if (typeof showToast === 'function') {
+      showToast('Endhaltestelle erreicht. Navigation beendet.', 2500);
+    }
+    stopNavigation();
+    return;
+  }
+
   if (navPerfDebugEnabled) {
     noteNavPerfTick(performance.now() - perfT0);
   }
+}
+
+function checkNavDestinationReached(currentDist, lat, lon) {
+  if (!navActive || navInputMode !== 'gps' || navOffRouteActive) {
+    navDestinationHitCount = 0;
+    return false;
+  }
+
+  if (!Number.isFinite(currentDist) || !Array.isArray(navStopDists) || !navStopDists.length) {
+    navDestinationHitCount = 0;
+    return false;
+  }
+
+  const lastStopInfo = navStopDists[navStopDists.length - 1];
+  const lastStop = lastStopInfo && lastStopInfo.stop;
+  const stopLat = Number(lastStop && lastStop.lat);
+  const stopLon = Number(lastStop && lastStop.lon);
+
+  if (!lastStopInfo || !Number.isFinite(lastStopInfo.distFromStart) || !Number.isFinite(stopLat) || !Number.isFinite(stopLon)) {
+    navDestinationHitCount = 0;
+    return false;
+  }
+
+  const routeRemainingM = Math.max(0, lastStopInfo.distFromStart - currentDist);
+  const directDistanceM = haversineM(lat, lon, stopLat, stopLon);
+
+  if (routeRemainingM <= 35 && directDistanceM <= 50) {
+    navDestinationHitCount += 1;
+  } else {
+    navDestinationHitCount = 0;
+  }
+
+  return navDestinationHitCount >= 3;
 }
 
 function renderUpcomingStops(currentDist) {
