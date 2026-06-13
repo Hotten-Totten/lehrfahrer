@@ -44,6 +44,7 @@ const NAV_TURN_NOW_WINDOW_M = 18;
 const NAV_OFF_ROUTE_ENTER_M = 145;
 const NAV_REJOIN_START_M = 78;
 const NAV_REJOIN_BLEND_STEP = 0.20;
+const NAV_REJOIN_LOOKAHEAD_M = 800;
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
 const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
@@ -2812,6 +2813,34 @@ function resolveActiveTurn(currentDist) {
   return null;
 }
 
+function findForwardRejoinTarget(lat, lon) {
+  const pts = currentNavLine && Array.isArray(currentNavLine.points) ? currentNavLine.points : null;
+  if (!pts || !pts.length || !Array.isArray(navCumDists) || !navCumDists.length) return null;
+
+  const startIdx = Math.max(0, Math.min(pts.length - 1, navProgressIdx));
+  const startDist = navCumDists[startIdx];
+  if (!Number.isFinite(startDist)) return null;
+
+  const maxDist = startDist + NAV_REJOIN_LOOKAHEAD_M;
+  let best = null;
+
+  for (let i = startIdx; i < pts.length; i++) {
+    const routeDist = navCumDists[i];
+    if (!Number.isFinite(routeDist)) continue;
+    if (routeDist > maxDist) break;
+
+    const [ptLat, ptLon] = navGetLatLon(pts[i]);
+    if (!Number.isFinite(ptLat) || !Number.isFinite(ptLon)) continue;
+
+    const distanceM = haversineM(lat, lon, ptLat, ptLon);
+    if (!best || distanceM < best.distanceM) {
+      best = { index: i, lat: ptLat, lon: ptLon, distanceM };
+    }
+  }
+
+  return best;
+}
+
 function updateNavHud(lat, lon, forcedIdx = null) {
   if (!navActive || !currentRoute) return;
   const perfT0 = navPerfDebugEnabled ? performance.now() : 0;
@@ -2832,8 +2861,15 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   // Aktive Abbiegung erst wechseln, wenn aktuelle Kurve sicher passiert wurde.
   // Bei engen Doppelkurven wird der Wechsel trotzdem früh genug freigegeben.
   const activeTurnData = resolveActiveTurn(currentDist);
+  const rejoinTarget = navOffRouteActive && navInputMode === 'gps'
+    ? findForwardRejoinTarget(lat, lon)
+    : null;
 
-  if (activeTurnData) {
+  if (rejoinTarget) {
+    setNavArrowIcon('straight');
+    if (navDistEl) navDistEl.textContent = navFormatDist(rejoinTarget.distanceM);
+    if (navLabelEl) navLabelEl.textContent = 'Zur Route zurueck';
+  } else if (activeTurnData) {
     const { turn } = activeTurnData;
     const info = getTurnInfo(turn.angle);
     const distToTurnM = turn.distFromStart - currentDist;
