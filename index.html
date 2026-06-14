@@ -56,7 +56,8 @@
           <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
           <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
           <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
-          <button type="button" class="menu-item" data-click-target="startDetourDraftBtn" title="Zwischen zwei ausgewählten Routenpunkten eine manuelle Umleitung einfügen">Umleitung einfügen</button>
+          <button type="button" class="menu-item" data-click-target="startDetourWizardBtn" title="Stop-basierte Umleitung starten: Haltestellenbereich auswählen, ohne Route oder Haltestellen sofort zu verändern." aria-label="Stop-basierte Umleitung starten: Haltestellenbereich auswählen.">Umleitung starten</button>
+          <button type="button" class="menu-item" data-click-target="startDetourDraftBtn" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
         </div>
       </div>
 
@@ -107,9 +108,12 @@
       <button id="modeRouteBtn" type="button" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route manuell</button>
       <button id="startTrackBetweenStopsBtn" type="button" title="Sondertrasse zwischen zwei Haltestellen zeichnen (z. B. Wendeschleife)">Sondertrasse zeichnen</button>
       <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschließen und speichern">Sondertrasse fertig</button>
-      <button id="startDetourDraftBtn" type="button" title="Zwischen zwei ausgewählten Routenpunkten eine manuelle Umleitung einfügen">Umleitung einfügen</button>
-      <button id="finishDetourDraftBtn" type="button" title="Gezeichnete Umleitung nach Bestätigung in die Route übernehmen" style="display:none">Umleitung übernehmen</button>
-      <button id="cancelDetourDraftBtn" type="button" title="Umleitungsentwurf verwerfen und Route unverändert lassen" style="display:none">Umleitung abbrechen</button>
+      <button id="startDetourWizardBtn" type="button" title="Stop-basierte Umleitung starten: Haltestellenbereich auswählen, ohne Route oder Haltestellen sofort zu verändern." aria-label="Stop-basierte Umleitung starten: Haltestellenbereich auswählen.">Umleitung starten</button>
+      <button id="acceptDetourRangeBtn" type="button" title="Ausgewählten zusammenhängenden Haltestellenbereich für die Umleitung übernehmen. Route und Haltestellen bleiben unverändert." aria-label="Umleitungsbereich übernehmen." style="display:none">Bereich übernehmen</button>
+      <button id="cancelDetourWizardBtn" type="button" title="Stop-basierte Umleitung abbrechen. Haltestellen und Route bleiben unverändert." aria-label="Stop-basierte Umleitung abbrechen." style="display:none">Umleitung abbrechen</button>
+      <button id="startDetourDraftBtn" type="button" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
+      <button id="finishDetourDraftBtn" type="button" title="Umleitung übernehmen: Der Abschnitt zwischen den zwei gewählten Routenpunkten wird durch die gesetzten Umleitungspunkte ersetzt. Haltestellen werden nicht automatisch verschoben." aria-label="Umleitung übernehmen: Abschnitt durch gesetzte Umleitungspunkte ersetzen. Haltestellen werden nicht automatisch verschoben." style="display:none">Umleitung übernehmen</button>
+      <button id="cancelDetourDraftBtn" type="button" title="Umleitung abbrechen: Der Entwurf wird verworfen und die bestehende Route bleibt unverändert." aria-label="Umleitung abbrechen: Entwurf verwerfen und Route unverändert lassen." style="display:none">Umleitung abbrechen</button>
 
       <span class="qb-sep"></span>
 

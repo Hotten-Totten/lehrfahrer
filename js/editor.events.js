@@ -61,6 +61,17 @@ if (finishSpecialTrackBtn) {
   });
 }
 
+if (startDetourWizardBtn) {
+  startDetourWizardBtn.addEventListener("click", startDetourWizard);
+}
+
+if (acceptDetourRangeBtn) {
+  acceptDetourRangeBtn.addEventListener("click", acceptDetourStopRange);
+}
+
+if (cancelDetourWizardBtn) {
+  cancelDetourWizardBtn.addEventListener("click", cancelDetourWizard);
+}
 
 // ---------- Routing ----------
 
@@ -278,6 +289,11 @@ map.on("click", function (e) {
 
   if (mode === "detourDraft") {
     addDetourDraftPoint(e.latlng);
+    return;
+  }
+
+  if (mode === "detourSelectStops") {
+    setStatus("Umleitungsbereich wählen: Bitte Haltestellen in der Liste auswählen.");
     return;
   }
 

@@ -12,7 +12,7 @@ function buildAutosaveData() {
     routeName: routeNameInput.value.trim(),
     directionName: directionNameInput.value.trim(),
     color: lineColorInput.value,
-    routeMode: state.routeMode,
+    routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
     previewMode: state.previewMode,
 
     stops: state.stops.map(stop => ({
@@ -162,6 +162,9 @@ function clearEditorData() {
   state.specialTracks = [];
   state.currentSpecialTrack = null;
   state.detourDraft = null;
+  if (typeof resetDetourWizardState === "function") {
+    resetDetourWizardState();
+  }
   state.selected = null;
   state.routeMode = "auto";
   state.previewMode = "original";

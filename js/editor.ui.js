@@ -6,6 +6,14 @@
 // Setzt den Status-Text und spiegelt ihn optional im Debug-Log.
 function setStatus(text, level = "info") {
   statusbar.textContent = text;
+  statusbar.classList.remove("status-detour-select", "status-detour-build");
+
+  const detourPhase = state.detourWizard && state.detourWizard.phase;
+  if (detourPhase === "selectStops") {
+    statusbar.classList.add("status-detour-select");
+  } else if (detourPhase === "buildReplacement") {
+    statusbar.classList.add("status-detour-build");
+  }
 
   if (level === "warn") {
     warn(text);
@@ -160,7 +168,8 @@ function updateStats() {
     select: "Auswählen",
     specialTrack: "Sondertrasse zeichnen",
     specialTrackExtend: "Sondertrasse erweitern",
-    detourDraft: "Umleitung zeichnen"
+    detourDraft: "Umleitung zeichnen",
+    detourSelectStops: "Umleitung: Bereich wählen"
   };
 
   currentModeText.textContent = modeLabels[currentMode] || currentMode || "-";
@@ -179,12 +188,27 @@ function updateModeButtons() {
 
   const inSpecialTrack = currentMode === "specialTrack" || currentMode === "specialTrackExtend";
   const inDetourDraft = currentMode === "detourDraft";
-  if (startTrackBetweenStopsBtn) startTrackBetweenStopsBtn.style.display = (inSpecialTrack || inDetourDraft) ? "none" : "";
+  const inDetourWizard = state.detourWizard && state.detourWizard.phase === "selectStops";
+  if (startTrackBetweenStopsBtn) startTrackBetweenStopsBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
   if (finishSpecialTrackBtn) {
     finishSpecialTrackBtn.style.display = inSpecialTrack ? "block" : "none";
     finishSpecialTrackBtn.classList.toggle("active", inSpecialTrack);
   }
-  if (startDetourDraftBtn) startDetourDraftBtn.style.display = (inSpecialTrack || inDetourDraft) ? "none" : "";
+  if (startDetourWizardBtn) {
+    startDetourWizardBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
+    startDetourWizardBtn.classList.toggle("active", inDetourWizard);
+    startDetourWizardBtn.classList.toggle("detour-phase-select", inDetourWizard);
+  }
+  if (acceptDetourRangeBtn) {
+    acceptDetourRangeBtn.style.display = inDetourWizard ? "block" : "none";
+    acceptDetourRangeBtn.classList.toggle("active", inDetourWizard);
+    acceptDetourRangeBtn.classList.toggle("detour-phase-select", inDetourWizard);
+  }
+  if (cancelDetourWizardBtn) {
+    cancelDetourWizardBtn.style.display = inDetourWizard ? "block" : "none";
+    cancelDetourWizardBtn.classList.toggle("detour-phase-select", inDetourWizard);
+  }
+  if (startDetourDraftBtn) startDetourDraftBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
   if (finishDetourDraftBtn) {
     finishDetourDraftBtn.style.display = inDetourDraft ? "block" : "none";
     finishDetourDraftBtn.classList.toggle("active", inDetourDraft);
@@ -201,6 +225,9 @@ function updateModeButtons() {
 function setMode(newMode, statusText = "") {
   if (state.routeMode === "detourDraft" && newMode !== "detourDraft" && state.detourDraft && typeof cancelDetourDraft === "function") {
     cancelDetourDraft();
+  }
+  if (state.detourWizard && state.detourWizard.phase && newMode !== "detourSelectStops" && typeof cancelDetourWizard === "function") {
+    cancelDetourWizard();
   }
 
   state.routeMode = newMode;

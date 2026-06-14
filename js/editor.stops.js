@@ -61,15 +61,23 @@ function findClosestPointOnRoute(lat, lon) {
 // =========================
 
 function selectStop(stop) {
+  const inDetourStopSelection = state.detourWizard && state.detourWizard.phase === "selectStops";
+
   if (state.selectedStopIds.has(stop.id)) {
     state.selectedStopIds.delete(stop.id);
   } else {
     state.selectedStopIds.add(stop.id);
   }
 
-  if (state.selectedStopIds.size > 2) {
+  if (!inDetourStopSelection && state.selectedStopIds.size > 2) {
     const ids = Array.from(state.selectedStopIds);
     state.selectedStopIds = new Set(ids.slice(ids.length - 2));
+  }
+
+  if (inDetourStopSelection) {
+    state.detourWizard.cutStopIds = [];
+    state.detourWizard.cutStartIndex = null;
+    state.detourWizard.cutEndIndex = null;
   }
 
   state.selected = { type: "stop", ref: stop };
@@ -92,11 +100,121 @@ function selectStop(stop) {
 
   const selectedStops = state.stops.filter(s => state.selectedStopIds.has(s.id));
 
-  if (selectedStops.length === 2) {
+  if (inDetourStopSelection) {
+    const selectionLabel = selectedStops.length === 1 ? "1 Haltestelle" : `${selectedStops.length} Haltestellen`;
+    setStatus(`Umleitungsbereich wählen: ${selectionLabel} ausgewählt. Danach "Bereich übernehmen" klicken.`);
+  } else if (selectedStops.length === 2) {
     setStatus(`2 Haltestellen ausgewählt: ${selectedStops[0].name} → ${selectedStops[1].name}`);
   } else {
     setStatus(`Haltestelle ausgewählt: ${stop.name} – neue Haltestellen werden darunter eingefügt.`);
   }
+}
+
+function resetDetourWizardState() {
+  state.detourWizard = {
+    phase: null,
+    cutStopIds: [],
+    cutStartIndex: null,
+    cutEndIndex: null
+  };
+}
+
+function isDetourWizardSelectPhase() {
+  return !!(state.detourWizard && state.detourWizard.phase === "selectStops");
+}
+
+function getSelectedDetourStopRange() {
+  const selectedEntries = state.stops
+    .map((stop, index) => ({ stop, index }))
+    .filter(entry => state.selectedStopIds.has(entry.stop.id));
+
+  if (!selectedEntries.length) {
+    return {
+      ok: false,
+      message: "Bitte mindestens eine Haltestelle für den Umleitungsbereich auswählen."
+    };
+  }
+
+  const startIndex = selectedEntries[0].index;
+  const endIndex = selectedEntries[selectedEntries.length - 1].index;
+  const expectedCount = endIndex - startIndex + 1;
+
+  if (selectedEntries.length !== expectedCount) {
+    return {
+      ok: false,
+      message: "Die Auswahl ist nicht zusammenhängend. Bitte einen durchgehenden Haltestellenbereich auswählen."
+    };
+  }
+
+  return {
+    ok: true,
+    startIndex,
+    endIndex,
+    stopIds: selectedEntries.map(entry => entry.stop.id),
+    stops: selectedEntries.map(entry => entry.stop)
+  };
+}
+
+function startDetourWizard() {
+  if (state.routeMode === "detourDraft" && state.detourDraft) {
+    setStatus("Bitte die routePoint-Umleitung zuerst übernehmen oder abbrechen.", "warn");
+    return;
+  }
+
+  if (state.routeMode === "specialTrack" || state.routeMode === "specialTrackExtend") {
+    setStatus("Bitte die Sondertrasse zuerst abschließen oder abbrechen.", "warn");
+    return;
+  }
+
+  resetDetourWizardState();
+  state.detourWizard.phase = "selectStops";
+  state.selectedStopIds.clear();
+  state.selected = null;
+  state.routeMode = "detourSelectStops";
+
+  clearSelection();
+  renderStopOrderList();
+  updateModeButtons();
+  updateStats();
+  setStatus("Umleitungsbereich wählen: Haltestellen in der Liste auswählen.");
+}
+
+function acceptDetourStopRange() {
+  if (!isDetourWizardSelectPhase()) {
+    setStatus("Kein aktiver Umleitungs-Wizard.", "warn");
+    return;
+  }
+
+  const range = getSelectedDetourStopRange();
+  if (!range.ok) {
+    setStatus(range.message, "warn");
+    return;
+  }
+
+  state.detourWizard.cutStopIds = range.stopIds;
+  state.detourWizard.cutStartIndex = range.startIndex;
+  state.detourWizard.cutEndIndex = range.endIndex;
+
+  renderStopOrderList();
+  setStatus(`Umleitungsbereich übernommen: ${range.stops[0].name} bis ${range.stops[range.stops.length - 1].name}. Noch keine Route geändert.`);
+}
+
+function cancelDetourWizard() {
+  if (!state.detourWizard || !state.detourWizard.phase) {
+    setStatus("Kein aktiver Umleitungs-Wizard.", "warn");
+    return;
+  }
+
+  resetDetourWizardState();
+  state.selectedStopIds.clear();
+  state.selected = null;
+  state.routeMode = "freeStop";
+
+  clearSelection();
+  renderStopOrderList();
+  updateModeButtons();
+  updateStats();
+  setStatus("Umleitung abgebrochen. Haltestellen und Route unverändert.");
 }
 
 // =========================
@@ -236,6 +354,9 @@ function renderStopOrderList() {
 
     if (isSelectedInList || isCurrentSelection) {
       item.classList.add("active");
+    }
+    if (isDetourWizardSelectPhase() && isSelectedInList) {
+      item.classList.add("detour-cut-stop");
     }
 
     const main = document.createElement("div");
