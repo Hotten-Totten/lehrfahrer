@@ -1,96 +1,96 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Lehrfahrer Linieneditor" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Linie 10 - Route 01 - Cottbus, Hauptbahnhof - Branitz, Schloss</name>
+    <name>10 - 01 - Cottbus, Hauptbahnhof - Branitz, Schloss</name>
     <desc>Export aus dem Lehrfahrer Linieneditor | Farbe: #d32f2f</desc>
   </metadata>
   <wpt lat="51.750201" lon="14.326487">
     <name>Cottbus, Hauptbahnhof</name>
     <cmt>SollMinute:0;Stop:1</cmt>
-    <desc>Stopp 1 | SollMinute: 0 | Typ: catalog</desc>
+    <desc>Stopp 1 | SollMinute: 0</desc>
   </wpt>
   <wpt lat="51.749601" lon="14.326365">
     <name>Freie Haltestelle 2</name>
     <cmt>SollMinute:1;Stop:2</cmt>
-    <desc>Stopp 2 | SollMinute: 1 | Typ: free</desc>
+    <desc>Stopp 2 | SollMinute: 1</desc>
   </wpt>
   <wpt lat="51.749441" lon="14.328189">
     <name>Freie Haltestelle 3</name>
     <cmt>SollMinute:4;Stop:3</cmt>
-    <desc>Stopp 3 | SollMinute: 4 | Typ: free</desc>
+    <desc>Stopp 3 | SollMinute: 4</desc>
   </wpt>
   <wpt lat="51.75537" lon="14.328249">
     <name>Cottbus, Stadtmuseum</name>
-    <cmt>SollMinute:8;Stop:4</cmt>
-    <desc>Stopp 4 | SollMinute: 8 | Typ: catalog</desc>
+    <cmt>SollMinute:8.5;Stop:4</cmt>
+    <desc>Stopp 4 | SollMinute: 8.5</desc>
   </wpt>
   <wpt lat="51.757172" lon="14.332138">
     <name>Cottbus, Stadtpromenade</name>
     <cmt>SollMinute:10;Stop:5</cmt>
-    <desc>Stopp 5 | SollMinute: 10 | Typ: catalog</desc>
+    <desc>Stopp 5 | SollMinute: 10</desc>
   </wpt>
   <wpt lat="51.757639" lon="14.336939">
     <name>Cottbus, Freiheitsstraße</name>
-    <cmt>SollMinute:11;Stop:6</cmt>
-    <desc>Stopp 6 | SollMinute: 11 | Typ: catalog</desc>
+    <cmt>SollMinute:11.5;Stop:6</cmt>
+    <desc>Stopp 6 | SollMinute: 11.5</desc>
   </wpt>
   <wpt lat="51.759192" lon="14.342987">
     <name>Cottbus, Carl-Blechen-Park</name>
     <cmt>SollMinute:14;Stop:7</cmt>
-    <desc>Stopp 7 | SollMinute: 14 | Typ: catalog</desc>
+    <desc>Stopp 7 | SollMinute: 14</desc>
   </wpt>
   <wpt lat="51.756992" lon="14.346178">
     <name>Georg-Schlesinger-Straße</name>
-    <cmt>SollMinute:15;Stop:8</cmt>
-    <desc>Stopp 8 | SollMinute: 15 | Typ: catalog</desc>
+    <cmt>SollMinute:15.5;Stop:8</cmt>
+    <desc>Stopp 8 | SollMinute: 15.5</desc>
   </wpt>
   <wpt lat="51.751157" lon="14.354142">
     <name>Vorpark</name>
     <cmt>SollMinute:19;Stop:9</cmt>
-    <desc>Stopp 9 | SollMinute: 19 | Typ: catalog</desc>
+    <desc>Stopp 9 | SollMinute: 19</desc>
   </wpt>
   <wpt lat="51.75185" lon="14.360428">
     <name>Bleyerstraße</name>
-    <cmt>SollMinute:21;Stop:10</cmt>
-    <desc>Stopp 10 | SollMinute: 21 | Typ: catalog</desc>
+    <cmt>SollMinute:21.5;Stop:10</cmt>
+    <desc>Stopp 10 | SollMinute: 21.5</desc>
   </wpt>
   <wpt lat="51.752008" lon="14.363985">
     <name>Feuerbachstraße</name>
     <cmt>SollMinute:23;Stop:11</cmt>
-    <desc>Stopp 11 | SollMinute: 23 | Typ: catalog</desc>
+    <desc>Stopp 11 | SollMinute: 23</desc>
   </wpt>
   <wpt lat="51.753627" lon="14.365613">
     <name>Spitzwegstraße</name>
-    <cmt>SollMinute:24;Stop:12</cmt>
-    <desc>Stopp 12 | SollMinute: 24 | Typ: catalog</desc>
+    <cmt>SollMinute:24.5;Stop:12</cmt>
+    <desc>Stopp 12 | SollMinute: 24.5</desc>
   </wpt>
   <wpt lat="51.756956" lon="14.369387">
     <name>Branitzer Siedlung</name>
     <cmt>SollMinute:27;Stop:13</cmt>
-    <desc>Stopp 13 | SollMinute: 27 | Typ: catalog</desc>
+    <desc>Stopp 13 | SollMinute: 27</desc>
   </wpt>
   <wpt lat="51.756277" lon="14.365406">
     <name>Freie Haltestelle 14</name>
-    <cmt>SollMinute:28;Stop:14</cmt>
-    <desc>Stopp 14 | SollMinute: 28 | Typ: free</desc>
+    <cmt>SollMinute:28.5;Stop:14</cmt>
+    <desc>Stopp 14 | SollMinute: 28.5</desc>
   </wpt>
   <wpt lat="51.754609" lon="14.365305">
     <name>Spitzwegstraße</name>
-    <cmt>SollMinute:29;Stop:15</cmt>
-    <desc>Stopp 15 | SollMinute: 29 | Typ: catalog</desc>
+    <cmt>SollMinute:29.5;Stop:15</cmt>
+    <desc>Stopp 15 | SollMinute: 29.5</desc>
   </wpt>
   <wpt lat="51.751537" lon="14.363965">
     <name>Baumuniversität</name>
-    <cmt>SollMinute:30;Stop:16</cmt>
-    <desc>Stopp 16 | SollMinute: 30 | Typ: catalog</desc>
+    <cmt>SollMinute:30.5;Stop:16</cmt>
+    <desc>Stopp 16 | SollMinute: 30.5</desc>
   </wpt>
   <wpt lat="51.743324" lon="14.375011">
     <name>Schloss Branitz</name>
     <cmt>SollMinute:36;Stop:17</cmt>
-    <desc>Stopp 17 | SollMinute: 36 | Typ: catalog</desc>
+    <desc>Stopp 17 | SollMinute: 36</desc>
   </wpt>
   <trk>
-    <name>Linie 10 - Route 01 - Cottbus, Hauptbahnhof - Branitz, Schloss</name>
+    <name>10 - 01 - Cottbus, Hauptbahnhof - Branitz, Schloss</name>
     <desc>Route für Maps.me Offline-Nutzung</desc>
     <trkseg>
       <trkpt lat="51.750194" lon="14.3263"></trkpt>
