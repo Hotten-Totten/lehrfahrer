@@ -205,10 +205,14 @@ function updateModeButtons() {
     startDetourWizardBtn.classList.toggle("detour-phase-build", inDetourBuild);
   }
   if (acceptDetourRangeBtn) {
-    acceptDetourRangeBtn.style.display = inDetourSelect ? "block" : "none";
-    acceptDetourRangeBtn.classList.toggle("active", inDetourSelect);
+    acceptDetourRangeBtn.style.display = inDetourWizard ? "block" : "none";
+    acceptDetourRangeBtn.textContent = inDetourBuild ? "Umleitung uebernehmen" : "Bereich uebernehmen";
+    acceptDetourRangeBtn.title = inDetourBuild
+      ? "Temporaere Ersatzpunkte final uebernehmen und den RoutePoint-Abschnitt neu berechnen."
+      : "Ausgewaehlten zusammenhaengenden Haltestellenbereich fuer die Umleitung uebernehmen. Route und Haltestellen bleiben unveraendert.";
+    acceptDetourRangeBtn.classList.toggle("active", inDetourWizard);
     acceptDetourRangeBtn.classList.toggle("detour-phase-select", inDetourSelect);
-    acceptDetourRangeBtn.classList.toggle("detour-phase-build", false);
+    acceptDetourRangeBtn.classList.toggle("detour-phase-build", inDetourBuild);
   }
   if (cancelDetourWizardBtn) {
     cancelDetourWizardBtn.style.display = inDetourWizard ? "block" : "none";
@@ -234,6 +238,13 @@ function setMode(newMode, statusText = "") {
     cancelDetourDraft();
   }
   const isDetourWizardMode = newMode === "detourSelectStops" || newMode === "detourBuildReplacement";
+  if (state.detourWizard && state.detourWizard.phase === "buildReplacement" && !isDetourWizardMode) {
+    state.routeMode = "detourBuildReplacement";
+    updateModeButtons();
+    setStatus("Umleitungs-Wizard bleibt aktiv: Kartenklick setzt einen Durchfahrpunkt.");
+    return;
+  }
+
   if (state.detourWizard && state.detourWizard.phase && !isDetourWizardMode && typeof cancelDetourWizard === "function") {
     cancelDetourWizard();
   }

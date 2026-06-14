@@ -210,7 +210,7 @@ function startDetourDraftFromSelectedRoutePoints() {
 
   refreshDetourDraftPreview();
   updateModeButtons();
-  setStatus(`Umleitung zeichnen: Schnittpunkte ${startIndex} bis ${endIndex}. Zwischenpunkte auf der Karte setzen.`);
+  setStatus(`Umleitung zeichnen: Schnittpunkte ${startIndex} bis ${endIndex}. Punkte auf der Karte setzen, dann "Umleitung \u00fcbernehmen" klicken. "Umleitung abbrechen" l\u00e4sst alles unver\u00e4ndert. Haltestellen werden nicht automatisch verschoben.`);
 }
 
 function addDetourDraftPoint(latlng) {
@@ -221,7 +221,7 @@ function addDetourDraftPoint(latlng) {
 
   state.detourDraft.points.push([latlng.lat, latlng.lng]);
   refreshDetourDraftPreview();
-  setStatus(`Umleitungspunkt hinzugef\u00fcgt (${state.detourDraft.points.length}).`);
+  setStatus(`Umleitungspunkt hinzugef\u00fcgt (${state.detourDraft.points.length}). Weitere Punkte setzen oder mit "Umleitung \u00fcbernehmen" den Abschnitt ersetzen. Haltestellen bleiben an ihrer Position.`);
 }
 
 function refreshDetourDraftPreview() {

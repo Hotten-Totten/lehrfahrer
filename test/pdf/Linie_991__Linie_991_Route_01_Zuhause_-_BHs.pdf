@@ -1,0 +1,157 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2015 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 12.06.2026 07:22:59) Tj
+T*
+() Tj
+T*
+(Ort: test) Tj
+T*
+(Linienordner: Linie_991) Tj
+T*
+(Datei: Linie_991_Route_01_Zuhause_-_BHs) Tj
+T*
+(Linie: Linie 991) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Zuhause - BHs) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 18) Tj
+T*
+(Routenpunkte: 287) Tj
+T*
+(Linienlaenge: 6,63 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Freie Haltestelle 1) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.746127, 14.323506) Tj
+T*
+(2. Cottbus, Finsterwalder Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.746549, 14.321730) Tj
+T*
+(3. Freie Haltestelle 3) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.749215, 14.328082) Tj
+T*
+(4. Cottbus, Stadtmuseum) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.755356, 14.328279) Tj
+T*
+(5. Cottbus, August-Bebel-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.758551, 14.327900) Tj
+T*
+(6. Cottbus, Stadtverwaltung) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.762220, 14.327608) Tj
+T*
+(7. Cottbus, BTU/Bibliothek) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.767373, 14.328668) Tj
+T*
+(8. Freizeitbad Lagune) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.770761, 14.328861) Tj
+T*
+(9. Goyatzer Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.773942, 14.325486) Tj
+T*
+(10. Freie Haltestelle 10) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.777562, 14.321800) Tj
+T*
+(11. Rennbahnweg) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.777923, 14.321368) Tj
+T*
+(12. Philipp-Reis-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.781087, 14.317319) Tj
+T*
+(13. Freie Haltestelle 13) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.782717, 14.320327) Tj
+T*
+(14. Freie Haltestelle 14) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.785164, 14.320014) Tj
+T*
+(15. Nordparkstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.786402, 14.327159) Tj
+T*
+(16. Gewerbeweg) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 295 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 0 | Typ: catalog | Position: 51.786991, 14.330642) Tj
+T*
+(17. Freie Haltestelle 17) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.787479, 14.333092) Tj
+T*
+(18. Betriebshof Schmellwitz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.788851, 14.331681) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000193 00000 n 
+0000002260 00000 n 
+0000002386 00000 n 
+0000002732 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2858
+%%EOF

@@ -66,7 +66,7 @@ if (startDetourWizardBtn) {
 }
 
 if (acceptDetourRangeBtn) {
-  acceptDetourRangeBtn.addEventListener("click", acceptDetourStopRange);
+  acceptDetourRangeBtn.addEventListener("click", acceptDetourWizardAction);
 }
 
 if (cancelDetourWizardBtn) {

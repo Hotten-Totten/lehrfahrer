@@ -1,0 +1,197 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2055 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 11.06.2026 17:59:21) Tj
+T*
+() Tj
+T*
+(Ort: test) Tj
+T*
+(Linienordner: Linie_42) Tj
+T*
+(Datei: Linie_42_Route_003_Peitz,_Busbahnhof_-_Jaenschwalde,_Schule) Tj
+T*
+(Linie: Linie 42) Tj
+T*
+(Route: Route 003) Tj
+T*
+(Richtung: Peitz, Busbahnhof - Jaenschwalde, Schule) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 28) Tj
+T*
+(Routenpunkte: 509) Tj
+T*
+(Linienlaenge: 27,06 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Peitz, Busbahnhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.854615, 14.425306) Tj
+T*
+(2. Peitz, Richard-Wagner-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.855837, 14.422737) Tj
+T*
+(3. Peitz, Dammzollstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.856174, 14.411802) Tj
+T*
+(4. Peitz, Markt) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.856908, 14.410975) Tj
+T*
+(5. Peitz, August-Bebel-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.860013, 14.404430) Tj
+T*
+(6. Peitz, Martinstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.862906, 14.396870) Tj
+T*
+(7. Turnow, Kirche) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.871489, 14.384931) Tj
+T*
+(8. Turnow, Feuerwehr) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.874058, 14.393380) Tj
+T*
+(9. Preilack, Dorf) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.883984, 14.415830) Tj
+T*
+(10. Freie Haltestelle 10) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.886896, 14.418387) Tj
+T*
+(11. Freie Haltestelle 11) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.882662, 14.418774) Tj
+T*
+(12. Preilack, Am Eichengrund) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.882876, 14.421037) Tj
+T*
+(13. Tauer, West) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.892873, 14.443125) Tj
+T*
+(14. Tauer, Schuelerverkehr) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.894640, 14.449150) Tj
+T*
+(15. Tauer, Mitte) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.896160, 14.453821) Tj
+T*
+(16. Tauer, Ost) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 1248 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 0 | Typ: catalog | Position: 51.899141, 14.466868) Tj
+T*
+(17. Tauer, Ausbau) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.894708, 14.486473) Tj
+T*
+(18. Freie Haltestelle 18) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.891948, 14.492485) Tj
+T*
+(19. Drewitz, Gasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.895873, 14.507909) Tj
+T*
+(20. Freie Haltestelle 20) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.897806, 14.514389) Tj
+T*
+(21. Drewitz, Kirche) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.898482, 14.514440) Tj
+T*
+(22. Freie Haltestelle 22) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.897978, 14.514732) Tj
+T*
+(23. Freie Haltestelle 23) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.887741, 14.496922) Tj
+T*
+(24. Jaenschwalde, Dorf) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.862178, 14.498869) Tj
+T*
+(25. Jaenschwalde, Kolonie) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.863692, 14.509039) Tj
+T*
+(26. Freie Haltestelle 26) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.875374, 14.508949) Tj
+T*
+(27. Jaenschwalde, Ost) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.875154, 14.544146) Tj
+T*
+(28. Jaenschwalde, Schule) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.873492, 14.540266) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000193 00000 n 
+0000002300 00000 n 
+0000002426 00000 n 
+0000003726 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+3852
+%%EOF

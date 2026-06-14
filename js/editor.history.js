@@ -25,6 +25,7 @@ function buildHistorySnapshot() {
       minuteFromStart: stop.minuteFromStart,
       note: stop.note,
       sourceType: stop.sourceType,
+      isGhostPoint: !!stop.isGhostPoint,
       transitType: stop.transitType || null,
       directionHint: stop.directionHint || null
     })),
@@ -89,12 +90,14 @@ function applyHistorySnapshot(snapshot) {
         sourceType: stopData.sourceType || "free",
         catalogId: stopData.catalogId || null,
         transitType: stopData.transitType || stopData.type || null,
-        directionHint: stopData.directionHint || stopData.direction || null
+        directionHint: stopData.directionHint || stopData.direction || null,
+        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost)
       });
 
       stop.id = stopData.id || stop.id;
       stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
       stop.note = stopData.note || "";
+      stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost);
       updateStopMarkerTooltip(stop);
     });
 

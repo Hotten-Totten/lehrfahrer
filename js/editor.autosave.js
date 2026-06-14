@@ -30,6 +30,7 @@ function buildAutosaveData() {
       minuteMode: stop.minuteMode || "auto",
       note: stop.note,
       sourceType: stop.sourceType,
+      isGhostPoint: !!stop.isGhostPoint,
       transitType: stop.transitType || null
     })),
 
@@ -251,7 +252,8 @@ function loadAutosave() {
         sourceType: stopData.sourceType || "free",
         catalogId: stopData.catalogId || null,
         transitType: stopData.transitType || stopData.type || null,
-        directionHint: stopData.directionHint || stopData.direction || null
+        directionHint: stopData.directionHint || stopData.direction || null,
+        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost)
       });
 
       stop.id = stopData.id;
@@ -263,6 +265,7 @@ function loadAutosave() {
       stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
       stop.minuteMode = stopData.minuteMode || "auto";
       stop.note = stopData.note || "";
+      stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost);
       updateStopMarkerTooltip(stop);
 
       const n = Number(String(stop.id).replace("stop_", ""));
