@@ -2,6 +2,8 @@
 // STOP HELPERS
 // =========================
 
+let detourReplacementStopIdCounter = 1;
+
 function updateStopMarkerTooltip(stop) {
   if (!stop.marker) return;
 
@@ -111,16 +113,186 @@ function selectStop(stop) {
 }
 
 function resetDetourWizardState() {
+  clearDetourReplacementStops();
+
   state.detourWizard = {
     phase: null,
     cutStopIds: [],
     cutStartIndex: null,
-    cutEndIndex: null
+    cutEndIndex: null,
+    replacementStops: []
   };
 }
 
 function isDetourWizardSelectPhase() {
   return !!(state.detourWizard && state.detourWizard.phase === "selectStops");
+}
+
+function isDetourWizardBuildPhase() {
+  return !!(state.detourWizard && state.detourWizard.phase === "buildReplacement");
+}
+
+function isDetourCutStop(stop) {
+  if (!state.detourWizard || !state.detourWizard.phase || !stop) return false;
+
+  if (state.detourWizard.phase === "selectStops") {
+    return state.selectedStopIds.has(stop.id);
+  }
+
+  if (state.detourWizard.phase === "buildReplacement") {
+    return Array.isArray(state.detourWizard.cutStopIds) && state.detourWizard.cutStopIds.includes(stop.id);
+  }
+
+  return false;
+}
+
+function ensureDetourReplacementStops() {
+  if (!state.detourWizard) {
+    state.detourWizard = {
+      phase: null,
+      cutStopIds: [],
+      cutStartIndex: null,
+      cutEndIndex: null,
+      replacementStops: []
+    };
+  }
+
+  if (!Array.isArray(state.detourWizard.replacementStops)) {
+    state.detourWizard.replacementStops = [];
+  }
+
+  return state.detourWizard.replacementStops;
+}
+
+function getDetourReplacementStopIcon(stop, selected = false) {
+  if (stop && stop.isGhostPoint) {
+    return createStopBadgeIcon(selected ? "#475569" : "#64748b", selected ? "#0f172a" : "#334155", selected ? 22 : 18, "G");
+  }
+
+  return createStopBadgeIcon(selected ? "#7c3aed" : "#8b5cf6", selected ? "#4c1d95" : "#6d28d9", selected ? 22 : 18, "E");
+}
+
+function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = null, transitType = null, directionHint = null, isGhostPoint = false }) {
+  if (!isDetourWizardBuildPhase()) {
+    setStatus("Ersatzpunkte koennen erst nach der Bereichsauswahl gesetzt werden.", "warn");
+    return null;
+  }
+
+  const replacementStops = ensureDetourReplacementStops();
+  const stop = {
+    id: "detour_replacement_" + detourReplacementStopIdCounter++,
+    catalogId,
+    name,
+    lat,
+    lon,
+    minuteFromStart: 0,
+    minuteMode: "auto",
+    note: "",
+    sourceType,
+    isGhostPoint: !!isGhostPoint,
+    transitType,
+    directionHint,
+    marker: null
+  };
+
+  const marker = L.marker([lat, lon], {
+    draggable: true,
+    icon: getDetourReplacementStopIcon(stop, false)
+  }).addTo(map);
+
+  marker.bindTooltip(stop.name, {
+    permanent: true,
+    direction: "top",
+    offset: [0, -10],
+    className: "detour-replacement-tooltip"
+  });
+
+  marker.on("click", function () {
+    state.selected = { type: "detourReplacementStop", ref: stop };
+    marker.setIcon(getDetourReplacementStopIcon(stop, true));
+    renderStopOrderList();
+    setStatus(`Ersatzpunkt ausgewaehlt: ${stop.name}`);
+  });
+
+  marker.on("dragend", function () {
+    const pos = marker.getLatLng();
+    stop.lat = pos.lat;
+    stop.lon = pos.lng;
+    renderStopOrderList();
+    setStatus(`Ersatzpunkt verschoben: ${stop.name}`);
+  });
+
+  stop.marker = marker;
+  replacementStops.push(stop);
+  state.selected = { type: "detourReplacementStop", ref: stop };
+
+  renderStopOrderList();
+  updateModeButtons();
+  setStatus(`Ersatzpunkt hinzugefuegt: ${stop.name}`);
+
+  return stop;
+}
+
+function addDetourReplacementFreeStop(latlng) {
+  const replacementStops = ensureDetourReplacementStops();
+  const index = replacementStops.length + 1;
+
+  return createDetourReplacementStop({
+    name: `Ersatzpunkt ${index}`,
+    lat: latlng.lat,
+    lon: latlng.lng,
+    sourceType: "free",
+    isGhostPoint: false
+  });
+}
+
+function addDetourReplacementCatalogStop(catalogStop) {
+  if (!catalogStop) return null;
+
+  return createDetourReplacementStop({
+    name: catalogStop.name || "Katalog-Ersatzpunkt",
+    lat: catalogStop.lat,
+    lon: catalogStop.lon,
+    sourceType: "catalog",
+    catalogId: catalogStop.id || null,
+    transitType: catalogStop.type || null,
+    directionHint: catalogStop.directionHint || catalogStop.direction || ""
+  });
+}
+
+function removeDetourReplacementStop(stopId) {
+  const replacementStops = ensureDetourReplacementStops();
+  const index = replacementStops.findIndex(stop => stop.id === stopId);
+  if (index === -1) return;
+
+  const [stop] = replacementStops.splice(index, 1);
+  if (stop.marker) {
+    map.removeLayer(stop.marker);
+  }
+
+  if (state.selected && state.selected.type === "detourReplacementStop" && state.selected.ref.id === stopId) {
+    state.selected = null;
+  }
+
+  renderStopOrderList();
+  setStatus("Ersatzpunkt entfernt.");
+}
+
+function clearDetourReplacementStops() {
+  if (!state.detourWizard || !Array.isArray(state.detourWizard.replacementStops)) return;
+
+  state.detourWizard.replacementStops.forEach(stop => {
+    if (stop.marker) {
+      map.removeLayer(stop.marker);
+      stop.marker = null;
+    }
+  });
+
+  state.detourWizard.replacementStops = [];
+
+  if (state.selected && state.selected.type === "detourReplacementStop") {
+    state.selected = null;
+  }
 }
 
 function getSelectedDetourStopRange() {
@@ -194,9 +366,16 @@ function acceptDetourStopRange() {
   state.detourWizard.cutStopIds = range.stopIds;
   state.detourWizard.cutStartIndex = range.startIndex;
   state.detourWizard.cutEndIndex = range.endIndex;
+  state.detourWizard.replacementStops = [];
+  state.detourWizard.phase = "buildReplacement";
+  state.selectedStopIds.clear();
+  state.selected = null;
+  state.routeMode = "detourBuildReplacement";
 
   renderStopOrderList();
-  setStatus(`Umleitungsbereich übernommen: ${range.stops[0].name} bis ${range.stops[range.stops.length - 1].name}. Noch keine Route geändert.`);
+  updateModeButtons();
+  updateStats();
+  setStatus(`Ersatzhaltestellen setzen: ${range.stops[0].name} bis ${range.stops[range.stops.length - 1].name} bleibt markiert. Originalroute unveraendert.`);
 }
 
 function cancelDetourWizard() {
@@ -355,7 +534,7 @@ function renderStopOrderList() {
     if (isSelectedInList || isCurrentSelection) {
       item.classList.add("active");
     }
-    if (isDetourWizardSelectPhase() && isSelectedInList) {
+    if (isDetourCutStop(stop)) {
       item.classList.add("detour-cut-stop");
     }
 
@@ -477,6 +656,94 @@ function renderStopOrderList() {
     item.appendChild(actions);
     stopOrderList.appendChild(item);
   });
+
+  renderDetourReplacementStops();
+}
+
+function renderDetourReplacementStops() {
+  if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return;
+
+  const replacementStops = Array.isArray(state.detourWizard.replacementStops)
+    ? state.detourWizard.replacementStops
+    : [];
+
+  const section = document.createElement("div");
+  section.className = "detour-replacement-section";
+
+  const title = document.createElement("div");
+  title.className = "detour-replacement-title";
+  title.textContent = "Temporaere Ersatzpunkte";
+  section.appendChild(title);
+
+  if (!replacementStops.length) {
+    const empty = document.createElement("div");
+    empty.className = "detour-replacement-empty";
+    empty.textContent = "Noch keine Ersatzpunkte gesetzt.";
+    section.appendChild(empty);
+    stopOrderList.appendChild(section);
+    return;
+  }
+
+  replacementStops.forEach((stop, index) => {
+    const isSelected = state.selected && state.selected.type === "detourReplacementStop" && state.selected.ref.id === stop.id;
+
+    if (stop.marker && typeof getDetourReplacementStopIcon === "function") {
+      stop.marker.setIcon(getDetourReplacementStopIcon(stop, isSelected));
+    }
+
+    const item = document.createElement("div");
+    item.className = "detour-replacement-stop";
+    if (isSelected) item.classList.add("active");
+    if (stop.isGhostPoint) item.classList.add("detour-replacement-ghost");
+
+    const main = document.createElement("div");
+    main.className = "detour-replacement-main";
+
+    const indexValue = document.createElement("span");
+    indexValue.className = "stop-order-row-index";
+    indexValue.textContent = `E${index + 1}.`;
+
+    const name = document.createElement("span");
+    name.className = "stop-order-row-name";
+    name.textContent = stop.name;
+
+    const source = document.createElement("span");
+    source.className = "stop-order-row-index";
+    source.textContent = stop.isGhostPoint
+      ? "Ghostpunkt"
+      : (stop.sourceType === "catalog" ? "Katalog" : "frei");
+
+    main.appendChild(indexValue);
+    main.appendChild(name);
+    main.appendChild(source);
+
+    main.addEventListener("click", function () {
+      state.selected = { type: "detourReplacementStop", ref: stop };
+      if (stop.marker) {
+        map.setView([stop.lat, stop.lon], 17);
+      }
+      renderStopOrderList();
+      setStatus(`Ersatzpunkt ausgewaehlt: ${stop.name}`);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "stop-order-actions";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Entfernen";
+    deleteBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      removeDetourReplacementStop(stop.id);
+    });
+
+    actions.appendChild(deleteBtn);
+    item.appendChild(main);
+    item.appendChild(actions);
+    section.appendChild(item);
+  });
+
+  stopOrderList.appendChild(section);
 }
 
 // =========================

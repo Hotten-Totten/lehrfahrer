@@ -88,6 +88,11 @@ function createCatalogMarker(catalogStop) {
   );
 
   marker.on("click", function () {
+    if (state.detourWizard && state.detourWizard.phase === "buildReplacement") {
+      addDetourReplacementCatalogStop(catalogStop);
+      return;
+    }
+
     if (mode !== "catalogStop" && mode !== "freeStop") {
       setStatus("Zum Übernehmen bitte den Modus 'Haltestelle' aktivieren.");
       return;
@@ -291,6 +296,11 @@ function renderSearchResults(results) {
     item.appendChild(meta);
 
     item.addEventListener("click", function () {
+      if (state.detourWizard && state.detourWizard.phase === "buildReplacement") {
+        addDetourReplacementCatalogStop(stop);
+        return;
+      }
+
       jumpToCatalogStop(stop);
 
       if (mode === "catalogStop" || mode === "freeStop") {

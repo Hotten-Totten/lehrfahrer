@@ -292,6 +292,11 @@ map.on("click", function (e) {
     return;
   }
 
+  if (mode === "detourBuildReplacement" || (state.detourWizard && state.detourWizard.phase === "buildReplacement")) {
+    addDetourReplacementFreeStop(e.latlng);
+    return;
+  }
+
   if (mode === "detourSelectStops") {
     setStatus("Umleitungsbereich wählen: Bitte Haltestellen in der Liste auswählen.");
     return;

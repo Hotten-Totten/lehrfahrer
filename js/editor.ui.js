@@ -171,6 +171,7 @@ function updateStats() {
     detourDraft: "Umleitung zeichnen",
     detourSelectStops: "Umleitung: Bereich wählen"
   };
+  modeLabels.detourBuildReplacement = "Umleitung: Ersatz bauen";
 
   currentModeText.textContent = modeLabels[currentMode] || currentMode || "-";
 
@@ -188,7 +189,10 @@ function updateModeButtons() {
 
   const inSpecialTrack = currentMode === "specialTrack" || currentMode === "specialTrackExtend";
   const inDetourDraft = currentMode === "detourDraft";
-  const inDetourWizard = state.detourWizard && state.detourWizard.phase === "selectStops";
+  const detourPhase = state.detourWizard && state.detourWizard.phase;
+  const inDetourSelect = detourPhase === "selectStops";
+  const inDetourBuild = detourPhase === "buildReplacement";
+  const inDetourWizard = inDetourSelect || inDetourBuild;
   if (startTrackBetweenStopsBtn) startTrackBetweenStopsBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
   if (finishSpecialTrackBtn) {
     finishSpecialTrackBtn.style.display = inSpecialTrack ? "block" : "none";
@@ -197,16 +201,19 @@ function updateModeButtons() {
   if (startDetourWizardBtn) {
     startDetourWizardBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
     startDetourWizardBtn.classList.toggle("active", inDetourWizard);
-    startDetourWizardBtn.classList.toggle("detour-phase-select", inDetourWizard);
+    startDetourWizardBtn.classList.toggle("detour-phase-select", inDetourSelect);
+    startDetourWizardBtn.classList.toggle("detour-phase-build", inDetourBuild);
   }
   if (acceptDetourRangeBtn) {
-    acceptDetourRangeBtn.style.display = inDetourWizard ? "block" : "none";
-    acceptDetourRangeBtn.classList.toggle("active", inDetourWizard);
-    acceptDetourRangeBtn.classList.toggle("detour-phase-select", inDetourWizard);
+    acceptDetourRangeBtn.style.display = inDetourSelect ? "block" : "none";
+    acceptDetourRangeBtn.classList.toggle("active", inDetourSelect);
+    acceptDetourRangeBtn.classList.toggle("detour-phase-select", inDetourSelect);
+    acceptDetourRangeBtn.classList.toggle("detour-phase-build", false);
   }
   if (cancelDetourWizardBtn) {
     cancelDetourWizardBtn.style.display = inDetourWizard ? "block" : "none";
-    cancelDetourWizardBtn.classList.toggle("detour-phase-select", inDetourWizard);
+    cancelDetourWizardBtn.classList.toggle("detour-phase-select", inDetourSelect);
+    cancelDetourWizardBtn.classList.toggle("detour-phase-build", inDetourBuild);
   }
   if (startDetourDraftBtn) startDetourDraftBtn.style.display = (inSpecialTrack || inDetourDraft || inDetourWizard) ? "none" : "";
   if (finishDetourDraftBtn) {
@@ -226,7 +233,8 @@ function setMode(newMode, statusText = "") {
   if (state.routeMode === "detourDraft" && newMode !== "detourDraft" && state.detourDraft && typeof cancelDetourDraft === "function") {
     cancelDetourDraft();
   }
-  if (state.detourWizard && state.detourWizard.phase && newMode !== "detourSelectStops" && typeof cancelDetourWizard === "function") {
+  const isDetourWizardMode = newMode === "detourSelectStops" || newMode === "detourBuildReplacement";
+  if (state.detourWizard && state.detourWizard.phase && !isDetourWizardMode && typeof cancelDetourWizard === "function") {
     cancelDetourWizard();
   }
 
@@ -246,7 +254,7 @@ function updatePreviewButtons() {
 }
 
 // Baut die Haltestellenreihenfolge in der Seitenleiste neu auf.
-function renderStopOrderList() {
+function renderStopOrderListInactiveDuplicate() {
   stopOrderList.innerHTML = "";
 
   if (!state.stops.length) {
@@ -264,6 +272,10 @@ function renderStopOrderList() {
 
     if (state.selected && state.selected.type === "stop" && state.selected.ref.id === stop.id) {
       item.classList.add("active");
+    }
+
+    if (typeof isDetourCutStop === "function" && isDetourCutStop(stop)) {
+      item.classList.add("detour-cut-stop");
     }
 
     const main = document.createElement("div");
@@ -349,4 +361,92 @@ function renderStopOrderList() {
 
     stopOrderList.appendChild(item);
   });
+
+  renderDetourReplacementStops();
+}
+
+function renderDetourReplacementStopsInactiveDuplicate() {
+  if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return;
+
+  const replacementStops = Array.isArray(state.detourWizard.replacementStops)
+    ? state.detourWizard.replacementStops
+    : [];
+
+  const section = document.createElement("div");
+  section.className = "detour-replacement-section";
+
+  const title = document.createElement("div");
+  title.className = "detour-replacement-title";
+  title.textContent = "Temporaere Ersatzpunkte";
+  section.appendChild(title);
+
+  if (!replacementStops.length) {
+    const empty = document.createElement("div");
+    empty.className = "detour-replacement-empty";
+    empty.textContent = "Noch keine Ersatzpunkte gesetzt.";
+    section.appendChild(empty);
+    stopOrderList.appendChild(section);
+    return;
+  }
+
+  replacementStops.forEach((stop, index) => {
+    const isSelected = state.selected && state.selected.type === "detourReplacementStop" && state.selected.ref.id === stop.id;
+
+    if (stop.marker && typeof getDetourReplacementStopIcon === "function") {
+      stop.marker.setIcon(getDetourReplacementStopIcon(stop, isSelected));
+    }
+
+    const item = document.createElement("div");
+    item.className = "detour-replacement-stop";
+    if (isSelected) item.classList.add("active");
+    if (stop.isGhostPoint) item.classList.add("detour-replacement-ghost");
+
+    const main = document.createElement("div");
+    main.className = "detour-replacement-main";
+
+    const idx = document.createElement("div");
+    idx.className = "stop-order-index";
+    idx.textContent = `Ersatz ${index + 1}`;
+
+    const name = document.createElement("div");
+    name.className = "stop-order-name";
+    name.textContent = stop.name;
+
+    const source = document.createElement("div");
+    source.className = "stop-order-index";
+    source.textContent = stop.isGhostPoint
+      ? "Ghostpunkt"
+      : (stop.sourceType === "catalog" ? "Katalog-Ersatz" : "Freier Ersatz");
+
+    main.appendChild(idx);
+    main.appendChild(name);
+    main.appendChild(source);
+
+    main.addEventListener("click", function () {
+      state.selected = { type: "detourReplacementStop", ref: stop };
+      if (stop.marker) {
+        map.setView([stop.lat, stop.lon], 17);
+      }
+      renderStopOrderList();
+      setStatus(`Ersatzpunkt ausgewaehlt: ${stop.name}`);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "stop-order-actions";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Entfernen";
+    deleteBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      removeDetourReplacementStop(stop.id);
+    });
+
+    actions.appendChild(deleteBtn);
+    item.appendChild(main);
+    item.appendChild(actions);
+    section.appendChild(item);
+  });
+
+  stopOrderList.appendChild(section);
 }

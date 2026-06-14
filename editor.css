@@ -129,6 +129,14 @@ button.detour-phase-select {
   font-weight: bold;
 }
 
+#quickbar button.detour-phase-build,
+button.detour-phase-build {
+  background: #ede9fe;
+  border-color: #7c3aed;
+  color: #4c1d95;
+  font-weight: bold;
+}
+
 .token-status {
   margin-left: auto;
   align-self: center;
@@ -502,6 +510,62 @@ button.danger:hover {
   border-color: #f59e0b;
   background: #fffbeb;
   box-shadow: inset 4px 0 0 #f59e0b;
+}
+
+.detour-replacement-section {
+  border-top: 1px dashed #c4b5fd;
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+.detour-replacement-title {
+  color: #4c1d95;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.detour-replacement-empty {
+  color: #6d28d9;
+  font-size: 13px;
+  padding: 8px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+}
+
+.detour-replacement-stop {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  background: #f5f3ff;
+  box-shadow: inset 4px 0 0 #7c3aed;
+  margin-top: 6px;
+  padding: 8px;
+}
+
+.detour-replacement-stop.active {
+  border-color: #7c3aed;
+  background: #ede9fe;
+}
+
+.detour-replacement-stop.detour-replacement-ghost {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  box-shadow: inset 4px 0 0 #64748b;
+}
+
+.detour-replacement-main {
+  cursor: pointer;
+}
+
+.detour-replacement-tooltip {
+  color: #4c1d95;
+  font-weight: 700;
 }
 
 .stop-order-main {
