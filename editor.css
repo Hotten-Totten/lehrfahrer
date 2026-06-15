@@ -121,6 +121,22 @@ body {
   font-weight: bold;
 }
 
+.quickbar-select-wrap {
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.quickbar-select-wrap select {
+  background: #fff;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  color: #111827;
+  font-size: 13px;
+  padding: 5px 8px;
+}
+
 #quickbar button.detour-phase-select,
 button.detour-phase-select {
   background: #fef3c7;
@@ -512,6 +528,18 @@ button.danger:hover {
   box-shadow: inset 4px 0 0 #f59e0b;
 }
 
+.stop-order-item.detour-replacement-line-stop {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: inset 4px 0 0 #3b82f6;
+}
+
+.stop-order-item.detour-pass-through-stop {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  box-shadow: inset 4px 0 0 #64748b;
+}
+
 .detour-replacement-section {
   border-top: 1px dashed #c4b5fd;
   margin-top: 6px;
@@ -565,6 +593,46 @@ button.danger:hover {
 
 .detour-replacement-tooltip {
   color: #4c1d95;
+  font-weight: 700;
+}
+
+.detour-manual-route-section {
+  border-top: 1px dashed #67e8f9;
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+.detour-manual-route-title {
+  color: #0e7490;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.detour-manual-route-empty {
+  color: #0e7490;
+  font-size: 13px;
+  padding: 8px;
+  background: #ecfeff;
+}
+
+.detour-manual-route-point {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border-color: #67e8f9;
+  background: #ecfeff;
+  box-shadow: inset 4px 0 0 #06b6d4;
+}
+
+.detour-manual-route-point.active {
+  border-color: #0891b2;
+  background: #cffafe;
+}
+
+.detour-manual-route-tooltip {
+  color: #0e7490;
   font-weight: 700;
 }
 

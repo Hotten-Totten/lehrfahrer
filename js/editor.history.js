@@ -26,6 +26,11 @@ function buildHistorySnapshot() {
       note: stop.note,
       sourceType: stop.sourceType,
       isGhostPoint: !!stop.isGhostPoint,
+      isDetourReplacement: !!stop.isDetourReplacement,
+      detourId: stop.detourId || null,
+      detourRole: stop.detourRole || null,
+      detourOriginalStopIds: Array.isArray(stop.detourOriginalStopIds) ? [...stop.detourOriginalStopIds] : [],
+      detourOriginalStopNames: Array.isArray(stop.detourOriginalStopNames) ? [...stop.detourOriginalStopNames] : [],
       transitType: stop.transitType || null,
       directionHint: stop.directionHint || null
     })),
@@ -91,13 +96,23 @@ function applyHistorySnapshot(snapshot) {
         catalogId: stopData.catalogId || null,
         transitType: stopData.transitType || stopData.type || null,
         directionHint: stopData.directionHint || stopData.direction || null,
-        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost)
+        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost),
+        isDetourReplacement: !!stopData.isDetourReplacement,
+        detourId: stopData.detourId || null,
+        detourRole: stopData.detourRole || null,
+        detourOriginalStopIds: Array.isArray(stopData.detourOriginalStopIds) ? stopData.detourOriginalStopIds : [],
+        detourOriginalStopNames: Array.isArray(stopData.detourOriginalStopNames) ? stopData.detourOriginalStopNames : []
       });
 
       stop.id = stopData.id || stop.id;
       stop.minuteFromStart = Number(stopData.minuteFromStart || 0);
       stop.note = stopData.note || "";
       stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost);
+      stop.isDetourReplacement = !!stopData.isDetourReplacement;
+      stop.detourId = stopData.detourId || null;
+      stop.detourRole = stopData.detourRole || null;
+      stop.detourOriginalStopIds = Array.isArray(stopData.detourOriginalStopIds) ? [...stopData.detourOriginalStopIds] : [];
+      stop.detourOriginalStopNames = Array.isArray(stopData.detourOriginalStopNames) ? [...stopData.detourOriginalStopNames] : [];
       updateStopMarkerTooltip(stop);
     });
 

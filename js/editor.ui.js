@@ -208,11 +208,30 @@ function updateModeButtons() {
     acceptDetourRangeBtn.style.display = inDetourWizard ? "block" : "none";
     acceptDetourRangeBtn.textContent = inDetourBuild ? "Umleitung uebernehmen" : "Bereich uebernehmen";
     acceptDetourRangeBtn.title = inDetourBuild
-      ? "Temporaere Ersatzpunkte final uebernehmen und den RoutePoint-Abschnitt neu berechnen."
+      ? "Temporaere Ersatzhaltestellen und Durchfahrpunkte final uebernehmen und den RoutePoint-Abschnitt neu berechnen."
       : "Ausgewaehlten zusammenhaengenden Haltestellenbereich fuer die Umleitung uebernehmen. Route und Haltestellen bleiben unveraendert.";
+    acceptDetourRangeBtn.setAttribute("aria-label", inDetourBuild
+      ? "Umleitung uebernehmen: Temporaere Ersatzhaltestellen und Durchfahrpunkte final uebernehmen und den RoutePoint-Abschnitt neu berechnen."
+      : "Bereich uebernehmen: Ausgewaehlten zusammenhaengenden Haltestellenbereich fuer die Umleitung uebernehmen. Route und Haltestellen bleiben unveraendert.");
     acceptDetourRangeBtn.classList.toggle("active", inDetourWizard);
     acceptDetourRangeBtn.classList.toggle("detour-phase-select", inDetourSelect);
     acceptDetourRangeBtn.classList.toggle("detour-phase-build", inDetourBuild);
+  }
+  if (detourRoutingModeWrap) {
+    detourRoutingModeWrap.style.display = inDetourBuild ? "inline-flex" : "none";
+  }
+  if (detourRoutingModeSelect && state.detourWizard) {
+    detourRoutingModeSelect.value = state.detourWizard.routingMode === "guidedStreet"
+      ? "guidedStreet"
+      : (state.detourWizard.routingMode === "manual" ? "manual" : "street");
+  }
+  if (detourManualInputModeWrap) {
+    const showManualInputMode = inDetourBuild && state.detourWizard &&
+      (state.detourWizard.routingMode === "manual" || state.detourWizard.routingMode === "guidedStreet");
+    detourManualInputModeWrap.style.display = showManualInputMode ? "inline-flex" : "none";
+  }
+  if (detourManualInputModeSelect && state.detourWizard) {
+    detourManualInputModeSelect.value = state.detourWizard.manualInputMode === "passThroughStop" ? "passThroughStop" : "guidePoint";
   }
   if (cancelDetourWizardBtn) {
     cancelDetourWizardBtn.style.display = inDetourWizard ? "block" : "none";
@@ -241,7 +260,14 @@ function setMode(newMode, statusText = "") {
   if (state.detourWizard && state.detourWizard.phase === "buildReplacement" && !isDetourWizardMode) {
     state.routeMode = "detourBuildReplacement";
     updateModeButtons();
-    setStatus("Umleitungs-Wizard bleibt aktiv: Kartenklick setzt einen Durchfahrpunkt.");
+    if (
+      (state.detourWizard.routingMode === "manual" || state.detourWizard.routingMode === "guidedStreet") &&
+      state.detourWizard.manualInputMode !== "passThroughStop"
+    ) {
+      setStatus("Umleitungs-Wizard bleibt aktiv: Kartenklick setzt Fahrwegpunkt.");
+    } else {
+      setStatus("Umleitungs-Wizard bleibt aktiv: Kartenklick setzt einen Durchfahrpunkt.");
+    }
     return;
   }
 
@@ -388,13 +414,13 @@ function renderDetourReplacementStopsInactiveDuplicate() {
 
   const title = document.createElement("div");
   title.className = "detour-replacement-title";
-  title.textContent = "Temporaere Ersatzpunkte";
+  title.textContent = "Temporaere Durchfahrpunkte / Ersatzhaltestellen";
   section.appendChild(title);
 
   if (!replacementStops.length) {
     const empty = document.createElement("div");
     empty.className = "detour-replacement-empty";
-    empty.textContent = "Noch keine Ersatzpunkte gesetzt.";
+    empty.textContent = "Noch keine Ersatzhaltestellen oder Durchfahrpunkte gesetzt.";
     section.appendChild(empty);
     stopOrderList.appendChild(section);
     return;
@@ -439,7 +465,7 @@ function renderDetourReplacementStopsInactiveDuplicate() {
         map.setView([stop.lat, stop.lon], 17);
       }
       renderStopOrderList();
-      setStatus(`Ersatzpunkt ausgewaehlt: ${stop.name}`);
+      setStatus(`${stop.isGhostPoint ? "Durchfahrpunkt" : "Ersatzhaltestelle"} ausgewaehlt: ${stop.name}`);
     });
 
     const actions = document.createElement("div");

@@ -49,6 +49,9 @@ const state = {
     cutStopIds: [],
     cutStartIndex: null,
     cutEndIndex: null,
+    routingMode: "street",
+    manualInputMode: "guidePoint",
+    manualRoutePoints: [],
     replacementStops: []
   },
   selected: null,
@@ -405,6 +408,10 @@ function getLineStopIcon(stop, selected = false) {
     return selected
       ? (ICONS.stopGhostSelected || ICONS.stopGhost || ICONS.stop)
       : (ICONS.stopGhost || ICONS.stop);
+  }
+
+  if (stop && stop.isDetourReplacement) {
+    return createStopBadgeIcon(selected ? "#2563eb" : "#60a5fa", selected ? "#1e3a8a" : "#1d4ed8", selected ? 22 : 18, "E");
   }
 
   return createTransitStopIcon(stop, selected ? 22 : 18);

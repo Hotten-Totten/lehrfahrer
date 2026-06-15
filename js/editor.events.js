@@ -69,6 +69,18 @@ if (acceptDetourRangeBtn) {
   acceptDetourRangeBtn.addEventListener("click", acceptDetourWizardAction);
 }
 
+if (detourRoutingModeSelect) {
+  detourRoutingModeSelect.addEventListener("change", function () {
+    setDetourWizardRoutingMode(detourRoutingModeSelect.value);
+  });
+}
+
+if (detourManualInputModeSelect) {
+  detourManualInputModeSelect.addEventListener("change", function () {
+    setDetourWizardManualInputMode(detourManualInputModeSelect.value);
+  });
+}
+
 if (cancelDetourWizardBtn) {
   cancelDetourWizardBtn.addEventListener("click", cancelDetourWizard);
 }
@@ -293,6 +305,14 @@ map.on("click", function (e) {
   }
 
   if (mode === "detourBuildReplacement" || (state.detourWizard && state.detourWizard.phase === "buildReplacement")) {
+    if (
+      state.detourWizard &&
+      (state.detourWizard.routingMode === "manual" || state.detourWizard.routingMode === "guidedStreet") &&
+      state.detourWizard.manualInputMode !== "passThroughStop"
+    ) {
+      addDetourManualRoutePoint(e.latlng);
+      return;
+    }
     addDetourReplacementFreeStop(e.latlng);
     return;
   }

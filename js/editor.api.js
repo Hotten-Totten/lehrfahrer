@@ -205,6 +205,11 @@ const stops = state.stops.map((stop, index) => ({
   note: stop.note || "",
   isGhostPoint: !!stop.isGhostPoint,
   isGhost: !!stop.isGhostPoint,
+  isDetourReplacement: !!stop.isDetourReplacement,
+  detourId: stop.detourId || null,
+  detourRole: stop.detourRole || null,
+  detourOriginalStopIds: Array.isArray(stop.detourOriginalStopIds) ? [...stop.detourOriginalStopIds] : [],
+  detourOriginalStopNames: Array.isArray(stop.detourOriginalStopNames) ? [...stop.detourOriginalStopNames] : [],
 
   isTimingPoint: index === 0 || index === state.stops.length - 1
 }));
@@ -1522,7 +1527,12 @@ function loadLineFromData(data) {
           (stopData.sourceType || "free") === "free" &&
           /^Freie Haltestelle\s+\d+$/i.test(String(stopData.name || ""))
         )
-      )
+      ),
+      isDetourReplacement: !!stopData.isDetourReplacement,
+      detourId: stopData.detourId || null,
+      detourRole: stopData.detourRole || null,
+      detourOriginalStopIds: Array.isArray(stopData.detourOriginalStopIds) ? stopData.detourOriginalStopIds : [],
+      detourOriginalStopNames: Array.isArray(stopData.detourOriginalStopNames) ? stopData.detourOriginalStopNames : []
     });
 
     stop.id = stopData.id || stop.id;
@@ -1547,6 +1557,11 @@ function loadLineFromData(data) {
         /^Freie Haltestelle\s+\d+$/i.test(String(stopData.name || ""))
       )
     );
+    stop.isDetourReplacement = !!stopData.isDetourReplacement;
+    stop.detourId = stopData.detourId || null;
+    stop.detourRole = stopData.detourRole || null;
+    stop.detourOriginalStopIds = Array.isArray(stopData.detourOriginalStopIds) ? [...stopData.detourOriginalStopIds] : [];
+    stop.detourOriginalStopNames = Array.isArray(stopData.detourOriginalStopNames) ? [...stopData.detourOriginalStopNames] : [];
     updateStopMarkerTooltip(stop);
 
     const n = Number(String(stop.id).replace("stop_", ""));

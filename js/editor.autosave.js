@@ -31,6 +31,11 @@ function buildAutosaveData() {
       note: stop.note,
       sourceType: stop.sourceType,
       isGhostPoint: !!stop.isGhostPoint,
+      isDetourReplacement: !!stop.isDetourReplacement,
+      detourId: stop.detourId || null,
+      detourRole: stop.detourRole || null,
+      detourOriginalStopIds: Array.isArray(stop.detourOriginalStopIds) ? [...stop.detourOriginalStopIds] : [],
+      detourOriginalStopNames: Array.isArray(stop.detourOriginalStopNames) ? [...stop.detourOriginalStopNames] : [],
       transitType: stop.transitType || null
     })),
 
@@ -253,7 +258,12 @@ function loadAutosave() {
         catalogId: stopData.catalogId || null,
         transitType: stopData.transitType || stopData.type || null,
         directionHint: stopData.directionHint || stopData.direction || null,
-        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost)
+        isGhostPoint: !!(stopData.isGhostPoint || stopData.isGhost),
+        isDetourReplacement: !!stopData.isDetourReplacement,
+        detourId: stopData.detourId || null,
+        detourRole: stopData.detourRole || null,
+        detourOriginalStopIds: Array.isArray(stopData.detourOriginalStopIds) ? stopData.detourOriginalStopIds : [],
+        detourOriginalStopNames: Array.isArray(stopData.detourOriginalStopNames) ? stopData.detourOriginalStopNames : []
       });
 
       stop.id = stopData.id;
@@ -266,6 +276,11 @@ function loadAutosave() {
       stop.minuteMode = stopData.minuteMode || "auto";
       stop.note = stopData.note || "";
       stop.isGhostPoint = !!(stopData.isGhostPoint || stopData.isGhost);
+      stop.isDetourReplacement = !!stopData.isDetourReplacement;
+      stop.detourId = stopData.detourId || null;
+      stop.detourRole = stopData.detourRole || null;
+      stop.detourOriginalStopIds = Array.isArray(stopData.detourOriginalStopIds) ? [...stopData.detourOriginalStopIds] : [];
+      stop.detourOriginalStopNames = Array.isArray(stopData.detourOriginalStopNames) ? [...stopData.detourOriginalStopNames] : [];
       updateStopMarkerTooltip(stop);
 
       const n = Number(String(stop.id).replace("stop_", ""));
