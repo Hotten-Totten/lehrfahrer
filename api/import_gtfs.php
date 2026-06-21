@@ -4,6 +4,7 @@ require_once __DIR__ . '/_auth.php';
 lehrfahrer_require_write_auth();
 
 const GTFS_MAX_UPLOAD_BYTES = 262144000;
+const GTFS_MAX_FILTERED_ROUTES = 5000;
 const GTFS_SESSION_TTL_SECONDS = 7200;
 
 function gtfs_reply(array $payload, int $status = 200): void {
@@ -95,13 +96,59 @@ function gtfs_route_label(array $route): string {
     return strval($route['route_id'] ?? 'Linie');
 }
 
-function gtfs_read_routes(ZipArchive $zip): array {
+function gtfs_read_agencies(ZipArchive $zip): array {
+    if (gtfs_find_zip_entry($zip, 'agency.txt') === null) return [];
+    [$handle, $headers] = gtfs_open_zip_table($zip, 'agency.txt', ['agency_id', 'agency_name']);
+    $agencies = [];
+    while (($values = fgetcsv($handle)) !== false) {
+        $row = gtfs_row($headers, $values);
+        $agencyId = $row['agency_id'] ?? '';
+        if ($agencyId === '') continue;
+        $agencies[$agencyId] = $row['agency_name'] ?? '';
+    }
+    fclose($handle);
+    return $agencies;
+}
+
+function gtfs_contains_text(string $haystack, string $needle): bool {
+    if ($needle === '') return true;
+    if (function_exists('mb_stripos')) return mb_stripos($haystack, $needle, 0, 'UTF-8') !== false;
+    return stripos($haystack, $needle) !== false;
+}
+
+function gtfs_is_vbb_agency(string $agencyName): bool {
+    if ($agencyName === '') return false;
+    return preg_match(
+        '/berliner verkehrsbetriebe|s.?bahn berlin|cottbusverkehr|havelbus|oberhavel|uckerm[aä]rk|prignitz|barnimer|niederbarnim|ostdeutsche eisenbahn|regiobus potsdam|regionalverkehr spreewald|stra[sß]enverkehr frankfurt|strausberger|m[aä]rkische (verkehr|vg)|teltow.?fl[aä]ming|verkehrsbetrieb potsdam|verkehrsbetriebe brandenburg|db regiobus ost|ostprignitz.?ruppin|sch[oö]neicher|woltersdorf|verkehrsverbund berlin.?brandenburg|\bvbb\b/iu',
+        $agencyName
+    ) === 1;
+}
+
+function gtfs_read_routes(ZipArchive $zip, array $filters = []): array {
+    $agencies = gtfs_read_agencies($zip);
     [$handle, $headers] = gtfs_open_zip_table($zip, 'routes.txt', ['route_id']);
+    $search = trim(strval($filters['search'] ?? ''));
+    $agencyFilter = trim(strval($filters['agencyFilter'] ?? ''));
+    $regionFilter = strtolower(trim(strval($filters['regionFilter'] ?? 'vbb')));
     $routes = [];
     while (($values = fgetcsv($handle)) !== false) {
         $row = gtfs_row($headers, $values);
         $routeId = $row['route_id'] ?? '';
         if ($routeId === '') continue;
+        $agencyId = $row['agency_id'] ?? '';
+        $agencyName = strval($agencies[$agencyId] ?? '');
+        $searchText = implode(' ', [
+            $routeId,
+            $row['route_short_name'] ?? '',
+            $row['route_long_name'] ?? '',
+            $row['route_type'] ?? '',
+            $agencyId,
+            $agencyName,
+        ]);
+        if ($search !== '' && !gtfs_contains_text($searchText, $search)) continue;
+        if ($agencyFilter !== '' && !gtfs_contains_text($agencyId . ' ' . $agencyName, $agencyFilter)) continue;
+        if ($search === '' && $agencyFilter === '' && $regionFilter === 'vbb' && !gtfs_is_vbb_agency($agencyName)) continue;
+
         $routes[$routeId] = [
             'id' => $routeId,
             'name' => gtfs_route_label($row),
@@ -109,10 +156,16 @@ function gtfs_read_routes(ZipArchive $zip): array {
             'longName' => $row['route_long_name'] ?? '',
             'routeType' => $row['route_type'] ?? '',
             'color' => $row['route_color'] ?? '',
+            'agencyId' => $agencyId,
+            'agencyName' => $agencyName,
         ];
-        if (count($routes) > 10000) {
+        if (count($routes) > GTFS_MAX_FILTERED_ROUTES) {
             fclose($handle);
-            gtfs_error(413, 'GTFS enthält mehr als 10.000 Linien.');
+            gtfs_error(
+                413,
+                'Der GTFS-Filter liefert mehr als ' . GTFS_MAX_FILTERED_ROUTES
+                . ' Linien. Bitte Suchtext oder Betreiberfilter genauer eingrenzen.'
+            );
         }
     }
     fclose($handle);
@@ -320,6 +373,14 @@ function gtfs_upload_error_message(int $errorCode): string {
     return $messages[$errorCode] ?? ('Unbekannter PHP-Uploadfehler ' . $errorCode . '.');
 }
 
+function gtfs_request_route_filters(): array {
+    return [
+        'search' => trim(strval($_POST['search'] ?? '')),
+        'agencyFilter' => trim(strval($_POST['agencyFilter'] ?? '')),
+        'regionFilter' => strtolower(trim(strval($_POST['regionFilter'] ?? 'vbb'))) ?: 'vbb',
+    ];
+}
+
 function gtfs_handle_upload(): void {
     if (!class_exists('ZipArchive')) {
         gtfs_error(501, 'GTFS-Import benötigt PHP ZipArchive.');
@@ -353,10 +414,10 @@ function gtfs_handle_upload(): void {
     if ($size <= 0 || $size > GTFS_MAX_UPLOAD_BYTES) {
         gtfs_error(413, 'GTFS-ZIP muss zwischen 1 Byte und 250 MB groß sein. ' . $limitsText);
     }
-    gtfs_start_session(strval($upload['tmp_name']), true, 'Browser-Upload');
+    gtfs_start_session(strval($upload['tmp_name']), true, 'Browser-Upload', gtfs_request_route_filters());
 }
 
-function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel): void {
+function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel, array $filters): void {
     if (!class_exists('ZipArchive')) {
         gtfs_error(501, 'GTFS-Import benötigt PHP ZipArchive.');
     }
@@ -400,6 +461,7 @@ function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel)
         'label' => $sourceLabel,
         'size' => (int)@filesize($sessionZipPath),
         'mtime' => (int)@filemtime($sessionZipPath),
+        'filters' => $filters,
     ];
     if (@file_put_contents(
         $dir . DIRECTORY_SEPARATOR . 'source.json',
@@ -411,9 +473,22 @@ function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel)
         gtfs_error(500, 'GTFS-Sitzungsdaten können nicht gespeichert werden.');
     }
 
-    $routes = gtfs_read_routes($zip);
+    $routes = gtfs_read_routes($zip, $filters);
+    if (@file_put_contents(
+        $dir . DIRECTORY_SEPARATOR . 'routes.json',
+        json_encode($routes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    ) === false) {
+        $zip->close();
+        gtfs_error(500, 'Gefilterte GTFS-Linienliste kann nicht temporär gespeichert werden.');
+    }
     $zip->close();
-    gtfs_reply(['ok' => true, 'token' => $token, 'routes' => $routes, 'routeCount' => count($routes)]);
+    gtfs_reply([
+        'ok' => true,
+        'token' => $token,
+        'routes' => $routes,
+        'routeCount' => count($routes),
+        'filters' => $filters,
+    ]);
 }
 
 function gtfs_server_zip_path(): string {
@@ -461,7 +536,21 @@ function gtfs_open_session_zip(string $dir): ZipArchive {
 }
 
 function gtfs_handle_server_zip(): void {
-    gtfs_start_session(gtfs_server_zip_path(), false, 'Server gtfs/data/gtfs/latest.zip');
+    gtfs_start_session(
+        gtfs_server_zip_path(),
+        false,
+        'Server gtfs/data/gtfs/latest.zip',
+        gtfs_request_route_filters()
+    );
+}
+
+function gtfs_load_listed_route(string $dir, string $routeId): array {
+    $routes = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'routes.json')), true);
+    if (!is_array($routes)) gtfs_error(410, 'Gefilterte GTFS-Linienliste ist nicht mehr verfügbar.');
+    foreach ($routes as $route) {
+        if (is_array($route) && ($route['id'] ?? '') === $routeId) return $route;
+    }
+    gtfs_error(404, 'Gewählte Linie gehört nicht zur gefilterten GTFS-Linienliste.');
 }
 
 function gtfs_save_variants(string $dir, string $routeId, array $variants): void {
@@ -501,6 +590,7 @@ try {
     if ($action === 'variants') {
         $routeId = trim(strval($_POST['routeId'] ?? ''));
         if ($routeId === '') gtfs_error(400, 'routeId fehlt.');
+        gtfs_load_listed_route($dir, $routeId);
         $zip = gtfs_open_session_zip($dir);
         $variants = gtfs_build_variants($zip, $routeId);
         $zip->close();
@@ -543,12 +633,8 @@ try {
             ];
         }
         if (count($editorStops) < 2) gtfs_error(422, 'Stopkoordinaten der Variante sind unvollständig.');
-        $routes = gtfs_read_routes($zip);
         $zip->close();
-        $route = null;
-        foreach ($routes as $candidate) {
-            if ($candidate['id'] === $routeId) { $route = $candidate; break; }
-        }
+        $route = gtfs_load_listed_route($dir, $routeId);
         $lineName = trim(strval($route['shortName'] ?? '')) ?: trim(strval($route['name'] ?? $routeId));
         $direction = trim(strval($variant['headsign'] ?? '')) ?: ($editorStops[0]['name'] . ' – ' . $editorStops[count($editorStops) - 1]['name']);
         $line = [

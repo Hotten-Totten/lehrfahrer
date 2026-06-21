@@ -1029,11 +1029,17 @@ async function runGtfsImport(loadSource, initialMessage) {
       const upload = await loadSource();
       const routes = (Array.isArray(upload.routes) ? upload.routes : []).map(route => ({
         ...route,
-        meta: [route.id ? `route_id ${route.id}` : "", route.routeType ? `Typ ${route.routeType}` : ""]
+        meta: [
+          route.agencyName || (route.agencyId ? `Agency ${route.agencyId}` : "Betreiber unbekannt"),
+          route.routeType ? `route_type ${route.routeType}` : "",
+          route.id ? `route_id ${route.id}` : ""
+        ]
           .filter(Boolean)
           .join(" | ")
       }));
-      if (!routes.length) throw new Error("Die GTFS-Datei enthaelt keine importierbaren Linien.");
+      if (!routes.length) {
+        throw new Error("Der GTFS-Filter liefert keine Linien. Bitte einen anderen Suchtext verwenden.");
+      }
 
       updateVbbImportProgressPopup(`${routes.length} Linien gefunden.`, {
         level: "info",
@@ -1130,7 +1136,22 @@ async function runGtfsImport(loadSource, initialMessage) {
   }
 }
 
+function promptGtfsRouteFilters() {
+  const searchInput = prompt(
+    "GTFS-Linienfilter:\nLeer lassen: VBB-/Berlin-/Brandenburg-Betreiber anzeigen.\nSuchtext eingeben: deutschlandweit nach Linie oder Betreiber suchen.",
+    ""
+  );
+  if (searchInput === null) return null;
+  const search = String(searchInput || "").trim();
+  return {
+    search,
+    regionFilter: search ? "all" : "vbb"
+  };
+}
+
 function importGtfsZipPrompt() {
+  const filters = promptGtfsRouteFilters();
+  if (!filters) return;
   const input = document.getElementById("gtfsZipInput");
   if (!input) {
     setStatus("GTFS-Dateiauswahl ist nicht verfuegbar.", "error");
@@ -1143,7 +1164,7 @@ function importGtfsZipPrompt() {
     if (!file) return;
     try {
       await runGtfsImport(
-        () => postGtfsImport({ action: "upload", feed: file }),
+        () => postGtfsImport({ action: "upload", feed: file, ...filters }),
         `GTFS-ZIP wird geladen: ${file.name}`
       );
     } finally {
@@ -1154,8 +1175,10 @@ function importGtfsZipPrompt() {
 }
 
 function importGtfsFromServer() {
+  const filters = promptGtfsRouteFilters();
+  if (!filters) return Promise.resolve();
   return runGtfsImport(
-    () => postGtfsImport({ action: "server" }),
+    () => postGtfsImport({ action: "server", ...filters }),
     "GTFS-ZIP wird direkt vom Server geladen ..."
   );
 }
