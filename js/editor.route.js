@@ -53,6 +53,32 @@ function pointToSegmentDistanceMeters(p, a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+function getPointToRouteDistanceMeters(point, routePoints) {
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return null;
+  if (!Array.isArray(routePoints) || routePoints.length < 2) return null;
+
+  let minDistanceMeters = Infinity;
+
+  for (let index = 0; index < routePoints.length - 1; index++) {
+    const fromPoint = routePoints[index];
+    const toPoint = routePoints[index + 1];
+    if (
+      !fromPoint || !toPoint ||
+      !Number.isFinite(fromPoint.lat) || !Number.isFinite(fromPoint.lon) ||
+      !Number.isFinite(toPoint.lat) || !Number.isFinite(toPoint.lon)
+    ) {
+      continue;
+    }
+
+    minDistanceMeters = Math.min(
+      minDistanceMeters,
+      pointToSegmentDistanceMeters(point, fromPoint, toPoint)
+    );
+  }
+
+  return Number.isFinite(minDistanceMeters) ? minDistanceMeters : null;
+}
+
 function getPerpendicularDistance(point, lineStart, lineEnd) {
   const x = point.lon;
   const y = point.lat;
