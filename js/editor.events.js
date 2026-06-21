@@ -45,6 +45,13 @@ if (redoBtn) redoBtn.addEventListener("click", redoHistory);
 if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle"));
 if (modeRouteBtn) modeRouteBtn.addEventListener("click", switchToManualRouteMode);
 if (modeSelectBtn) modeSelectBtn.addEventListener("click", () => setMode("select", "Modus: Auswählen"));
+if (routingModeSelect) {
+  routingModeSelect.addEventListener("change", () => {
+    state.routingMode = normalizeEditorRoutingMode(routingModeSelect.value);
+    updateStats();
+    setStatus(`Routingmodus: ${routingModeText ? routingModeText.textContent : state.routingMode}`);
+  });
+}
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
     setMode("specialTrack", "Modus: Sondertrasse zeichnen");

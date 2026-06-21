@@ -192,13 +192,6 @@ function findClosestSegment(latlng) {
   return closest;
 }
 
-function isPointNearStop(routePoint, stop, thresholdMeters = 18) {
-  return approxDistanceMeters(
-    { lat: routePoint.lat, lon: routePoint.lon },
-    { lat: stop.lat, lon: stop.lon }
-  ) <= thresholdMeters;
-}
-
 function buildRoutingAnchorsFromCurrentRoute() {
   if (!state.routePoints.length) {
     return state.stops.map(stop => ({
@@ -209,45 +202,48 @@ function buildRoutingAnchorsFromCurrentRoute() {
     }));
   }
 
-  const anchors = [];
-  const usedStopIds = new Set();
+  const anchorEntries = [];
+  let stopSearchStartIndex = 0;
 
-  state.routePoints.forEach(point => {
-    const matchedStop = state.stops.find(stop =>
-      !usedStopIds.has(stop.id) && isPointNearStop(point, stop)
-    );
-
-    if (matchedStop) {
-      anchors.push({
-        lat: matchedStop.lat,
-        lon: matchedStop.lon,
-        kind: "stop",
-        refId: matchedStop.id
-      });
-      usedStopIds.add(matchedStop.id);
-      return;
-    }
-
-    if (point.sourceType === "manual") {
-      anchors.push({
-        lat: point.lat,
-        lon: point.lon,
-        kind: "manual",
-        refId: point.id
-      });
-    }
-  });
-
-  state.stops.forEach(stop => {
-    if (!usedStopIds.has(stop.id)) {
-      anchors.push({
+  state.stops.forEach((stop, stopIndex) => {
+    const routeIndex = findNearestRoutePointIndexFrom(stopSearchStartIndex, stop);
+    if (routeIndex < 0) return;
+    anchorEntries.push({
+      routeIndex,
+      priority: 0,
+      stopIndex,
+      anchor: {
         lat: stop.lat,
         lon: stop.lon,
         kind: "stop",
         refId: stop.id
-      });
-    }
+      }
+    });
+    stopSearchStartIndex = routeIndex;
   });
+
+  state.routePoints.forEach((point, routeIndex) => {
+    if (point.sourceType !== "manual") return;
+    anchorEntries.push({
+      routeIndex,
+      priority: 1,
+      stopIndex: -1,
+      anchor: {
+        lat: point.lat,
+        lon: point.lon,
+        kind: "manual",
+        refId: point.id
+      }
+    });
+  });
+
+  anchorEntries.sort((a, b) =>
+    a.routeIndex - b.routeIndex ||
+    a.priority - b.priority ||
+    a.stopIndex - b.stopIndex
+  );
+
+  const anchors = anchorEntries.map(entry => entry.anchor);
 
   const deduped = [];
   anchors.forEach(anchor => {
@@ -262,7 +258,12 @@ function buildRoutingAnchorsFromCurrentRoute() {
       { lat: anchor.lat, lon: anchor.lon }
     );
 
-    if (dist < 3) return;
+    if (dist < 3) {
+      if (anchor.kind === "manual" && prev.kind !== "manual") {
+        deduped[deduped.length - 1] = anchor;
+      }
+      return;
+    }
     deduped.push(anchor);
   });
 

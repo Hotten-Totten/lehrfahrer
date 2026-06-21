@@ -122,6 +122,7 @@ body {
 }
 
 .quickbar-select-wrap {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #fff;

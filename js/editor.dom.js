@@ -21,6 +21,8 @@ const stopOrderList = document.getElementById("stopOrderList");
 const modeFreeStopBtn = document.getElementById("modeFreeStopBtn");
 const modeRouteBtn = document.getElementById("modeRouteBtn");
 const modeSelectBtn = document.getElementById("modeSelectBtn");
+const routingModeWrap = document.getElementById("routingModeWrap");
+const routingModeSelect = document.getElementById("routingModeSelect");
 const buildStreetRouteBtn = document.getElementById("buildStreetRouteBtn");
 const cancelRoutingBtn = document.getElementById("cancelRoutingBtn");
 const rerouteSegmentBtn = document.getElementById("rerouteSegmentBtn");
@@ -74,6 +76,7 @@ const stopCount = document.getElementById("stopCount");
 const routePointCount = document.getElementById("routePointCount");
 const catalogCount = document.getElementById("catalogCount");
 const currentModeText = document.getElementById("currentModeText");
+const routingModeText = document.getElementById("routingModeText");
 const routeLengthKm = document.getElementById("routeLengthKm");
 const estimatedDriveMinutes = document.getElementById("estimatedDriveMinutes");
 

@@ -52,7 +52,7 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Route</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Automatisch eine Straßenroute zwischen den Haltestellen berechnen">Straßenroute erzeugen</button>
+          <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
           <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
           <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
           <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
@@ -110,6 +110,14 @@
 
       <button id="modeFreeStopBtn" type="button" title="Modus: Haltestelle frei auf der Karte setzen oder aus dem Katalog auswählen">Haltestelle Auswahl</button>
       <button id="modeRouteBtn" type="button" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route manuell</button>
+      <label id="routingModeWrap" class="quickbar-select-wrap">
+        <span>Routing:</span>
+        <select id="routingModeSelect" title="Routingmodus für Route erzeugen" aria-label="Routingmodus für Route erzeugen">
+          <option value="street">Straßenrouting</option>
+          <option value="guidedStreet">Straßenrouting über Fahrwegpunkte</option>
+          <option value="manual">Punktführung</option>
+        </select>
+      </label>
       <button id="startTrackBetweenStopsBtn" type="button" title="Sondertrasse zwischen zwei Haltestellen zeichnen (z. B. Wendeschleife)">Sondertrasse zeichnen</button>
       <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschließen und speichern">Sondertrasse fertig</button>
       <button id="startDetourWizardBtn" type="button" title="Umleitung starten:&#10;1. Stopbereich in der Haltestellenliste auswählen.&#10;2. Bereich übernehmen.&#10;3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen.&#10;4. Routingart wählen:&#10;- Straßenrouting: Router berechnet zwischen Ersatzhaltestellen/Durchfahrpunkten.&#10;- Punktführung: Linie folgt exakt den gesetzten Fahrwegpunkten.&#10;- Straßenrouting über Fahrwegpunkte: Router berechnet über gesetzte Fahrwegpunkte als Zwangspunkte.&#10;5. Umleitung übernehmen.&#10;6. Abbrechen lässt Originalroute unverändert." aria-label="Umleitung starten: 1. Stopbereich in der Haltestellenliste auswählen. 2. Bereich übernehmen. 3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen. 4. Routingart wählen: Straßenrouting berechnet zwischen Ersatzhaltestellen und Durchfahrpunkten; Punktführung folgt exakt den gesetzten Fahrwegpunkten; Straßenrouting über Fahrwegpunkte berechnet über gesetzte Fahrwegpunkte als Zwangspunkte. 5. Umleitung übernehmen. 6. Abbrechen lässt Originalroute unverändert.">Umleitung starten</button>
@@ -136,7 +144,7 @@
 
       <span class="qb-sep"></span>
 
-      <button id="buildStreetRouteBtn" type="button" title="Automatisch eine Straßenroute zwischen den Haltestellen berechnen">Route zeichnen</button>
+      <button id="buildStreetRouteBtn" type="button" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
       <button id="cancelRoutingBtn" type="button" title="Laufendes Routing abbrechen" style="display:none">✕ Abbrechen</button>
       <button id="smoothRouteBtn" type="button" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
 
@@ -266,6 +274,7 @@
         <div>Ø Geschwindigkeit: <span id="avgSpeed">20 km/h</span></div>
         <div>Fahrzeit gesamt: <span id="totalTime">0 min</span></div>
         <div>Modus: <span id="currentModeText"></span></div>
+        <div>Routing: <span id="routingModeText"></span></div>
       </div>
 
     </div>

@@ -91,6 +91,104 @@ async function fetchStreetSegment(fromStop, toStop) {
   }
 }
 
+async function buildStreetRouteCoordsViaAnchors(anchors, options = {}) {
+  const {
+    routingModeLabel = "street",
+    onSegmentDebug = null,
+    onSegmentWarning = null
+  } = options || {};
+  const routingAnchors = Array.isArray(anchors) ? anchors : [];
+  const combinedCoords = [];
+
+  for (let index = 0; index < routingAnchors.length - 1; index++) {
+    const fromAnchor = routingAnchors[index];
+    const toAnchor = routingAnchors[index + 1];
+    const directMeters = distanceMetersBetween(fromAnchor, toAnchor);
+    const segmentCoords = (await fetchStreetSegment(fromAnchor, toAnchor))
+      .map(coord => Array.isArray(coord)
+        ? [Number(coord[0]), Number(coord[1])]
+        : [Number(coord.lon), Number(coord.lat)])
+      .filter(coord => Number.isFinite(coord[0]) && Number.isFinite(coord[1]));
+
+    if (segmentCoords.length < 2) {
+      throw new Error(`Kein Routing-Segment zwischen ${fromAnchor.name} und ${toAnchor.name}.`);
+    }
+
+    let routedMeters = 0;
+    for (let coordIndex = 1; coordIndex < segmentCoords.length; coordIndex++) {
+      routedMeters += distanceMetersBetween(
+        { lat: segmentCoords[coordIndex - 1][1], lon: segmentCoords[coordIndex - 1][0] },
+        { lat: segmentCoords[coordIndex][1], lon: segmentCoords[coordIndex][0] }
+      );
+    }
+
+    const segmentInfo = {
+      index,
+      fromName: fromAnchor.name || "",
+      toName: toAnchor.name || "",
+      fromId: fromAnchor.id || null,
+      toId: toAnchor.id || null,
+      fromCatalogId: fromAnchor.catalogId || null,
+      toCatalogId: toAnchor.catalogId || null,
+      directMeters: Math.round(directMeters),
+      routedMeters: Math.round(routedMeters),
+      ratio: directMeters > 0 ? Number((routedMeters / directMeters).toFixed(2)) : null,
+      routePointCount: segmentCoords.length,
+      routingMode: routingModeLabel
+    };
+
+    if (typeof onSegmentDebug === "function") {
+      onSegmentDebug(segmentInfo);
+    }
+    if (typeof onSegmentWarning === "function") {
+      onSegmentWarning(segmentInfo);
+    }
+
+    combinedCoords.push(...(index === 0 ? segmentCoords : segmentCoords.slice(1)));
+  }
+
+  return combinedCoords;
+}
+
+async function buildEditorStreetRouteItemsViaAnchors(anchors, options = {}) {
+  const routingAnchors = Array.isArray(anchors) ? anchors : [];
+  const routeItems = [];
+
+  for (let index = 0; index < routingAnchors.length - 1; index++) {
+    const fromAnchor = routingAnchors[index];
+    const toAnchor = routingAnchors[index + 1];
+    const segmentCoords = await buildStreetRouteCoordsViaAnchors(
+      [fromAnchor, toAnchor],
+      {
+        ...options,
+        onSegmentDebug: segmentInfo => {
+          if (typeof options.onSegmentDebug === "function") {
+            options.onSegmentDebug({ ...segmentInfo, index });
+          }
+        },
+        onSegmentWarning: segmentInfo => {
+          if (typeof options.onSegmentWarning === "function") {
+            options.onSegmentWarning({ ...segmentInfo, index });
+          }
+        }
+      }
+    );
+
+    segmentCoords.forEach((coord, coordIndex) => {
+      if (routeItems.length && coordIndex === 0) return;
+      const isFromManualAnchor = coordIndex === 0 && fromAnchor.kind === "manual";
+      const isToManualAnchor = coordIndex === segmentCoords.length - 1 && toAnchor.kind === "manual";
+      const manualAnchor = isFromManualAnchor ? fromAnchor : (isToManualAnchor ? toAnchor : null);
+      routeItems.push({
+        coord: manualAnchor ? [manualAnchor.lon, manualAnchor.lat] : coord,
+        sourceType: manualAnchor ? "manual" : "street"
+      });
+    });
+  }
+
+  return routeItems;
+}
+
 // Berechnet eine Teilstrecke der Route neu
 // Benutzer wählt zwei Routenpunkte aus, dazwischen wird neu geroutet
 function escapeRerouteDialogHtml(value) {
@@ -381,10 +479,6 @@ async function rerouteSelectedSegment() {
     return;
   }
 
-  if (!historyRestoreRunning) {
-    pushHistorySnapshot("Teilstrecke neu berechnet");
-  }
-
   try {
     setStatus("Teilstrecke wird neu berechnet...");
     debug("Teilstrecke wird neu berechnet", {
@@ -399,23 +493,35 @@ async function rerouteSelectedSegment() {
       }))
     });
 
-    const segment = await fetchStreetSegment(
-      { lat: startPoint.lat, lon: startPoint.lon },
-      { lat: endPoint.lat, lon: endPoint.lon }
-    );
+    const anchors = state.routePoints
+      .slice(startIndex, endIndex + 1)
+      .map((point, offset, points) => ({ point, offset, isBoundary: offset === 0 || offset === points.length - 1 }))
+      .filter(item => item.isBoundary || item.point.sourceType === "manual")
+      .map(item => ({
+        lat: item.point.lat,
+        lon: item.point.lon,
+        name: item.point.sourceType === "manual" ? "Pflichtpunkt" : "Abschnittsgrenze",
+        id: item.point.id,
+        kind: item.point.sourceType === "manual" ? "manual" : "routeBoundary"
+      }));
+    const routeItems = await buildEditorStreetRouteItemsViaAnchors(anchors, {
+      routingModeLabel: anchors.some(anchor => anchor.kind === "manual") ? "guidedStreet" : "street",
+      onSegmentDebug: segmentInfo => debug("Editor Teilrouting-Segment", segmentInfo)
+    });
 
-    const newPoints = segment.map(coord => ({
-      lat: coord[1],
-      lon: coord[0]
-    }));
+    if (!historyRestoreRunning) {
+      pushHistorySnapshot("Teilstrecke neu berechnet");
+    }
 
     const removed = state.routePoints.splice(startIndex + 1, endIndex - startIndex - 1);
-    removed.forEach(p => map.removeLayer(p.marker));
+    removed.forEach(p => {
+      if (p.marker) map.removeLayer(p.marker);
+    });
 
     let insertIndex = startIndex + 1;
 
-    newPoints.slice(1, -1).forEach(coord => {
-      createRoutePointObject(coord.lat, coord.lon, true, "street");
+    routeItems.slice(1, -1).forEach(item => {
+      createRoutePointObject(item.coord[1], item.coord[0], true, item.sourceType);
       const createdPoint = state.routePoints.pop();
       state.routePoints.splice(insertIndex, 0, createdPoint);
       insertIndex++;
@@ -589,35 +695,10 @@ function buildRoutingStepsFromAnchors(anchors) {
     const fromLabel = from.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(from)?.name || "Haltestelle");
     const toLabel = to.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(to)?.name || "Haltestelle");
 
-    // Sobald ein manueller Punkt beteiligt ist, direkte Verbindung erzwingen.
-    if (from.kind === "manual" || to.kind === "manual") {
-      steps.push({
-        type: "direct",
-        points: [
-          [from.lon, from.lat],
-          [to.lon, to.lat]
-        ],
-        label: `${fromLabel} => ${toLabel}`
-      });
-      continue;
-    }
-
     const fromStop = findStopByAnchor(from);
     const toStop = findStopByAnchor(to);
 
-    if (!fromStop || !toStop) {
-      steps.push({
-        type: "direct",
-        points: [
-          [from.lon, from.lat],
-          [to.lon, to.lat]
-        ],
-        label: `${fromLabel} => ${toLabel}`
-      });
-      continue;
-    }
-
-    const match = findMatchingSpecialTrack(fromStop, toStop);
+    const match = fromStop && toStop ? findMatchingSpecialTrack(fromStop, toStop) : null;
     if (match) {
       const rawPoints = match.reversed
         ? match.track.points.slice().reverse()
@@ -639,16 +720,20 @@ function buildRoutingStepsFromAnchors(anchors) {
     steps.push({
       type: "street",
       from: {
-        lat: fromStop.lat,
-        lon: fromStop.lon,
-        name: fromStop.name
+        lat: from.lat,
+        lon: from.lon,
+        name: fromLabel,
+        id: from.refId || null,
+        kind: from.kind || null
       },
       to: {
-        lat: toStop.lat,
-        lon: toStop.lon,
-        name: toStop.name
+        lat: to.lat,
+        lon: to.lon,
+        name: toLabel,
+        id: to.refId || null,
+        kind: to.kind || null
       },
-      label: `${fromStop.name} → ${toStop.name}`
+      label: `${fromLabel} → ${toLabel}`
     });
   }
 
@@ -657,7 +742,8 @@ function buildRoutingStepsFromAnchors(anchors) {
 
 // Routet nur die zwei Abschnitte um einen neu in der Mitte eingefügten Stop.
 // Gibt true zurück wenn erfolgreich, false wenn Fallback auf Vollrouting nötig.
-async function rerouteInsertedStop(insertedStopIndex) {
+async function rerouteInsertedStop(insertedStopIndex, options = {}) {
+  const useManualAnchors = !!options.useManualAnchors;
   const prevStop = state.stops[insertedStopIndex - 1];
   const newStop  = state.stops[insertedStopIndex];
   const nextStop = state.stops[insertedStopIndex + 1];
@@ -672,29 +758,114 @@ async function rerouteInsertedStop(insertedStopIndex) {
 
   setStatus(`Zwischenstop einsetzen: ${prevStop.name} → ${newStop.name} → ${nextStop.name} …`);
 
-  // Beide Abschnitte parallel abrufen
-  const [seg1, seg2] = await Promise.all([
-    fetchStreetSegment({ lat: prevStop.lat, lon: prevStop.lon }, { lat: newStop.lat, lon: newStop.lon }),
-    fetchStreetSegment({ lat: newStop.lat, lon: newStop.lon }, { lat: nextStop.lat, lon: nextStop.lon })
-  ]);
+  let nearestNewStopRouteIndex = fromIdx;
+  let nearestNewStopDistance = Infinity;
+  for (let index = fromIdx; index <= toIdx; index++) {
+    const distance = distanceMetersBetween(state.routePoints[index], newStop);
+    if (distance < nearestNewStopDistance) {
+      nearestNewStopDistance = distance;
+      nearestNewStopRouteIndex = index;
+    }
+  }
+
+  const anchorEntries = [
+    {
+      order: fromIdx,
+      anchor: { lat: prevStop.lat, lon: prevStop.lon, name: prevStop.name, id: prevStop.id, kind: "stop" }
+    },
+    {
+      order: Math.min(toIdx - 0.5, Math.max(fromIdx + 0.5, nearestNewStopRouteIndex + 0.25)),
+      anchor: { lat: newStop.lat, lon: newStop.lon, name: newStop.name, id: newStop.id, kind: "stop" }
+    },
+    {
+      order: toIdx,
+      anchor: { lat: nextStop.lat, lon: nextStop.lon, name: nextStop.name, id: nextStop.id, kind: "stop" }
+    }
+  ];
+
+  state.routePoints.slice(fromIdx + 1, toIdx).forEach((point, offset) => {
+    if (!useManualAnchors || point.sourceType !== "manual") return;
+    anchorEntries.push({
+      order: fromIdx + offset + 1,
+      anchor: { lat: point.lat, lon: point.lon, name: "Pflichtpunkt", id: point.id, kind: "manual" }
+    });
+  });
+
+  anchorEntries.sort((a, b) => a.order - b.order);
+  const anchors = anchorEntries.map(entry => entry.anchor);
+  const routeItems = await buildEditorStreetRouteItemsViaAnchors(anchors, {
+    routingModeLabel: useManualAnchors ? "guidedStreet" : "street",
+    onSegmentDebug: segmentInfo => debug("Editor Zwischenstopp-Routing-Segment", segmentInfo)
+  });
 
   // Alte Routenpunkte zwischen fromIdx und toIdx (exklusiv) entfernen
   const removed = state.routePoints.splice(fromIdx + 1, toIdx - fromIdx - 1);
-  removed.forEach(p => map.removeLayer(p.marker));
-
-  // Neue Punkte aus beiden Segmenten zusammenführen (ohne doppelten Mittelpunkt)
-  const newCoords = [...seg1, ...seg2.slice(1)];
+  removed.forEach(p => {
+    if (p.marker) map.removeLayer(p.marker);
+  });
 
   // Innere Punkte einfügen (ohne ersten und letzten, die sind bereits vorhanden)
   let insertAt = fromIdx + 1;
-  for (const coord of newCoords.slice(1, -1)) {
-    createRoutePointObject(coord[1], coord[0], true, "street");
+  for (const item of routeItems.slice(1, -1)) {
+    createRoutePointObject(item.coord[1], item.coord[0], true, item.sourceType);
     const created = state.routePoints.pop();
     state.routePoints.splice(insertAt, 0, created);
     insertAt++;
   }
 
   return true;
+}
+
+function buildManualRouteFromStopsAndAnchors() {
+  const hasExistingRoute = Array.isArray(state.routePoints) && state.routePoints.length > 0;
+  const anchors = hasExistingRoute
+    ? buildRoutingAnchorsFromCurrentRoute()
+    : state.stops.map(stop => ({
+        lat: stop.lat,
+        lon: stop.lon,
+        name: stop.name,
+        id: stop.id,
+        kind: "stop"
+      }));
+
+  if (anchors.length < 2) {
+    setStatus("Punktführung benötigt mindestens zwei Anker.", "warn");
+    return;
+  }
+
+  const coords = interpolateManualRouteCoords(anchors, 20);
+  const manualCoordKeys = new Set(
+    anchors
+      .filter(anchor => anchor.kind === "manual")
+      .map(anchor => `${Number(anchor.lon).toFixed(7)}:${Number(anchor.lat).toFixed(7)}`)
+  );
+
+  if (!historyRestoreRunning) {
+    pushHistorySnapshot("Punktführung erzeugt");
+  }
+
+  removeAllRoutePointMarkers();
+  coords.forEach(coord => {
+    const coordKey = `${Number(coord[0]).toFixed(7)}:${Number(coord[1]).toFixed(7)}`;
+    createRoutePointObject(
+      coord[1],
+      coord[0],
+      true,
+      manualCoordKeys.has(coordKey) ? "manual" : "street"
+    );
+  });
+
+  state.routeMode = "manual";
+  state.simplifiedRoutePoints = [];
+  state.previewMode = "original";
+  state.lastRoutedStopCount = state.stops.length;
+  state.lastRoutedStopIds = state.stops.map(stop => stop.id);
+  refreshRouteLine();
+  applyRoutePointIcons();
+  updateModeButtons();
+  updateStats();
+  updateRouteStats();
+  setStatus("Punktführung erfolgreich erzeugt.");
 }
 
 // Erstellt eine vollständige Straßenroute zwischen allen Haltestellen
@@ -707,6 +878,12 @@ async function buildStreetRouteFromStops() {
 
   if (state.stops.length < 2) {
     setStatus("Für Straßenrouting werden mindestens 2 Haltestellen benötigt.");
+    return;
+  }
+
+  const selectedRoutingMode = normalizeEditorRoutingMode(state.routingMode);
+  if (selectedRoutingMode === "manual") {
+    buildManualRouteFromStopsAndAnchors();
     return;
   }
 
@@ -740,8 +917,11 @@ async function buildStreetRouteFromStops() {
       buildStreetRouteBtn.disabled = true;
       cancelRoutingBtn.style.display = "";
       try {
-        const ok = await rerouteInsertedStop(insertedIdx);
+        const ok = await rerouteInsertedStop(insertedIdx, {
+          useManualAnchors: selectedRoutingMode === "guidedStreet"
+        });
         if (ok) {
+          state.routeMode = "street";
           state.lastRoutedStopIds = state.stops.map(s => s.id);
           state.lastRoutedStopCount = state.stops.length;
           state.simplifiedRoutePoints = [];
@@ -786,9 +966,12 @@ async function buildStreetRouteFromStops() {
     return;
   }
 
-  if (!historyRestoreRunning) {
-    pushHistorySnapshot("Straßenroute erzeugt");
-  }
+  const existingRoutingAnchors = !appendMode && hasExistingRoute
+    ? buildRoutingAnchorsFromCurrentRoute()
+    : [];
+  const useManualAnchors =
+    selectedRoutingMode === "guidedStreet" &&
+    existingRoutingAnchors.some(anchor => anchor.kind === "manual");
 
   streetRoutingRunning = true;
   routingAbortController = new AbortController();
@@ -804,25 +987,13 @@ async function buildStreetRouteFromStops() {
       setStatus("Straßenroute wird berechnet ...");
     }
 
-    // Nur bei kompletter Neuberechnung alles löschen
-    if (!appendMode) {
-      removeAllRoutePointMarkers();
-      state.routePoints = [];
-      state.simplifiedRoutePoints = [];
-    }
-
-    const useManualAnchors =
-      !appendMode &&
-      Array.isArray(state.routePoints) &&
-      state.routePoints.some(point => point.sourceType === "manual");
-
     const allCoords = [];
     const steps = useManualAnchors
-      ? buildRoutingStepsFromAnchors(buildRoutingAnchorsFromCurrentRoute())
+      ? buildRoutingStepsFromAnchors(existingRoutingAnchors)
       : buildForcedRoutingSteps(stopsToBuild);
 
     if (useManualAnchors) {
-      setStatus("Manuelle Pflichtpunkte erkannt: direkte Verbindungen werden erzwungen.", "warn");
+      setStatus("Manuelle Pflichtpunkte erkannt: Straßenrouting wird abschnittsweise über die Pflichtpunkte berechnet.");
     }
 
     debug("Erzwungene Routing-Schritte", steps);
@@ -830,15 +1001,14 @@ async function buildStreetRouteFromStops() {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
 
-      if (step.type === "track" || step.type === "direct") {
-        const stepText = step.type === "direct" ? "Direktverbindung" : "Sondertrasse";
-        setStatus(`${stepText} verwende Abschnitt ${i + 1}/${steps.length}: ${step.label}`);
+      if (step.type === "track") {
+        setStatus(`Sondertrasse verwende Abschnitt ${i + 1}/${steps.length}: ${step.label}`);
 
         step.points.forEach((coord, idx) => {
           if (allCoords.length && idx === 0) return;
           allCoords.push({
             coord,
-            sourceType: step.type === "direct" ? "manual" : "street"
+            sourceType: "street"
           });
         });
 
@@ -847,26 +1017,30 @@ async function buildStreetRouteFromStops() {
 
       setStatus(`Straßenroute berechne Abschnitt ${i + 1}/${steps.length}: ${step.label}`);
 
-      let segment;
+      let segmentItems;
       try {
-        segment = await fetchStreetSegment(
-          { lat: step.from.lat, lon: step.from.lon },
-          { lat: step.to.lat, lon: step.to.lon }
+        segmentItems = await buildEditorStreetRouteItemsViaAnchors(
+          [step.from, step.to],
+          {
+            routingModeLabel: useManualAnchors ? "guidedStreet" : "street",
+            onSegmentDebug: segmentInfo => debug("Editor Routing-Segment", segmentInfo)
+          }
         );
       } catch (segErr) {
         if (segErr.name === "AbortError") throw segErr; // Nutzer-Abbruch durchreichen
+        if (useManualAnchors) throw segErr;
         // Gerade Linie als Fallback, Rest der Route wird trotzdem berechnet
         debug(`Abschnitt ${i + 1} fehlgeschlagen, nutze gerade Linie als Fallback`, segErr.message);
         setStatus(`⚠ Abschnitt ${i + 1}/${steps.length} nicht routbar – gerade Linie eingesetzt.`, "warn");
-        segment = [
-          [step.from.lon, step.from.lat],
-          [step.to.lon, step.to.lat]
+        segmentItems = [
+          { coord: [step.from.lon, step.from.lat], sourceType: "street" },
+          { coord: [step.to.lon, step.to.lat], sourceType: "street" }
         ];
       }
 
-      segment.forEach((coord, idx) => {
+      segmentItems.forEach((item, idx) => {
         if (allCoords.length && idx === 0) return;
-        allCoords.push({ coord, sourceType: "street" });
+        allCoords.push(item);
       });
     }
 
@@ -874,6 +1048,15 @@ async function buildStreetRouteFromStops() {
       appendMode && allCoords.length > 1
         ? allCoords.slice(1)
         : allCoords;
+
+    if (!historyRestoreRunning) {
+      pushHistorySnapshot("Straßenroute erzeugt");
+    }
+
+    if (!appendMode) {
+      removeAllRoutePointMarkers();
+      state.simplifiedRoutePoints = [];
+    }
 
     coordsToCreate.forEach(item => {
       const lon = item.coord[0];

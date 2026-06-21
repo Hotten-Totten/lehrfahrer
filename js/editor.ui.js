@@ -175,6 +175,20 @@ function updateStats() {
 
   currentModeText.textContent = modeLabels[currentMode] || currentMode || "-";
 
+  const routingMode = normalizeEditorRoutingMode(state.routingMode);
+  const routingModeLabels = {
+    street: "Straßenrouting",
+    guidedStreet: "Straßenrouting über Fahrwegpunkte",
+    manual: "Punktführung"
+  };
+  if (routingModeText) routingModeText.textContent = routingModeLabels[routingMode];
+  if (routingModeSelect) routingModeSelect.value = routingMode;
+  if (buildStreetRouteBtn) {
+    buildStreetRouteBtn.textContent = routingMode === "guidedStreet"
+      ? "Route über Fahrwegpunkte"
+      : (routingMode === "manual" ? "Punktführung erzeugen" : "Straßenroute erzeugen");
+  }
+
   if (typeof updateLineMetricsUI === "function") {
     updateLineMetricsUI();
   }
@@ -219,6 +233,9 @@ function updateModeButtons() {
   }
   if (detourRoutingModeWrap) {
     detourRoutingModeWrap.style.display = inDetourBuild ? "inline-flex" : "none";
+  }
+  if (routingModeWrap) {
+    routingModeWrap.style.display = inDetourBuild ? "none" : "inline-flex";
   }
   if (detourRoutingModeSelect && state.detourWizard) {
     detourRoutingModeSelect.value = state.detourWizard.routingMode === "guidedStreet"

@@ -241,6 +241,7 @@ const stops = state.stops.map((stop, index) => ({
     directionName,
     color: lineColorInput.value,
     routeMode: state.routeMode,
+    routingMode: normalizeEditorRoutingMode(state.routingMode),
     stops,
     routePoints: routeOriginal.map(point => [point.lat, point.lon]),
     routePointsSimplified: routeSimplified
@@ -265,7 +266,8 @@ const stops = state.stops.map((stop, index) => ({
       startStopName: startStop ? startStop.name : "",
       endStopName: endStop ? endStop.name : "",
       color: lineColorInput.value,
-      routeMode: state.routeMode
+      routeMode: state.routeMode,
+      routingMode: normalizeEditorRoutingMode(state.routingMode)
     },
 
     stats: {
@@ -1505,6 +1507,7 @@ function loadLineFromData(data) {
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";
+  state.routingMode = normalizeEditorRoutingMode(lineBlock.routingMode || data.routingMode);
   state.previewMode = "original";
 
   let maxStopNum = 0;

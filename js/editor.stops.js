@@ -588,20 +588,6 @@ function normalizeRoutingSegmentCoords(segmentCoords) {
     .filter(coord => Number.isFinite(coord[0]) && Number.isFinite(coord[1]));
 }
 
-function getDetourRoutingCoordDistanceMeters(coords) {
-  if (!Array.isArray(coords) || coords.length < 2) return 0;
-
-  let meters = 0;
-  for (let i = 1; i < coords.length; i++) {
-    meters += distanceMetersBetween(
-      { lat: coords[i - 1][1], lon: coords[i - 1][0] },
-      { lat: coords[i][1], lon: coords[i][0] }
-    );
-  }
-
-  return meters;
-}
-
 function getDetourRoutingAnchorDebugInfo(anchor, index) {
   return {
     index,
@@ -970,42 +956,12 @@ async function buildDetourReplacementRouteCoords(anchors, routingMode = "street"
     });
   }
 
-  const combined = [];
   debugDetourRoutingAnchors(routingAnchors);
-
-  for (let i = 0; i < routingAnchors.length - 1; i++) {
-    const fromStop = routingAnchors[i];
-    const toStop = routingAnchors[i + 1];
-    const directMeters = distanceMetersBetween(fromStop, toStop);
-    const segmentCoords = normalizeRoutingSegmentCoords(await fetchStreetSegment(fromStop, toStop));
-
-    if (segmentCoords.length < 2) {
-      throw new Error(`Kein Routing-Segment zwischen ${fromStop.name} und ${toStop.name}.`);
-    }
-
-    const routedMeters = getDetourRoutingCoordDistanceMeters(segmentCoords);
-    const segmentInfo = {
-      index: i,
-      fromName: fromStop.name || "",
-      toName: toStop.name || "",
-      fromId: fromStop.id || null,
-      toId: toStop.id || null,
-      fromCatalogId: fromStop.catalogId || null,
-      toCatalogId: toStop.catalogId || null,
-      directMeters: Math.round(directMeters),
-      routedMeters: Math.round(routedMeters),
-      ratio: directMeters > 0 ? Number((routedMeters / directMeters).toFixed(2)) : null,
-      routePointCount: segmentCoords.length,
-      routingMode
-    };
-
-    debug("Stop-Umleitung Routing-Segment", segmentInfo);
-    warnSuspiciousDetourRoutingSegment(segmentInfo);
-
-    combined.push(...(i === 0 ? segmentCoords : segmentCoords.slice(1)));
-  }
-
-  return combined;
+  return buildStreetRouteCoordsViaAnchors(routingAnchors, {
+    routingModeLabel: routingMode,
+    onSegmentDebug: segmentInfo => debug("Stop-Umleitung Routing-Segment", segmentInfo),
+    onSegmentWarning: warnSuspiciousDetourRoutingSegment
+  });
 }
 
 function getDetourWizardFinalContext() {

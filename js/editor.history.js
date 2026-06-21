@@ -14,6 +14,7 @@ function buildHistorySnapshot() {
     directionName: directionNameInput.value.trim(),
     color: lineColorInput.value,
     routeMode: state.routeMode,
+    routingMode: normalizeEditorRoutingMode(state.routingMode),
     previewMode: state.previewMode,
 
     stops: state.stops.map(stop => ({
@@ -85,6 +86,7 @@ function applyHistorySnapshot(snapshot) {
     lineColorInput.value = snapshot.color || "#d32f2f";
 
     state.routeMode = snapshot.routeMode || "auto";
+    state.routingMode = normalizeEditorRoutingMode(snapshot.routingMode);
     state.previewMode = snapshot.previewMode || "original";
 
     (snapshot.stops || []).forEach(stopData => {
