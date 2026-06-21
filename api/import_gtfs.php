@@ -4,7 +4,6 @@ require_once __DIR__ . '/_auth.php';
 lehrfahrer_require_write_auth();
 
 const GTFS_MAX_UPLOAD_BYTES = 262144000;
-const GTFS_MAX_EXTRACTED_BYTES = 1610612736;
 const GTFS_SESSION_TTL_SECONDS = 7200;
 
 function gtfs_reply(array $payload, int $status = 200): void {
@@ -45,13 +44,27 @@ function gtfs_session_dir(string $token): string {
     return $dir;
 }
 
-function gtfs_open_table(string $path, array $requiredHeaders): array {
-    $handle = @fopen($path, 'rb');
-    if (!$handle) gtfs_error(500, 'GTFS-Datei kann nicht gelesen werden: ' . basename($path));
+function gtfs_find_zip_entry(ZipArchive $zip, string $fileName): ?string {
+    $target = strtolower($fileName);
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $stat = $zip->statIndex($index);
+        if (!is_array($stat)) continue;
+        $entryName = strval($stat['name'] ?? '');
+        $baseName = strtolower(basename(str_replace('\\', '/', $entryName)));
+        if ($baseName === $target) return $entryName;
+    }
+    return null;
+}
+
+function gtfs_open_zip_table(ZipArchive $zip, string $fileName, array $requiredHeaders): array {
+    $entryName = gtfs_find_zip_entry($zip, $fileName);
+    if ($entryName === null) gtfs_error(422, 'GTFS-ZIP enthält ' . $fileName . ' nicht.');
+    $handle = $zip->getStream($entryName);
+    if (!$handle) gtfs_error(500, 'GTFS-Datei kann nicht aus ZIP gelesen werden: ' . $fileName);
     $headers = fgetcsv($handle);
     if (!is_array($headers)) {
         fclose($handle);
-        gtfs_error(422, 'GTFS-Datei ist leer: ' . basename($path));
+        gtfs_error(422, 'GTFS-Datei ist leer: ' . $fileName);
     }
     $headers = array_map(static function ($value): string {
         return trim(preg_replace('/^\xEF\xBB\xBF/', '', strval($value)));
@@ -59,7 +72,7 @@ function gtfs_open_table(string $path, array $requiredHeaders): array {
     foreach ($requiredHeaders as $required) {
         if (!in_array($required, $headers, true)) {
             fclose($handle);
-            gtfs_error(422, basename($path) . ' enthält das Pflichtfeld ' . $required . ' nicht.');
+            gtfs_error(422, $fileName . ' enthält das Pflichtfeld ' . $required . ' nicht.');
         }
     }
     return [$handle, $headers];
@@ -82,8 +95,8 @@ function gtfs_route_label(array $route): string {
     return strval($route['route_id'] ?? 'Linie');
 }
 
-function gtfs_read_routes(string $dir): array {
-    [$handle, $headers] = gtfs_open_table($dir . '/routes.txt', ['route_id']);
+function gtfs_read_routes(ZipArchive $zip): array {
+    [$handle, $headers] = gtfs_open_zip_table($zip, 'routes.txt', ['route_id']);
     $routes = [];
     while (($values = fgetcsv($handle)) !== false) {
         $row = gtfs_row($headers, $values);
@@ -107,8 +120,8 @@ function gtfs_read_routes(string $dir): array {
     return array_values($routes);
 }
 
-function gtfs_read_route_trips(string $dir, string $routeId): array {
-    [$handle, $headers] = gtfs_open_table($dir . '/trips.txt', ['route_id', 'trip_id']);
+function gtfs_read_route_trips(ZipArchive $zip, string $routeId): array {
+    [$handle, $headers] = gtfs_open_zip_table($zip, 'trips.txt', ['route_id', 'trip_id']);
     $trips = [];
     while (($values = fgetcsv($handle)) !== false) {
         $row = gtfs_row($headers, $values);
@@ -129,16 +142,18 @@ function gtfs_read_route_trips(string $dir, string $routeId): array {
     return $trips;
 }
 
-function gtfs_read_trip_sequences(string $dir, array $trips): array {
-    [$handle, $headers] = gtfs_open_table($dir . '/stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence']);
+function gtfs_read_trip_sequences(ZipArchive $zip, array $trips): array {
+    [$handle, $headers] = gtfs_open_zip_table($zip, 'stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence']);
+    $tripIdIndex = array_search('trip_id', $headers, true);
+    $stopIdIndex = array_search('stop_id', $headers, true);
+    $sequenceIndex = array_search('stop_sequence', $headers, true);
     $sequences = [];
     $matchedRows = 0;
     while (($values = fgetcsv($handle)) !== false) {
-        $row = gtfs_row($headers, $values);
-        $tripId = $row['trip_id'] ?? '';
+        $tripId = trim(strval($values[$tripIdIndex] ?? ''));
         if (!isset($trips[$tripId])) continue;
-        $stopId = $row['stop_id'] ?? '';
-        $sequenceRaw = $row['stop_sequence'] ?? '';
+        $stopId = trim(strval($values[$stopIdIndex] ?? ''));
+        $sequenceRaw = trim(strval($values[$sequenceIndex] ?? ''));
         if ($stopId === '' || !is_numeric($sequenceRaw)) continue;
         $sequences[$tripId][] = ['stopId' => $stopId, 'sequence' => (int)$sequenceRaw];
         $matchedRows++;
@@ -151,10 +166,10 @@ function gtfs_read_trip_sequences(string $dir, array $trips): array {
     return $sequences;
 }
 
-function gtfs_build_variants(string $dir, string $routeId): array {
-    $trips = gtfs_read_route_trips($dir, $routeId);
+function gtfs_build_variants(ZipArchive $zip, string $routeId): array {
+    $trips = gtfs_read_route_trips($zip, $routeId);
     if (!$trips) return [];
-    $sequences = gtfs_read_trip_sequences($dir, $trips);
+    $sequences = gtfs_read_trip_sequences($zip, $trips);
     $variants = [];
     foreach ($sequences as $tripId => $items) {
         usort($items, static fn(array $a, array $b): int => $a['sequence'] <=> $b['sequence']);
@@ -165,14 +180,36 @@ function gtfs_build_variants(string $dir, string $routeId): array {
         $variantId = strval($trip['directionId']) . '|' . $signature;
         if (isset($variants[$variantId])) continue;
         $variants[$variantId] = [
-            'id' => $tripId,
+            'id' => $variantId,
             'name' => trim(strval($trip['headsign'])) !== '' ? $trip['headsign'] : 'GTFS-Variante',
             'directionId' => $trip['directionId'],
             'headsign' => $trip['headsign'],
             'stopCount' => count($stopIds),
             'variantKey' => $signature,
+            'items' => $items,
         ];
     }
+    if (!$variants) return [];
+
+    $endStopIds = [];
+    foreach ($variants as $variant) {
+        $items = $variant['items'];
+        $endStopIds[] = $items[0]['stopId'];
+        $endStopIds[] = $items[count($items) - 1]['stopId'];
+    }
+    $endStops = gtfs_read_stops($zip, array_values(array_unique($endStopIds)));
+    foreach ($variants as &$variant) {
+        $items = $variant['items'];
+        $firstStopId = $items[0]['stopId'];
+        $lastStopId = $items[count($items) - 1]['stopId'];
+        $variant['startStop'] = strval($endStops[$firstStopId]['name'] ?? '');
+        $variant['destination'] = strval($endStops[$lastStopId]['name'] ?? '');
+        if (trim(strval($variant['headsign'])) === '' && $variant['destination'] !== '') {
+            $variant['name'] = $variant['destination'];
+        }
+    }
+    unset($variant);
+
     $result = array_values($variants);
     usort($result, static function (array $a, array $b): int {
         $directionCompare = strnatcasecmp(strval($a['directionId']), strval($b['directionId']));
@@ -182,20 +219,6 @@ function gtfs_build_variants(string $dir, string $routeId): array {
     return $result;
 }
 
-function gtfs_read_trip_stops(string $dir, string $tripId): array {
-    [$handle, $headers] = gtfs_open_table($dir . '/stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence']);
-    $items = [];
-    while (($values = fgetcsv($handle)) !== false) {
-        $row = gtfs_row($headers, $values);
-        if (($row['trip_id'] ?? '') !== $tripId) continue;
-        if (($row['stop_id'] ?? '') === '' || !is_numeric($row['stop_sequence'] ?? '')) continue;
-        $items[] = ['stopId' => $row['stop_id'], 'sequence' => (int)$row['stop_sequence']];
-    }
-    fclose($handle);
-    usort($items, static fn(array $a, array $b): int => $a['sequence'] <=> $b['sequence']);
-    return $items;
-}
-
 function gtfs_valid_coordinates(array $row): bool {
     if (!is_numeric($row['stop_lat'] ?? '') || !is_numeric($row['stop_lon'] ?? '')) return false;
     $lat = (float)$row['stop_lat'];
@@ -203,8 +226,8 @@ function gtfs_valid_coordinates(array $row): bool {
     return $lat >= -90 && $lat <= 90 && $lon >= -180 && $lon <= 180;
 }
 
-function gtfs_read_stops(string $dir, array $neededIds): array {
-    [$handle, $headers] = gtfs_open_table($dir . '/stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon']);
+function gtfs_read_stops(ZipArchive $zip, array $neededIds): array {
+    [$handle, $headers] = gtfs_open_zip_table($zip, 'stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon']);
     $needed = array_fill_keys($neededIds, true);
     $requestedRows = [];
     while (($values = fgetcsv($handle)) !== false && count($requestedRows) < count($needed)) {
@@ -224,7 +247,7 @@ function gtfs_read_stops(string $dir, array $neededIds): array {
 
     $parentCoordinates = [];
     if ($parentIds) {
-        [$parentHandle, $parentHeaders] = gtfs_open_table($dir . '/stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon']);
+        [$parentHandle, $parentHeaders] = gtfs_open_zip_table($zip, 'stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon']);
         while (($values = fgetcsv($parentHandle)) !== false && count($parentCoordinates) < count($parentIds)) {
             $row = gtfs_row($parentHeaders, $values);
             $stopId = $row['stop_id'] ?? '';
@@ -330,10 +353,10 @@ function gtfs_handle_upload(): void {
     if ($size <= 0 || $size > GTFS_MAX_UPLOAD_BYTES) {
         gtfs_error(413, 'GTFS-ZIP muss zwischen 1 Byte und 250 MB groß sein. ' . $limitsText);
     }
-    gtfs_process_zip(strval($upload['tmp_name']));
+    gtfs_start_session(strval($upload['tmp_name']), true, 'Browser-Upload');
 }
 
-function gtfs_process_zip(string $zipPath): void {
+function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel): void {
     if (!class_exists('ZipArchive')) {
         gtfs_error(501, 'GTFS-Import benötigt PHP ZipArchive.');
     }
@@ -341,27 +364,13 @@ function gtfs_process_zip(string $zipPath): void {
     if ($zip->open($zipPath) !== true) {
         gtfs_error(422, 'GTFS-ZIP kann nicht geöffnet werden.');
     }
-    $wanted = ['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt'];
-    $entries = [];
-    $totalSize = 0;
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $stat = $zip->statIndex($i);
-        if (!is_array($stat)) continue;
-        $base = strtolower(basename(str_replace('\\', '/', strval($stat['name'] ?? ''))));
-        if (!in_array($base, $wanted, true) || isset($entries[$base])) continue;
-        $totalSize += (int)($stat['size'] ?? 0);
-        $entries[$base] = strval($stat['name']);
-    }
-    foreach ($wanted as $required) {
-        if (!isset($entries[$required])) {
+    foreach (['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt'] as $required) {
+        if (gtfs_find_zip_entry($zip, $required) === null) {
             $zip->close();
             gtfs_error(422, 'GTFS-ZIP enthält ' . $required . ' nicht.');
         }
     }
-    if ($totalSize > GTFS_MAX_EXTRACTED_BYTES) {
-        $zip->close();
-        gtfs_error(413, 'Benötigte GTFS-Dateien sind entpackt größer als 1,5 GB.');
-    }
+
     $root = gtfs_temp_root();
     if (!is_dir($root) && !mkdir($root, 0700, true)) {
         $zip->close();
@@ -374,50 +383,113 @@ function gtfs_process_zip(string $zipPath): void {
         $zip->close();
         gtfs_error(500, 'GTFS-Sitzung kann nicht erstellt werden.');
     }
-    foreach ($wanted as $fileName) {
-        $input = $zip->getStream($entries[$fileName]);
-        $output = fopen($dir . DIRECTORY_SEPARATOR . $fileName, 'wb');
-        if (!$input || !$output) {
+    $sessionZipPath = $zipPath;
+    $sourceType = 'server';
+    if ($copyZip) {
+        $sessionZipPath = $dir . DIRECTORY_SEPARATOR . 'feed.zip';
+        if (!@copy($zipPath, $sessionZipPath)) {
             $zip->close();
-            gtfs_error(500, 'GTFS-Datei kann nicht temporär gespeichert werden: ' . $fileName);
+            @rmdir($dir);
+            gtfs_error(500, 'Browser-GTFS-ZIP kann nicht in die temporäre Sitzung kopiert werden.');
         }
-        stream_copy_to_stream($input, $output);
-        fclose($input);
-        fclose($output);
+        $sourceType = 'session';
     }
+
+    $sourceData = [
+        'type' => $sourceType,
+        'label' => $sourceLabel,
+        'size' => (int)@filesize($sessionZipPath),
+        'mtime' => (int)@filemtime($sessionZipPath),
+    ];
+    if (@file_put_contents(
+        $dir . DIRECTORY_SEPARATOR . 'source.json',
+        json_encode($sourceData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    ) === false) {
+        $zip->close();
+        if ($copyZip) @unlink($sessionZipPath);
+        @rmdir($dir);
+        gtfs_error(500, 'GTFS-Sitzungsdaten können nicht gespeichert werden.');
+    }
+
+    $routes = gtfs_read_routes($zip);
     $zip->close();
-    [$h0] = gtfs_open_table($dir . '/routes.txt', ['route_id']); fclose($h0);
-    [$h1] = gtfs_open_table($dir . '/trips.txt', ['route_id', 'trip_id']); fclose($h1);
-    [$h2] = gtfs_open_table($dir . '/stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence']); fclose($h2);
-    [$h3] = gtfs_open_table($dir . '/stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon']); fclose($h3);
-    $routes = gtfs_read_routes($dir);
     gtfs_reply(['ok' => true, 'token' => $token, 'routes' => $routes, 'routeCount' => count($routes)]);
 }
 
-function gtfs_handle_server_zip(): void {
+function gtfs_server_zip_path(): string {
     $projectRoot = realpath(dirname(__DIR__));
-    if ($projectRoot === false) {
-        gtfs_error(500, 'Projektverzeichnis für Server-GTFS kann nicht aufgelöst werden.');
-    }
+    if ($projectRoot === false) gtfs_error(500, 'Projektverzeichnis für Server-GTFS kann nicht aufgelöst werden.');
     $expectedDir = $projectRoot . DIRECTORY_SEPARATOR . 'gtfs' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'gtfs';
     $realDir = realpath($expectedDir);
-    $requestedPath = $expectedDir . DIRECTORY_SEPARATOR . 'latest.zip';
-    $realPath = realpath($requestedPath);
+    $realPath = realpath($expectedDir . DIRECTORY_SEPARATOR . 'latest.zip');
     if ($realDir === false || $realPath === false || !is_file($realPath)) {
         gtfs_error(404, 'Server-GTFS-ZIP fehlt: gtfs/data/gtfs/latest.zip');
     }
     $projectPrefix = rtrim($projectRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    if (strpos(rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR, $projectPrefix) !== 0) {
+    $allowedPrefix = rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    if (strpos($allowedPrefix, $projectPrefix) !== 0) {
         gtfs_error(403, 'Server-GTFS-Verzeichnis liegt außerhalb des Projekts.');
     }
-    $allowedPrefix = rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     if (strpos($realPath, $allowedPrefix) !== 0 || basename($realPath) !== 'latest.zip') {
         gtfs_error(403, 'Ungültiger Pfad für Server-GTFS-ZIP.');
     }
     if (!is_readable($realPath)) {
         gtfs_error(500, 'Server-GTFS-ZIP ist nicht lesbar: gtfs/data/gtfs/latest.zip');
     }
-    gtfs_process_zip($realPath);
+    return $realPath;
+}
+
+function gtfs_open_session_zip(string $dir): ZipArchive {
+    $sourcePath = $dir . DIRECTORY_SEPARATOR . 'source.json';
+    $source = json_decode(strval(@file_get_contents($sourcePath)), true);
+    if (!is_array($source)) gtfs_error(410, 'GTFS-Sitzung ist unvollständig. Quelle bitte erneut laden.');
+
+    $zipPath = ($source['type'] ?? '') === 'session'
+        ? $dir . DIRECTORY_SEPARATOR . 'feed.zip'
+        : gtfs_server_zip_path();
+    if (!is_file($zipPath) || !is_readable($zipPath)) {
+        gtfs_error(410, 'GTFS-Quelldatei der Sitzung ist nicht mehr verfügbar.');
+    }
+    if ((int)@filesize($zipPath) !== (int)($source['size'] ?? -1)
+        || (int)@filemtime($zipPath) !== (int)($source['mtime'] ?? -1)) {
+        gtfs_error(409, 'GTFS-Quelldatei wurde während der Auswahl geändert. Bitte neu laden.');
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) gtfs_error(422, 'GTFS-ZIP kann nicht erneut geöffnet werden.');
+    return $zip;
+}
+
+function gtfs_handle_server_zip(): void {
+    gtfs_start_session(gtfs_server_zip_path(), false, 'Server gtfs/data/gtfs/latest.zip');
+}
+
+function gtfs_save_variants(string $dir, string $routeId, array $variants): void {
+    $payload = json_encode([
+        'routeId' => $routeId,
+        'variants' => $variants,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($payload === false || @file_put_contents($dir . DIRECTORY_SEPARATOR . 'variants.json', $payload) === false) {
+        gtfs_error(500, 'GTFS-Varianten können nicht temporär gespeichert werden.');
+    }
+}
+
+function gtfs_public_variants(array $variants): array {
+    return array_map(static function (array $variant): array {
+        unset($variant['items']);
+        return $variant;
+    }, $variants);
+}
+
+function gtfs_load_variant(string $dir, string $routeId, string $variantId): array {
+    $payload = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'variants.json')), true);
+    if (!is_array($payload) || ($payload['routeId'] ?? '') !== $routeId) {
+        gtfs_error(409, 'Varianten für diese GTFS-Linie müssen neu geladen werden.');
+    }
+    foreach (($payload['variants'] ?? []) as $variant) {
+        if (is_array($variant) && ($variant['id'] ?? '') === $variantId) return $variant;
+    }
+    gtfs_error(404, 'Gewählte GTFS-Variante wurde nicht gefunden.');
 }
 
 try {
@@ -429,18 +501,22 @@ try {
     if ($action === 'variants') {
         $routeId = trim(strval($_POST['routeId'] ?? ''));
         if ($routeId === '') gtfs_error(400, 'routeId fehlt.');
-        $variants = gtfs_build_variants($dir, $routeId);
-        gtfs_reply(['ok' => true, 'variants' => $variants, 'variantCount' => count($variants)]);
+        $zip = gtfs_open_session_zip($dir);
+        $variants = gtfs_build_variants($zip, $routeId);
+        $zip->close();
+        gtfs_save_variants($dir, $routeId, $variants);
+        $publicVariants = gtfs_public_variants($variants);
+        gtfs_reply(['ok' => true, 'variants' => $publicVariants, 'variantCount' => count($publicVariants)]);
     }
     if ($action === 'import') {
         $routeId = trim(strval($_POST['routeId'] ?? ''));
-        $tripId = trim(strval($_POST['tripId'] ?? ''));
-        if ($routeId === '' || $tripId === '') gtfs_error(400, 'routeId oder tripId fehlt.');
-        $trips = gtfs_read_route_trips($dir, $routeId);
-        if (!isset($trips[$tripId])) gtfs_error(404, 'Gewählte GTFS-Variante wurde nicht gefunden.');
-        $items = gtfs_read_trip_stops($dir, $tripId);
+        $variantId = trim(strval($_POST['variantId'] ?? $_POST['tripId'] ?? ''));
+        if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
+        $variant = gtfs_load_variant($dir, $routeId, $variantId);
+        $items = is_array($variant['items'] ?? null) ? $variant['items'] : [];
         if (count($items) < 2) gtfs_error(422, 'GTFS-Variante enthält weniger als zwei nutzbare Stops.');
-        $stopData = gtfs_read_stops($dir, array_values(array_unique(array_column($items, 'stopId'))));
+        $zip = gtfs_open_session_zip($dir);
+        $stopData = gtfs_read_stops($zip, array_values(array_unique(array_column($items, 'stopId'))));
         $editorStops = [];
         $skippedStopCount = 0;
         $parentCoordinateCount = 0;
@@ -467,14 +543,14 @@ try {
             ];
         }
         if (count($editorStops) < 2) gtfs_error(422, 'Stopkoordinaten der Variante sind unvollständig.');
-        $routes = gtfs_read_routes($dir);
+        $routes = gtfs_read_routes($zip);
+        $zip->close();
         $route = null;
         foreach ($routes as $candidate) {
             if ($candidate['id'] === $routeId) { $route = $candidate; break; }
         }
-        $trip = $trips[$tripId];
         $lineName = trim(strval($route['shortName'] ?? '')) ?: trim(strval($route['name'] ?? $routeId));
-        $direction = trim(strval($trip['headsign'])) ?: ($editorStops[0]['name'] . ' – ' . $editorStops[count($editorStops) - 1]['name']);
+        $direction = trim(strval($variant['headsign'] ?? '')) ?: ($editorStops[0]['name'] . ' – ' . $editorStops[count($editorStops) - 1]['name']);
         $line = [
             'lineName' => 'Linie ' . preg_replace('/^Linie\s+/i', '', $lineName),
             'routeName' => 'Route 01',

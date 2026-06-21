@@ -1096,7 +1096,7 @@ async function runGtfsImport(loadSource, initialMessage) {
         action: "import",
         token: upload.token,
         routeId: route.id,
-        tripId: variant.id
+        variantId: variant.id
       });
       if (!imported.line || typeof imported.line !== "object") {
         throw new Error("GTFS-Import lieferte keine gueltigen Liniendaten.");
