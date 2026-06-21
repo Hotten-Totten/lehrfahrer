@@ -15,6 +15,7 @@ function buildHistorySnapshot() {
     color: lineColorInput.value,
     routeMode: state.routeMode,
     routingMode: normalizeEditorRoutingMode(state.routingMode),
+    preserveManualChains: !!state.preserveManualChains,
     previewMode: state.previewMode,
 
     stops: state.stops.map(stop => ({
@@ -87,6 +88,7 @@ function applyHistorySnapshot(snapshot) {
 
     state.routeMode = snapshot.routeMode || "auto";
     state.routingMode = normalizeEditorRoutingMode(snapshot.routingMode);
+    state.preserveManualChains = !!snapshot.preserveManualChains;
     state.previewMode = snapshot.previewMode || "original";
 
     (snapshot.stops || []).forEach(stopData => {

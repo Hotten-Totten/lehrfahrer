@@ -23,6 +23,8 @@ const modeRouteBtn = document.getElementById("modeRouteBtn");
 const modeSelectBtn = document.getElementById("modeSelectBtn");
 const routingModeWrap = document.getElementById("routingModeWrap");
 const routingModeSelect = document.getElementById("routingModeSelect");
+const preserveManualChainsWrap = document.getElementById("preserveManualChainsWrap");
+const preserveManualChainsInput = document.getElementById("preserveManualChainsInput");
 const buildStreetRouteBtn = document.getElementById("buildStreetRouteBtn");
 const cancelRoutingBtn = document.getElementById("cancelRoutingBtn");
 const rerouteSegmentBtn = document.getElementById("rerouteSegmentBtn");
@@ -77,6 +79,8 @@ const routePointCount = document.getElementById("routePointCount");
 const catalogCount = document.getElementById("catalogCount");
 const currentModeText = document.getElementById("currentModeText");
 const routingModeText = document.getElementById("routingModeText");
+const preserveManualChainsPreviewRow = document.getElementById("preserveManualChainsPreviewRow");
+const preserveManualChainsText = document.getElementById("preserveManualChainsText");
 const routeLengthKm = document.getElementById("routeLengthKm");
 const estimatedDriveMinutes = document.getElementById("estimatedDriveMinutes");
 

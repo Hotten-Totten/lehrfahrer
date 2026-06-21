@@ -183,6 +183,18 @@ function updateStats() {
   };
   if (routingModeText) routingModeText.textContent = routingModeLabels[routingMode];
   if (routingModeSelect) routingModeSelect.value = routingMode;
+  const preserveManualChains = !!state.preserveManualChains;
+  const showPreserveManualChains = routingMode === "guidedStreet" && !(
+    state.detourWizard && state.detourWizard.phase === "buildReplacement"
+  );
+  if (preserveManualChainsWrap) {
+    preserveManualChainsWrap.style.display = showPreserveManualChains ? "inline-flex" : "none";
+  }
+  if (preserveManualChainsInput) preserveManualChainsInput.checked = preserveManualChains;
+  if (preserveManualChainsPreviewRow) {
+    preserveManualChainsPreviewRow.style.display = routingMode === "guidedStreet" ? "" : "none";
+  }
+  if (preserveManualChainsText) preserveManualChainsText.textContent = preserveManualChains ? "An" : "Aus";
   if (buildStreetRouteBtn) {
     buildStreetRouteBtn.textContent = routingMode === "guidedStreet"
       ? "Route über Fahrwegpunkte"
@@ -236,6 +248,9 @@ function updateModeButtons() {
   }
   if (routingModeWrap) {
     routingModeWrap.style.display = inDetourBuild ? "none" : "inline-flex";
+  }
+  if (preserveManualChainsWrap && inDetourBuild) {
+    preserveManualChainsWrap.style.display = "none";
   }
   if (detourRoutingModeSelect && state.detourWizard) {
     detourRoutingModeSelect.value = state.detourWizard.routingMode === "guidedStreet"

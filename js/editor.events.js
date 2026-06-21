@@ -52,6 +52,13 @@ if (routingModeSelect) {
     setStatus(`Routingmodus: ${routingModeText ? routingModeText.textContent : state.routingMode}`);
   });
 }
+if (preserveManualChainsInput) {
+  preserveManualChainsInput.addEventListener("change", () => {
+    state.preserveManualChains = preserveManualChainsInput.checked;
+    updateStats();
+    setStatus(`Fahrwegpunkte exakt halten: ${state.preserveManualChains ? "An" : "Aus"}`);
+  });
+}
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
     setMode("specialTrack", "Modus: Sondertrasse zeichnen");

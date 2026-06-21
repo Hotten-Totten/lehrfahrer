@@ -144,6 +144,10 @@
           <option value="manual">Punktführung (Expertenmodus)</option>
         </select>
       </label>
+      <label id="preserveManualChainsWrap" class="quickbar-select-wrap" title="Direkt aufeinanderfolgende Fahrwegpunkte exakt verbinden, ohne dazwischen neu zu routen">
+        <input id="preserveManualChainsInput" type="checkbox">
+        <span>Fahrwegpunkte exakt halten</span>
+      </label>
 
       <span class="qb-sep"></span>
 
@@ -283,6 +287,7 @@
         <div>Fahrzeit gesamt: <span id="totalTime">0 min</span></div>
         <div>Modus: <span id="currentModeText"></span></div>
         <div>Routing: <span id="routingModeText"></span></div>
+        <div id="preserveManualChainsPreviewRow">Exakte Fahrwegpunkte: <span id="preserveManualChainsText">Aus</span></div>
       </div>
 
     </div>

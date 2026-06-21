@@ -94,6 +94,7 @@ async function fetchStreetSegment(fromStop, toStop) {
 async function buildStreetRouteCoordsViaAnchors(anchors, options = {}) {
   const {
     routingModeLabel = "street",
+    preserveManualChains = false,
     onSegmentDebug = null,
     onSegmentWarning = null
   } = options || {};
@@ -104,7 +105,17 @@ async function buildStreetRouteCoordsViaAnchors(anchors, options = {}) {
     const fromAnchor = routingAnchors[index];
     const toAnchor = routingAnchors[index + 1];
     const directMeters = distanceMetersBetween(fromAnchor, toAnchor);
-    const segmentCoords = (await fetchStreetSegment(fromAnchor, toAnchor))
+    const preserveManualSegment =
+      preserveManualChains &&
+      fromAnchor.kind === "manual" &&
+      toAnchor.kind === "manual";
+    const rawSegmentCoords = preserveManualSegment
+      ? [
+          [Number(fromAnchor.lon), Number(fromAnchor.lat)],
+          [Number(toAnchor.lon), Number(toAnchor.lat)]
+        ]
+      : await fetchStreetSegment(fromAnchor, toAnchor);
+    const segmentCoords = rawSegmentCoords
       .map(coord => Array.isArray(coord)
         ? [Number(coord[0]), Number(coord[1])]
         : [Number(coord.lon), Number(coord.lat)])
@@ -134,7 +145,8 @@ async function buildStreetRouteCoordsViaAnchors(anchors, options = {}) {
       routedMeters: Math.round(routedMeters),
       ratio: directMeters > 0 ? Number((routedMeters / directMeters).toFixed(2)) : null,
       routePointCount: segmentCoords.length,
-      routingMode: routingModeLabel
+      routingMode: routingModeLabel,
+      preserveManualSegment
     };
 
     if (typeof onSegmentDebug === "function") {
@@ -504,8 +516,12 @@ async function rerouteSelectedSegment() {
         id: item.point.id,
         kind: item.point.sourceType === "manual" ? "manual" : "routeBoundary"
       }));
+    const preserveManualChains =
+      normalizeEditorRoutingMode(state.routingMode) === "guidedStreet" &&
+      !!state.preserveManualChains;
     const routeItems = await buildEditorStreetRouteItemsViaAnchors(anchors, {
       routingModeLabel: anchors.some(anchor => anchor.kind === "manual") ? "guidedStreet" : "street",
+      preserveManualChains,
       onSegmentDebug: segmentInfo => debug("Editor Teilrouting-Segment", segmentInfo)
     });
 
@@ -744,6 +760,7 @@ function buildRoutingStepsFromAnchors(anchors) {
 // Gibt true zurück wenn erfolgreich, false wenn Fallback auf Vollrouting nötig.
 async function rerouteInsertedStop(insertedStopIndex, options = {}) {
   const useManualAnchors = !!options.useManualAnchors;
+  const preserveManualChains = useManualAnchors && !!options.preserveManualChains;
   const prevStop = state.stops[insertedStopIndex - 1];
   const newStop  = state.stops[insertedStopIndex];
   const nextStop = state.stops[insertedStopIndex + 1];
@@ -795,6 +812,7 @@ async function rerouteInsertedStop(insertedStopIndex, options = {}) {
   const anchors = anchorEntries.map(entry => entry.anchor);
   const routeItems = await buildEditorStreetRouteItemsViaAnchors(anchors, {
     routingModeLabel: useManualAnchors ? "guidedStreet" : "street",
+    preserveManualChains,
     onSegmentDebug: segmentInfo => debug("Editor Zwischenstopp-Routing-Segment", segmentInfo)
   });
 
@@ -882,6 +900,9 @@ async function buildStreetRouteFromStops() {
   }
 
   const selectedRoutingMode = normalizeEditorRoutingMode(state.routingMode);
+  const preserveManualChains =
+    selectedRoutingMode === "guidedStreet" &&
+    !!state.preserveManualChains;
   if (selectedRoutingMode === "manual") {
     buildManualRouteFromStopsAndAnchors();
     return;
@@ -918,7 +939,8 @@ async function buildStreetRouteFromStops() {
       cancelRoutingBtn.style.display = "";
       try {
         const ok = await rerouteInsertedStop(insertedIdx, {
-          useManualAnchors: selectedRoutingMode === "guidedStreet"
+          useManualAnchors: selectedRoutingMode === "guidedStreet",
+          preserveManualChains
         });
         if (ok) {
           state.routeMode = "street";
@@ -967,7 +989,7 @@ async function buildStreetRouteFromStops() {
   }
 
   const existingRoutingAnchors = !appendMode && hasExistingRoute
-    ? buildRoutingAnchorsFromCurrentRoute()
+    ? buildRoutingAnchorsFromCurrentRoute({ preserveManualChains })
     : [];
   const useManualAnchors =
     selectedRoutingMode === "guidedStreet" &&
@@ -1023,6 +1045,7 @@ async function buildStreetRouteFromStops() {
           [step.from, step.to],
           {
             routingModeLabel: useManualAnchors ? "guidedStreet" : "street",
+            preserveManualChains,
             onSegmentDebug: segmentInfo => debug("Editor Routing-Segment", segmentInfo)
           }
         );

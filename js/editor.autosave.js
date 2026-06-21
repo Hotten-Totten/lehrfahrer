@@ -14,6 +14,7 @@ function buildAutosaveData() {
     color: lineColorInput.value,
     routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
     routingMode: normalizeEditorRoutingMode(state.routingMode),
+    preserveManualChains: !!state.preserveManualChains,
     previewMode: state.previewMode,
 
     stops: state.stops.map(stop => ({
@@ -175,6 +176,7 @@ function clearEditorData() {
   state.selected = null;
   state.routeMode = "auto";
   state.routingMode = "guidedStreet";
+  state.preserveManualChains = false;
   state.previewMode = "original";
 
   if ("guidePoints" in state) {
@@ -247,6 +249,7 @@ function loadAutosave() {
 
     state.routeMode = data.routeMode || "auto";
     state.routingMode = normalizeEditorRoutingMode(data.routingMode);
+    state.preserveManualChains = !!data.preserveManualChains;
     state.previewMode = data.previewMode || "original";
 
     let maxStopNum = 0;

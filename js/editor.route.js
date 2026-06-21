@@ -192,7 +192,8 @@ function findClosestSegment(latlng) {
   return closest;
 }
 
-function buildRoutingAnchorsFromCurrentRoute() {
+function buildRoutingAnchorsFromCurrentRoute(options = {}) {
+  const preserveManualChains = !!options.preserveManualChains;
   if (!state.routePoints.length) {
     return state.stops.map(stop => ({
       lat: stop.lat,
@@ -259,6 +260,15 @@ function buildRoutingAnchorsFromCurrentRoute() {
     );
 
     if (dist < 3) {
+      if (
+        preserveManualChains &&
+        anchor.kind === "manual" &&
+        prev.kind === "manual" &&
+        dist >= 0.25
+      ) {
+        deduped.push(anchor);
+        return;
+      }
       if (anchor.kind === "manual" && prev.kind !== "manual") {
         deduped[deduped.length - 1] = anchor;
       }
