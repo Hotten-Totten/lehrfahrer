@@ -1,5 +1,7 @@
 # Architektur des Lehrfahrer-Linieneditors
 
+Dokumentationsstand: **V2.1.000**
+
 ## Projektziel
 
 Der Lehrfahrer-Linieneditor erstellt, bearbeitet und speichert Linienverläufe für den betrieblichen Einsatz. Er verbindet eine geordnete Haltestellenfolge mit einer unabhängig davon bearbeitbaren Routengeometrie. Die erzeugten Daten werden vom Editor, von Exportfunktionen und von der Fahrer-App verwendet.
@@ -10,6 +12,17 @@ Die Architektur muss zwei fachliche Ebenen sauber trennen:
 - Die Routengeometrie beschreibt den tatsächlich zu fahrenden Weg.
 
 Nicht jeder betriebliche Punkt ist ein Fahrgasthalt und nicht jeder Geometriepunkt ist eine Haltestelle.
+
+## Aktuelle Architekturübersicht V2.1.000
+
+Der Editor trennt in V2.1.000 vier Zustandsbereiche:
+
+- `state.stops` enthält Haltestellen und Ghost-Haltestellen.
+- `state.routePoints` enthält die finale Routengeometrie. Manuell gesetzte Fahrwegpunkte sind durch `sourceType: "manual"` als wiederverwendbare Routing-Anker erkennbar.
+- `state.placementMode` steuert dauerhaft, ob Kartenklicks Haltestellen oder Fahrwegpunkte setzen.
+- `state.routingMode` und `state.preserveManualChains` steuern die nächste Routenberechnung.
+
+Straßenrouting und GuidedStreet verwenden zentral `buildStreetRouteCoordsViaAnchors()`. Der Helper ist zustandslos: Er verändert weder Editor-State noch History oder Autosave. Diese Verantwortung bleibt bei den aufrufenden Editorfunktionen.
 
 ## Kernobjekte
 
@@ -74,6 +87,8 @@ Eigenschaften:
 
 Fahrwegpunkte werden im aktiven Wizard temporär separat von Stops gehalten. Bei der finalen Übernahme werden sie ausschließlich in Routengeometrie umgesetzt.
 
+Im normalen Linieneditor entstehen Fahrwegpunkte als RoutePoints mit `sourceType: "manual"`. Sie können gesetzt, verschoben und gelöscht werden und bleiben bei GuidedStreet als Pflichtanker erhalten. Aufeinanderfolgende manuelle RoutePoints bilden eine Manual-Kette.
+
 > **Feste Architekturentscheidung:** Durchfahrpunkte und Fahrwegpunkte sind unterschiedliche Konzepte und dürfen niemals zusammengelegt werden.
 
 ## RoutePoints
@@ -92,7 +107,7 @@ Ghostpunkte dürfen nicht mit unsichtbaren Geometriepunkten verwechselt werden: 
 
 ## Routingmodi
 
-Der Umleitungs-Wizard unterscheidet drei Routingmodi. Die Modi legen fest, wie aus Stops und Fahrwegpunkten eine Routengeometrie entsteht.
+Der normale Editor und der Umleitungs-Wizard unterscheiden drei Routingarten. Im normalen Editor ist `guidedStreet` der Standard. Die Modi legen fest, wie aus Stops und Fahrwegpunkten eine Routengeometrie entsteht.
 
 ### Straßenrouting
 
@@ -124,7 +139,7 @@ Die Ankerfolge im stop-basierten Umleitungs-Wizard lautet:
 2. alle temporären Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte in Bedienreihenfolge
 3. Haltestelle nach dem Umleitungsbereich
 
-Punktführung eignet sich für Bereiche, die ein Straßenrouter nicht sinnvoll oder gar nicht routen kann.
+Punktführung ist ein Experten- und Legacy-Modus für Bereiche, die ein Straßenrouter nicht sinnvoll oder gar nicht routen kann.
 
 ### GuidedStreet
 
@@ -149,6 +164,20 @@ Typische Anwendungsfälle:
 
 GuidedStreet zwingt den Router über gesetzte Koordinaten, ändert aber nicht automatisch das zugrunde liegende Routingprofil oder dessen Zugangsregeln. Wenn der Router einen Abschnitt grundsätzlich nicht akzeptiert, bleibt Punktführung der notwendige Fallback.
 
+### Exakte Fahrwegpunkt-Ketten
+
+Interne Option: `preserveManualChains`
+
+Die Option ist in neuen Projekten standardmäßig aktiv. Fehlt das Feld in einer alten Projektdatei, wird ebenfalls `true` verwendet. Ein ausdrücklich gespeichertes `false` bleibt erhalten.
+
+Bei aktivierter Option gilt:
+
+- Stop zu Fahrwegpunkt: Straßenrouting
+- Fahrwegpunkt zu Fahrwegpunkt: direkte, exakte Koordinatenfolge ohne Routeraufruf
+- Fahrwegpunkt zu Stop: Straßenrouting
+
+Der Helper entfernt doppelte Segmentübergänge. Manual-Punkte mit weniger als 25 Zentimetern Abstand werden weiterhin dedupliziert. Die exakte Verbindung ist eine bewusste Nutzervorgabe und darf daher auch über Flächen verlaufen, die ein Straßenrouter nicht akzeptieren würde.
+
 ## Stop-basierter Umleitungs-Wizard
 
 Der Wizard bearbeitet einen zusammenhängenden Bereich der Haltestellenfolge, ohne Originalroute und Originalstopps während des Entwurfs sofort zu verändern.
@@ -172,6 +201,8 @@ Beim finalen Stop-Splice werden nur `replacementStop` und `passThroughStop` übe
 
 Der Modus `street` darf Fahrwegpunkte ignorieren, soll sie beim Moduswechsel aber nicht zerstören.
 
+Bei GuidedStreet werden aufeinanderfolgende Wizard-Elemente vom Typ `guidePoint` intern als Manual-Kette an den gemeinsamen Routinghelper übergeben. Ist `preserveManualChains` aktiv, wird nur `guidePoint` zu `guidePoint` direkt verbunden. Ersatzhaltestellen, Durchfahrpunkte und die Anschlüsse an `beforeStop` und `afterStop` bleiben Routersegmente. Die Punktführung des Wizards war bereits vollständig direkt und bleibt davon unabhängig.
+
 ## Save/Load
 
 Save/Load serialisiert die fertige Linie, nicht die temporären Leaflet-Objekte eines aktiven Wizard-Entwurfs.
@@ -182,6 +213,9 @@ Gespeichert werden insbesondere:
 - Umleitungsmetadaten fertiger Ersatz- und Durchfahrpunkte
 - finale RoutePoints
 - Linien-, Routen- und Richtungsmetadaten
+- `routingMode`: `street`, `guidedStreet` oder `manual`
+- `preserveManualChains`: exakte Manual-Ketten an oder aus
+- `placementMode`: dauerhaftes Setzen von `freeStop` oder `route`
 
 Beim Laden müssen alte Formate weiterhin unterstützt werden. Fehlende neue Felder benötigen sichere Defaults. Das Speichern während eines aktiven Wizard-Entwurfs muss zukünftig ausdrücklich blockiert oder fachlich definiert werden.
 
@@ -189,11 +223,13 @@ Beim Laden müssen alte Formate weiterhin unterstützt werden. Fehlende neue Fel
 
 Autosave schützt den normalen Editorzustand im Browser. Aktive Wizard-Drafts werden derzeit nicht vollständig persistiert. Temporäre Marker und Wizard-Arrays dürfen daher nicht als wiederherstellbar vorausgesetzt werden.
 
-Fertige Umleitungsstopps und deren Metadaten gehören dagegen zum normalen Linienzustand und werden im Autosave berücksichtigt.
+Fertige Umleitungsstopps und deren Metadaten gehören dagegen zum normalen Linienzustand und werden im Autosave berücksichtigt. Autosave speichert außerdem `routingMode`, `preserveManualChains` und `placementMode`. Alte Autosaves ohne Strict-Feld laden `preserveManualChains` mit `true`; alte Setzmodi werden soweit möglich aus `routeMode` abgeleitet.
 
 ## History
 
 Undo/Redo arbeitet snapshot-basiert. Die finale Übernahme einer Umleitung muss als zusammenhängende Aktion rückgängig gemacht werden können.
+
+Snapshots enthalten in V2.1.000 auch Routingmodus, Strict-Option und Setzmodus. Der Routinghelper selbst schreibt weiterhin keine History.
 
 Einzelne temporäre Wizard-Schritte sind derzeit keine vollständigen History-Aktionen. Das Verhalten von Undo/Redo während eines aktiven Wizards muss vor weiterer Ausweitung ausdrücklich definiert werden.
 
@@ -223,17 +259,36 @@ Die Fahrer-App darf nicht aus dem Fehlen eines Fahrgasthalts schließen, dass ei
 8. Temporäre Kartenobjekte sind keine direkt serialisierbaren Fachdaten.
 9. Fertige Umleitungsmetadaten müssen Save/Load, Autosave und History überstehen.
 10. Neue Routingfunktionen sollen auf gemeinsamen Routinghelpern aufbauen und keine parallelen Sonderimplementierungen erzeugen.
+11. `placementMode` ist vom geometrischen `routeMode` getrennt, damit der gewählte Setzmodus Routingberechnungen übersteht.
+12. Strict-Fahrwegführung verändert nur aufeinanderfolgende Manual-Anker; Stopanschlüsse bleiben geroutet.
+
+## Bekannte Einschränkungen
+
+- Stop- und Zwischenstopp-Zuordnungen zur Route beruhen bei Schleifen teilweise auf dem nächsten RoutePoint und können mehrdeutig sein.
+- Exakte Manual-Segmente prüfen nicht automatisch, ob sie Straßen, Hindernisse oder betriebliche Grenzen schneiden.
+- Segment-Neuberechnung erkennt betroffene Stops, verwendet sie aber nicht automatisch als Pflichtanker.
+- Aktive Wizard-Drafts werden nicht vollständig in Autosave oder Projektdateien persistiert.
+- Das GPX-Verhalten für Durchfahrpunkte ist noch nicht abschließend fachlich festgelegt.
+- Für Routingfehler, Schleifen und dichte Manual-Ketten fehlen automatisierte Browser- und Integrationstests.
 
 ## Zukunftsplanung
 
-GuidedStreet soll aus dem Umleitungs-Wizard in den normalen Linieneditor übernommen werden. Dafür wird ein gemeinsamer Routinghelper benötigt, der eine geordnete Ankerfolge abschnittsweise routet.
+GuidedStreet, der gemeinsame Routinghelper und Strict-Manual-Ketten sind seit V2.1.000 im normalen Linieneditor vorhanden.
+
+### Empfehlungen für zukünftige Entwicklung
+
+- Routingentscheidungen weiterhin im gemeinsamen Helper konzentrieren; State-Mutationen bleiben in den Editor-Workflows.
+- Strict-Führung langfristig segmentbezogen modellieren, statt weitere globale Modi einzuführen.
+- Neue Datenfelder immer mit Migrationstests für fehlende, `false` gesetzte und alte Legacy-Werte absichern.
+- Stop-Anker, Manual-Anker und Ghost-Stops in automatisierten Tests als getrennte Fachobjekte behandeln.
+- Vor einer vollständigen Wizard-Persistenz Undo, Save und Autosave für aktive Entwürfe gemeinsam definieren.
+- Routingqualität nicht nur anhand vorhandener RoutePoints, sondern auch anhand der Entfernung fachlich erforderlicher Stops bewerten.
 
 Weitere geplante Bausteine:
 
-- Distanzprüfung zwischen Ersatzhaltestellen und finaler Route
+- automatisierte Tests für Street, GuidedStreet, Strict-Manual-Ketten und Fehler-Rollback
 - definierter Umgang mit Save/Load und Undo während aktiver Wizard-Drafts
 - Routingpresets für Busspur, Betriebshof, Gleisbereich und Sonderzufahrten
 - segmentbezogene Routingmetadaten
-- automatische Tests für Anchor-Reihenfolge, Save/Load und Exporte
-- robuste Vorschau für GuidedStreet
-
+- segmentbezogene Entscheidung zwischen Routing und exakter Geometrie
+- robuste Behandlung mehrdeutiger Stop-Zuordnungen in Schleifen

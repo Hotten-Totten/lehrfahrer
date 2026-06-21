@@ -1,14 +1,26 @@
 # Benutzerhandbuch Lehrfahrer-Linieneditor
 
-Dieses Handbuch beschreibt die Bedienung des Linieneditors. Screenshots werden später ergänzt.
+Dieses Handbuch beschreibt die Bedienung des Linieneditors in **V2.1.000**. Screenshots werden später ergänzt.
+
+## Änderungsübersicht V2.1.000
+
+- `Straßenrouting über Fahrwegpunkte` ist der Standardmodus.
+- `Fahrwegpunkte exakt halten` ist für neue und alte feldlose Projekte standardmäßig aktiv.
+- Aufeinanderfolgende Fahrwegpunkte werden bei aktivierter Option exakt verbunden; Stopanschlüsse bleiben Straßenrouting.
+- `Punktführung` ist als Expertenmodus gekennzeichnet.
+- Die dauerhaften Setzmodi heißen `Haltestellen setzen` und `Fahrwegpunkte setzen`.
+- Vollberechnung, Zwischenstopp-Routing und Segment-Neuberechnung erhalten manuelle Pflichtpunkte.
+- GuidedStreet-Umleitungen können exakte Fahrwegpunkt-Ketten verwenden.
+- Routing-, Strict- und Setzmodus werden in Projektdateien, Autosave und History berücksichtigt.
 
 ## 1. Linien erstellen
 
 1. Ort, Liniennummer, Route und Richtung eintragen.
 2. Linienfarbe auswählen.
-3. Haltestellen in der gewünschten Reihenfolge hinzufügen.
-4. Routengeometrie automatisch berechnen oder manuell bearbeiten.
-5. Linie prüfen und speichern.
+3. `Haltestellen setzen` wählen und Haltestellen in der gewünschten Reihenfolge hinzufügen.
+4. Bei Bedarf `Fahrwegpunkte setzen` wählen und den gewünschten Korridor markieren.
+5. Routingart auswählen und die Route erzeugen.
+6. Linie prüfen und speichern.
 
 Vor dem Speichern sollten Start, Ziel, Stopreihenfolge und Streckenverlauf kontrolliert werden.
 
@@ -20,6 +32,10 @@ Haltestellen können ausgewählt, verschoben, bearbeitet und gelöscht werden. �
 
 Durchfahrpunkte sind Ghost-Haltestellen. Sie erscheinen im Editor als betriebliche Referenzpunkte, sind aber keine regulären Fahrgasthalte.
 
+### Setzmodus: Haltestellen setzen
+
+Der Button `Haltestellen setzen` aktiviert einen dauerhaften Modus. Jeder Kartenklick setzt eine reale freie Haltestelle, bis bewusst auf `Fahrwegpunkte setzen` oder einen anderen Arbeitsmodus umgeschaltet wird. Das Auswählen oder Setzen eines einzelnen Punktes schaltet nicht automatisch zurück.
+
 ## 3. RoutePoints
 
 RoutePoints bilden die sichtbare Routengeometrie. Sie können automatisch durch Routing entstehen oder manuell gesetzt werden.
@@ -27,6 +43,20 @@ RoutePoints bilden die sichtbare Routengeometrie. Sie können automatisch durch 
 Je nach Modus können RoutePoints ausgewählt, verschoben, ergänzt oder gelöscht werden. Mehrfachauswahl und Segmentbearbeitung dienen zur Korrektur größerer Bereiche.
 
 RoutePoints sind keine Haltestellen.
+
+### Fahrwegpunkte setzen
+
+`Fahrwegpunkte setzen` ersetzt die frühere Bezeichnung `Route manuell`. Der Modus bleibt aktiv, bis der Nutzer bewusst umschaltet. Kartenklicks erzeugen manuelle RoutePoints mit `sourceType: "manual"`.
+
+Fahrwegpunkte können ausgewählt, verschoben und gelöscht werden. Ihre Reihenfolge in `state.routePoints` bestimmt die Reihenfolge der GuidedStreet-Anker.
+
+### Segment-Neuberechnung
+
+Für eine Teilstrecke werden zwei RoutePoints als Grenzen ausgewählt und `Teilstrecke neu berechnen` gestartet. Manuelle Fahrwegpunkte innerhalb des Abschnitts bleiben Pflichtanker. Bei aktivem `Fahrwegpunkte exakt halten` werden direkt aufeinanderfolgende manuelle Punkte exakt verbunden.
+
+### Zwischenstopp-Routing
+
+Wird ein Stop in eine bereits berechnete Route eingefügt, berechnet der Editor den betroffenen Abschnitt neu. Im GuidedStreet-Modus bleiben manuelle Fahrwegpunkte dieses Abschnitts erhalten. Der neue Stop wird anhand seiner Nähe zur vorhandenen Route in die Anchor-Reihenfolge eingeordnet.
 
 ## 4. Straßenrouting
 
@@ -38,11 +68,11 @@ Geeignet für:
 - eindeutig im Kartenmaterial erfasste Strecken
 - schnelle Grundrouten
 
-Bei Busspuren, Gleisen, Betriebshöfen oder Sonderzufahrten kann das Ergebnis abweichen. In diesen Fällen Punktführung oder GuidedStreet verwenden.
+Bei Busspuren, Gleisen, Betriebshöfen oder Sonderzufahrten kann das Ergebnis abweichen. In diesen Fällen `Straßenrouting über Fahrwegpunkte` verwenden.
 
 ## 5. Punktführung
 
-Bei Punktführung findet keine Routerberechnung statt. Die Linie folgt exakt der gesetzten Punktfolge.
+Punktführung ist ein Expertenmodus. Es findet keine Routerberechnung statt; die Linie folgt exakt der gesetzten Punktfolge.
 
 Geeignet für:
 
@@ -56,7 +86,7 @@ Fahrwegpunkte sind reine Geometriepunkte und erscheinen nicht als Haltestellen.
 
 ## 6. GuidedStreet
 
-GuidedStreet berechnet Straßenrouting abschnittsweise über gesetzte Zwangspunkte. Dadurch lässt sich der Router gezielt durch einen gewünschten Korridor führen.
+`Straßenrouting über Fahrwegpunkte` ist der Standardmodus. GuidedStreet berechnet Straßenrouting abschnittsweise über gesetzte Zwangspunkte. Dadurch lässt sich der Router gezielt durch einen gewünschten Korridor führen.
 
 Typische Anwendungen:
 
@@ -67,7 +97,27 @@ Typische Anwendungen:
 - Baustellen
 - Durchfahrverbote mit Freigabe für Linienverkehr
 
-GuidedStreet kann nur Wege verwenden, die der Router akzeptiert. Falls ein Abschnitt trotz Zwangspunkten nicht berechnet werden kann, Punktführung verwenden.
+### Fahrwegpunkte exakt halten
+
+Die Option ist standardmäßig aktiv und nur bei GuidedStreet sichtbar.
+
+- Stop zu Fahrwegpunkt: normale Routerberechnung
+- Fahrwegpunkt zu Fahrwegpunkt: direkte exakte Verbindung
+- Fahrwegpunkt zu Stop: normale Routerberechnung
+
+Bei deaktivierter Option routet der Router auch zwischen zwei Fahrwegpunkten. Das entspricht dem bisherigen GuidedStreet-Verhalten.
+
+Die exakte Verbindung eignet sich für Busbahnhöfe, Betriebshöfe, Wendeschleifen, Tramtrassen und nichtöffentliche Fahrwege. Sie prüft nicht automatisch, ob die direkte Linie Hindernisse schneidet. Fahrwegpunkte müssen deshalb sorgfältig und in Fahrreihenfolge gesetzt werden.
+
+### Projektdateien und Autosave
+
+Projektdateien speichern:
+
+- `routingMode`: gewählte Routingart
+- `preserveManualChains`: exakte Fahrwegpunkt-Ketten an oder aus
+- `placementMode`: `freeStop` für Haltestellen oder `route` für Fahrwegpunkte
+
+Autosave und History berücksichtigen dieselben Einstellungen. Alte Projekte ohne `routingMode` starten mit GuidedStreet. Fehlt `preserveManualChains`, wird die Option aktiviert. Ein ausdrücklich gespeichertes `false` bleibt erhalten.
 
 ## 7. Umleitungen
 
@@ -89,6 +139,8 @@ Punkttypen:
 - Fahrwegpunkt: reine Geometrie, kein Halt
 
 Bei Punktführung und GuidedStreet wird die gemeinsame Setzreihenfolge aller drei Typen berücksichtigt. Im Straßenrouting werden Fahrwegpunkte ignoriert, bleiben beim Moduswechsel aber erhalten.
+
+Bei GuidedStreet gilt auch im Wizard `Fahrwegpunkte exakt halten`: Folgen zwei Fahrwegpunkte direkt aufeinander, wird ihre Punktfolge exakt übernommen. Ersatzhaltestellen, Durchfahrpunkte und Anschlüsse an die Originalroute werden weiterhin über Straßenrouting verbunden. Im Wizard-Modus Punktführung ist die gesamte gesetzte Folge ohnehin direkt.
 
 `Umleitung abbrechen` verwirft den Entwurf und lässt Originalroute und Originalhaltestellen unverändert.
 
@@ -130,7 +182,7 @@ Wenn die Strecke über normale, im Kartenmaterial korrekt erfasste Straßen füh
 
 ### Wann verwende ich Punktführung?
 
-Wenn die Route exakt vorgegeben werden muss oder der Router einen Abschnitt nicht berechnen kann.
+Nur als Expertenmodus, wenn die gesamte Route exakt vorgegeben werden muss oder der Router einen Abschnitt nicht berechnen kann.
 
 ### Wann verwende ich GuidedStreet?
 
@@ -138,7 +190,11 @@ Wenn der Router grundsätzlich verwendet werden soll, aber über bestimmte Zwisc
 
 ### Warum läuft GuidedStreet trotz Fahrwegpunkt nicht über eine Busspur?
 
-Der Fahrwegpunkt erzwingt eine Koordinate, ändert aber nicht die Zugangsregeln des Routers. Bei nicht routbaren Abschnitten muss Punktführung verwendet werden.
+Ein einzelner Fahrwegpunkt erzwingt nur eine Koordinate. Für einen exakten Korridor mehrere Punkte in Fahrreihenfolge setzen und `Fahrwegpunkte exakt halten` aktivieren. Stopanschlüsse bleiben trotzdem Routersegmente.
+
+### Bleibt der Setzmodus nach einem Klick aktiv?
+
+Ja. `Haltestellen setzen` und `Fahrwegpunkte setzen` bleiben aktiv, bis bewusst umgeschaltet wird.
 
 ### Was passiert beim Abbrechen einer Umleitung?
 
@@ -147,4 +203,3 @@ Der temporäre Entwurf wird entfernt. Die ursprüngliche Route und Haltestellenf
 ### Werden Fahrwegpunkte gespeichert?
 
 Sie werden nicht als Haltestellen gespeichert. Ihre Wirkung wird in die finale Folge der RoutePoints übernommen.
-

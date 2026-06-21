@@ -2,19 +2,31 @@
 
 Die Roadmap priorisiert fachliche Stabilität vor Komfort und visueller Erweiterung. Architekturentscheidungen sind in [architecture.md](architecture.md) dokumentiert.
 
+## Stand V2.1.000
+
+In V2.1.000 umgesetzt:
+
+- gemeinsamer zustandsloser Helper `buildStreetRouteCoordsViaAnchors()`
+- GuidedStreet im normalen Linieneditor und im Umleitungs-Wizard
+- dauerhafte Setzmodi für Haltestellen und Fahrwegpunkte
+- Strict-Fahrwegführung über `preserveManualChains`
+- Erhalt manueller Anchors bei Voll-, Zwischenstopp- und Segmentrouting
+- gemeinsame Bedienreihenfolge temporärer Wizard-Elemente
+- geplante und entfallende Umleitungs-Preview
+- Distanzprüfung fachlich erforderlicher Umleitungspunkte
+- Speicherung von `routingMode`, `preserveManualChains` und `placementMode`
+
 ## HIGH PRIORITY
 
 ### Routing und GuidedStreet
 
-- GuidedStreet-Routinghelper aus der Wizard-Implementierung extrahieren.
-- Gemeinsamen Helper `buildStreetRouteCoordsViaAnchors()` einführen.
-- GuidedStreet im normalen Linieneditor verfügbar machen.
-- Sicherstellen, dass alle Verbraucher dieselbe geordnete Anchor-Logik verwenden.
-- GuidedStreet-Vorschau vor finaler Übernahme bereitstellen.
+- Automatisierte Tests für Street, GuidedStreet und Strict-Manual-Ketten einführen.
+- Fehler-Rollback für Voll-, Zwischenstopp- und Segmentrouting automatisiert prüfen.
+- Mehrdeutige Stop- und Anchor-Zuordnungen bei Schleifen robust behandeln.
+- Segment-Neuberechnung fachlich um optionale Stop-Pflichtanker erweitern.
 
 ### Validierung und Datensicherheit
 
-- Distanzprüfung zwischen Ersatzhaltestelle und finaler Route einführen.
 - Save/Load während eines aktiven Wizards absichern.
 - Undo-Verhalten während eines aktiven Wizards definieren.
 - GPX-Verhalten für Durchfahrpunkte prüfen und festlegen.
@@ -30,7 +42,7 @@ Die Roadmap priorisiert fachliche Stabilität vor Komfort und visueller Erweiter
 
 ### NORMALER LINIENEDITOR
 
-GuidedStreet soll später auch außerhalb des Umleitungs-Wizards verfügbar sein. Dies ist ein Kernfeature für professionelle Routenerstellung.
+GuidedStreet ist seit V2.1.000 außerhalb des Umleitungs-Wizards verfügbar und der Standardmodus. Strict-Manual-Ketten decken komplexe Sonderbereiche ab. Dies bleibt ein Kernfeature für professionelle Routenerstellung.
 
 Nutzen:
 
@@ -42,7 +54,7 @@ Nutzen:
 - Durchfahrverbote
 - Baustellen
 
-Die Übernahme soll nicht durch Kopieren der Wizard-Logik erfolgen. Wizard und normaler Linieneditor müssen denselben Routinghelper und dasselbe Anchor-Datenmodell verwenden.
+Wizard und normaler Linieneditor verwenden denselben Routinghelper. Künftige Erweiterungen müssen diese gemeinsame Implementierung erhalten.
 
 ## MEDIUM PRIORITY
 
@@ -59,7 +71,7 @@ Die Übernahme soll nicht durch Kopieren der Wizard-Logik erfolgen. Wizard und n
 
 - Wizard-Logik aus `editor.stops.js` in ein eigenes Modul auslagern.
 - Doppelte globale Hilfsfunktionen konsolidieren.
-- RouteMode-Bezeichnungen vereinheitlichen.
+- Verbleibende Legacy-Nutzung von `routeMode` gegen `placementMode` prüfen und vereinheitlichen.
 - Routing-, State- und Renderinglogik deutlicher voneinander trennen.
 - Tests für History, Autosave und Laden fertiger Umleitungen ergänzen.
 
@@ -74,9 +86,9 @@ Die Übernahme soll nicht durch Kopieren der Wizard-Logik erfolgen. Wizard und n
 - Mehrere Umleitungsabschnitte in einem Arbeitsgang bearbeiten.
 - Aktive Wizard-Drafts vollständig persistieren und wiederherstellen.
 - Unterschiedliche Presets innerhalb einer Umleitung pro Teilsegment erlauben.
+- Strict- oder Routingentscheidung pro Teilsegment statt nur pro Projekt ermöglichen.
 - Eigene Routingprofile für Bus, Straßenbahn und betriebliche Sonderflächen untersuchen.
 - Betrieblich freigegebene Zufahrten und lokale Routingregeln verwalten.
 - Qualitätsprüfung für Schleifen, Gegenrichtungen und mehrdeutige Anschluss-RoutePoints ausbauen.
 - Visuelle Routendifferenz zwischen Original, Entwurf und finaler Umleitung verbessern.
 - Versionsfähiges Datenmodell für Umleitungen und Routingsegmente entwickeln.
-
