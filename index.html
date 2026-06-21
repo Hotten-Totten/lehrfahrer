@@ -20,11 +20,12 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
+          <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
           <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen …</button>
           <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
           <button type="button" class="menu-item" onclick="clearApiTokenViaPrompt()" title="Löscht den lokal gespeicherten API-Token im Browser">API-Token löschen</button>
-          <button type="button" class="menu-item" onclick="importLineFromVbbPrompt()" title="Optional: Linie aus VBB-API suchen und in den Editor laden">VBB-Linie importieren …</button>
+          <button type="button" class="menu-item" onclick="importLineFromVbbPrompt()" title="Linienvarianten suchen und ihre Haltestellenfolge in den Editor laden">VBB-Haltestellenfolge importieren …</button>
           <button type="button" class="menu-item" onclick="setVbbAccessIdViaPrompt()" title="VBB Access-ID lokal im Browser speichern, damit sie beim Import nicht neu eingegeben werden muss">VBB Access-ID setzen …</button>
           <button type="button" class="menu-item" onclick="clearVbbAccessIdViaPrompt()" title="Löscht die lokal gespeicherte VBB Access-ID">VBB Access-ID löschen</button>
           <hr class="menu-separator">
@@ -213,6 +214,7 @@
     </div>
 
     <input id="loadLineInput" type="file" accept=".json" class="hidden">
+    <input id="gtfsZipInput" type="file" accept=".zip,application/zip" class="hidden">
 
     <!-- versteckte Buttons für DOM-Referenzen -->
     <button id="snapStopToRouteBtn" type="button" class="hidden"></button>
@@ -507,7 +509,7 @@
           <div id="vbbImportCandidateList" class="vbb-candidate-list" role="listbox" aria-label="Gefundene Linien"></div>
           <div class="vbb-candidate-actions">
             <button id="vbbImportCandidateCancelBtn" type="button" class="vbb-candidate-btn vbb-candidate-btn-cancel">Abbrechen</button>
-            <button id="vbbImportCandidateSelectBtn" type="button" class="vbb-candidate-btn vbb-candidate-btn-ok" disabled>Ausgewählte Fahrt importieren</button>
+            <button id="vbbImportCandidateSelectBtn" type="button" class="vbb-candidate-btn vbb-candidate-btn-ok" disabled>Ausgewählte Variante importieren</button>
           </div>
         </div>
       </div>

@@ -713,7 +713,7 @@ function closeVbbImportProgressPopup() {
   refs.modal.classList.add("hidden");
 }
 
-function showVbbImportProgressPopup(lineQuery) {
+function showVbbImportProgressPopup(lineQuery, title = "") {
   const refs = getVbbImportModalRefs();
   if (!refs.modal || !refs.box) return;
 
@@ -727,7 +727,7 @@ function showVbbImportProgressPopup(lineQuery) {
   refs.box.classList.remove("vbb-import-state-success", "vbb-import-state-warn", "vbb-import-state-error");
   refs.box.classList.add("vbb-import-state-info");
 
-  if (refs.title) refs.title.textContent = `VBB-Import Linie ${lineQuery}`;
+  if (refs.title) refs.title.textContent = title || `VBB-Import Linie ${lineQuery}`;
   if (refs.subtitle) refs.subtitle.textContent = "Import wird vorbereitet …";
   if (refs.message) refs.message.textContent = "Startet …";
   if (refs.timeline) refs.timeline.innerHTML = "";
@@ -796,12 +796,17 @@ function updateVbbImportProgressPopup(stepText, options = {}) {
 }
 
 function formatVbbCandidateMeta(entry) {
+  const customMeta = String(entry?.meta || "").trim();
+  if (customMeta) return customMeta;
+
   const product = String(entry?.product || "").trim();
   const startStop = String(entry?.startStop || entry?.origin || "").trim();
   const destination = String(entry?.destination || entry?.direction || "").trim();
-  const time = String(entry?.time || "").trim();
+  const stopCount = Number(entry?.stopCount || 0);
+  const variantKey = String(entry?.variantKey || "").trim();
   const routeLabel = `${startStop || "Start ?"} -> ${destination || "Ziel ?"}`;
-  const parts = [routeLabel, product, time].filter(Boolean);
+  const variantLabel = variantKey ? `Variante ${variantKey.slice(0, 6)}` : "";
+  const parts = [routeLabel, stopCount > 0 ? `${stopCount} Stops` : "", variantLabel, product].filter(Boolean);
   return parts.join(" | ");
 }
 
@@ -901,7 +906,7 @@ function chooseVbbSearchOptionsInPopup() {
   });
 }
 
-function chooseVbbCandidateInPopup(candidates) {
+function chooseVbbCandidateInPopup(candidates, options = {}) {
   const refs = getVbbImportModalRefs();
   if (!refs.picker || !refs.pickerList || !refs.pickerSelectBtn || !refs.pickerCancelBtn || !refs.closeBtn) {
     return Promise.resolve(candidates?.[0] || null);
@@ -910,8 +915,13 @@ function chooseVbbCandidateInPopup(candidates) {
   refs.picker.classList.remove("hidden");
   refs.pickerList.innerHTML = "";
   refs.pickerSelectBtn.disabled = true;
+  refs.pickerSelectBtn.textContent = options.selectText || "Fahrt importieren";
   if (refs.pickerHint) {
     refs.pickerHint.textContent = `${candidates.length} Treffer gefunden. Bitte Fahrt auswählen.`;
+  }
+
+  if (refs.pickerHint && options.hint) {
+    refs.pickerHint.textContent = options.hint;
   }
 
   let selectedId = "";
@@ -987,9 +997,157 @@ function chooseVbbCandidateInPopup(candidates) {
   });
 }
 
+async function postGtfsImport(fields) {
+  const body = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) body.append(key, value);
+  });
+
+  const response = await fetch(API_GTFS_IMPORT_URL, {
+    method: "POST",
+    headers: withApiAuthHeaders({}),
+    body
+  });
+  const result = await response.json().catch(() => ({
+    ok: false,
+    error: `GTFS-Serverantwort ist ungueltig (HTTP ${response.status}).`
+  }));
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || `GTFS-Import fehlgeschlagen (HTTP ${response.status}).`);
+  }
+  return result;
+}
+
+function importGtfsZipPrompt() {
+  const input = document.getElementById("gtfsZipInput");
+  if (!input) {
+    setStatus("GTFS-Dateiauswahl ist nicht verfuegbar.", "error");
+    return;
+  }
+
+  input.value = "";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    showVbbImportProgressPopup("", "GTFS-ZIP-Import");
+    try {
+      updateVbbImportProgressPopup(`GTFS-ZIP wird geladen: ${file.name}`, {
+        level: "info",
+        busy: true,
+        subtitle: "Datei lesen"
+      });
+      const upload = await postGtfsImport({ action: "upload", feed: file });
+      const routes = (Array.isArray(upload.routes) ? upload.routes : []).map(route => ({
+        ...route,
+        meta: [route.id ? `route_id ${route.id}` : "", route.routeType ? `Typ ${route.routeType}` : ""]
+          .filter(Boolean)
+          .join(" | ")
+      }));
+      if (!routes.length) throw new Error("Die GTFS-Datei enthaelt keine importierbaren Linien.");
+
+      updateVbbImportProgressPopup(`${routes.length} Linien gefunden.`, {
+        level: "info",
+        busy: false,
+        subtitle: "Linie auswaehlen"
+      });
+      const route = await chooseVbbCandidateInPopup(routes, {
+        hint: `${routes.length} Linien gefunden. Bitte Linie auswaehlen.`,
+        selectText: "Linie auswaehlen"
+      });
+      if (!route) {
+        setStatus("GTFS-Import abgebrochen.", "warn");
+        return;
+      }
+
+      updateVbbImportProgressPopup(`Varianten fuer ${route.name} werden ermittelt ...`, {
+        level: "info",
+        busy: true,
+        subtitle: "Varianten bilden"
+      });
+      const variantResult = await postGtfsImport({
+        action: "variants",
+        token: upload.token,
+        routeId: route.id
+      });
+      const variants = (Array.isArray(variantResult.variants) ? variantResult.variants : []).map(variant => {
+        const direction = String(variant.directionId ?? "").trim();
+        const signature = String(variant.variantKey || "").slice(0, 8);
+        return {
+          ...variant,
+          meta: [
+            direction ? `Richtung ${direction}` : "Richtung unbekannt",
+            `${Number(variant.stopCount || 0)} Stops`,
+            signature ? `Sequenz ${signature}` : ""
+          ].filter(Boolean).join(" | ")
+        };
+      });
+      if (!variants.length) throw new Error(`Fuer ${route.name} wurden keine nutzbaren Varianten gefunden.`);
+
+      updateVbbImportProgressPopup(`${variants.length} Varianten gefunden.`, {
+        level: "info",
+        busy: false,
+        subtitle: "Variante auswaehlen"
+      });
+      const variant = await chooseVbbCandidateInPopup(variants, {
+        hint: `${variants.length} Richtungen/Varianten gefunden. Bitte Haltestellenfolge auswaehlen.`,
+        selectText: "Variante importieren"
+      });
+      if (!variant) {
+        setStatus("GTFS-Import abgebrochen.", "warn");
+        return;
+      }
+
+      updateVbbImportProgressPopup(`Haltestellenfolge ${variant.name} wird importiert ...`, {
+        level: "info",
+        busy: true,
+        subtitle: "Linie erzeugen"
+      });
+      const imported = await postGtfsImport({
+        action: "import",
+        token: upload.token,
+        routeId: route.id,
+        tripId: variant.id
+      });
+      if (!imported.line || typeof imported.line !== "object") {
+        throw new Error("GTFS-Import lieferte keine gueltigen Liniendaten.");
+      }
+
+      loadLineFromData(imported.line);
+      const warningCount = Number(imported.warningCount || 0);
+      const warningText = warningCount > 0
+        ? ` ${warningCount} Stops ohne Koordinaten wurden übersprungen.`
+        : "";
+      updateVbbImportProgressPopup(`GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText}`, {
+        level: warningCount > 0 ? "warn" : "success",
+        busy: false,
+        allowClose: true,
+        subtitle: "Fertig",
+        autoCloseMs: 5000
+      });
+      setStatus(
+        `GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText} Route wurde nicht berechnet.`,
+        warningCount > 0 ? "warn" : "success"
+      );
+    } catch (err) {
+      error("GTFS-Import fehlgeschlagen", err);
+      updateVbbImportProgressPopup(err.message || "GTFS-Import fehlgeschlagen.", {
+        level: "error",
+        busy: false,
+        allowClose: true,
+        subtitle: "Fehler"
+      });
+      setStatus(err.message || "GTFS-Import fehlgeschlagen.", "error");
+    } finally {
+      input.value = "";
+    }
+  };
+  input.click();
+}
+
 async function importLineFromVbbPrompt() {
   try {
-    const lineQueryRaw = prompt("Welche VBB-Linie soll importiert werden?\nBeispiel: 10");
+    const lineQueryRaw = prompt("Für welche VBB-Linie sollen Haltestellenfolgen gesucht werden?\nBeispiel: 10");
     if (lineQueryRaw === null) {
       return;
     }
@@ -1001,36 +1159,12 @@ async function importLineFromVbbPrompt() {
     }
 
     showVbbImportProgressPopup(lineQuery);
-    updateVbbImportProgressPopup("Bitte Suchoptionen wählen …", {
-      level: "info",
-      busy: false,
-      subtitle: "VBB-Suche"
-    });
-
-    const options = await chooseVbbSearchOptionsInPopup();
-    if (!options) {
-      updateVbbImportProgressPopup("VBB-Import abgebrochen.", {
-        level: "warn",
-        busy: false,
-        allowClose: true,
-        subtitle: "Abgebrochen",
-        autoCloseMs: 4500
-      });
-      setStatus("VBB-Import abgebrochen.", "warn");
-      return;
-    }
-
-    const searchDate = String(options.searchDate || "").trim();
-    const searchTimeFrom = options.searchTimeFrom ? String(options.searchTimeFrom).trim() : "";
-    const searchTimeTo = options.searchTimeTo ? String(options.searchTimeTo).trim() : "";
-    const allDay = !!options.allDay;
-    const searchMode = String(options.searchMode || "window").trim();
-    const dateLabel = searchDate ? searchDate : "heute";
-    const modeLabel = searchMode === "variants"
-      ? `als Linienverläufe (Hin/Rück) (${dateLabel})`
-      : (allDay
-        ? `ganztägig (${dateLabel})`
-        : `von ${searchTimeFrom} bis ${searchTimeTo} (${dateLabel})`);
+    const searchDate = "";
+    const searchTimeFrom = "";
+    const searchTimeTo = "";
+    const allDay = true;
+    const searchMode = "variants";
+    const modeLabel = "als Haltestellenfolgen und Varianten";
 
     updateVbbImportProgressPopup(`Suche läuft für Linie ${lineQuery} ${modeLabel} …`, {
       level: "info",
@@ -1141,18 +1275,8 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    const serverSearchTimeFrom = String(searchResult?.searchTimeFrom || "").trim();
-    const serverSearchTimeTo = String(searchResult?.searchTimeTo || "").trim();
-    const serverSearchDate = String(searchResult?.searchDate || "").trim();
-    const serverAllDay = !!searchResult?.allDay;
-    const serverSearchMode = String(searchResult?.searchMode || "window").trim();
-    const serverLabel = serverSearchMode === "variants"
-      ? `${serverSearchDate || "heute"}, Linienverläufe`
-      : (serverAllDay
-        ? `${serverSearchDate || "heute"}, ganztägig`
-        : ((serverSearchTimeFrom && serverSearchTimeTo) ? `${serverSearchDate || "heute"} ${serverSearchTimeFrom}-${serverSearchTimeTo}` : ""));
     updateVbbImportProgressPopup(
-      `${candidates.length} Treffer gefunden${serverLabel ? ` (${serverLabel})` : ""}. Auswahl im Popup …`,
+      `${candidates.length} Haltestellenfolgen gefunden. Variante im Popup auswählen …`,
       {
       level: "info",
       busy: false,
@@ -1172,7 +1296,7 @@ async function importLineFromVbbPrompt() {
       return;
     }
 
-    updateVbbImportProgressPopup(`Fahrt ${selected.name} wird geladen …`, {
+    updateVbbImportProgressPopup(`Variante ${selected.name} wird geladen …`, {
       level: "info",
       busy: true,
       subtitle: "Import läuft"
@@ -1190,60 +1314,14 @@ async function importLineFromVbbPrompt() {
     }
 
     loadLineFromData(importResult.line);
-    updateVbbImportProgressPopup(`Import abgeschlossen: ${selected.name} (${importResult.stopCount || 0} Stops)`, {
+    updateVbbImportProgressPopup(`Haltestellenfolge importiert: ${selected.name} (${importResult.stopCount || 0} Stops)`, {
       level: "success",
       busy: false,
       allowClose: true,
-      subtitle: "Daten geladen"
+      subtitle: "Fertig",
+      autoCloseMs: 5000
     });
-
-    // Nach dem VBB-Import automatisch Straßenroute erzeugen, damit keine grobe Luftlinie bleibt.
-    if (typeof buildStreetRouteFromStops === "function") {
-      updateVbbImportProgressPopup("Straßenroute wird automatisch berechnet …", {
-        level: "info",
-        busy: true,
-        allowClose: false,
-        subtitle: "Nachbearbeitung"
-      });
-
-      try {
-        await buildStreetRouteFromStops();
-      } catch (routeErr) {
-        warn("Automatisches Straßenrouting nach VBB-Import fehlgeschlagen: " + routeErr.message);
-      }
-
-      const routePointCount = Array.isArray(state.routePoints) ? state.routePoints.length : 0;
-      const hasStreetRoute = state.routeMode === "street" && routePointCount > Math.max(2, state.stops.length);
-
-      if (hasStreetRoute) {
-        updateVbbImportProgressPopup(`Import + Straßenroute fertig (${state.stops.length} Stops, ${routePointCount} Routenpunkte)`, {
-          level: "success",
-          busy: false,
-          allowClose: true,
-          subtitle: "Fertig",
-          autoCloseMs: 5500
-        });
-        setStatus(`VBB-Import + Straßenroute fertig: ${selected.name} (${state.stops.length} Stops, ${routePointCount} Punkte)`);
-      } else {
-        updateVbbImportProgressPopup("Import fertig, aber Straßenroute konnte nicht vollständig erzeugt werden. Du kannst sie über 'Route zeichnen' neu berechnen.", {
-          level: "warn",
-          busy: false,
-          allowClose: true,
-          subtitle: "Teilweise fertig",
-          autoCloseMs: 7000
-        });
-        setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops). Straßenroute bitte ggf. manuell erzeugen.`, "warn");
-      }
-    } else {
-      updateVbbImportProgressPopup(`Import abgeschlossen: ${selected.name} (${importResult.stopCount || 0} Stops)`, {
-        level: "success",
-        busy: false,
-        allowClose: true,
-        subtitle: "Fertig",
-        autoCloseMs: 4500
-      });
-      setStatus(`VBB-Import fertig: ${selected.name} (${importResult.stopCount || 0} Stops)`);
-    }
+    setStatus(`VBB-Haltestellenfolge importiert: ${selected.name} (${importResult.stopCount || 0} Stops). Route kann jetzt erzeugt werden.`);
   } catch (err) {
     error("VBB-Import fehlgeschlagen", err);
     updateVbbImportProgressPopup(err.message || "VBB-Import fehlgeschlagen.", {
@@ -1550,6 +1628,9 @@ function loadLineFromData(data) {
     });
 
     stop.id = stopData.id || stop.id;
+    stop.stopId = stopData.stopId || stopData.catalogId || null;
+    const importedStopSequence = Number(stopData.stopSequence ?? stopData.order);
+    stop.stopSequence = Number.isFinite(importedStopSequence) ? importedStopSequence : null;
     stop.groupId = stopData.groupId || stopData.catalogId || null;
     stop.platformCode = stopData.platformCode || null;
     stop.directionHint = stopData.directionHint || null;

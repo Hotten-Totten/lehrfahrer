@@ -511,23 +511,27 @@ function vbb_merge_candidates(array $base, array $extra): array {
 function vbb_extract_journey_terminals(array $journeyData): array {
     $stops = $journeyData['Stops']['Stop'] ?? [];
     if (!is_array($stops) || !$stops) {
-        return [null, null];
+        return [null, null, '', 0];
     }
 
     $firstName = null;
     $lastName = null;
+    $sequenceParts = [];
 
     foreach ($stops as $stop) {
         if (!is_array($stop)) continue;
         $name = trim(strval($stop['name'] ?? ''));
         if ($name === '') continue;
+        $stopId = trim(strval($stop['id'] ?? ''));
         if ($firstName === null) {
             $firstName = $name;
         }
         $lastName = $name;
+        $sequenceParts[] = $stopId !== '' ? $stopId : strtolower($name);
     }
 
-    return [$firstName, $lastName];
+    $variantKey = $sequenceParts ? hash('sha256', implode('>', $sequenceParts)) : '';
+    return [$firstName, $lastName, $variantKey, count($sequenceParts)];
 }
 
 function vbb_enrich_candidates_with_terminals(array $cfg, array $candidates, int $maxEnrich = 40): array {
@@ -552,13 +556,19 @@ function vbb_enrich_candidates_with_terminals(array $cfg, array $candidates, int
             continue;
         }
 
-        [$tripStart, $tripEnd] = vbb_extract_journey_terminals($detail['data']);
+        [$tripStart, $tripEnd, $variantKey, $stopCount] = vbb_extract_journey_terminals($detail['data']);
         if ($tripStart !== null && $tripStart !== '') {
             $candidates[$i]['startStop'] = $tripStart;
         }
         if ($tripEnd !== null && $tripEnd !== '') {
             $candidates[$i]['destination'] = $tripEnd;
             $candidates[$i]['direction'] = $tripEnd;
+        }
+        if ($variantKey !== '') {
+            $candidates[$i]['variantKey'] = $variantKey;
+        }
+        if ($stopCount > 0) {
+            $candidates[$i]['stopCount'] = $stopCount;
         }
     }
 
@@ -573,11 +583,11 @@ function vbb_reduce_to_direction_variants(array $candidates, int $maxItems = 120
         $line = strtolower(trim(strval($candidate['name'] ?? '')));
         $start = strtolower(trim(strval($candidate['startStop'] ?? $candidate['origin'] ?? '')));
         $dest = strtolower(trim(strval($candidate['destination'] ?? $candidate['direction'] ?? '')));
+        $variantKey = trim(strval($candidate['variantKey'] ?? ''));
 
-        $key = $line . '|' . $start . '|' . $dest;
-        if ($line !== '' && $dest !== '') {
-            $key = $line . '|*|' . $dest;
-        }
+        $key = $variantKey !== ''
+            ? $line . '|sequence|' . $variantKey
+            : $line . '|terminals|' . $start . '|' . $dest;
 
         if (isset($seen[$key])) {
             continue;
@@ -593,89 +603,6 @@ function vbb_reduce_to_direction_variants(array $candidates, int $maxItems = 120
     return $out;
 }
 
-function vbb_parse_datetime_to_minutes(string $date, string $time): ?int {
-    $date = trim($date);
-    $time = trim($time);
-    if ($date === '' || $time === '') {
-        return null;
-    }
-
-    $dt = DateTime::createFromFormat('Y-m-d H:i:s', $date . ' ' . $time);
-    if (!$dt) {
-        $dt = DateTime::createFromFormat('Y-m-d H:i', $date . ' ' . $time);
-    }
-    if (!$dt) {
-        return null;
-    }
-
-    return intdiv($dt->getTimestamp(), 60);
-}
-
-function vbb_extract_stop_timestamp_minutes(array $stop): ?int {
-    $candidates = [
-        [strval($stop['rtDepDate'] ?? ''), strval($stop['rtDepTime'] ?? '')],
-        [strval($stop['rtArrDate'] ?? ''), strval($stop['rtArrTime'] ?? '')],
-        [strval($stop['depDate'] ?? ''), strval($stop['depTime'] ?? '')],
-        [strval($stop['arrDate'] ?? ''), strval($stop['arrTime'] ?? '')],
-    ];
-
-    foreach ($candidates as [$date, $time]) {
-        $minutes = vbb_parse_datetime_to_minutes($date, $time);
-        if ($minutes !== null) {
-            return $minutes;
-        }
-    }
-
-    return null;
-}
-
-function vbb_build_minute_offsets(array $stopItems): array {
-    $offsets = [];
-    $absolute = [];
-
-    foreach ($stopItems as $idx => $stop) {
-        if (!is_array($stop)) {
-            $absolute[$idx] = null;
-            continue;
-        }
-        $absolute[$idx] = vbb_extract_stop_timestamp_minutes($stop);
-    }
-
-    $start = null;
-    foreach ($absolute as $value) {
-        if ($value !== null) {
-            $start = $value;
-            break;
-        }
-    }
-
-    if ($start === null) {
-        foreach ($stopItems as $idx => $_stop) {
-            $offsets[$idx] = $idx * 2;
-        }
-        return $offsets;
-    }
-
-    $lastOffset = 0;
-    foreach ($stopItems as $idx => $_stop) {
-        $abs = $absolute[$idx] ?? null;
-        if ($abs === null) {
-            $lastOffset += 2;
-            $offsets[$idx] = $lastOffset;
-            continue;
-        }
-
-        $offset = max(0, $abs - $start);
-        if ($idx > 0 && $offset < $lastOffset) {
-            $offset = $lastOffset;
-        }
-        $offsets[$idx] = $offset;
-        $lastOffset = $offset;
-    }
-
-    return $offsets;
-}
-
 function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, string $city, string $fallbackDirection): array {
     $stopItems = $journey['Stops']['Stop'] ?? [];
     if (!is_array($stopItems)) {
@@ -683,16 +610,13 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
     }
 
     $stops = [];
-    $routePoints = [];
-
-    $minuteOffsets = vbb_build_minute_offsets($stopItems);
 
     foreach ($stopItems as $idx => $stop) {
         if (!is_array($stop)) {
             continue;
         }
 
-        if (!isset($stop['lat'], $stop['lon'])) {
+        if (!isset($stop['lat'], $stop['lon']) || !is_numeric($stop['lat']) || !is_numeric($stop['lon'])) {
             continue;
         }
 
@@ -701,45 +625,26 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
 
         $lat = round(floatval($stop['lat']), 6);
         $lon = round(floatval($stop['lon']), 6);
-        $minuteFromStart = intval($minuteOffsets[$idx] ?? (count($stops) * 2));
-        $prevMinute = count($stops) > 0 ? intval($stops[count($stops) - 1]['minuteFromStart']) : 0;
-        $segmentMinutes = count($stops) === 0 ? 0 : max(0, $minuteFromStart - $prevMinute);
+        if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+            continue;
+        }
+        $stopSequence = $idx + 1;
 
         $stops[] = [
             'id' => 'stop_' . (count($stops) + 1),
+            'stopId' => $id !== '' ? $id : null,
             'catalogId' => $id !== '' ? $id : null,
             'sourceType' => 'catalog',
             'type' => 'bus',
             'name' => $name,
             'lat' => $lat,
             'lon' => $lon,
-            'order' => count($stops) + 1,
-            'minuteFromStart' => $minuteFromStart,
-            'minuteMode' => 'manual',
-            'segmentMinutes' => $segmentMinutes,
-            'arrivalMinute' => $minuteFromStart,
-            'departureMinute' => $minuteFromStart,
+            'order' => $stopSequence,
+            'stopSequence' => $stopSequence,
             'note' => '',
             'isGhostPoint' => false,
             'isGhost' => false,
-            'isTimingPoint' => false,
-            'hafasPlannedDate' => strval($stop['depDate'] ?? $stop['arrDate'] ?? ''),
-            'hafasPlannedTime' => strval($stop['depTime'] ?? $stop['arrTime'] ?? ''),
-            'hafasRealtimeDate' => strval($stop['rtDepDate'] ?? $stop['rtArrDate'] ?? ''),
-            'hafasRealtimeTime' => strval($stop['rtDepTime'] ?? $stop['rtArrTime'] ?? ''),
         ];
-
-        $routePoints[] = [
-            'lat' => $lat,
-            'lon' => $lon,
-            'sourceType' => 'imported'
-        ];
-    }
-
-    $stopCount = count($stops);
-    if ($stopCount > 0) {
-        $stops[0]['isTimingPoint'] = true;
-        $stops[$stopCount - 1]['isTimingPoint'] = true;
     }
 
     $lineNameRaw = trim(strval($journey['Names']['Name'][0]['name'] ?? $lineQuery));
@@ -755,19 +660,26 @@ function vbb_map_journey_to_editor_line(array $journey, string $lineQuery, strin
         'routeName' => 'Route 01',
         'directionName' => $direction,
         'color' => '#d32f2f',
-        'routeMode' => 'imported',
+        'routeMode' => 'auto',
+        'routingMode' => 'guidedStreet',
+        'preserveManualChains' => true,
+        'placementMode' => 'freeStop',
         'stops' => $stops,
-        'routePoints' => $routePoints,
+        'routePoints' => [],
         'routePointsSimplified' => [],
         'line' => [
             'lineName' => $lineName,
             'routeName' => 'Route 01',
             'directionName' => $direction,
             'color' => '#d32f2f',
-            'routeMode' => 'imported'
+            'routeMode' => 'auto',
+            'routingMode' => 'guidedStreet',
+            'preserveManualChains' => true,
+            'placementMode' => 'freeStop'
         ],
         'meta' => [
-            'source' => 'VBB API Import (HAFAS 2.52)',
+            'source' => 'VBB API Import (HAFAS 2.52, stop sequence only)',
+            'importsTimetable' => false,
             'importedAt' => date('c')
         ]
     ];
