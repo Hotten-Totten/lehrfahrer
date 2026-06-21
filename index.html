@@ -53,11 +53,14 @@
         <button class="menu-button" type="button">Route</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
-          <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
           <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
           <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
           <button type="button" class="menu-item" data-click-target="startDetourWizardBtn" title="Umleitung starten:&#10;1. Stopbereich in der Haltestellenliste auswählen.&#10;2. Bereich übernehmen.&#10;3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen.&#10;4. Routingart wählen:&#10;- Straßenrouting: Router berechnet zwischen Ersatzhaltestellen/Durchfahrpunkten.&#10;- Punktführung: Linie folgt exakt den gesetzten Fahrwegpunkten.&#10;- Straßenrouting über Fahrwegpunkte: Router berechnet über gesetzte Fahrwegpunkte als Zwangspunkte.&#10;5. Umleitung übernehmen.&#10;6. Abbrechen lässt Originalroute unverändert." aria-label="Umleitung starten: 1. Stopbereich in der Haltestellenliste auswählen. 2. Bereich übernehmen. 3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen. 4. Routingart wählen: Straßenrouting berechnet zwischen Ersatzhaltestellen und Durchfahrpunkten; Punktführung folgt exakt den gesetzten Fahrwegpunkten; Straßenrouting über Fahrwegpunkte berechnet über gesetzte Fahrwegpunkte als Zwangspunkte. 5. Umleitung übernehmen. 6. Abbrechen lässt Originalroute unverändert.">Umleitung starten</button>
+          <hr class="menu-separator">
+          <div class="menu-section-label">Expertenfunktionen</div>
+          <button type="button" class="menu-item" data-click-target="startTrackBetweenStopsBtn" title="Sondertrasse zwischen zwei Haltestellen zeichnen">Sondertrasse zeichnen</button>
           <button type="button" class="menu-item" data-click-target="startDetourDraftBtn" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
+          <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
         </div>
       </div>
 
@@ -99,6 +102,7 @@
     </div>
 
     <div id="quickbar">
+      <button type="button" data-click-target="loadLineBtn" title="Gespeicherte Linien anzeigen und laden">Laden</button>
       <button id="quickNewBtn" type="button" title="Alle Felder und die Karte leeren – neue Linie beginnen">Neu</button>
 
       <span class="qb-sep"></span>
@@ -110,15 +114,6 @@
 
       <button id="modeFreeStopBtn" type="button" title="Modus: Haltestelle frei auf der Karte setzen oder aus dem Katalog auswählen">Haltestelle Auswahl</button>
       <button id="modeRouteBtn" type="button" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route manuell</button>
-      <label id="routingModeWrap" class="quickbar-select-wrap">
-        <span>Routing:</span>
-        <select id="routingModeSelect" title="Routingmodus für Route erzeugen" aria-label="Routingmodus für Route erzeugen">
-          <option value="guidedStreet">Straßenrouting über Fahrwegpunkte</option>
-          <option value="street">Straßenrouting</option>
-          <option value="manual">Punktführung (Expertenmodus)</option>
-        </select>
-      </label>
-      <button id="startTrackBetweenStopsBtn" type="button" title="Sondertrasse zwischen zwei Haltestellen zeichnen (z. B. Wendeschleife)">Sondertrasse zeichnen</button>
       <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschließen und speichern">Sondertrasse fertig</button>
       <button id="startDetourWizardBtn" type="button" title="Umleitung starten:&#10;1. Stopbereich in der Haltestellenliste auswählen.&#10;2. Bereich übernehmen.&#10;3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen.&#10;4. Routingart wählen:&#10;- Straßenrouting: Router berechnet zwischen Ersatzhaltestellen/Durchfahrpunkten.&#10;- Punktführung: Linie folgt exakt den gesetzten Fahrwegpunkten.&#10;- Straßenrouting über Fahrwegpunkte: Router berechnet über gesetzte Fahrwegpunkte als Zwangspunkte.&#10;5. Umleitung übernehmen.&#10;6. Abbrechen lässt Originalroute unverändert." aria-label="Umleitung starten: 1. Stopbereich in der Haltestellenliste auswählen. 2. Bereich übernehmen. 3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen. 4. Routingart wählen: Straßenrouting berechnet zwischen Ersatzhaltestellen und Durchfahrpunkten; Punktführung folgt exakt den gesetzten Fahrwegpunkten; Straßenrouting über Fahrwegpunkte berechnet über gesetzte Fahrwegpunkte als Zwangspunkte. 5. Umleitung übernehmen. 6. Abbrechen lässt Originalroute unverändert.">Umleitung starten</button>
       <button id="acceptDetourRangeBtn" type="button" title="Ausgewählten zusammenhängenden Haltestellenbereich für die Umleitung übernehmen. Route und Haltestellen bleiben unverändert." aria-label="Umleitungsbereich übernehmen." style="display:none">Bereich übernehmen</button>
@@ -138,15 +133,22 @@
         </select>
       </label>
       <button id="cancelDetourWizardBtn" type="button" title="Stop-basierte Umleitung abbrechen. Haltestellen und Route bleiben unverändert." aria-label="Stop-basierte Umleitung abbrechen." style="display:none">Umleitung abbrechen</button>
-      <button id="startDetourDraftBtn" type="button" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
       <button id="finishDetourDraftBtn" type="button" title="Umleitung übernehmen: Der Abschnitt zwischen den zwei gewählten Routenpunkten wird durch die gesetzten Umleitungspunkte ersetzt. Haltestellen werden nicht automatisch verschoben." aria-label="Umleitung übernehmen: Abschnitt durch gesetzte Umleitungspunkte ersetzen. Haltestellen werden nicht automatisch verschoben." style="display:none">Umleitung übernehmen</button>
       <button id="cancelDetourDraftBtn" type="button" title="Umleitung abbrechen: Der Entwurf wird verworfen und die bestehende Route bleibt unverändert." aria-label="Umleitung abbrechen: Entwurf verwerfen und Route unverändert lassen." style="display:none">Umleitung abbrechen</button>
+
+      <label id="routingModeWrap" class="quickbar-select-wrap">
+        <span>Routing:</span>
+        <select id="routingModeSelect" title="Routingmodus für Route erzeugen" aria-label="Routingmodus für Route erzeugen">
+          <option value="guidedStreet">Straßenrouting über Fahrwegpunkte</option>
+          <option value="street">Straßenrouting</option>
+          <option value="manual">Punktführung (Expertenmodus)</option>
+        </select>
+      </label>
 
       <span class="qb-sep"></span>
 
       <button id="buildStreetRouteBtn" type="button" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
       <button id="cancelRoutingBtn" type="button" title="Laufendes Routing abbrechen" style="display:none">✕ Abbrechen</button>
-      <button id="smoothRouteBtn" type="button" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
 
       <span class="qb-sep"></span>
 
@@ -154,6 +156,7 @@
 
       <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.0.224</span>
       <span id="apiTokenStatus" class="token-status token-status-off" title="Status des lokal gespeicherten API-Tokens">API-Token: aus</span>
+      <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
       <span
         class="token-help"
         title="Wofür ist der API-Token?&#10;Der Token schützt Schreibaktionen (Speichern, Löschen, Orte anlegen) auf dem Server.&#10;Nur wer den Token kennt, darf Änderungen an den Linien-Daten vornehmen.&#10;Der Token wird lokal in diesem Browser gespeichert und bei API-Anfragen mitgesendet."
@@ -213,6 +216,11 @@
     <button id="deleteStopBtn" type="button" class="hidden"></button>
     <button id="showOriginalRouteBtn" type="button" class="hidden"></button>
     <button id="showSimplifiedRouteBtn" type="button" class="hidden"></button>
+    <button id="modeSelectBtn" type="button" class="hidden"></button>
+    <button id="rerouteSegmentBtn" type="button" class="hidden"></button>
+    <button id="startTrackBetweenStopsBtn" type="button" class="hidden"></button>
+    <button id="startDetourDraftBtn" type="button" class="hidden"></button>
+    <button id="smoothRouteBtn" type="button" class="hidden"></button>
     <button id="simplifyRouteBtn" type="button" class="hidden"></button>
     <button id="autoMinutesBtn" type="button" class="hidden"></button>
     <button id="saveLineBtn" type="button" class="hidden"></button>

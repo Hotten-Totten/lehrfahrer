@@ -355,7 +355,7 @@ map.on("click", function (e) {
 });
 // ---------- Menü ----------
 
-document.querySelectorAll(".menu-item[data-click-target]").forEach(menuItem => {
+document.querySelectorAll("[data-click-target]").forEach(menuItem => {
   menuItem.addEventListener("click", e => {
     e.preventDefault();
 
