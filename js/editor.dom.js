@@ -104,6 +104,7 @@ const clearAutosaveBtn = document.getElementById("clearAutosaveBtn");
 // Modale Dialoge
 const helpBtn = document.getElementById("helpBtn");
 const helpModal = document.getElementById("helpModal");
+const helpModalTitle = document.getElementById("helpModalTitle");
 const helpModalBody = document.getElementById("helpModalBody");
 const helpCloseBtn = document.getElementById("helpCloseBtn");
 

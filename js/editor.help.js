@@ -5,7 +5,87 @@
 // Zeigt Tastenkürzel und Editor-Funktionen
 
 // Öffnet das Hilfe-Fenster und füllt den Hilfetext.
+const HELP_DOCUMENTS = {
+  handbook: {
+    title: "Benutzerhandbuch",
+    path: "docs/handbuch.md"
+  },
+  detourWizard: {
+    title: "Umleitungs-Wizard Hilfe",
+    path: "docs/handbuch.md",
+    sectionHeading: "## 7. Umleitungen"
+  },
+  architecture: {
+    title: "Architektur",
+    path: "docs/architecture.md"
+  },
+  roadmap: {
+    title: "Roadmap",
+    path: "docs/roadmap.md"
+  }
+};
+
+let helpDocumentRequestId = 0;
+
+function extractMarkdownSection(markdown, sectionHeading) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  const startIndex = lines.findIndex(line => line.trim() === sectionHeading);
+  if (startIndex === -1) return null;
+
+  let endIndex = lines.length;
+  for (let index = startIndex + 1; index < lines.length; index++) {
+    if (/^##\s+/.test(lines[index])) {
+      endIndex = index;
+      break;
+    }
+  }
+
+  return lines.slice(startIndex, endIndex).join("\n").trim();
+}
+
+async function openHelpDocument(documentKey) {
+  const documentConfig = HELP_DOCUMENTS[documentKey];
+  if (!documentConfig) {
+    setStatus("Unbekanntes Hilfedokument.", "warn");
+    return;
+  }
+
+  const requestId = ++helpDocumentRequestId;
+  helpModalTitle.textContent = documentConfig.title;
+  helpModalBody.textContent = "Dokument wird geladen ...";
+  helpModal.classList.remove("hidden");
+
+  try {
+    const response = await fetch(documentConfig.path, { cache: "no-cache" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const markdown = await response.text();
+    if (requestId !== helpDocumentRequestId) return;
+
+    if (documentConfig.sectionHeading) {
+      const section = extractMarkdownSection(markdown, documentConfig.sectionHeading);
+      if (!section) {
+        throw new Error(`Abschnitt ${documentConfig.sectionHeading} wurde nicht gefunden`);
+      }
+      helpModalBody.textContent = section;
+      return;
+    }
+
+    helpModalBody.textContent = markdown;
+  } catch (err) {
+    if (requestId !== helpDocumentRequestId) return;
+    helpModalBody.textContent =
+      "Das Dokument konnte nicht geladen werden.\n\n" +
+      `Direkter Pfad: ${documentConfig.path}\n` +
+      `Fehler: ${err.message || "Unbekannter Fehler"}`;
+  }
+}
+
 function openHelpModal() {
+  helpDocumentRequestId++;
+  helpModalTitle.textContent = "Editor-Kurzhilfe";
   helpModalBody.textContent = `LINIENEDITOR – KURZHILFE (ELI15)
 
 1) Haltestelle aus Karte
@@ -76,5 +156,6 @@ Zeigt interne Meldungen direkt im Editor.`;
 
 // Schließt das Hilfe-Fenster
 function closeHelpModal() {
+  helpDocumentRequestId++;
   helpModal.classList.add("hidden");
 }

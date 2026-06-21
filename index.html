@@ -88,7 +88,11 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Hilfe</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="helpBtn" title="Hilfe und Erklärungen zum Editor öffnen">Hilfe öffnen</button>
+          <button type="button" class="menu-item" data-help-document="handbook" title="Benutzerhandbuch im Editor öffnen">Benutzerhandbuch öffnen</button>
+          <button type="button" class="menu-item" data-help-document="detourWizard" title="Kapitel zum stop-basierten Umleitungs-Wizard öffnen">Umleitungs-Wizard Hilfe öffnen</button>
+          <button type="button" class="menu-item" data-help-document="architecture" title="Architekturdokumentation im Editor öffnen">Architektur öffnen</button>
+          <button type="button" class="menu-item" data-help-document="roadmap" title="Projekt-Roadmap im Editor öffnen">Roadmap öffnen</button>
+          <button type="button" class="menu-item" data-click-target="helpBtn" title="Kurzhilfe und Erklärungen zum Editor öffnen">Editor-Kurzhilfe öffnen</button>
         </div>
       </div>
 
@@ -272,7 +276,7 @@
   <div id="helpModal" class="help-modal hidden">
     <div class="help-modal-content">
       <div class="help-modal-header">
-        <h3>Editor-Hilfe</h3>
+        <h3 id="helpModalTitle">Editor-Hilfe</h3>
         <button id="helpCloseBtn" type="button">Schließen</button>
       </div>
       <pre id="helpModalBody" class="help-modal-body"></pre>

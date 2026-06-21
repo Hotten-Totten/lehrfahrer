@@ -7,6 +7,11 @@
 if (exportAutosaveBtn) exportAutosaveBtn.addEventListener("click", exportAutosaveFile);
 //if (helpBtn) helpBtn.addEventListener("click", openHelpModal);
 if (helpBtn) {helpBtn.addEventListener("click", openHelpModal);}
+document.querySelectorAll("[data-help-document]").forEach(helpDocumentButton => {
+  helpDocumentButton.addEventListener("click", function () {
+    openHelpDocument(helpDocumentButton.dataset.helpDocument);
+  });
+});
 if (helpCloseBtn) helpCloseBtn.addEventListener("click", closeHelpModal);
 
 if (helpModal) {

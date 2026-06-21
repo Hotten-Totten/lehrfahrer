@@ -51,6 +51,7 @@ const state = {
     cutEndIndex: null,
     routingMode: "street",
     manualInputMode: "guidePoint",
+    nextDetourItemOrder: 1,
     manualRoutePoints: [],
     replacementStops: []
   },

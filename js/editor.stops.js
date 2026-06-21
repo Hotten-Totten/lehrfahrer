@@ -126,6 +126,7 @@ function resetDetourWizardState() {
     cutEndIndex: null,
     routingMode: "street",
     manualInputMode: "guidePoint",
+    nextDetourItemOrder: 1,
     manualRoutePoints: [],
     replacementStops: []
   };
@@ -162,6 +163,7 @@ function ensureDetourReplacementStops() {
       cutEndIndex: null,
       routingMode: "street",
       manualInputMode: "guidePoint",
+      nextDetourItemOrder: 1,
       manualRoutePoints: [],
       replacementStops: []
     };
@@ -187,6 +189,7 @@ function ensureDetourManualRoutePoints() {
       cutEndIndex: null,
       routingMode: "street",
       manualInputMode: "guidePoint",
+      nextDetourItemOrder: 1,
       manualRoutePoints: [],
       replacementStops: []
     };
@@ -201,6 +204,60 @@ function ensureDetourManualRoutePoints() {
   }
 
   return state.detourWizard.manualRoutePoints;
+}
+
+function getNextDetourItemOrder() {
+  if (!state.detourWizard || !Number.isInteger(state.detourWizard.nextDetourItemOrder)) {
+    const existingItems = [
+      ...(Array.isArray(state.detourWizard?.replacementStops) ? state.detourWizard.replacementStops : []),
+      ...(Array.isArray(state.detourWizard?.manualRoutePoints) ? state.detourWizard.manualRoutePoints : [])
+    ];
+    const existingOrders = existingItems
+      .map(item => Number(item.detourItemOrder))
+      .filter(Number.isFinite);
+    state.detourWizard.nextDetourItemOrder = existingOrders.length
+      ? Math.max(...existingOrders) + 1
+      : 1;
+  }
+
+  return state.detourWizard.nextDetourItemOrder++;
+}
+
+function getOrderedDetourItems() {
+  if (!state.detourWizard) return [];
+
+  const replacementStops = Array.isArray(state.detourWizard.replacementStops)
+    ? state.detourWizard.replacementStops
+    : [];
+  const manualRoutePoints = Array.isArray(state.detourWizard.manualRoutePoints)
+    ? state.detourWizard.manualRoutePoints
+    : [];
+  const combinedItems = [...replacementStops, ...manualRoutePoints];
+  const assignedOrders = combinedItems
+    .map(item => Number(item.detourItemOrder))
+    .filter(Number.isFinite);
+  let fallbackOrder = assignedOrders.length ? Math.max(...assignedOrders) + 1 : 1;
+
+  const normalizedItems = combinedItems.map(item => {
+      if (!item.kind) {
+        item.kind = item.isGhostPoint
+          ? "passThroughStop"
+          : (manualRoutePoints.includes(item) ? "guidePoint" : "replacementStop");
+      }
+      if (!Number.isFinite(Number(item.detourItemOrder))) {
+        item.detourItemOrder = fallbackOrder++;
+      }
+      return item;
+    });
+  const maxOrder = normalizedItems.reduce(
+    (max, item) => Math.max(max, Number(item.detourItemOrder) || 0),
+    0
+  );
+  if (!Number.isInteger(state.detourWizard.nextDetourItemOrder) || state.detourWizard.nextDetourItemOrder <= maxOrder) {
+    state.detourWizard.nextDetourItemOrder = maxOrder + 1;
+  }
+
+  return normalizedItems.sort((a, b) => a.detourItemOrder - b.detourItemOrder);
 }
 
 function getDetourManualRoutePointIcon(point, selected = false) {
@@ -228,6 +285,8 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
   const replacementStops = ensureDetourReplacementStops();
   const stop = {
     id: "detour_replacement_" + detourReplacementStopIdCounter++,
+    detourItemOrder: getNextDetourItemOrder(),
+    kind: isGhostPoint ? "passThroughStop" : "replacementStop",
     catalogId,
     name,
     lat,
@@ -265,6 +324,7 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
     const pos = marker.getLatLng();
     stop.lat = pos.lat;
     stop.lon = pos.lng;
+    refreshDetourManualRoutePreview();
     renderStopOrderList();
     setStatus(`${getDetourReplacementStopLabel(stop)} verschoben: ${stop.name}`);
   });
@@ -273,6 +333,7 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
   replacementStops.push(stop);
   state.selected = { type: "detourReplacementStop", ref: stop };
 
+  refreshDetourManualRoutePreview();
   renderStopOrderList();
   updateModeButtons();
   setStatus(`${getDetourReplacementStopLabel(stop)} hinzugefuegt: ${stop.name}`);
@@ -317,6 +378,8 @@ function addDetourManualRoutePoint(latlng) {
   const index = manualRoutePoints.length + 1;
   const point = {
     id: "detour_manual_route_" + detourManualRoutePointIdCounter++,
+    detourItemOrder: getNextDetourItemOrder(),
+    kind: "guidePoint",
     name: `Fahrwegpunkt ${index}`,
     lat: latlng.lat,
     lon: latlng.lng,
@@ -378,6 +441,7 @@ function removeDetourReplacementStop(stopId) {
     state.selected = null;
   }
 
+  refreshDetourManualRoutePreview();
   renderStopOrderList();
   setStatus(`${getDetourReplacementStopLabel(stop)} entfernt.`);
 }
@@ -651,12 +715,10 @@ function getDetourManualRoutePreviewPoints() {
   const afterStop = state.stops[cutEndIndex + 1];
   if (!beforeStop || !afterStop) return null;
 
-  const manualRoutePoints = Array.isArray(state.detourWizard.manualRoutePoints)
-    ? state.detourWizard.manualRoutePoints
-    : [];
-  if (!manualRoutePoints.length) return null;
+  const orderedDetourItems = getOrderedDetourItems();
+  if (!orderedDetourItems.length) return null;
 
-  return [beforeStop, ...manualRoutePoints, afterStop];
+  return [beforeStop, ...orderedDetourItems, afterStop];
 }
 
 function refreshDetourManualRoutePreview() {
@@ -690,21 +752,21 @@ function refreshDetourManualRoutePreview() {
   detourManualRoutePreviewLine.setLatLngs(previewCoords);
 }
 
-async function buildDetourReplacementRouteCoords(anchors, routingMode = "street", manualRoutePoints = []) {
+async function buildDetourReplacementRouteCoords(anchors, routingMode = "street", orderedDetourItems = []) {
   if (routingMode === "manual") {
-    if (!Array.isArray(manualRoutePoints) || !manualRoutePoints.length) {
-      throw new Error("Punktfuehrung benoetigt Fahrwegpunkte.");
+    if (!Array.isArray(orderedDetourItems) || !orderedDetourItems.length) {
+      throw new Error("Punktfuehrung benoetigt mindestens einen Umleitungspunkt.");
     }
 
     const manualGeometryPoints = [
       anchors[0],
-      ...manualRoutePoints,
+      ...orderedDetourItems,
       anchors[anchors.length - 1]
     ].filter(Boolean);
     const manualCoords = interpolateManualRouteCoords(manualGeometryPoints, 20);
     debug("Stop-Umleitung Punktfuehrung", {
       anchorCount: anchors.length,
-      manualRoutePointCount: manualRoutePoints.length,
+      detourItemCount: orderedDetourItems.length,
       routePointCount: manualCoords.length
     });
     return manualCoords;
@@ -712,18 +774,18 @@ async function buildDetourReplacementRouteCoords(anchors, routingMode = "street"
 
   let routingAnchors = anchors;
   if (routingMode === "guidedStreet") {
-    if (!Array.isArray(manualRoutePoints) || !manualRoutePoints.length) {
-      throw new Error("Straßenrouting über Fahrwegpunkte benötigt mindestens einen Fahrwegpunkt.");
+    if (!Array.isArray(orderedDetourItems) || !orderedDetourItems.length) {
+      throw new Error("Straßenrouting über Fahrwegpunkte benötigt mindestens einen Umleitungspunkt.");
     }
 
     routingAnchors = [
       anchors[0],
-      ...manualRoutePoints,
+      ...orderedDetourItems,
       anchors[anchors.length - 1]
     ].filter(Boolean);
     debug("Stop-Umleitung guidedStreet", {
       anchorCount: routingAnchors.length,
-      manualRoutePointCount: manualRoutePoints.length
+      detourItemCount: orderedDetourItems.length
     });
   }
 
@@ -824,6 +886,7 @@ async function finishDetourWizardReplacement() {
   }
 
   const anchors = [context.beforeStop, ...context.tempReplacementStops, context.afterStop];
+  const orderedDetourItems = getOrderedDetourItems();
 
   let routedCoords;
   try {
@@ -831,7 +894,7 @@ async function finishDetourWizardReplacement() {
     routedCoords = await buildDetourReplacementRouteCoords(
       anchors,
       context.wizard.routingMode || "street",
-      context.wizard.manualRoutePoints
+      orderedDetourItems
     );
   } catch (err) {
     setStatus(`Umleitung konnte nicht berechnet werden: ${err.message}`, "error");
@@ -849,7 +912,8 @@ async function finishDetourWizardReplacement() {
 
   const detourId = "detour_" + Date.now();
   const originalStops = state.stops.slice(context.cutStartIndex, context.cutEndIndex + 1);
-  const replacementStops = context.tempReplacementStops
+  const replacementStops = orderedDetourItems
+    .filter(item => item.kind === "replacementStop" || item.kind === "passThroughStop")
     .map(cloneDetourReplacementAsLineStop)
     .map(stop => applyDetourReplacementMetadata(stop, detourId, originalStops));
   replacementStops.forEach(attachLineStopMarker);
@@ -921,7 +985,7 @@ function setDetourWizardRoutingMode(routingMode) {
   state.detourWizard.manualInputMode = "guidePoint";
 
   if (state.detourWizard.routingMode === "street") {
-    clearDetourManualRoutePoints();
+    clearDetourManualRoutePreview();
   } else if (state.detourWizard.routingMode === "manual") {
     refreshDetourManualRoutePreview();
   } else {
@@ -1040,6 +1104,7 @@ function acceptDetourStopRange() {
   state.detourWizard.cutEndIndex = range.endIndex;
   state.detourWizard.routingMode = "street";
   state.detourWizard.manualInputMode = "guidePoint";
+  state.detourWizard.nextDetourItemOrder = 1;
   state.detourWizard.manualRoutePoints = [];
   state.detourWizard.replacementStops = [];
   state.detourWizard.phase = "buildReplacement";
@@ -1364,81 +1429,74 @@ function renderStopOrderList() {
   });
 
   renderDetourReplacementStops();
-  renderDetourManualRoutePoints();
 }
 
 function renderDetourReplacementStops() {
   if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return;
 
-  const replacementStops = Array.isArray(state.detourWizard.replacementStops)
-    ? state.detourWizard.replacementStops
-    : [];
-
-  const replacementStopItems = replacementStops.filter(stop => !stop.isGhostPoint);
-  const passThroughItems = replacementStops.filter(stop => stop.isGhostPoint);
-
-  renderDetourReplacementStopSection("Temporaere Ersatzhaltestellen", "Noch keine Ersatzhaltestellen gesetzt.", replacementStopItems, "E");
-  renderDetourReplacementStopSection("Temporaere Durchfahrpunkte", "Noch keine Durchfahrpunkte gesetzt.", passThroughItems, "D");
-}
-
-function renderDetourReplacementStopSection(titleText, emptyText, replacementStops, indexPrefix) {
+  const orderedItems = getOrderedDetourItems();
   const section = document.createElement("div");
   section.className = "detour-replacement-section";
 
   const title = document.createElement("div");
   title.className = "detour-replacement-title";
-  title.textContent = titleText;
+  title.textContent = "Temporaere Umleitungspunkte";
   section.appendChild(title);
 
-  if (!replacementStops.length) {
+  if (!orderedItems.length) {
     const empty = document.createElement("div");
     empty.className = "detour-replacement-empty";
-    empty.textContent = emptyText;
+    empty.textContent = "Noch keine Ersatzhaltestellen, Durchfahrpunkte oder Fahrwegpunkte gesetzt.";
     section.appendChild(empty);
     stopOrderList.appendChild(section);
     return;
   }
 
-  replacementStops.forEach((stop, index) => {
-    const isSelected = state.selected && state.selected.type === "detourReplacementStop" && state.selected.ref.id === stop.id;
+  orderedItems.forEach((detourItem, index) => {
+    const isGuidePoint = detourItem.kind === "guidePoint";
+    const selectionType = isGuidePoint ? "detourManualRoutePoint" : "detourReplacementStop";
+    const isSelected = state.selected && state.selected.type === selectionType && state.selected.ref.id === detourItem.id;
 
-    if (stop.marker && typeof getDetourReplacementStopIcon === "function") {
-      stop.marker.setIcon(getDetourReplacementStopIcon(stop, isSelected));
+    if (detourItem.marker) {
+      detourItem.marker.setIcon(isGuidePoint
+        ? getDetourManualRoutePointIcon(detourItem, isSelected)
+        : getDetourReplacementStopIcon(detourItem, isSelected));
     }
 
     const item = document.createElement("div");
-    item.className = "detour-replacement-stop";
+    item.className = isGuidePoint ? "detour-manual-route-point" : "detour-replacement-stop";
     if (isSelected) item.classList.add("active");
-    if (stop.isGhostPoint) item.classList.add("detour-replacement-ghost");
+    if (detourItem.kind === "passThroughStop") item.classList.add("detour-replacement-ghost");
 
     const main = document.createElement("div");
     main.className = "detour-replacement-main";
 
     const indexValue = document.createElement("span");
     indexValue.className = "stop-order-row-index";
-    indexValue.textContent = `${indexPrefix}${index + 1}.`;
+    indexValue.textContent = `${index + 1}.`;
 
     const name = document.createElement("span");
     name.className = "stop-order-row-name";
-    name.textContent = stop.name;
+    name.textContent = detourItem.name;
 
     const source = document.createElement("span");
     source.className = "stop-order-row-index";
-    source.textContent = stop.isGhostPoint
-      ? "Durchfahrpunkt [Ghost]"
-      : (stop.sourceType === "catalog" ? "Katalog" : "frei");
+    source.textContent = detourItem.kind === "guidePoint"
+      ? "Fahrwegpunkt"
+      : (detourItem.kind === "passThroughStop" ? "Durchfahrpunkt [Ghost]" : "Ersatzhaltestelle");
 
     main.appendChild(indexValue);
     main.appendChild(name);
     main.appendChild(source);
 
     main.addEventListener("click", function () {
-      state.selected = { type: "detourReplacementStop", ref: stop };
-      if (stop.marker) {
-        map.setView([stop.lat, stop.lon], 17);
+      state.selected = { type: selectionType, ref: detourItem };
+      if (detourItem.marker) {
+        map.setView([detourItem.lat, detourItem.lon], 17);
       }
       renderStopOrderList();
-      setStatus(`${getDetourReplacementStopLabel(stop)} ausgewaehlt: ${stop.name}`);
+      const itemLabel = isGuidePoint ? "Fahrwegpunkt" : getDetourReplacementStopLabel(detourItem);
+      setStatus(`${itemLabel} ausgewaehlt: ${detourItem.name}`);
     });
 
     const actions = document.createElement("div");
@@ -1449,91 +1507,11 @@ function renderDetourReplacementStopSection(titleText, emptyText, replacementSto
     deleteBtn.textContent = "Entfernen";
     deleteBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      removeDetourReplacementStop(stop.id);
-    });
-
-    actions.appendChild(deleteBtn);
-    item.appendChild(main);
-    item.appendChild(actions);
-    section.appendChild(item);
-  });
-
-  stopOrderList.appendChild(section);
-}
-
-function renderDetourManualRoutePoints() {
-  if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return;
-  if (state.detourWizard.routingMode !== "manual" && state.detourWizard.routingMode !== "guidedStreet") return;
-
-  const manualRoutePoints = Array.isArray(state.detourWizard.manualRoutePoints)
-    ? state.detourWizard.manualRoutePoints
-    : [];
-
-  const section = document.createElement("div");
-  section.className = "detour-manual-route-section";
-
-  const title = document.createElement("div");
-  title.className = "detour-manual-route-title";
-  title.textContent = "Temporaere Fahrwegpunkte";
-  section.appendChild(title);
-
-  if (!manualRoutePoints.length) {
-    const empty = document.createElement("div");
-    empty.className = "detour-manual-route-empty";
-    empty.textContent = "Noch keine Fahrwegpunkte gesetzt.";
-    section.appendChild(empty);
-    stopOrderList.appendChild(section);
-    return;
-  }
-
-  manualRoutePoints.forEach((point, index) => {
-    const isSelected = state.selected && state.selected.type === "detourManualRoutePoint" && state.selected.ref.id === point.id;
-
-    if (point.marker && typeof getDetourManualRoutePointIcon === "function") {
-      point.marker.setIcon(getDetourManualRoutePointIcon(point, isSelected));
-    }
-
-    const item = document.createElement("div");
-    item.className = "detour-manual-route-point";
-    if (isSelected) item.classList.add("active");
-
-    const main = document.createElement("div");
-    main.className = "detour-replacement-main";
-
-    const indexValue = document.createElement("span");
-    indexValue.className = "stop-order-row-index";
-    indexValue.textContent = `F${index + 1}.`;
-
-    const name = document.createElement("span");
-    name.className = "stop-order-row-name";
-    name.textContent = point.name || `Fahrwegpunkt ${index + 1}`;
-
-    const source = document.createElement("span");
-    source.className = "stop-order-row-index";
-    source.textContent = "Fahrwegpunkt";
-
-    main.appendChild(indexValue);
-    main.appendChild(name);
-    main.appendChild(source);
-
-    main.addEventListener("click", function () {
-      state.selected = { type: "detourManualRoutePoint", ref: point };
-      if (point.marker) {
-        map.setView([point.lat, point.lon], 17);
+      if (isGuidePoint) {
+        removeDetourManualRoutePoint(detourItem.id);
+      } else {
+        removeDetourReplacementStop(detourItem.id);
       }
-      renderStopOrderList();
-      setStatus(`Fahrwegpunkt ausgewaehlt: ${point.name}`);
-    });
-
-    const actions = document.createElement("div");
-    actions.className = "stop-order-actions";
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.textContent = "Entfernen";
-    deleteBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      removeDetourManualRoutePoint(point.id);
     });
 
     actions.appendChild(deleteBtn);
