@@ -644,14 +644,7 @@ function maybeAutoBuildRoute() {
 }
 
 function switchToManualRouteMode() {
-  if (state.routeMode === "manual") {
-    setMode("route", "Manueller Routenmodus aktiv – zusätzliche Punkte können gesetzt werden.");
-    return;
-  }
-
-  state.routeMode = "manual";
-  updateStats();
-  setMode("route", "Manueller Routenmodus aktiv – zusätzliche Punkte können gesetzt werden.");
+  setPlacementMode("route", "Modus: Fahrwegpunkte setzen");
 }
 
 // =========================

@@ -163,8 +163,8 @@ function updateStats() {
   const modeLabels = {
     catalogStop: "Haltestelle",
     freeStop: "Haltestelle",
-    route: "Route zeichnen",
-    manual: "Route zeichnen (manuell)",
+    route: "Fahrwegpunkte setzen",
+    manual: "Fahrwegpunkte setzen",
     select: "Auswählen",
     specialTrack: "Sondertrasse zeichnen",
     specialTrackExtend: "Sondertrasse erweitern",
@@ -173,7 +173,18 @@ function updateStats() {
   };
   modeLabels.detourBuildReplacement = "Umleitung: Ersatz bauen";
 
-  currentModeText.textContent = modeLabels[currentMode] || currentMode || "-";
+  const placementMode = state.placementMode === "route" ? "route" : "freeStop";
+  const showWorkflowMode = [
+    "select",
+    "specialTrack",
+    "specialTrackExtend",
+    "detourDraft",
+    "detourSelectStops",
+    "detourBuildReplacement"
+  ].includes(currentMode);
+  currentModeText.textContent = showWorkflowMode
+    ? (modeLabels[currentMode] || currentMode || "-")
+    : modeLabels[placementMode];
 
   const routingMode = normalizeEditorRoutingMode(state.routingMode);
   const routingModeLabels = {
@@ -209,8 +220,13 @@ function updateStats() {
 // Markiert Modus-Buttons passend zum aktuellen Bearbeitungsmodus.
 function updateModeButtons() {
   const currentMode = state.routeMode;
-  modeFreeStopBtn.classList.toggle("active", currentMode === "freeStop" || currentMode === "catalogStop");
-  modeRouteBtn.classList.toggle("active", currentMode === "route" || currentMode === "manual");
+  const placementMode = state.placementMode === "route" ? "route" : "freeStop";
+  const stopPlacementActive = placementMode === "freeStop";
+  const routePlacementActive = placementMode === "route";
+  modeFreeStopBtn.classList.toggle("active", stopPlacementActive);
+  modeRouteBtn.classList.toggle("active", routePlacementActive);
+  modeFreeStopBtn.setAttribute("aria-pressed", String(stopPlacementActive));
+  modeRouteBtn.setAttribute("aria-pressed", String(routePlacementActive));
   if (modeSelectBtn) modeSelectBtn.classList.toggle("active", currentMode === "select");
 
   const inSpecialTrack = currentMode === "specialTrack" || currentMode === "specialTrackExtend";
@@ -284,6 +300,11 @@ function updateModeButtons() {
 }
 
 // Wechselt den Editor-Modus inklusive optionaler Statusmeldung.
+function setPlacementMode(newMode, statusText = "") {
+  state.placementMode = newMode === "route" ? "route" : "freeStop";
+  setMode(state.placementMode, statusText);
+}
+
 function setMode(newMode, statusText = "") {
   if (state.routeMode === "detourDraft" && newMode !== "detourDraft" && state.detourDraft && typeof cancelDetourDraft === "function") {
     cancelDetourDraft();

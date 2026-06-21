@@ -741,8 +741,9 @@ async function createNewLine() {
 
   state.previewMode = "original";
   state.routeMode = "auto";
+  state.placementMode = "freeStop";
   state.routingMode = "guidedStreet";
-  state.preserveManualChains = false;
+  state.preserveManualChains = true;
 
   clearSelection();
   clearRouteMultiSelection();

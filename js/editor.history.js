@@ -14,6 +14,7 @@ function buildHistorySnapshot() {
     directionName: directionNameInput.value.trim(),
     color: lineColorInput.value,
     routeMode: state.routeMode,
+    placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
     routingMode: normalizeEditorRoutingMode(state.routingMode),
     preserveManualChains: !!state.preserveManualChains,
     previewMode: state.previewMode,
@@ -87,8 +88,11 @@ function applyHistorySnapshot(snapshot) {
     lineColorInput.value = snapshot.color || "#d32f2f";
 
     state.routeMode = snapshot.routeMode || "auto";
+    state.placementMode = normalizeEditorPlacementMode(snapshot.placementMode, state.routeMode);
     state.routingMode = normalizeEditorRoutingMode(snapshot.routingMode);
-    state.preserveManualChains = !!snapshot.preserveManualChains;
+    state.preserveManualChains = snapshot.preserveManualChains === undefined
+      ? true
+      : !!snapshot.preserveManualChains;
     state.previewMode = snapshot.previewMode || "original";
 
     (snapshot.stops || []).forEach(stopData => {

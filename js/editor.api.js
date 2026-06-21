@@ -241,6 +241,7 @@ const stops = state.stops.map((stop, index) => ({
     directionName,
     color: lineColorInput.value,
     routeMode: state.routeMode,
+    placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
     routingMode: normalizeEditorRoutingMode(state.routingMode),
     preserveManualChains: !!state.preserveManualChains,
     stops,
@@ -268,6 +269,7 @@ const stops = state.stops.map((stop, index) => ({
       endStopName: endStop ? endStop.name : "",
       color: lineColorInput.value,
       routeMode: state.routeMode,
+      placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
       routingMode: normalizeEditorRoutingMode(state.routingMode),
       preserveManualChains: !!state.preserveManualChains
     },
@@ -1509,9 +1511,13 @@ function loadLineFromData(data) {
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";
+  state.placementMode = normalizeEditorPlacementMode(
+    lineBlock.placementMode || data.placementMode,
+    state.routeMode
+  );
   state.routingMode = normalizeEditorRoutingMode(lineBlock.routingMode || data.routingMode);
   state.preserveManualChains = !!(
-    lineBlock.preserveManualChains ?? data.preserveManualChains
+    lineBlock.preserveManualChains ?? data.preserveManualChains ?? true
   );
   state.previewMode = "original";
 

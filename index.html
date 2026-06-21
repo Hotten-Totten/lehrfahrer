@@ -67,7 +67,7 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Haltestellen</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="modeFreeStopBtn" title="Modus: Haltestelle frei auf der Karte setzen">Haltestelle</button>
+          <button type="button" class="menu-item" data-click-target="modeFreeStopBtn" title="Haltestellen dauerhaft auf der Karte setzen">Haltestellen setzen</button>
           <button type="button" class="menu-item" onclick="suggestGhostPointsFromRoute()" title="Setzt automatisch Ghostpunkte auf langen Abschnitten zwischen Haltestellen">Ghostpunkt-Assistent …</button>
           <button type="button" class="menu-item" data-click-target="autoMinutesBtn" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">Minuten automatisch</button>
           <button type="button" class="menu-item" data-click-target="snapStopToRouteBtn" title="Ausgewählte Haltestelle an den nächsten Routenpunkt snappen">Haltestelle an Route snappen</button>
@@ -84,7 +84,7 @@
           <button type="button" class="menu-item" data-click-target="showOriginalRouteBtn" title="Die ursprüngliche ungekürzte Route auf der Karte anzeigen">Original anzeigen</button>
           <button type="button" class="menu-item" data-click-target="showSimplifiedRouteBtn" title="Die vereinfachte Route mit weniger Punkten anzeigen">Vereinfachte anzeigen</button>
           <button type="button" class="menu-item" data-click-target="modeSelectBtn" title="Modus: Routenpunkte auf der Karte auswählen und bearbeiten">Routenpunkte Auswahl</button>
-          <button type="button" class="menu-item" data-click-target="modeRouteBtn" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route zeichnen</button>
+          <button type="button" class="menu-item" data-click-target="modeRouteBtn" title="Fahrwegpunkte dauerhaft auf der Karte setzen">Fahrwegpunkte setzen</button>
         </div>
       </div>
 
@@ -112,8 +112,8 @@
 
       <span class="qb-sep"></span>
 
-      <button id="modeFreeStopBtn" type="button" title="Modus: Haltestelle frei auf der Karte setzen oder aus dem Katalog auswählen">Haltestelle Auswahl</button>
-      <button id="modeRouteBtn" type="button" title="Modus: Route manuell durch Klicken auf der Karte zeichnen">Route manuell</button>
+      <button id="modeFreeStopBtn" type="button" title="Kartenklick setzt dauerhaft Haltestellen">Haltestellen setzen</button>
+      <button id="modeRouteBtn" type="button" title="Kartenklick setzt dauerhaft Fahrwegpunkte">Fahrwegpunkte setzen</button>
       <button id="finishSpecialTrackBtn" type="button" title="Aktuell gezeichnete Sondertrasse abschließen und speichern">Sondertrasse fertig</button>
       <button id="startDetourWizardBtn" type="button" title="Umleitung starten:&#10;1. Stopbereich in der Haltestellenliste auswählen.&#10;2. Bereich übernehmen.&#10;3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen.&#10;4. Routingart wählen:&#10;- Straßenrouting: Router berechnet zwischen Ersatzhaltestellen/Durchfahrpunkten.&#10;- Punktführung: Linie folgt exakt den gesetzten Fahrwegpunkten.&#10;- Straßenrouting über Fahrwegpunkte: Router berechnet über gesetzte Fahrwegpunkte als Zwangspunkte.&#10;5. Umleitung übernehmen.&#10;6. Abbrechen lässt Originalroute unverändert." aria-label="Umleitung starten: 1. Stopbereich in der Haltestellenliste auswählen. 2. Bereich übernehmen. 3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen. 4. Routingart wählen: Straßenrouting berechnet zwischen Ersatzhaltestellen und Durchfahrpunkten; Punktführung folgt exakt den gesetzten Fahrwegpunkten; Straßenrouting über Fahrwegpunkte berechnet über gesetzte Fahrwegpunkte als Zwangspunkte. 5. Umleitung übernehmen. 6. Abbrechen lässt Originalroute unverändert.">Umleitung starten</button>
       <button id="acceptDetourRangeBtn" type="button" title="Ausgewählten zusammenhängenden Haltestellenbereich für die Umleitung übernehmen. Route und Haltestellen bleiben unverändert." aria-label="Umleitungsbereich übernehmen." style="display:none">Bereich übernehmen</button>
@@ -145,7 +145,7 @@
         </select>
       </label>
       <label id="preserveManualChainsWrap" class="quickbar-select-wrap" title="Direkt aufeinanderfolgende Fahrwegpunkte exakt verbinden, ohne dazwischen neu zu routen">
-        <input id="preserveManualChainsInput" type="checkbox">
+        <input id="preserveManualChainsInput" type="checkbox" checked>
         <span>Fahrwegpunkte exakt halten</span>
       </label>
 
@@ -287,7 +287,7 @@
         <div>Fahrzeit gesamt: <span id="totalTime">0 min</span></div>
         <div>Modus: <span id="currentModeText"></span></div>
         <div>Routing: <span id="routingModeText"></span></div>
-        <div id="preserveManualChainsPreviewRow">Exakte Fahrwegpunkte: <span id="preserveManualChainsText">Aus</span></div>
+        <div id="preserveManualChainsPreviewRow">Exakte Fahrwegpunkte: <span id="preserveManualChainsText">An</span></div>
       </div>
 
     </div>

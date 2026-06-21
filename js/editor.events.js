@@ -42,7 +42,7 @@ if (redoBtn) redoBtn.addEventListener("click", redoHistory);
 
 // ---------- Modus ----------
 
-if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setMode("freeStop", "Modus: Haltestelle"));
+if (modeFreeStopBtn) modeFreeStopBtn.addEventListener("click", () => setPlacementMode("freeStop", "Modus: Haltestellen setzen"));
 if (modeRouteBtn) modeRouteBtn.addEventListener("click", switchToManualRouteMode);
 if (modeSelectBtn) modeSelectBtn.addEventListener("click", () => setMode("select", "Modus: Auswählen"));
 if (routingModeSelect) {
@@ -341,22 +341,24 @@ map.on("click", function (e) {
     return;
   }
 
+  if (mode === "select") {
+    clearSelection();
+    setStatus("Auswahl aufgehoben.");
+    return;
+  }
+
   // =========================
   // NORMALE MODI
   // =========================
-  if (mode === "freeStop") {
+  const placementMode = state.placementMode === "route" ? "route" : "freeStop";
+
+  if (placementMode === "freeStop") {
     createFreeStop(lat, lon);
     return;
   }
 
-  if (mode === "route" || mode === "manual") {
-  createManualRoutePoint(lat, lon);
-  return;
-}
-
-  if (mode === "select") {
-    clearSelection();
-    setStatus("Auswahl aufgehoben.");
+  if (placementMode === "route") {
+    createManualRoutePoint(lat, lon);
     return;
   }
 });

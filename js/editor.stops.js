@@ -940,6 +940,7 @@ async function buildDetourReplacementRouteCoords(anchors, routingMode = "street"
   }
 
   let routingAnchors = anchors;
+  const preserveManualChains = routingMode === "guidedStreet" && !!state.preserveManualChains;
   if (routingMode === "guidedStreet") {
     if (!Array.isArray(orderedDetourItems) || !orderedDetourItems.length) {
       throw new Error("Straßenrouting über Fahrwegpunkte benötigt mindestens einen Umleitungspunkt.");
@@ -949,7 +950,11 @@ async function buildDetourReplacementRouteCoords(anchors, routingMode = "street"
       anchors[0],
       ...orderedDetourItems,
       anchors[anchors.length - 1]
-    ].filter(Boolean);
+    ]
+      .filter(Boolean)
+      .map(anchor => preserveManualChains && anchor.kind === "guidePoint"
+        ? { ...anchor, kind: "manual", detourKind: "guidePoint" }
+        : anchor);
     debug("Stop-Umleitung guidedStreet", {
       anchorCount: routingAnchors.length,
       detourItemCount: orderedDetourItems.length
@@ -959,6 +964,7 @@ async function buildDetourReplacementRouteCoords(anchors, routingMode = "street"
   debugDetourRoutingAnchors(routingAnchors);
   return buildStreetRouteCoordsViaAnchors(routingAnchors, {
     routingModeLabel: routingMode,
+    preserveManualChains,
     onSegmentDebug: segmentInfo => debug("Stop-Umleitung Routing-Segment", segmentInfo),
     onSegmentWarning: warnSuspiciousDetourRoutingSegment
   });

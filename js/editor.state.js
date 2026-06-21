@@ -41,6 +41,11 @@ function normalizeEditorRoutingMode(value) {
   return value === "street" || value === "manual" ? value : "guidedStreet";
 }
 
+function normalizeEditorPlacementMode(value, routeMode = "") {
+  if (value === "route" || value === "freeStop") return value;
+  return routeMode === "route" || routeMode === "manual" ? "route" : "freeStop";
+}
+
 const state = {
   stops: [],
   routePoints: [],
@@ -64,8 +69,9 @@ selectedStopIds: new Set(),
 visibleCatalogMarkers: new Map(),
   highlightedCatalogMarkerId: null,
   routeMode: "auto",
+  placementMode: "freeStop",
   routingMode: "guidedStreet",
-  preserveManualChains: false,
+  preserveManualChains: true,
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
