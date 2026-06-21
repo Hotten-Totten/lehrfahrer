@@ -174,7 +174,7 @@ function clearEditorData() {
   }
   state.selected = null;
   state.routeMode = "auto";
-  state.routingMode = "street";
+  state.routingMode = "guidedStreet";
   state.previewMode = "original";
 
   if ("guidePoints" in state) {

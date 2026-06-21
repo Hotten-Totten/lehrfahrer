@@ -179,14 +179,14 @@ function updateStats() {
   const routingModeLabels = {
     street: "Straßenrouting",
     guidedStreet: "Straßenrouting über Fahrwegpunkte",
-    manual: "Punktführung"
+    manual: "Punktführung (Expertenmodus)"
   };
   if (routingModeText) routingModeText.textContent = routingModeLabels[routingMode];
   if (routingModeSelect) routingModeSelect.value = routingMode;
   if (buildStreetRouteBtn) {
     buildStreetRouteBtn.textContent = routingMode === "guidedStreet"
       ? "Route über Fahrwegpunkte"
-      : (routingMode === "manual" ? "Punktführung erzeugen" : "Straßenroute erzeugen");
+      : (routingMode === "manual" ? "Punktführung (Expertenmodus)" : "Straßenroute erzeugen");
   }
 
   if (typeof updateLineMetricsUI === "function") {

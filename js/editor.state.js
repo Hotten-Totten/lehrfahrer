@@ -38,7 +38,7 @@ if (catalogCluster) {
 let mode = "freeStop"; // freeStop | route | select | specialTrack | specialTrackExtend | detourDraft | detourSelectStops | detourBuildReplacement
 
 function normalizeEditorRoutingMode(value) {
-  return value === "guidedStreet" || value === "manual" ? value : "street";
+  return value === "street" || value === "manual" ? value : "guidedStreet";
 }
 
 const state = {
@@ -64,7 +64,7 @@ selectedStopIds: new Set(),
 visibleCatalogMarkers: new Map(),
   highlightedCatalogMarkerId: null,
   routeMode: "auto",
-  routingMode: "street",
+  routingMode: "guidedStreet",
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
