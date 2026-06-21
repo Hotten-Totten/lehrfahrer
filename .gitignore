@@ -13,6 +13,9 @@ linien/backup/
 # Large local offline datasets
 Offlinekarten/
 *.osm.pbf
+GTFS-Haltestellendatenaeätze/
+*.gtfs.zip
+latest.zip
 
 # Python cache
 __pycache__/

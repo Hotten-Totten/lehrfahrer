@@ -261,17 +261,74 @@ function gtfs_read_stops(string $dir, array $neededIds): array {
     return $stops;
 }
 
+function gtfs_ini_size_bytes(string $value): int {
+    $value = trim($value);
+    if ($value === '' || $value === '-1') return 0;
+    $number = (float)$value;
+    $unit = strtolower(substr($value, -1));
+    if ($unit === 'g') $number *= 1024;
+    if ($unit === 'g' || $unit === 'm') $number *= 1024;
+    if ($unit === 'g' || $unit === 'm' || $unit === 'k') $number *= 1024;
+    return max(0, (int)$number);
+}
+
+function gtfs_upload_limits_text(): string {
+    $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    return sprintf(
+        'Serverlimits: upload_max_filesize=%s, post_max_size=%s, memory_limit=%s, max_execution_time=%ss, CONTENT_LENGTH=%d Bytes.',
+        strval(ini_get('upload_max_filesize')),
+        strval(ini_get('post_max_size')),
+        strval(ini_get('memory_limit')),
+        strval(ini_get('max_execution_time')),
+        $contentLength
+    );
+}
+
+function gtfs_upload_error_message(int $errorCode): string {
+    $messages = [
+        UPLOAD_ERR_INI_SIZE => 'Upload überschreitet upload_max_filesize.',
+        UPLOAD_ERR_FORM_SIZE => 'Upload überschreitet die im Formular erlaubte Dateigröße.',
+        UPLOAD_ERR_PARTIAL => 'Upload wurde nur teilweise übertragen.',
+        UPLOAD_ERR_NO_FILE => 'Keine GTFS-ZIP-Datei ausgewählt.',
+        UPLOAD_ERR_NO_TMP_DIR => 'Temporäres Upload-Verzeichnis fehlt.',
+        UPLOAD_ERR_CANT_WRITE => 'Upload konnte nicht auf die Festplatte geschrieben werden.',
+        UPLOAD_ERR_EXTENSION => 'Eine PHP-Erweiterung hat den Upload gestoppt.',
+    ];
+    return $messages[$errorCode] ?? ('Unbekannter PHP-Uploadfehler ' . $errorCode . '.');
+}
+
 function gtfs_handle_upload(): void {
     if (!class_exists('ZipArchive')) {
         gtfs_error(501, 'GTFS-Import benötigt PHP ZipArchive.');
     }
+    $limitsText = gtfs_upload_limits_text();
+    if (empty($_FILES)) {
+        $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        $postMaxBytes = gtfs_ini_size_bytes(strval(ini_get('post_max_size')));
+        if ($postMaxBytes > 0 && $contentLength > $postMaxBytes) {
+            gtfs_error(413, 'Upload zu groß für post_max_size. ' . $limitsText);
+        }
+        gtfs_error(400, 'Keine Upload-Datei empfangen. ' . $limitsText);
+    }
+
     $upload = $_FILES['feed'] ?? null;
-    if (!is_array($upload) || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        gtfs_error(400, 'Keine gültige GTFS-ZIP-Datei empfangen.');
+    if (!is_array($upload)) {
+        gtfs_error(400, 'Upload-Feld "feed" fehlt. ' . $limitsText);
+    }
+    $uploadError = (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        if (in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            $status = 413;
+        } elseif (in_array($uploadError, [UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE, UPLOAD_ERR_EXTENSION], true)) {
+            $status = 500;
+        } else {
+            $status = 400;
+        }
+        gtfs_error($status, gtfs_upload_error_message($uploadError) . ' ' . $limitsText);
     }
     $size = (int)($upload['size'] ?? 0);
     if ($size <= 0 || $size > GTFS_MAX_UPLOAD_BYTES) {
-        gtfs_error(413, 'GTFS-ZIP muss zwischen 1 Byte und 250 MB groß sein.');
+        gtfs_error(413, 'GTFS-ZIP muss zwischen 1 Byte und 250 MB groß sein. ' . $limitsText);
     }
     $zip = new ZipArchive();
     if ($zip->open(strval($upload['tmp_name'])) !== true) {
