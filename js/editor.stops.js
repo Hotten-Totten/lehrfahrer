@@ -7,6 +7,8 @@ let detourManualRoutePointIdCounter = 1;
 let detourPlannedRoutePreviewLine = null;
 let detourPlannedRoutePreviewTimer = null;
 let detourPlannedRoutePreviewRequestId = 0;
+let detourRemovedRoutePreviewLine = null;
+let detourCutStopPreviewLayer = null;
 
 function updateStopMarkerTooltip(stop) {
   if (!stop.marker) return;
@@ -117,6 +119,7 @@ function selectStop(stop) {
 }
 
 function resetDetourWizardState() {
+  clearDetourRemovedRoutePreview();
   clearDetourPlannedRoutePreview();
   clearDetourReplacementStops();
   clearDetourManualRoutePoints();
@@ -761,6 +764,70 @@ function clearDetourPlannedRoutePreview() {
   removeDetourPlannedRoutePreviewLine();
 }
 
+function clearDetourRemovedRoutePreview() {
+  if (detourRemovedRoutePreviewLine && map.hasLayer(detourRemovedRoutePreviewLine)) {
+    map.removeLayer(detourRemovedRoutePreviewLine);
+  }
+  detourRemovedRoutePreviewLine = null;
+
+  if (detourCutStopPreviewLayer && map.hasLayer(detourCutStopPreviewLayer)) {
+    map.removeLayer(detourCutStopPreviewLayer);
+  }
+  detourCutStopPreviewLayer = null;
+}
+
+function refreshDetourRemovedRoutePreview() {
+  clearDetourRemovedRoutePreview();
+  if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return;
+
+  const cutStartIndex = state.detourWizard.cutStartIndex;
+  const cutEndIndex = state.detourWizard.cutEndIndex;
+  if (!Number.isInteger(cutStartIndex) || !Number.isInteger(cutEndIndex)) return;
+
+  detourCutStopPreviewLayer = L.layerGroup().addTo(map);
+  state.stops.slice(cutStartIndex, cutEndIndex + 1).forEach(stop => {
+    L.circleMarker([stop.lat, stop.lon], {
+      radius: 13,
+      color: "#b91c1c",
+      weight: 3,
+      opacity: 0.75,
+      fillColor: "#6b7280",
+      fillOpacity: 0.12,
+      interactive: false
+    }).addTo(detourCutStopPreviewLayer);
+  });
+
+  const beforeStop = state.stops[cutStartIndex - 1];
+  const afterStop = state.stops[cutEndIndex + 1];
+  if (!beforeStop || !afterStop) return;
+
+  const beforeRouteIndex = findNearestRoutePointIndexFrom(0, beforeStop);
+  const afterRouteIndex = beforeRouteIndex >= 0
+    ? findNearestRoutePointIndexFrom(beforeRouteIndex, afterStop)
+    : -1;
+  if (beforeRouteIndex >= 0 && afterRouteIndex > beforeRouteIndex) {
+    const cutRoutePoints = state.routePoints.slice(beforeRouteIndex, afterRouteIndex + 1);
+    if (cutRoutePoints.length >= 2) {
+      detourRemovedRoutePreviewLine = L.polyline(
+        cutRoutePoints.map(point => [point.lat, point.lon]),
+        {
+          color: "#6b7280",
+          weight: 8,
+          opacity: 0.72,
+          dashArray: "10 9",
+          lineCap: "round",
+          lineJoin: "round",
+          interactive: false
+        }
+      ).addTo(map);
+    }
+  }
+
+  if (detourPlannedRoutePreviewLine && map.hasLayer(detourPlannedRoutePreviewLine)) {
+    detourPlannedRoutePreviewLine.bringToFront();
+  }
+}
+
 function getDetourPlannedRouteAnchors() {
   if (!state.detourWizard || state.detourWizard.phase !== "buildReplacement") return null;
 
@@ -843,6 +910,7 @@ async function refreshDetourPlannedRoutePreviewAsync(requestId) {
 }
 
 function scheduleDetourPlannedRoutePreview() {
+  refreshDetourRemovedRoutePreview();
   invalidateDetourPlannedRoutePreviewRequest();
   const requestId = detourPlannedRoutePreviewRequestId;
   const anchors = getDetourPlannedRouteAnchors();
@@ -1577,6 +1645,7 @@ function renderStopOrderList() {
   });
 
   renderDetourReplacementStops();
+  refreshDetourRemovedRoutePreview();
 }
 
 function renderDetourReplacementStops() {
