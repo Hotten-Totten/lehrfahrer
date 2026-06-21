@@ -1018,26 +1018,15 @@ async function postGtfsImport(fields) {
   return result;
 }
 
-function importGtfsZipPrompt() {
-  const input = document.getElementById("gtfsZipInput");
-  if (!input) {
-    setStatus("GTFS-Dateiauswahl ist nicht verfuegbar.", "error");
-    return;
-  }
-
-  input.value = "";
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-
-    showVbbImportProgressPopup("", "GTFS-ZIP-Import");
-    try {
-      updateVbbImportProgressPopup(`GTFS-ZIP wird geladen: ${file.name}`, {
+async function runGtfsImport(loadSource, initialMessage) {
+  showVbbImportProgressPopup("", "GTFS-ZIP-Import");
+  try {
+      updateVbbImportProgressPopup(initialMessage, {
         level: "info",
         busy: true,
         subtitle: "Datei lesen"
       });
-      const upload = await postGtfsImport({ action: "upload", feed: file });
+      const upload = await loadSource();
       const routes = (Array.isArray(upload.routes) ? upload.routes : []).map(route => ({
         ...route,
         meta: [route.id ? `route_id ${route.id}` : "", route.routeType ? `Typ ${route.routeType}` : ""]
@@ -1138,11 +1127,37 @@ function importGtfsZipPrompt() {
         subtitle: "Fehler"
       });
       setStatus(err.message || "GTFS-Import fehlgeschlagen.", "error");
+  }
+}
+
+function importGtfsZipPrompt() {
+  const input = document.getElementById("gtfsZipInput");
+  if (!input) {
+    setStatus("GTFS-Dateiauswahl ist nicht verfuegbar.", "error");
+    return;
+  }
+
+  input.value = "";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      await runGtfsImport(
+        () => postGtfsImport({ action: "upload", feed: file }),
+        `GTFS-ZIP wird geladen: ${file.name}`
+      );
     } finally {
       input.value = "";
     }
   };
   input.click();
+}
+
+function importGtfsFromServer() {
+  return runGtfsImport(
+    () => postGtfsImport({ action: "server" }),
+    "GTFS-ZIP wird direkt vom Server geladen ..."
+  );
 }
 
 async function importLineFromVbbPrompt() {

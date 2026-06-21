@@ -330,8 +330,15 @@ function gtfs_handle_upload(): void {
     if ($size <= 0 || $size > GTFS_MAX_UPLOAD_BYTES) {
         gtfs_error(413, 'GTFS-ZIP muss zwischen 1 Byte und 250 MB groß sein. ' . $limitsText);
     }
+    gtfs_process_zip(strval($upload['tmp_name']));
+}
+
+function gtfs_process_zip(string $zipPath): void {
+    if (!class_exists('ZipArchive')) {
+        gtfs_error(501, 'GTFS-Import benötigt PHP ZipArchive.');
+    }
     $zip = new ZipArchive();
-    if ($zip->open(strval($upload['tmp_name'])) !== true) {
+    if ($zip->open($zipPath) !== true) {
         gtfs_error(422, 'GTFS-ZIP kann nicht geöffnet werden.');
     }
     $wanted = ['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt'];
@@ -387,9 +394,36 @@ function gtfs_handle_upload(): void {
     gtfs_reply(['ok' => true, 'token' => $token, 'routes' => $routes, 'routeCount' => count($routes)]);
 }
 
+function gtfs_handle_server_zip(): void {
+    $projectRoot = realpath(dirname(__DIR__));
+    if ($projectRoot === false) {
+        gtfs_error(500, 'Projektverzeichnis für Server-GTFS kann nicht aufgelöst werden.');
+    }
+    $expectedDir = $projectRoot . DIRECTORY_SEPARATOR . 'gtfs' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'gtfs';
+    $realDir = realpath($expectedDir);
+    $requestedPath = $expectedDir . DIRECTORY_SEPARATOR . 'latest.zip';
+    $realPath = realpath($requestedPath);
+    if ($realDir === false || $realPath === false || !is_file($realPath)) {
+        gtfs_error(404, 'Server-GTFS-ZIP fehlt: gtfs/data/gtfs/latest.zip');
+    }
+    $projectPrefix = rtrim($projectRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    if (strpos(rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR, $projectPrefix) !== 0) {
+        gtfs_error(403, 'Server-GTFS-Verzeichnis liegt außerhalb des Projekts.');
+    }
+    $allowedPrefix = rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    if (strpos($realPath, $allowedPrefix) !== 0 || basename($realPath) !== 'latest.zip') {
+        gtfs_error(403, 'Ungültiger Pfad für Server-GTFS-ZIP.');
+    }
+    if (!is_readable($realPath)) {
+        gtfs_error(500, 'Server-GTFS-ZIP ist nicht lesbar: gtfs/data/gtfs/latest.zip');
+    }
+    gtfs_process_zip($realPath);
+}
+
 try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
+    if ($action === 'server') gtfs_handle_server_zip();
     $token = trim(strval($_POST['token'] ?? ''));
     $dir = gtfs_session_dir($token);
     if ($action === 'variants') {

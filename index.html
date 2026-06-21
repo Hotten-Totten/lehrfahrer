@@ -21,6 +21,7 @@
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
+          <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP direkt aus gtfs/data/gtfs/latest.zip auf dem Server laden">GTFS vom Server laden</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
           <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen …</button>
           <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
