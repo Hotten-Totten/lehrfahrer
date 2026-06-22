@@ -581,6 +581,23 @@ function gtfs_feed_signature(string $zipPath): array {
     ];
 }
 
+function gtfs_normalize_agency_ids(array $agencyIds): array {
+    $agencyIds = array_values(array_unique(array_filter(array_map(
+        static fn($value): string => trim(strval($value)),
+        $agencyIds
+    ), static fn(string $value): bool => $value !== '')));
+    sort($agencyIds, SORT_STRING);
+    return $agencyIds;
+}
+
+function gtfs_agency_fingerprint(array $agencyIds): string {
+    return hash('sha256', implode("\n", gtfs_normalize_agency_ids($agencyIds)));
+}
+
+function gtfs_index_fingerprint(array $feedSignature, string $agencyFingerprint): string {
+    return hash('sha256', $feedSignature['size'] . '|' . $feedSignature['mtime'] . '|' . $agencyFingerprint);
+}
+
 function gtfs_header_position(array $headers, string $name): int {
     $index = array_search($name, $headers, true);
     if ($index === false) gtfs_error(422, 'GTFS-Pflichtfeld fehlt: ' . $name);
@@ -627,9 +644,12 @@ function gtfs_open_valid_index(): ?PDO {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
         $meta = $pdo->query('SELECT key, value FROM meta')->fetchAll(PDO::FETCH_KEY_PAIR);
-        if (($meta['schema_version'] ?? '') !== '2'
+        $agencyFingerprint = strval($meta['agency_fingerprint'] ?? '');
+        if (($meta['schema_version'] ?? '') !== '3'
             || (int)($meta['feed_size'] ?? -1) !== $feedSignature['size']
-            || (int)($meta['feed_mtime'] ?? -1) !== $feedSignature['mtime']) {
+            || (int)($meta['feed_mtime'] ?? -1) !== $feedSignature['mtime']
+            || $agencyFingerprint === ''
+            || ($meta['index_fingerprint'] ?? '') !== gtfs_index_fingerprint($feedSignature, $agencyFingerprint)) {
             return null;
         }
         return $pdo;
@@ -873,16 +893,26 @@ function gtfs_analyze_server_index(): void {
     ]);
 }
 
-function gtfs_start_index_job(bool $restart): void {
+function gtfs_start_index_job(bool $restart, array $requestedAgencyIds): void {
     gtfs_require_sqlite();
+    $agencyIds = gtfs_normalize_agency_ids($requestedAgencyIds);
+    if (!$agencyIds) gtfs_error(400, 'Bitte mindestens einen Betreiber für den GTFS-Index auswählen.');
+    $zipPath = gtfs_server_zip_path();
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) gtfs_error(422, 'Server-GTFS-ZIP kann nicht geöffnet werden.');
+    $availableAgencies = gtfs_read_agencies($zip);
+    $zip->close();
+    $unknownAgencyIds = array_values(array_filter($agencyIds, static fn(string $id): bool => !array_key_exists($id, $availableAgencies)));
+    if ($unknownAgencyIds) gtfs_error(400, 'Unbekannte Betreiber-ID für GTFS-Index: ' . $unknownAgencyIds[0]);
+    $agencyFingerprint = gtfs_agency_fingerprint($agencyIds);
     $existing = gtfs_read_index_job();
     if ($existing && !$restart) {
-        if ((int)($existing['version'] ?? 0) !== 2) {
-            gtfs_error(409, 'Vorhandener GTFS-Indexjob verwendet ein altes Schema und muss neu gestartet werden.');
+        if ((int)($existing['version'] ?? 0) !== 3
+            || ($existing['agencyFingerprint'] ?? '') !== $agencyFingerprint) {
+            gtfs_error(409, 'Vorhandener GTFS-Indexjob passt nicht zur Betreiber-Auswahl oder verwendet ein altes Schema und muss neu gestartet werden.');
         }
         gtfs_reply(['ok' => true, 'job' => $existing, 'resumed' => true]);
     }
-    $zipPath = gtfs_server_zip_path();
     $indexDir = gtfs_index_dir();
     if (!is_dir($indexDir) && !mkdir($indexDir, 0700, true)) {
         gtfs_error(500, 'GTFS-Indexverzeichnis kann nicht erstellt werden.');
@@ -901,17 +931,23 @@ function gtfs_start_index_job(bool $restart): void {
     $pdo = null;
     $signature = gtfs_feed_signature($zipPath);
     $job = [
-        'version' => 2,
+        'version' => 3,
         'phase' => 'extract',
         'step' => 'ZIP-Dateien vorbereiten',
         'feedSize' => $signature['size'],
         'feedMtime' => $signature['mtime'],
+        'agencyIds' => $agencyIds,
+        'agencyCount' => count($agencyIds),
+        'agencyFingerprint' => $agencyFingerprint,
+        'indexFingerprint' => gtfs_index_fingerprint($signature, $agencyFingerprint),
         'extractIndex' => 0,
         'importFileIndex' => 0,
         'fileOffset' => 0,
         'headers' => [],
         'rowsRead' => 0,
         'stopTimeRows' => 0,
+        'routeRows' => 0,
+        'tripRows' => 0,
         'variantsFound' => 0,
         'lastTripId' => '',
         'startedAt' => date('c'),
@@ -980,25 +1016,31 @@ function gtfs_import_index_rows(array $job, int $batchSize): array {
         'agency.txt' => $pdo->prepare('INSERT OR REPLACE INTO agencies VALUES (?, ?)'),
         'routes.txt' => $pdo->prepare('INSERT OR REPLACE INTO routes VALUES (?, ?, ?, ?, ?)'),
         'stops.txt' => $pdo->prepare('INSERT OR IGNORE INTO stops(stop_id, stop_name, lat, lon, parent_station) VALUES (?, ?, ?, ?, ?)'),
-        'trips.txt' => $pdo->prepare('INSERT OR IGNORE INTO trips(trip_id, route_id, direction_id, headsign) VALUES (?, ?, ?, ?)'),
+        'trips.txt' => $pdo->prepare('INSERT OR IGNORE INTO trips(trip_id, route_id, direction_id, headsign)
+            SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM routes WHERE route_id = ?)'),
         'stop_times.txt' => $pdo->prepare('INSERT OR REPLACE INTO stop_times(trip_pk, stop_sequence, stop_pk)
             SELECT t.trip_pk, ?, s.stop_pk FROM trips t, stops s WHERE t.trip_id = ? AND s.stop_id = ?'),
     ];
     $statement = $statements[$fileName];
+    $selectedAgencies = array_fill_keys(gtfs_normalize_agency_ids($job['agencyIds'] ?? []), true);
     $pdo->beginTransaction();
     $processed = 0;
     while ($processed < $batchSize && ($values = fgetcsv($handle)) !== false) {
         $row = gtfs_row($headers, $values);
-        if ($fileName === 'agency.txt' && ($row['agency_id'] ?? '') !== '') {
+        if ($fileName === 'agency.txt' && isset($selectedAgencies[$row['agency_id'] ?? ''])) {
             $statement->execute([$row['agency_id'], $row['agency_name'] ?? '']);
-        } elseif ($fileName === 'routes.txt' && ($row['route_id'] ?? '') !== '') {
+        } elseif ($fileName === 'routes.txt'
+            && ($row['route_id'] ?? '') !== ''
+            && isset($selectedAgencies[$row['agency_id'] ?? ''])) {
             $statement->execute([$row['route_id'], $row['agency_id'] ?? '', $row['route_short_name'] ?? '', $row['route_long_name'] ?? '', $row['route_type'] ?? '']);
+            if ($statement->rowCount() > 0) $job['routeRows']++;
         } elseif ($fileName === 'stops.txt' && ($row['stop_id'] ?? '') !== '') {
             $lat = is_numeric($row['stop_lat'] ?? '') ? (float)$row['stop_lat'] : null;
             $lon = is_numeric($row['stop_lon'] ?? '') ? (float)$row['stop_lon'] : null;
             $statement->execute([$row['stop_id'], $row['stop_name'] ?? '', $lat, $lon, $row['parent_station'] ?? '']);
         } elseif ($fileName === 'trips.txt' && ($row['trip_id'] ?? '') !== '' && ($row['route_id'] ?? '') !== '') {
-            $statement->execute([$row['trip_id'], $row['route_id'], $row['direction_id'] ?? '', $row['trip_headsign'] ?? '']);
+            $statement->execute([$row['trip_id'], $row['route_id'], $row['direction_id'] ?? '', $row['trip_headsign'] ?? '', $row['route_id']]);
+            if ($statement->rowCount() > 0) $job['tripRows']++;
         } elseif ($fileName === 'stop_times.txt'
             && ($row['trip_id'] ?? '') !== ''
             && ($row['stop_id'] ?? '') !== ''
@@ -1136,9 +1178,12 @@ function gtfs_finalize_batch_index(array $job): array {
     $pdo->exec('PRAGMA temp_store=FILE');
     $metaInsert = $pdo->prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)');
     foreach ([
-        'schema_version' => '2',
+        'schema_version' => '3',
         'feed_size' => $job['feedSize'],
         'feed_mtime' => $job['feedMtime'],
+        'agency_ids' => json_encode($job['agencyIds'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        'agency_fingerprint' => $job['agencyFingerprint'],
+        'index_fingerprint' => $job['indexFingerprint'],
         'created_at' => date('c'),
         'stop_time_rows' => $job['stopTimeRows'],
     ] as $key => $value) {
@@ -1231,6 +1276,14 @@ function gtfs_open_session_zip(string $dir): ZipArchive {
 
 function gtfs_handle_server_zip(): void {
     gtfs_start_session(gtfs_server_zip_path(), false, 'Server gtfs/data/gtfs/latest.zip');
+}
+
+function gtfs_handle_index_agencies(): void {
+    $zip = new ZipArchive();
+    if ($zip->open(gtfs_server_zip_path()) !== true) gtfs_error(422, 'Server-GTFS-ZIP kann nicht geöffnet werden.');
+    $agencies = gtfs_read_agency_options($zip);
+    $zip->close();
+    gtfs_reply(['ok' => true, 'agencies' => $agencies, 'agencyCount' => count($agencies)]);
 }
 
 function gtfs_handle_route_filter(string $dir): void {
@@ -1337,9 +1390,14 @@ try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
+    if ($action === 'indexagencies') gtfs_handle_index_agencies();
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
-    if ($action === 'indexstart') gtfs_start_index_job(($_POST['restart'] ?? '') === '1');
+    if ($action === 'indexstart') {
+        $agencyIds = json_decode(strval($_POST['agencyIds'] ?? '[]'), true);
+        if (!is_array($agencyIds)) gtfs_error(400, 'agencyIds muss eine JSON-Liste sein.');
+        gtfs_start_index_job(($_POST['restart'] ?? '') === '1', $agencyIds);
+    }
     if ($action === 'indexstep') gtfs_run_index_step();
     $token = trim(strval($_POST['token'] ?? ''));
     $dir = gtfs_session_dir($token);

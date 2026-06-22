@@ -999,7 +999,8 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
   });
 }
 
-function chooseGtfsAgenciesInPopup(agencies) {
+function chooseGtfsAgenciesInPopup(agencies, options = {}) {
+  const isIndexSelection = options.mode === "index";
   const refs = getVbbImportModalRefs();
   if (!refs.picker || !refs.pickerList || !refs.pickerSelectBtn || !refs.pickerCancelBtn || !refs.closeBtn) {
     return Promise.resolve(null);
@@ -1008,8 +1009,12 @@ function chooseGtfsAgenciesInPopup(agencies) {
   refs.picker.classList.remove("hidden");
   refs.pickerList.innerHTML = "";
   refs.pickerList.setAttribute("role", "group");
-  refs.pickerSelectBtn.textContent = "Weiter zur Linienauswahl";
-  if (refs.pickerHint) refs.pickerHint.textContent = "Betreiber auswählen und Linien optional eingrenzen.";
+  refs.pickerSelectBtn.textContent = isIndexSelection ? "Index starten" : "Weiter zur Linienauswahl";
+  if (refs.pickerHint) {
+    refs.pickerHint.textContent = isIndexSelection
+      ? "Betreiber für den Turboindex auswählen."
+      : "Betreiber auswählen und Linien optional eingrenzen.";
+  }
 
   const controls = document.createElement("div");
   controls.className = "gtfs-agency-controls";
@@ -1029,14 +1034,21 @@ function chooseGtfsAgenciesInPopup(agencies) {
   const defaultBtn = document.createElement("button");
   defaultBtn.type = "button";
   defaultBtn.textContent = "VBB-Standard auswählen";
+  const cottbusBtn = document.createElement("button");
+  cottbusBtn.type = "button";
+  cottbusBtn.textContent = "Cottbusverkehr auswählen";
   const allBtn = document.createElement("button");
   allBtn.type = "button";
-  allBtn.textContent = "Alle auswählen";
+  allBtn.textContent = isIndexSelection ? "Alle auswählen (Expertenmodus)" : "Alle auswählen";
   const noneBtn = document.createElement("button");
   noneBtn.type = "button";
   noneBtn.textContent = "Keine auswählen";
-  buttonRow.append(defaultBtn, allBtn, noneBtn);
-  controls.append(agencySearch, lineSearch, buttonRow);
+  buttonRow.append(defaultBtn);
+  if (isIndexSelection) buttonRow.append(cottbusBtn);
+  buttonRow.append(allBtn, noneBtn);
+  controls.append(agencySearch);
+  if (!isIndexSelection) controls.append(lineSearch);
+  controls.append(buttonRow);
   refs.pickerList.appendChild(controls);
 
   const entries = agencies.map(agency => {
@@ -1083,6 +1095,7 @@ function chooseGtfsAgenciesInPopup(agencies) {
   entries.forEach(entry => entry.checkbox.addEventListener("change", updateSelectionState));
   agencySearch.addEventListener("input", filterRows);
   defaultBtn.addEventListener("click", () => setChecked(agency => agency.isDefault));
+  cottbusBtn.addEventListener("click", () => setChecked(agency => /cottbusverkehr/i.test(String(agency.name || ""))));
   allBtn.addEventListener("click", () => setChecked(() => true));
   noneBtn.addEventListener("click", () => setChecked(() => false));
   updateSelectionState();
@@ -1334,10 +1347,39 @@ function importGtfsFromServer() {
 async function rebuildGtfsServerIndex() {
   showVbbImportProgressPopup("", "GTFS-Turboindex");
   try {
+    updateVbbImportProgressPopup("Betreiberliste wird aus dem Server-GTFS geladen ...", {
+      level: "info",
+      busy: true,
+      subtitle: "Betreiber laden"
+    });
+    const agencyResult = await postGtfsImport({ action: "indexAgencies" });
+    const agencies = Array.isArray(agencyResult.agencies) ? agencyResult.agencies : [];
+    if (!agencies.length) throw new Error("Die GTFS-Datei enthält keine auswählbaren Betreiber.");
+    updateVbbImportProgressPopup(`${agencies.length} Betreiber gefunden.`, {
+      level: "info",
+      busy: false,
+      subtitle: "Betreiber auswählen"
+    });
+    const selection = await chooseGtfsAgenciesInPopup(agencies, { mode: "index" });
+    if (!selection) {
+      closeVbbImportProgressPopup();
+      setStatus("GTFS-Indexaufbau abgebrochen.", "warn");
+      return;
+    }
+    const selectedAgencyIds = selection.agencyIds.map(String).sort();
+    if (selectedAgencyIds.length === agencies.length
+      && !confirm("Wirklich alle Betreiber indexieren? Dies ist der langsame deutschlandweite Expertenmodus.")) {
+      closeVbbImportProgressPopup();
+      setStatus("GTFS-Indexaufbau abgebrochen.", "warn");
+      return;
+    }
+
     const status = await postGtfsImport({ action: "indexStatus" });
     let restart = false;
-    if (status.job && Number(status.job.version || 0) !== 2) {
-      alert("Der vorhandene GTFS-Indexjob verwendet das alte, speicherintensive Schema und wird neu gestartet.");
+    const existingAgencyIds = Array.isArray(status.job?.agencyIds) ? status.job.agencyIds.map(String).sort() : [];
+    const sameSelection = JSON.stringify(existingAgencyIds) === JSON.stringify(selectedAgencyIds);
+    if (status.job && (Number(status.job.version || 0) !== 3 || !sameSelection)) {
+      alert("Der vorhandene GTFS-Indexjob passt nicht zur aktuellen Betreiber-Auswahl oder verwendet ein altes Schema und wird neu gestartet.");
       restart = true;
     } else if (status.active) {
       const resume = confirm("Ein GTFS-Indexjob ist bereits vorhanden. Mit OK fortsetzen; Abbrechen bietet einen sauberen Neustart an.");
@@ -1348,14 +1390,18 @@ async function rebuildGtfsServerIndex() {
         }
         restart = true;
       }
-    } else if (!confirm("GTFS-Turboindex aus gtfs/data/gtfs/latest.zip neu erstellen?")) {
+    } else if (!confirm(`GTFS-Turboindex für ${selectedAgencyIds.length} ausgewählte Betreiber neu erstellen?`)) {
       closeVbbImportProgressPopup();
       return;
     } else {
       restart = true;
     }
 
-    let result = await postGtfsImport({ action: "indexStart", restart: restart ? "1" : "0" });
+    let result = await postGtfsImport({
+      action: "indexStart",
+      restart: restart ? "1" : "0",
+      agencyIds: JSON.stringify(selectedAgencyIds)
+    });
     let job = result.job || {};
     const renderProgress = currentJob => {
       const sqlite = currentJob.sqliteDiagnostics || currentJob.sqliteAfterPrepare || null;
@@ -1363,6 +1409,8 @@ async function rebuildGtfsServerIndex() {
         currentJob.step || currentJob.phase || "Indexierung",
         `${Number(currentJob.rowsRead || 0)} Zeilen gelesen`,
         `${Number(currentJob.stopTimeRows || 0)} stop_times-Zeilen`,
+        `${Number(currentJob.routeRows || 0)} relevante Linien`,
+        `${Number(currentJob.tripRows || 0)} relevante Trips`,
         `${Number(currentJob.variantsFound || 0)} Varianten`,
         currentJob.fileProgress !== undefined ? `${currentJob.fileProgress}% aktuelle Datei` : "",
         sqlite ? `SQLite ${(Number(sqlite.fileBytes || 0) / 1048576).toFixed(1)} MB` : "",
