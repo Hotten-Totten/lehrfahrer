@@ -583,7 +583,6 @@ function gtfs_handle_route_filter(string $dir): void {
         || @file_put_contents($dir . DIRECTORY_SEPARATOR . 'selection.json', $selectionJson) === false) {
         gtfs_error(500, 'GTFS-Betreiber- und Linienauswahl kann nicht temporär gespeichert werden.');
     }
-    @unlink($dir . DIRECTORY_SEPARATOR . 'variants.json');
     gtfs_reply([
         'ok' => true,
         'routes' => $routes,
@@ -601,14 +600,44 @@ function gtfs_load_listed_route(string $dir, string $routeId): array {
     gtfs_error(404, 'Gewählte Linie gehört nicht zur gefilterten GTFS-Linienliste.');
 }
 
+function gtfs_variant_cache_path(string $dir, string $routeId): string {
+    return $dir . DIRECTORY_SEPARATOR . 'variants_' . sha1($routeId) . '.json';
+}
+
+function gtfs_source_fingerprint(string $dir): string {
+    $source = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'source.json')), true);
+    if (!is_array($source)) gtfs_error(410, 'GTFS-Sitzungsquelle ist nicht mehr verfügbar.');
+    return hash('sha256', implode('|', [
+        strval($source['type'] ?? ''),
+        strval($source['label'] ?? ''),
+        strval($source['size'] ?? ''),
+        strval($source['mtime'] ?? ''),
+    ]));
+}
+
 function gtfs_save_variants(string $dir, string $routeId, array $variants): void {
     $payload = json_encode([
         'routeId' => $routeId,
+        'sourceFingerprint' => gtfs_source_fingerprint($dir),
         'variants' => $variants,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($payload === false || @file_put_contents($dir . DIRECTORY_SEPARATOR . 'variants.json', $payload) === false) {
+    if ($payload === false || @file_put_contents(gtfs_variant_cache_path($dir, $routeId), $payload) === false) {
         gtfs_error(500, 'GTFS-Varianten können nicht temporär gespeichert werden.');
     }
+}
+
+function gtfs_read_cached_variants(string $dir, string $routeId): ?array {
+    $cachePath = gtfs_variant_cache_path($dir, $routeId);
+    if (!is_file($cachePath)) return null;
+    $payload = json_decode(strval(@file_get_contents($cachePath)), true);
+    if (!is_array($payload)
+        || ($payload['routeId'] ?? '') !== $routeId
+        || ($payload['sourceFingerprint'] ?? '') !== gtfs_source_fingerprint($dir)
+        || !is_array($payload['variants'] ?? null)) {
+        @unlink($cachePath);
+        return null;
+    }
+    return $payload['variants'];
 }
 
 function gtfs_public_variants(array $variants): array {
@@ -619,11 +648,11 @@ function gtfs_public_variants(array $variants): array {
 }
 
 function gtfs_load_variant(string $dir, string $routeId, string $variantId): array {
-    $payload = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'variants.json')), true);
-    if (!is_array($payload) || ($payload['routeId'] ?? '') !== $routeId) {
+    $variants = gtfs_read_cached_variants($dir, $routeId);
+    if ($variants === null) {
         gtfs_error(409, 'Varianten für diese GTFS-Linie müssen neu geladen werden.');
     }
-    foreach (($payload['variants'] ?? []) as $variant) {
+    foreach ($variants as $variant) {
         if (is_array($variant) && ($variant['id'] ?? '') === $variantId) return $variant;
     }
     gtfs_error(404, 'Gewählte GTFS-Variante wurde nicht gefunden.');
@@ -641,11 +670,20 @@ try {
         if ($routeId === '') gtfs_error(400, 'routeId fehlt.');
         gtfs_load_listed_route($dir, $routeId);
         $zip = gtfs_open_session_zip($dir);
-        $variants = gtfs_build_variants($zip, $routeId);
+        $variants = gtfs_read_cached_variants($dir, $routeId);
+        $fromCache = $variants !== null;
+        if (!$fromCache) {
+            $variants = gtfs_build_variants($zip, $routeId);
+            gtfs_save_variants($dir, $routeId, $variants);
+        }
         $zip->close();
-        gtfs_save_variants($dir, $routeId, $variants);
         $publicVariants = gtfs_public_variants($variants);
-        gtfs_reply(['ok' => true, 'variants' => $publicVariants, 'variantCount' => count($publicVariants)]);
+        gtfs_reply([
+            'ok' => true,
+            'variants' => $publicVariants,
+            'variantCount' => count($publicVariants),
+            'fromCache' => $fromCache,
+        ]);
     }
     if ($action === 'import') {
         $routeId = trim(strval($_POST['routeId'] ?? ''));

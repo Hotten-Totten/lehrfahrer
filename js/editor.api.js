@@ -917,6 +917,7 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
   refs.pickerList.setAttribute("role", "listbox");
   refs.pickerSelectBtn.disabled = true;
   refs.pickerSelectBtn.textContent = options.selectText || "Fahrt importieren";
+  refs.pickerCancelBtn.textContent = options.cancelText || "Abbrechen";
   if (refs.pickerHint) {
     refs.pickerHint.textContent = `${candidates.length} Treffer gefunden. Bitte Fahrt auswählen.`;
   }
@@ -1178,89 +1179,103 @@ async function runGtfsImport(loadSource, initialMessage) {
         throw new Error("Der GTFS-Filter liefert keine Linien. Bitte einen anderen Suchtext verwenden.");
       }
 
-      updateVbbImportProgressPopup(`${routes.length} Linien gefunden.`, {
-        level: "info",
-        busy: false,
-        subtitle: "Linie auswaehlen"
-      });
-      const route = await chooseVbbCandidateInPopup(routes, {
-        hint: `${routes.length} Linien gefunden. Bitte Linie auswaehlen.`,
-        selectText: "Linie auswaehlen"
-      });
-      if (!route) {
-        setStatus("GTFS-Import abgebrochen.", "warn");
-        return;
+      while (true) {
+        updateVbbImportProgressPopup(`${routes.length} Linien gefunden.`, {
+          level: "info",
+          busy: false,
+          subtitle: "Linie auswählen"
+        });
+        const route = await chooseVbbCandidateInPopup(routes, {
+          hint: `${routes.length} Linien gefunden. Bitte Linie auswählen.`,
+          selectText: "Linie auswählen",
+          cancelText: "Import beenden"
+        });
+        if (!route) {
+          setStatus("GTFS-Import beendet.");
+          return;
+        }
+
+        updateVbbImportProgressPopup(`Varianten für ${route.name} werden geladen ...`, {
+          level: "info",
+          busy: true,
+          subtitle: "Varianten laden"
+        });
+        const variantResult = await postGtfsImport({
+          action: "variants",
+          token: upload.token,
+          routeId: route.id
+        });
+        const variants = (Array.isArray(variantResult.variants) ? variantResult.variants : []).map(variant => {
+          const direction = String(variant.directionId ?? "").trim();
+          const signature = String(variant.variantKey || "").slice(0, 8);
+          return {
+            ...variant,
+            meta: [
+              direction ? `Richtung ${direction}` : "Richtung unbekannt",
+              `${Number(variant.stopCount || 0)} Stops`,
+              signature ? `Sequenz ${signature}` : ""
+            ].filter(Boolean).join(" | ")
+          };
+        });
+        if (!variants.length) throw new Error(`Für ${route.name} wurden keine nutzbaren Varianten gefunden.`);
+
+        const cacheText = variantResult.fromCache ? " Varianten aus Zwischenspeicher geladen." : "";
+        if (variantResult.fromCache) {
+          updateVbbImportProgressPopup(`Varianten aus Zwischenspeicher geladen: ${route.name}.`, {
+            level: "success",
+            busy: false,
+            subtitle: "Varianten-Cache"
+          });
+        }
+
+        let lastImportedName = "";
+        while (true) {
+          const variant = await chooseVbbCandidateInPopup(variants, {
+            hint: lastImportedName
+              ? `${lastImportedName} importiert. Weitere Variante wählen oder zur Linienauswahl zurückkehren.`
+              : `${variants.length} Varianten gefunden.${cacheText} Bitte Haltestellenfolge auswählen.`,
+            selectText: lastImportedName ? "Weitere Variante importieren" : "Variante importieren",
+            cancelText: "Zur Linienauswahl zurück"
+          });
+          if (!variant) {
+            const refs = getVbbImportModalRefs();
+            if (refs.modal?.classList.contains("hidden")) return;
+            break;
+          }
+
+          updateVbbImportProgressPopup(`Haltestellenfolge ${variant.name} wird importiert ...`, {
+            level: "info",
+            busy: true,
+            subtitle: "Linie erzeugen"
+          });
+          const imported = await postGtfsImport({
+            action: "import",
+            token: upload.token,
+            routeId: route.id,
+            variantId: variant.id
+          });
+          if (!imported.line || typeof imported.line !== "object") {
+            throw new Error("GTFS-Import lieferte keine gültigen Liniendaten.");
+          }
+
+          loadLineFromData(imported.line);
+          const warningCount = Number(imported.warningCount || 0);
+          const warningText = warningCount > 0
+            ? ` ${warningCount} Stops ohne Koordinaten wurden übersprungen.`
+            : "";
+          lastImportedName = String(variant.name || "Variante");
+          updateVbbImportProgressPopup(`GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText}`, {
+            level: warningCount > 0 ? "warn" : "success",
+            busy: false,
+            allowClose: true,
+            subtitle: "Weitere Variante möglich"
+          });
+          setStatus(
+            `GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText} Route wurde nicht berechnet.`,
+            warningCount > 0 ? "warn" : "success"
+          );
+        }
       }
-
-      updateVbbImportProgressPopup(`Varianten fuer ${route.name} werden ermittelt ...`, {
-        level: "info",
-        busy: true,
-        subtitle: "Varianten bilden"
-      });
-      const variantResult = await postGtfsImport({
-        action: "variants",
-        token: upload.token,
-        routeId: route.id
-      });
-      const variants = (Array.isArray(variantResult.variants) ? variantResult.variants : []).map(variant => {
-        const direction = String(variant.directionId ?? "").trim();
-        const signature = String(variant.variantKey || "").slice(0, 8);
-        return {
-          ...variant,
-          meta: [
-            direction ? `Richtung ${direction}` : "Richtung unbekannt",
-            `${Number(variant.stopCount || 0)} Stops`,
-            signature ? `Sequenz ${signature}` : ""
-          ].filter(Boolean).join(" | ")
-        };
-      });
-      if (!variants.length) throw new Error(`Fuer ${route.name} wurden keine nutzbaren Varianten gefunden.`);
-
-      updateVbbImportProgressPopup(`${variants.length} Varianten gefunden.`, {
-        level: "info",
-        busy: false,
-        subtitle: "Variante auswaehlen"
-      });
-      const variant = await chooseVbbCandidateInPopup(variants, {
-        hint: `${variants.length} Richtungen/Varianten gefunden. Bitte Haltestellenfolge auswaehlen.`,
-        selectText: "Variante importieren"
-      });
-      if (!variant) {
-        setStatus("GTFS-Import abgebrochen.", "warn");
-        return;
-      }
-
-      updateVbbImportProgressPopup(`Haltestellenfolge ${variant.name} wird importiert ...`, {
-        level: "info",
-        busy: true,
-        subtitle: "Linie erzeugen"
-      });
-      const imported = await postGtfsImport({
-        action: "import",
-        token: upload.token,
-        routeId: route.id,
-        variantId: variant.id
-      });
-      if (!imported.line || typeof imported.line !== "object") {
-        throw new Error("GTFS-Import lieferte keine gueltigen Liniendaten.");
-      }
-
-      loadLineFromData(imported.line);
-      const warningCount = Number(imported.warningCount || 0);
-      const warningText = warningCount > 0
-        ? ` ${warningCount} Stops ohne Koordinaten wurden übersprungen.`
-        : "";
-      updateVbbImportProgressPopup(`GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText}`, {
-        level: warningCount > 0 ? "warn" : "success",
-        busy: false,
-        allowClose: true,
-        subtitle: "Fertig",
-        autoCloseMs: 5000
-      });
-      setStatus(
-        `GTFS-Haltestellenfolge importiert (${imported.stopCount || 0} Stops).${warningText} Route wurde nicht berechnet.`,
-        warningCount > 0 ? "warn" : "success"
-      );
     } catch (err) {
       error("GTFS-Import fehlgeschlagen", err);
       updateVbbImportProgressPopup(err.message || "GTFS-Import fehlgeschlagen.", {
