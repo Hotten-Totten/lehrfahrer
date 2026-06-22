@@ -16,6 +16,10 @@ Offlinekarten/
 GTFS-Haltestellendatenaeätze/
 *.gtfs.zip
 latest.zip
+gtfs/imports/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
 
 # Python cache
 __pycache__/

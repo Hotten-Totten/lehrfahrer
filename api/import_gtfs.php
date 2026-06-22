@@ -255,7 +255,7 @@ function gtfs_read_trip_sequences(ZipArchive $zip, array $trips): array {
     return $sequences;
 }
 
-function gtfs_build_variants(ZipArchive $zip, string $routeId): array {
+function gtfs_build_variants(ZipArchive $zip, string $routeId, array $route = []): array {
     $trips = gtfs_read_route_trips($zip, $routeId);
     if (!$trips) return [];
     $sequences = gtfs_read_trip_sequences($zip, $trips);
@@ -280,19 +280,30 @@ function gtfs_build_variants(ZipArchive $zip, string $routeId): array {
     }
     if (!$variants) return [];
 
-    $endStopIds = [];
+    $neededStopIds = [];
     foreach ($variants as $variant) {
-        $items = $variant['items'];
-        $endStopIds[] = $items[0]['stopId'];
-        $endStopIds[] = $items[count($items) - 1]['stopId'];
+        foreach ($variant['items'] as $item) $neededStopIds[] = $item['stopId'];
     }
-    $endStops = gtfs_read_stops($zip, array_values(array_unique($endStopIds)));
+    $stopData = gtfs_read_stops($zip, array_values(array_unique($neededStopIds)));
     foreach ($variants as &$variant) {
+        foreach ($variant['items'] as &$item) {
+            $stop = $stopData[$item['stopId']] ?? null;
+            $item['name'] = strval($stop['name'] ?? $item['stopId']);
+            $item['lat'] = $stop['lat'] ?? null;
+            $item['lon'] = $stop['lon'] ?? null;
+        }
+        unset($item);
         $items = $variant['items'];
         $firstStopId = $items[0]['stopId'];
         $lastStopId = $items[count($items) - 1]['stopId'];
-        $variant['startStop'] = strval($endStops[$firstStopId]['name'] ?? '');
-        $variant['destination'] = strval($endStops[$lastStopId]['name'] ?? '');
+        $variant['startStop'] = strval($stopData[$firstStopId]['name'] ?? $firstStopId);
+        $variant['destination'] = strval($stopData[$lastStopId]['name'] ?? $lastStopId);
+        $variant['viaStops'] = gtfs_via_names(array_column($items, 'name'));
+        $variant['routeShortName'] = strval($route['shortName'] ?? '');
+        $variant['routeLongName'] = strval($route['longName'] ?? '');
+        $variant['agencyName'] = strval($route['agencyName'] ?? '');
+        $variant['routeType'] = strval($route['routeType'] ?? '');
+        $variant['routeTypeLabel'] = gtfs_route_type_label($variant['routeType']);
         if (trim(strval($variant['headsign'])) === '' && $variant['destination'] !== '') {
             $variant['name'] = $variant['destination'];
         }
@@ -533,6 +544,359 @@ function gtfs_server_zip_path(): string {
     return $realPath;
 }
 
+function gtfs_index_dir(): string {
+    return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'gtfs' . DIRECTORY_SEPARATOR . 'imports';
+}
+
+function gtfs_index_path(): string {
+    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'variants.sqlite';
+}
+
+function gtfs_require_sqlite(): void {
+    if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        gtfs_error(501, 'GTFS-Turboindex benötigt PHP PDO_SQLite.');
+    }
+}
+
+function gtfs_route_type_label(string $routeType): string {
+    $labels = [
+        '0' => 'Tram',
+        '1' => 'U-Bahn',
+        '2' => 'Bahn',
+        '3' => 'Bus',
+        '4' => 'Fähre',
+        '5' => 'Straßenbahn-Kabelbahn',
+        '6' => 'Seilbahn',
+        '7' => 'Standseilbahn',
+        '11' => 'Oberleitungsbus',
+        '12' => 'Monorail',
+    ];
+    return $labels[$routeType] ?? ($routeType !== '' ? 'Typ ' . $routeType : 'Unbekannt');
+}
+
+function gtfs_feed_signature(string $zipPath): array {
+    return [
+        'size' => (int)@filesize($zipPath),
+        'mtime' => (int)@filemtime($zipPath),
+    ];
+}
+
+function gtfs_header_position(array $headers, string $name): int {
+    $index = array_search($name, $headers, true);
+    if ($index === false) gtfs_error(422, 'GTFS-Pflichtfeld fehlt: ' . $name);
+    return (int)$index;
+}
+
+function gtfs_index_import_table(
+    ZipArchive $zip,
+    string $fileName,
+    array $requiredHeaders,
+    callable $rowHandler
+): int {
+    [$handle, $headers] = gtfs_open_zip_table($zip, $fileName, $requiredHeaders);
+    $count = 0;
+    while (($values = fgetcsv($handle)) !== false) {
+        $rowHandler($headers, $values);
+        $count++;
+    }
+    fclose($handle);
+    return $count;
+}
+
+function gtfs_via_names(array $stopNames): array {
+    $count = count($stopNames);
+    if ($count <= 2) return [];
+    $via = [];
+    for ($step = 1; $step <= 4; $step++) {
+        $index = (int)round(($count - 1) * $step / 5);
+        if ($index <= 0 || $index >= $count - 1) continue;
+        $name = trim(strval($stopNames[$index] ?? ''));
+        if ($name !== '' && !in_array($name, $via, true)) $via[] = $name;
+    }
+    return $via;
+}
+
+function gtfs_build_persistent_index(): void {
+    gtfs_require_sqlite();
+    if (function_exists('set_time_limit')) @set_time_limit(0);
+    $zipPath = gtfs_server_zip_path();
+    $indexDir = gtfs_index_dir();
+    if (!is_dir($indexDir) && !mkdir($indexDir, 0700, true)) {
+        gtfs_error(500, 'GTFS-Indexverzeichnis kann nicht erstellt werden: gtfs/imports');
+    }
+
+    $lockHandle = @fopen($indexDir . DIRECTORY_SEPARATOR . 'index.lock', 'c+');
+    if (!$lockHandle || !flock($lockHandle, LOCK_EX | LOCK_NB)) {
+        gtfs_error(409, 'Ein GTFS-Indexlauf ist bereits aktiv.');
+    }
+
+    $startedAt = microtime(true);
+    $temporaryPath = gtfs_index_path() . '.building';
+    @unlink($temporaryPath);
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) gtfs_error(422, 'Server-GTFS-ZIP kann für Indexierung nicht geöffnet werden.');
+
+    try {
+        $pdo = new PDO('sqlite:' . $temporaryPath, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $pdo->exec('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE;');
+        $pdo->exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+        $pdo->exec('CREATE TABLE agencies (agency_id TEXT PRIMARY KEY, agency_name TEXT NOT NULL)');
+        $pdo->exec('CREATE TABLE routes (route_id TEXT PRIMARY KEY, agency_id TEXT, short_name TEXT, long_name TEXT, route_type TEXT)');
+        $pdo->exec('CREATE TABLE stops (stop_id TEXT PRIMARY KEY, stop_name TEXT, lat REAL, lon REAL, parent_station TEXT)');
+        $pdo->exec('CREATE TABLE trips (trip_id TEXT PRIMARY KEY, route_id TEXT NOT NULL, direction_id TEXT, headsign TEXT)');
+        $pdo->exec('CREATE TABLE stop_times (trip_id TEXT NOT NULL, stop_sequence INTEGER NOT NULL, stop_id TEXT NOT NULL)');
+        $pdo->exec('CREATE TABLE variants (
+            route_id TEXT NOT NULL,
+            variant_id TEXT NOT NULL,
+            signature TEXT NOT NULL,
+            direction_id TEXT,
+            trip_headsign TEXT,
+            stop_count INTEGER NOT NULL,
+            start_stop_name TEXT,
+            end_stop_name TEXT,
+            via_stops_json TEXT NOT NULL,
+            stop_ids_json TEXT NOT NULL,
+            stop_names_json TEXT NOT NULL,
+            stop_lats_json TEXT NOT NULL,
+            stop_lons_json TEXT NOT NULL,
+            stops_json TEXT NOT NULL,
+            route_short_name TEXT,
+            route_long_name TEXT,
+            agency_name TEXT,
+            route_type TEXT,
+            PRIMARY KEY (route_id, variant_id)
+        )');
+
+        $pdo->beginTransaction();
+        $agencyInsert = $pdo->prepare('INSERT OR REPLACE INTO agencies VALUES (?, ?)');
+        $agencyRows = gtfs_index_import_table($zip, 'agency.txt', ['agency_id', 'agency_name'], static function (array $headers, array $values) use ($agencyInsert): void {
+            $id = trim(strval($values[gtfs_header_position($headers, 'agency_id')] ?? ''));
+            if ($id === '') return;
+            $agencyInsert->execute([$id, trim(strval($values[gtfs_header_position($headers, 'agency_name')] ?? ''))]);
+        });
+
+        $routeInsert = $pdo->prepare('INSERT OR REPLACE INTO routes VALUES (?, ?, ?, ?, ?)');
+        $routeRows = gtfs_index_import_table($zip, 'routes.txt', ['route_id'], static function (array $headers, array $values) use ($routeInsert): void {
+            $row = gtfs_row($headers, $values);
+            $routeId = $row['route_id'] ?? '';
+            if ($routeId === '') return;
+            $routeInsert->execute([$routeId, $row['agency_id'] ?? '', $row['route_short_name'] ?? '', $row['route_long_name'] ?? '', $row['route_type'] ?? '']);
+        });
+
+        $stopInsert = $pdo->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?)');
+        $stopRows = gtfs_index_import_table($zip, 'stops.txt', ['stop_id', 'stop_name'], static function (array $headers, array $values) use ($stopInsert): void {
+            $row = gtfs_row($headers, $values);
+            $stopId = $row['stop_id'] ?? '';
+            if ($stopId === '') return;
+            $lat = is_numeric($row['stop_lat'] ?? '') ? (float)$row['stop_lat'] : null;
+            $lon = is_numeric($row['stop_lon'] ?? '') ? (float)$row['stop_lon'] : null;
+            if ($lat !== null && ($lat < -90 || $lat > 90)) $lat = null;
+            if ($lon !== null && ($lon < -180 || $lon > 180)) $lon = null;
+            $stopInsert->execute([$stopId, $row['stop_name'] ?? '', $lat, $lon, $row['parent_station'] ?? '']);
+        });
+
+        $tripInsert = $pdo->prepare('INSERT OR REPLACE INTO trips VALUES (?, ?, ?, ?)');
+        $tripRows = gtfs_index_import_table($zip, 'trips.txt', ['trip_id', 'route_id'], static function (array $headers, array $values) use ($tripInsert): void {
+            $row = gtfs_row($headers, $values);
+            if (($row['trip_id'] ?? '') === '' || ($row['route_id'] ?? '') === '') return;
+            $tripInsert->execute([$row['trip_id'], $row['route_id'], $row['direction_id'] ?? '', $row['trip_headsign'] ?? '']);
+        });
+
+        $stopTimeInsert = $pdo->prepare('INSERT INTO stop_times VALUES (?, ?, ?)');
+        [$stopTimeHandle, $stopTimeHeaders] = gtfs_open_zip_table($zip, 'stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence']);
+        $tripIdIndex = gtfs_header_position($stopTimeHeaders, 'trip_id');
+        $stopIdIndex = gtfs_header_position($stopTimeHeaders, 'stop_id');
+        $sequenceIndex = gtfs_header_position($stopTimeHeaders, 'stop_sequence');
+        $stopTimeRows = 0;
+        while (($values = fgetcsv($stopTimeHandle)) !== false) {
+            $tripId = trim(strval($values[$tripIdIndex] ?? ''));
+            $stopId = trim(strval($values[$stopIdIndex] ?? ''));
+            $sequence = $values[$sequenceIndex] ?? '';
+            if ($tripId === '' || $stopId === '' || !is_numeric($sequence)) continue;
+            $stopTimeInsert->execute([$tripId, (int)$sequence, $stopId]);
+            $stopTimeRows++;
+        }
+        fclose($stopTimeHandle);
+        $pdo->commit();
+
+        $pdo->exec('CREATE INDEX idx_trips_route ON trips(route_id); CREATE INDEX idx_stop_times_trip_sequence ON stop_times(trip_id, stop_sequence);');
+        $tripQuery = $pdo->query('SELECT t.trip_id, t.route_id, t.direction_id, t.headsign,
+            r.short_name, r.long_name, r.route_type, COALESCE(a.agency_name, "") AS agency_name
+            FROM trips t
+            LEFT JOIN routes r ON r.route_id = t.route_id
+            LEFT JOIN agencies a ON a.agency_id = r.agency_id
+            ORDER BY t.trip_id');
+        $stopQuery = $pdo->prepare('SELECT st.stop_id, st.stop_sequence, COALESCE(s.stop_name, "") AS stop_name,
+            CASE WHEN s.lat IS NOT NULL AND s.lon IS NOT NULL THEN s.lat ELSE p.lat END AS lat,
+            CASE WHEN s.lat IS NOT NULL AND s.lon IS NOT NULL THEN s.lon ELSE p.lon END AS lon
+            FROM stop_times st
+            LEFT JOIN stops s ON s.stop_id = st.stop_id
+            LEFT JOIN stops p ON p.stop_id = s.parent_station
+            WHERE st.trip_id = ? ORDER BY st.stop_sequence');
+        $variantInsert = $pdo->prepare('INSERT OR IGNORE INTO variants VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+        $pdo->beginTransaction();
+        foreach ($tripQuery as $trip) {
+            $stopQuery->execute([$trip['trip_id']]);
+            $items = [];
+            $stopIds = [];
+            $stopNames = [];
+            $lats = [];
+            $lons = [];
+            while ($stop = $stopQuery->fetch()) {
+                $stopIds[] = $stop['stop_id'];
+                $stopNames[] = $stop['stop_name'];
+                $lats[] = $stop['lat'] !== null ? (float)$stop['lat'] : null;
+                $lons[] = $stop['lon'] !== null ? (float)$stop['lon'] : null;
+                $items[] = [
+                    'stopId' => $stop['stop_id'],
+                    'sequence' => (int)$stop['stop_sequence'],
+                    'name' => $stop['stop_name'],
+                    'lat' => $stop['lat'] !== null ? (float)$stop['lat'] : null,
+                    'lon' => $stop['lon'] !== null ? (float)$stop['lon'] : null,
+                ];
+            }
+            if (count($stopIds) < 2) continue;
+            $signature = sha1(implode('>', $stopIds));
+            $variantId = strval($trip['direction_id']) . '|' . $signature;
+            $variantInsert->execute([
+                $trip['route_id'], $variantId, $signature, $trip['direction_id'], $trip['headsign'], count($stopIds),
+                $stopNames[0] ?? '', $stopNames[count($stopNames) - 1] ?? '',
+                json_encode(gtfs_via_names($stopNames), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($stopIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($stopNames, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($lats), json_encode($lons),
+                json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                $trip['short_name'], $trip['long_name'], $trip['agency_name'], $trip['route_type'],
+            ]);
+        }
+        $pdo->commit();
+
+        $signature = gtfs_feed_signature($zipPath);
+        $metaInsert = $pdo->prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)');
+        foreach ([
+            'feed_size' => $signature['size'],
+            'feed_mtime' => $signature['mtime'],
+            'schema_version' => '1',
+            'created_at' => date('c'),
+            'agency_rows' => $agencyRows,
+            'route_rows' => $routeRows,
+            'stop_rows' => $stopRows,
+            'trip_rows' => $tripRows,
+            'stop_time_rows' => $stopTimeRows,
+        ] as $key => $value) {
+            $metaInsert->execute([$key, strval($value)]);
+        }
+        $variantCount = (int)$pdo->query('SELECT COUNT(*) FROM variants')->fetchColumn();
+        unset(
+            $agencyInsert,
+            $routeInsert,
+            $stopInsert,
+            $tripInsert,
+            $stopTimeInsert,
+            $tripQuery,
+            $stopQuery,
+            $variantInsert,
+            $metaInsert
+        );
+        $pdo = null;
+        $zip->close();
+
+        $finalPath = gtfs_index_path();
+        $backupPath = $finalPath . '.previous';
+        @unlink($backupPath);
+        if (is_file($finalPath) && !@rename($finalPath, $backupPath)) {
+            throw new RuntimeException('Alter GTFS-Index kann nicht für Austausch vorbereitet werden.');
+        }
+        if (!@rename($temporaryPath, $finalPath)) {
+            if (is_file($backupPath)) @rename($backupPath, $finalPath);
+            throw new RuntimeException('Neuer GTFS-Index kann nicht aktiviert werden.');
+        }
+        @unlink($backupPath);
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+        gtfs_reply([
+            'ok' => true,
+            'indexPath' => 'gtfs/imports/variants.sqlite',
+            'variantCount' => $variantCount,
+            'stopTimeRows' => $stopTimeRows,
+            'durationSeconds' => round(microtime(true) - $startedAt, 1),
+        ]);
+    } catch (Throwable $error) {
+        $pdo = null;
+        try {
+            $zip->close();
+        } catch (Throwable $ignored) {
+            // ZIP wurde im erfolgreichen Aufbaupfad bereits geschlossen.
+        }
+        @unlink($temporaryPath);
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+        throw $error;
+    }
+}
+
+function gtfs_open_valid_index(): ?PDO {
+    if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers(), true)) return null;
+    $indexPath = gtfs_index_path();
+    if (!is_file($indexPath) || !is_readable($indexPath)) return null;
+    $feedSignature = gtfs_feed_signature(gtfs_server_zip_path());
+    try {
+        $pdo = new PDO('sqlite:' . $indexPath, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $meta = $pdo->query('SELECT key, value FROM meta')->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (($meta['schema_version'] ?? '') !== '1'
+            || (int)($meta['feed_size'] ?? -1) !== $feedSignature['size']
+            || (int)($meta['feed_mtime'] ?? -1) !== $feedSignature['mtime']) {
+            return null;
+        }
+        return $pdo;
+    } catch (Throwable $error) {
+        return null;
+    }
+}
+
+function gtfs_read_index_variants(string $routeId): ?array {
+    $pdo = gtfs_open_valid_index();
+    if (!$pdo) return null;
+    $statement = $pdo->prepare('SELECT * FROM variants WHERE route_id = ? ORDER BY direction_id, trip_headsign, start_stop_name, end_stop_name');
+    $statement->execute([$routeId]);
+    $variants = [];
+    while ($row = $statement->fetch()) {
+        $items = json_decode(strval($row['stops_json']), true);
+        $viaStops = json_decode(strval($row['via_stops_json']), true);
+        if (!is_array($items)) continue;
+        $variants[] = [
+            'id' => $row['variant_id'],
+            'name' => trim(strval($row['trip_headsign'])) !== '' ? $row['trip_headsign'] : $row['end_stop_name'],
+            'directionId' => $row['direction_id'],
+            'headsign' => $row['trip_headsign'],
+            'stopCount' => (int)$row['stop_count'],
+            'variantKey' => $row['signature'],
+            'startStop' => $row['start_stop_name'],
+            'destination' => $row['end_stop_name'],
+            'viaStops' => is_array($viaStops) ? $viaStops : [],
+            'routeShortName' => $row['route_short_name'],
+            'routeLongName' => $row['route_long_name'],
+            'agencyName' => $row['agency_name'],
+            'routeType' => $row['route_type'],
+            'routeTypeLabel' => gtfs_route_type_label(strval($row['route_type'])),
+            'items' => $items,
+        ];
+    }
+    return $variants ?: null;
+}
+
+function gtfs_session_uses_server_source(string $dir): bool {
+    $source = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'source.json')), true);
+    return is_array($source) && ($source['type'] ?? '') === 'server';
+}
+
 function gtfs_open_session_zip(string $dir): ZipArchive {
     $sourcePath = $dir . DIRECTORY_SEPARATOR . 'source.json';
     $source = json_decode(strval(@file_get_contents($sourcePath)), true);
@@ -662,18 +1026,25 @@ try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
+    if ($action === 'buildindex') gtfs_build_persistent_index();
     $token = trim(strval($_POST['token'] ?? ''));
     $dir = gtfs_session_dir($token);
     if ($action === 'routes') gtfs_handle_route_filter($dir);
     if ($action === 'variants') {
         $routeId = trim(strval($_POST['routeId'] ?? ''));
         if ($routeId === '') gtfs_error(400, 'routeId fehlt.');
-        gtfs_load_listed_route($dir, $routeId);
+        $route = gtfs_load_listed_route($dir, $routeId);
         $zip = gtfs_open_session_zip($dir);
         $variants = gtfs_read_cached_variants($dir, $routeId);
         $fromCache = $variants !== null;
-        if (!$fromCache) {
-            $variants = gtfs_build_variants($zip, $routeId);
+        $fromTurboIndex = false;
+        if (!$fromCache && gtfs_session_uses_server_source($dir)) {
+            $variants = gtfs_read_index_variants($routeId);
+            $fromTurboIndex = $variants !== null;
+            if ($fromTurboIndex) gtfs_save_variants($dir, $routeId, $variants);
+        }
+        if ($variants === null) {
+            $variants = gtfs_build_variants($zip, $routeId, $route);
             gtfs_save_variants($dir, $routeId, $variants);
         }
         $zip->close();
@@ -682,7 +1053,8 @@ try {
             'ok' => true,
             'variants' => $publicVariants,
             'variantCount' => count($publicVariants),
-            'fromCache' => $fromCache,
+            'fromCache' => $fromCache || $fromTurboIndex,
+            'fromTurboIndex' => $fromTurboIndex,
         ]);
     }
     if ($action === 'import') {
@@ -692,8 +1064,26 @@ try {
         $variant = gtfs_load_variant($dir, $routeId, $variantId);
         $items = is_array($variant['items'] ?? null) ? $variant['items'] : [];
         if (count($items) < 2) gtfs_error(422, 'GTFS-Variante enthält weniger als zwei nutzbare Stops.');
-        $zip = gtfs_open_session_zip($dir);
-        $stopData = gtfs_read_stops($zip, array_values(array_unique(array_column($items, 'stopId'))));
+        $zip = null;
+        $stopData = [];
+        $hasEmbeddedStops = array_key_exists('name', $items[0])
+            && array_key_exists('lat', $items[0])
+            && array_key_exists('lon', $items[0]);
+        if ($hasEmbeddedStops) {
+            foreach ($items as $item) {
+                $stopId = strval($item['stopId'] ?? '');
+                if ($stopId === '' || !is_numeric($item['lat'] ?? null) || !is_numeric($item['lon'] ?? null)) continue;
+                $stopData[$stopId] = [
+                    'name' => strval($item['name'] ?? $stopId),
+                    'lat' => (float)$item['lat'],
+                    'lon' => (float)$item['lon'],
+                    'coordinateSource' => 'turbo_index',
+                ];
+            }
+        } else {
+            $zip = gtfs_open_session_zip($dir);
+            $stopData = gtfs_read_stops($zip, array_values(array_unique(array_column($items, 'stopId'))));
+        }
         $editorStops = [];
         $skippedStopCount = 0;
         $parentCoordinateCount = 0;
@@ -720,7 +1110,7 @@ try {
             ];
         }
         if (count($editorStops) < 2) gtfs_error(422, 'Stopkoordinaten der Variante sind unvollständig.');
-        $zip->close();
+        if ($zip) $zip->close();
         $route = gtfs_load_listed_route($dir, $routeId);
         $lineName = trim(strval($route['shortName'] ?? '')) ?: trim(strval($route['name'] ?? $routeId));
         $direction = trim(strval($variant['headsign'] ?? '')) ?: ($editorStops[0]['name'] . ' – ' . $editorStops[count($editorStops) - 1]['name']);

@@ -1208,20 +1208,33 @@ async function runGtfsImport(loadSource, initialMessage) {
         const variants = (Array.isArray(variantResult.variants) ? variantResult.variants : []).map(variant => {
           const direction = String(variant.directionId ?? "").trim();
           const signature = String(variant.variantKey || "").slice(0, 8);
+          const routeLabel = [variant.routeShortName, variant.routeLongName].filter(Boolean).join(" - ");
+          const viaStops = Array.isArray(variant.viaStops) ? variant.viaStops.filter(Boolean).slice(0, 4) : [];
           return {
             ...variant,
             meta: [
+              routeLabel,
+              variant.agencyName || "Betreiber unbekannt",
+              variant.routeTypeLabel || (variant.routeType ? `route_type ${variant.routeType}` : ""),
               direction ? `Richtung ${direction}` : "Richtung unbekannt",
+              variant.headsign ? `Ziel ${variant.headsign}` : "",
               `${Number(variant.stopCount || 0)} Stops`,
-              signature ? `Sequenz ${signature}` : ""
+              [variant.startStop, variant.destination].filter(Boolean).join(" -> "),
+              viaStops.length ? `via ${viaStops.join(" / ")}` : "",
+              signature ? `Variante ${signature}` : ""
             ].filter(Boolean).join(" | ")
           };
         });
         if (!variants.length) throw new Error(`Für ${route.name} wurden keine nutzbaren Varianten gefunden.`);
 
-        const cacheText = variantResult.fromCache ? " Varianten aus Zwischenspeicher geladen." : "";
+        const cacheText = variantResult.fromTurboIndex
+          ? " Varianten aus Turboindex geladen."
+          : (variantResult.fromCache ? " Varianten aus Zwischenspeicher geladen." : "");
         if (variantResult.fromCache) {
-          updateVbbImportProgressPopup(`Varianten aus Zwischenspeicher geladen: ${route.name}.`, {
+          updateVbbImportProgressPopup(
+            variantResult.fromTurboIndex
+              ? `Varianten aus Turboindex geladen: ${route.name}.`
+              : `Varianten aus Zwischenspeicher geladen: ${route.name}.`, {
             level: "success",
             busy: false,
             subtitle: "Varianten-Cache"
@@ -1316,6 +1329,39 @@ function importGtfsFromServer() {
     () => postGtfsImport({ action: "server" }),
     "GTFS-ZIP wird direkt vom Server geladen ..."
   );
+}
+
+async function rebuildGtfsServerIndex() {
+  if (!confirm("GTFS-Turboindex aus gtfs/data/gtfs/latest.zip neu erstellen? Der Vorgang kann mehrere Minuten dauern.")) return;
+  showVbbImportProgressPopup("", "GTFS-Turboindex");
+  try {
+    updateVbbImportProgressPopup("GTFS-Index wird streamend neu erstellt ...", {
+      level: "info",
+      busy: true,
+      subtitle: "Indexierung läuft"
+    });
+    const result = await postGtfsImport({ action: "buildIndex" });
+    const duration = Number(result.durationSeconds || 0);
+    updateVbbImportProgressPopup(
+      `GTFS-Index erstellt: ${Number(result.variantCount || 0)} Varianten, ${Number(result.stopTimeRows || 0)} Stop-Zeilen${duration ? ` in ${duration} s` : ""}.`,
+      {
+        level: "success",
+        busy: false,
+        allowClose: true,
+        subtitle: "Turboindex fertig"
+      }
+    );
+    setStatus(`GTFS-Turboindex neu erstellt (${Number(result.variantCount || 0)} Varianten).`, "success");
+  } catch (err) {
+    error("GTFS-Indexierung fehlgeschlagen", err);
+    updateVbbImportProgressPopup(err.message || "GTFS-Indexierung fehlgeschlagen.", {
+      level: "error",
+      busy: false,
+      allowClose: true,
+      subtitle: "Indexfehler"
+    });
+    setStatus(err.message || "GTFS-Indexierung fehlgeschlagen.", "error");
+  }
 }
 
 async function importLineFromVbbPrompt() {
