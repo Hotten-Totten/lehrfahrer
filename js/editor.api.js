@@ -1332,33 +1332,66 @@ function importGtfsFromServer() {
 }
 
 async function rebuildGtfsServerIndex() {
-  if (!confirm("GTFS-Turboindex aus gtfs/data/gtfs/latest.zip neu erstellen? Der Vorgang kann mehrere Minuten dauern.")) return;
   showVbbImportProgressPopup("", "GTFS-Turboindex");
   try {
-    updateVbbImportProgressPopup("GTFS-Index wird streamend neu erstellt ...", {
-      level: "info",
-      busy: true,
-      subtitle: "Indexierung läuft"
-    });
-    const result = await postGtfsImport({ action: "buildIndex" });
-    const duration = Number(result.durationSeconds || 0);
-    updateVbbImportProgressPopup(
-      `GTFS-Index erstellt: ${Number(result.variantCount || 0)} Varianten, ${Number(result.stopTimeRows || 0)} Stop-Zeilen${duration ? ` in ${duration} s` : ""}.`,
-      {
-        level: "success",
-        busy: false,
-        allowClose: true,
-        subtitle: "Turboindex fertig"
+    const status = await postGtfsImport({ action: "indexStatus" });
+    let restart = false;
+    if (status.active) {
+      const resume = confirm("Ein GTFS-Indexjob ist bereits vorhanden. Mit OK fortsetzen; Abbrechen bietet einen sauberen Neustart an.");
+      if (!resume) {
+        if (!confirm("Vorhandenen Zwischenstand verwerfen und GTFS-Index neu starten?")) {
+          closeVbbImportProgressPopup();
+          return;
+        }
+        restart = true;
       }
-    );
-    setStatus(`GTFS-Turboindex neu erstellt (${Number(result.variantCount || 0)} Varianten).`, "success");
+    } else if (!confirm("GTFS-Turboindex aus gtfs/data/gtfs/latest.zip neu erstellen?")) {
+      closeVbbImportProgressPopup();
+      return;
+    } else {
+      restart = true;
+    }
+
+    let result = await postGtfsImport({ action: "indexStart", restart: restart ? "1" : "0" });
+    let job = result.job || {};
+    const renderProgress = currentJob => {
+      const details = [
+        currentJob.step || currentJob.phase || "Indexierung",
+        `${Number(currentJob.rowsRead || 0)} Zeilen gelesen`,
+        `${Number(currentJob.stopTimeRows || 0)} stop_times-Zeilen`,
+        `${Number(currentJob.variantsFound || 0)} Varianten`,
+        currentJob.fileProgress !== undefined ? `${currentJob.fileProgress}% aktuelle Datei` : ""
+      ].filter(Boolean).join(" | ");
+      updateVbbImportProgressPopup(details, {
+        level: currentJob.phase === "done" ? "success" : "info",
+        busy: currentJob.phase !== "done",
+        allowClose: currentJob.phase === "done",
+        subtitle: currentJob.phase === "done" ? "Turboindex fertig" : `Indexphase: ${currentJob.phase || "start"}`
+      });
+    };
+
+    renderProgress(job);
+    while (job.phase !== "done") {
+      result = await postGtfsImport({ action: "indexStep" });
+      job = result.job || {};
+      renderProgress(job);
+      if (job.phase !== "done") await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    updateVbbImportProgressPopup("GTFS-Turboindex wurde vollständig erstellt.", {
+      level: "success",
+      busy: false,
+      allowClose: true,
+      subtitle: "Turboindex fertig"
+    });
+    setStatus(`GTFS-Turboindex neu erstellt (${Number(job.variantsFound || 0)} Varianten).`, "success");
   } catch (err) {
     error("GTFS-Indexierung fehlgeschlagen", err);
-    updateVbbImportProgressPopup(err.message || "GTFS-Indexierung fehlgeschlagen.", {
+    updateVbbImportProgressPopup(`${err.message || "GTFS-Indexierung fehlgeschlagen."} Der Job kann später fortgesetzt oder neu gestartet werden.`, {
       level: "error",
       busy: false,
       allowClose: true,
-      subtitle: "Indexfehler"
+      subtitle: "Index unterbrochen"
     });
     setStatus(err.message || "GTFS-Indexierung fehlgeschlagen.", "error");
   }

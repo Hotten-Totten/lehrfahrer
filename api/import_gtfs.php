@@ -897,6 +897,385 @@ function gtfs_session_uses_server_source(string $dir): bool {
     return is_array($source) && ($source['type'] ?? '') === 'server';
 }
 
+function gtfs_index_job_path(): string {
+    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'index_job.json';
+}
+
+function gtfs_index_building_path(): string {
+    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'variants.building.sqlite';
+}
+
+function gtfs_index_extracted_dir(): string {
+    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'extracted';
+}
+
+function gtfs_read_index_job(): ?array {
+    $job = json_decode(strval(@file_get_contents(gtfs_index_job_path())), true);
+    return is_array($job) ? $job : null;
+}
+
+function gtfs_write_index_job(array $job): void {
+    $json = json_encode($job, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents(gtfs_index_job_path(), $json, LOCK_EX) === false) {
+        gtfs_error(500, 'GTFS-Indexfortschritt kann nicht gespeichert werden.');
+    }
+}
+
+function gtfs_clear_index_job_files(): void {
+    foreach ([gtfs_index_job_path(), gtfs_index_building_path(), gtfs_index_building_path() . '-journal'] as $file) {
+        if (is_file($file)) @unlink($file);
+    }
+    $extractedDir = gtfs_index_extracted_dir();
+    if (is_dir($extractedDir)) {
+        foreach (glob($extractedDir . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
+            if (is_file($file)) @unlink($file);
+        }
+        @rmdir($extractedDir);
+    }
+}
+
+function gtfs_create_batch_schema(PDO $pdo): void {
+    $pdo->exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=NORMAL; PRAGMA temp_store=FILE;');
+    $pdo->exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE agencies (agency_id TEXT PRIMARY KEY, agency_name TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE routes (route_id TEXT PRIMARY KEY, agency_id TEXT, short_name TEXT, long_name TEXT, route_type TEXT)');
+    $pdo->exec('CREATE TABLE stops (stop_id TEXT PRIMARY KEY, stop_name TEXT, lat REAL, lon REAL, parent_station TEXT)');
+    $pdo->exec('CREATE TABLE trips (trip_id TEXT PRIMARY KEY, route_id TEXT NOT NULL, direction_id TEXT, headsign TEXT)');
+    $pdo->exec('CREATE TABLE stop_times (trip_id TEXT NOT NULL, stop_sequence INTEGER NOT NULL, stop_id TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE variants (
+        route_id TEXT NOT NULL, variant_id TEXT NOT NULL, signature TEXT NOT NULL, direction_id TEXT,
+        trip_headsign TEXT, stop_count INTEGER NOT NULL, start_stop_name TEXT, end_stop_name TEXT,
+        via_stops_json TEXT NOT NULL, stop_ids_json TEXT NOT NULL, stop_names_json TEXT NOT NULL,
+        stop_lats_json TEXT NOT NULL, stop_lons_json TEXT NOT NULL, stops_json TEXT NOT NULL,
+        route_short_name TEXT, route_long_name TEXT, agency_name TEXT, route_type TEXT,
+        PRIMARY KEY (route_id, variant_id)
+    )');
+}
+
+function gtfs_start_index_job(bool $restart): void {
+    gtfs_require_sqlite();
+    $existing = gtfs_read_index_job();
+    if ($existing && !$restart) {
+        gtfs_reply(['ok' => true, 'job' => $existing, 'resumed' => true]);
+    }
+    $zipPath = gtfs_server_zip_path();
+    $indexDir = gtfs_index_dir();
+    if (!is_dir($indexDir) && !mkdir($indexDir, 0700, true)) {
+        gtfs_error(500, 'GTFS-Indexverzeichnis kann nicht erstellt werden.');
+    }
+    $lock = @fopen($indexDir . DIRECTORY_SEPARATOR . 'index_job.lock', 'c+');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        gtfs_error(409, 'Ein GTFS-Indexschritt läuft bereits; Neustart ist momentan nicht möglich.');
+    }
+    gtfs_clear_index_job_files();
+    $extractedDir = gtfs_index_extracted_dir();
+    if (!mkdir($extractedDir, 0700, true)) gtfs_error(500, 'GTFS-Extraktionsverzeichnis kann nicht erstellt werden.');
+
+    $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    gtfs_create_batch_schema($pdo);
+    $pdo = null;
+    $signature = gtfs_feed_signature($zipPath);
+    $job = [
+        'version' => 1,
+        'phase' => 'extract',
+        'step' => 'ZIP-Dateien vorbereiten',
+        'feedSize' => $signature['size'],
+        'feedMtime' => $signature['mtime'],
+        'extractIndex' => 0,
+        'importFileIndex' => 0,
+        'fileOffset' => 0,
+        'headers' => [],
+        'rowsRead' => 0,
+        'stopTimeRows' => 0,
+        'variantsFound' => 0,
+        'lastTripId' => '',
+        'startedAt' => date('c'),
+    ];
+    gtfs_write_index_job($job);
+    flock($lock, LOCK_UN);
+    fclose($lock);
+    gtfs_reply(['ok' => true, 'job' => $job, 'resumed' => false]);
+}
+
+function gtfs_extract_index_file(array $job): array {
+    $files = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
+    $index = (int)($job['extractIndex'] ?? 0);
+    if ($index >= count($files)) {
+        $job['phase'] = 'import';
+        $job['step'] = 'Tabellen importieren';
+        return $job;
+    }
+    $fileName = $files[$index];
+    $zip = new ZipArchive();
+    if ($zip->open(gtfs_server_zip_path()) !== true) gtfs_error(422, 'GTFS-ZIP kann nicht geöffnet werden.');
+    $entry = gtfs_find_zip_entry($zip, $fileName);
+    if ($entry === null) gtfs_error(422, 'GTFS-ZIP enthält ' . $fileName . ' nicht.');
+    $input = $zip->getStream($entry);
+    $output = @fopen(gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . $fileName, 'wb');
+    if (!$input || !$output) gtfs_error(500, 'GTFS-Datei kann nicht extrahiert werden: ' . $fileName);
+    stream_copy_to_stream($input, $output);
+    fclose($input);
+    fclose($output);
+    $zip->close();
+    $job['extractIndex'] = $index + 1;
+    $job['step'] = $fileName . ' extrahiert';
+    if ($job['extractIndex'] >= count($files)) {
+        $job['phase'] = 'import';
+        $job['step'] = 'Tabellen importieren';
+    }
+    return $job;
+}
+
+function gtfs_import_index_rows(array $job, int $batchSize): array {
+    $files = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
+    $fileIndex = (int)($job['importFileIndex'] ?? 0);
+    if ($fileIndex >= count($files)) {
+        $job['phase'] = 'prepare';
+        $job['step'] = 'SQLite-Indizes vorbereiten';
+        return $job;
+    }
+    $fileName = $files[$fileIndex];
+    $path = gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . $fileName;
+    $handle = @fopen($path, 'rb');
+    if (!$handle) gtfs_error(500, 'Extrahierte GTFS-Datei fehlt: ' . $fileName);
+    $offset = (int)($job['fileOffset'] ?? 0);
+    $headers = $job['headers'][$fileName] ?? null;
+    if ($offset === 0) {
+        $headers = fgetcsv($handle);
+        if (!is_array($headers)) gtfs_error(422, $fileName . ' ist leer.');
+        $headers = array_map(static fn($value): string => trim(preg_replace('/^\xEF\xBB\xBF/', '', strval($value))), $headers);
+        $job['headers'][$fileName] = $headers;
+        $offset = (int)ftell($handle);
+    } else {
+        fseek($handle, $offset, SEEK_SET);
+    }
+
+    $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $statements = [
+        'agency.txt' => $pdo->prepare('INSERT OR REPLACE INTO agencies VALUES (?, ?)'),
+        'routes.txt' => $pdo->prepare('INSERT OR REPLACE INTO routes VALUES (?, ?, ?, ?, ?)'),
+        'stops.txt' => $pdo->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?)'),
+        'trips.txt' => $pdo->prepare('INSERT OR REPLACE INTO trips VALUES (?, ?, ?, ?)'),
+        'stop_times.txt' => $pdo->prepare('INSERT INTO stop_times VALUES (?, ?, ?)'),
+    ];
+    $statement = $statements[$fileName];
+    $pdo->beginTransaction();
+    $processed = 0;
+    while ($processed < $batchSize && ($values = fgetcsv($handle)) !== false) {
+        $row = gtfs_row($headers, $values);
+        if ($fileName === 'agency.txt' && ($row['agency_id'] ?? '') !== '') {
+            $statement->execute([$row['agency_id'], $row['agency_name'] ?? '']);
+        } elseif ($fileName === 'routes.txt' && ($row['route_id'] ?? '') !== '') {
+            $statement->execute([$row['route_id'], $row['agency_id'] ?? '', $row['route_short_name'] ?? '', $row['route_long_name'] ?? '', $row['route_type'] ?? '']);
+        } elseif ($fileName === 'stops.txt' && ($row['stop_id'] ?? '') !== '') {
+            $lat = is_numeric($row['stop_lat'] ?? '') ? (float)$row['stop_lat'] : null;
+            $lon = is_numeric($row['stop_lon'] ?? '') ? (float)$row['stop_lon'] : null;
+            $statement->execute([$row['stop_id'], $row['stop_name'] ?? '', $lat, $lon, $row['parent_station'] ?? '']);
+        } elseif ($fileName === 'trips.txt' && ($row['trip_id'] ?? '') !== '' && ($row['route_id'] ?? '') !== '') {
+            $statement->execute([$row['trip_id'], $row['route_id'], $row['direction_id'] ?? '', $row['trip_headsign'] ?? '']);
+        } elseif ($fileName === 'stop_times.txt'
+            && ($row['trip_id'] ?? '') !== ''
+            && ($row['stop_id'] ?? '') !== ''
+            && is_numeric($row['stop_sequence'] ?? '')) {
+            $statement->execute([$row['trip_id'], (int)$row['stop_sequence'], $row['stop_id']]);
+            $job['stopTimeRows']++;
+        }
+        $processed++;
+        $job['rowsRead']++;
+    }
+    $pdo->commit();
+    $job['fileOffset'] = (int)ftell($handle);
+    $atEnd = feof($handle);
+    fclose($handle);
+    $pdo = null;
+    $job['step'] = $fileName . ': ' . $processed . ' Zeilen verarbeitet';
+    $fileSize = max(1, (int)@filesize($path));
+    $job['fileProgress'] = min(100, round($job['fileOffset'] / $fileSize * 100, 1));
+    if ($atEnd) {
+        $job['importFileIndex'] = $fileIndex + 1;
+        $job['fileOffset'] = 0;
+        $job['fileProgress'] = 100;
+        if ($job['importFileIndex'] >= count($files)) {
+            $job['phase'] = 'prepare';
+            $job['step'] = 'SQLite-Indizes vorbereiten';
+        }
+    }
+    return $job;
+}
+
+function gtfs_prepare_batch_index(array $job): array {
+    $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_trips_route ON trips(route_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_stop_times_trip_sequence ON stop_times(trip_id, stop_sequence)');
+    $pdo = null;
+    $job['phase'] = 'variants';
+    $job['step'] = 'Varianten bilden';
+    return $job;
+}
+
+function gtfs_build_variant_batch(array $job, int $tripBatchSize): array {
+    $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $tripQuery = $pdo->prepare('SELECT t.trip_id, t.route_id, t.direction_id, t.headsign,
+        r.short_name, r.long_name, r.route_type, COALESCE(a.agency_name, "") AS agency_name
+        FROM trips t
+        LEFT JOIN routes r ON r.route_id = t.route_id
+        LEFT JOIN agencies a ON a.agency_id = r.agency_id
+        WHERE t.trip_id > ? ORDER BY t.trip_id LIMIT ?');
+    $tripQuery->bindValue(1, strval($job['lastTripId'] ?? ''), PDO::PARAM_STR);
+    $tripQuery->bindValue(2, $tripBatchSize, PDO::PARAM_INT);
+    $tripQuery->execute();
+    $trips = $tripQuery->fetchAll();
+    if (!$trips) {
+        $job['phase'] = 'finalize';
+        $job['step'] = 'Index aktivieren';
+        return $job;
+    }
+
+    $stopQuery = $pdo->prepare('SELECT st.stop_id, st.stop_sequence, COALESCE(s.stop_name, "") AS stop_name,
+        CASE WHEN s.lat IS NOT NULL AND s.lon IS NOT NULL THEN s.lat ELSE p.lat END AS lat,
+        CASE WHEN s.lat IS NOT NULL AND s.lon IS NOT NULL THEN s.lon ELSE p.lon END AS lon
+        FROM stop_times st
+        LEFT JOIN stops s ON s.stop_id = st.stop_id
+        LEFT JOIN stops p ON p.stop_id = s.parent_station
+        WHERE st.trip_id = ? ORDER BY st.stop_sequence');
+    $variantInsert = $pdo->prepare('INSERT OR IGNORE INTO variants VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $pdo->beginTransaction();
+    $newVariants = 0;
+    foreach ($trips as $trip) {
+        $stopQuery->execute([$trip['trip_id']]);
+        $items = [];
+        $stopIds = [];
+        $stopNames = [];
+        $lats = [];
+        $lons = [];
+        while ($stop = $stopQuery->fetch()) {
+            $stopIds[] = $stop['stop_id'];
+            $stopNames[] = $stop['stop_name'];
+            $lats[] = $stop['lat'] !== null ? (float)$stop['lat'] : null;
+            $lons[] = $stop['lon'] !== null ? (float)$stop['lon'] : null;
+            $items[] = [
+                'stopId' => $stop['stop_id'],
+                'sequence' => (int)$stop['stop_sequence'],
+                'name' => $stop['stop_name'],
+                'lat' => $stop['lat'] !== null ? (float)$stop['lat'] : null,
+                'lon' => $stop['lon'] !== null ? (float)$stop['lon'] : null,
+            ];
+        }
+        if (count($stopIds) >= 2) {
+            $signature = sha1(implode('>', $stopIds));
+            $variantId = strval($trip['direction_id']) . '|' . $signature;
+            $variantInsert->execute([
+                $trip['route_id'], $variantId, $signature, $trip['direction_id'], $trip['headsign'], count($stopIds),
+                $stopNames[0] ?? '', $stopNames[count($stopNames) - 1] ?? '',
+                json_encode(gtfs_via_names($stopNames), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($stopIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($stopNames, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($lats), json_encode($lons),
+                json_encode($items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                $trip['short_name'], $trip['long_name'], $trip['agency_name'], $trip['route_type'],
+            ]);
+            $newVariants += $variantInsert->rowCount() > 0 ? 1 : 0;
+        }
+        $job['lastTripId'] = $trip['trip_id'];
+    }
+    $pdo->commit();
+    $pdo = null;
+    $job['variantsFound'] = (int)($job['variantsFound'] ?? 0) + $newVariants;
+    $job['tripsProcessed'] = (int)($job['tripsProcessed'] ?? 0) + count($trips);
+    $job['step'] = count($trips) . ' Trips geprüft, ' . $newVariants . ' neue Varianten';
+    if (count($trips) < $tripBatchSize) {
+        $job['phase'] = 'finalize';
+        $job['step'] = 'Index aktivieren';
+    }
+    return $job;
+}
+
+function gtfs_finalize_batch_index(array $job): array {
+    if (!is_file(gtfs_index_building_path())) {
+        $existingIndex = gtfs_open_valid_index();
+        if ($existingIndex) {
+            $job['phase'] = 'done';
+            $job['step'] = 'Turboindex fertig';
+            $job['variantsFound'] = (int)$existingIndex->query('SELECT COUNT(*) FROM variants')->fetchColumn();
+            $job['finishedAt'] = date('c');
+            return $job;
+        }
+        gtfs_error(500, 'GTFS-Zwischenindex fehlt und konnte nicht wiederhergestellt werden.');
+    }
+    $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $metaInsert = $pdo->prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)');
+    foreach ([
+        'schema_version' => '1',
+        'feed_size' => $job['feedSize'],
+        'feed_mtime' => $job['feedMtime'],
+        'created_at' => date('c'),
+        'stop_time_rows' => $job['stopTimeRows'],
+    ] as $key => $value) {
+        $metaInsert->execute([$key, strval($value)]);
+    }
+    $variantCount = (int)$pdo->query('SELECT COUNT(*) FROM variants')->fetchColumn();
+    unset($metaInsert);
+    $pdo = null;
+
+    $finalPath = gtfs_index_path();
+    $backupPath = $finalPath . '.previous';
+    @unlink($backupPath);
+    if (is_file($finalPath) && !@rename($finalPath, $backupPath)) {
+        gtfs_error(500, 'Alter GTFS-Index kann nicht für Austausch vorbereitet werden.');
+    }
+    if (!@rename(gtfs_index_building_path(), $finalPath)) {
+        if (is_file($backupPath)) @rename($backupPath, $finalPath);
+        gtfs_error(500, 'Neuer GTFS-Index kann nicht aktiviert werden.');
+    }
+    @unlink($backupPath);
+    foreach (glob(gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
+        if (is_file($file)) @unlink($file);
+    }
+    @rmdir(gtfs_index_extracted_dir());
+    $job['phase'] = 'done';
+    $job['step'] = 'Turboindex fertig';
+    $job['variantsFound'] = $variantCount;
+    $job['finishedAt'] = date('c');
+    return $job;
+}
+
+function gtfs_run_index_step(): void {
+    gtfs_require_sqlite();
+    $job = gtfs_read_index_job();
+    if (!$job) gtfs_error(404, 'Kein GTFS-Indexjob vorhanden.');
+    $signature = gtfs_feed_signature(gtfs_server_zip_path());
+    if ((int)$job['feedSize'] !== $signature['size'] || (int)$job['feedMtime'] !== $signature['mtime']) {
+        gtfs_error(409, 'latest.zip wurde während der Indexierung geändert. Job bitte neu starten.');
+    }
+    $lock = @fopen(gtfs_index_dir() . DIRECTORY_SEPARATOR . 'index_job.lock', 'c+');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) gtfs_error(409, 'Ein Indexschritt läuft bereits.');
+    try {
+        $phase = strval($job['phase'] ?? '');
+        if ($phase === 'extract') $job = gtfs_extract_index_file($job);
+        elseif ($phase === 'import') $job = gtfs_import_index_rows($job, 50000);
+        elseif ($phase === 'prepare') $job = gtfs_prepare_batch_index($job);
+        elseif ($phase === 'variants') $job = gtfs_build_variant_batch($job, 500);
+        elseif ($phase === 'finalize') $job = gtfs_finalize_batch_index($job);
+        elseif ($phase !== 'done') gtfs_error(409, 'Unbekannter GTFS-Indexjob-Status.');
+        gtfs_write_index_job($job);
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        gtfs_reply(['ok' => true, 'job' => $job, 'done' => $job['phase'] === 'done']);
+    } catch (Throwable $error) {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        throw $error;
+    }
+}
+
+function gtfs_index_job_status(): void {
+    $job = gtfs_read_index_job();
+    gtfs_reply(['ok' => true, 'job' => $job, 'active' => is_array($job) && ($job['phase'] ?? '') !== 'done']);
+}
+
 function gtfs_open_session_zip(string $dir): ZipArchive {
     $sourcePath = $dir . DIRECTORY_SEPARATOR . 'source.json';
     $source = json_decode(strval(@file_get_contents($sourcePath)), true);
@@ -1026,7 +1405,9 @@ try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
-    if ($action === 'buildindex') gtfs_build_persistent_index();
+    if ($action === 'indexstatus') gtfs_index_job_status();
+    if ($action === 'indexstart') gtfs_start_index_job(($_POST['restart'] ?? '') === '1');
+    if ($action === 'indexstep') gtfs_run_index_step();
     $token = trim(strval($_POST['token'] ?? ''));
     $dir = gtfs_session_dir($token);
     if ($action === 'routes') gtfs_handle_route_filter($dir);
