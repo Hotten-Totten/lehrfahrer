@@ -914,6 +914,7 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
 
   refs.picker.classList.remove("hidden");
   refs.pickerList.innerHTML = "";
+  refs.pickerList.setAttribute("role", "listbox");
   refs.pickerSelectBtn.disabled = true;
   refs.pickerSelectBtn.textContent = options.selectText || "Fahrt importieren";
   if (refs.pickerHint) {
@@ -997,6 +998,117 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
   });
 }
 
+function chooseGtfsAgenciesInPopup(agencies) {
+  const refs = getVbbImportModalRefs();
+  if (!refs.picker || !refs.pickerList || !refs.pickerSelectBtn || !refs.pickerCancelBtn || !refs.closeBtn) {
+    return Promise.resolve(null);
+  }
+
+  refs.picker.classList.remove("hidden");
+  refs.pickerList.innerHTML = "";
+  refs.pickerList.setAttribute("role", "group");
+  refs.pickerSelectBtn.textContent = "Weiter zur Linienauswahl";
+  if (refs.pickerHint) refs.pickerHint.textContent = "Betreiber auswählen und Linien optional eingrenzen.";
+
+  const controls = document.createElement("div");
+  controls.className = "gtfs-agency-controls";
+
+  const agencySearch = document.createElement("input");
+  agencySearch.type = "search";
+  agencySearch.placeholder = "Betreiberliste filtern";
+  agencySearch.setAttribute("aria-label", "Betreiberliste filtern");
+
+  const lineSearch = document.createElement("input");
+  lineSearch.type = "search";
+  lineSearch.placeholder = "Liniennummer oder Linienname (optional)";
+  lineSearch.setAttribute("aria-label", "Linien innerhalb der ausgewählten Betreiber filtern");
+
+  const buttonRow = document.createElement("div");
+  buttonRow.className = "gtfs-agency-select-actions";
+  const defaultBtn = document.createElement("button");
+  defaultBtn.type = "button";
+  defaultBtn.textContent = "VBB-Standard auswählen";
+  const allBtn = document.createElement("button");
+  allBtn.type = "button";
+  allBtn.textContent = "Alle auswählen";
+  const noneBtn = document.createElement("button");
+  noneBtn.type = "button";
+  noneBtn.textContent = "Keine auswählen";
+  buttonRow.append(defaultBtn, allBtn, noneBtn);
+  controls.append(agencySearch, lineSearch, buttonRow);
+  refs.pickerList.appendChild(controls);
+
+  const entries = agencies.map(agency => {
+    const row = document.createElement("label");
+    row.className = "vbb-candidate-row gtfs-agency-row";
+    row.dataset.filterText = `${agency.name || ""} ${agency.id || ""}`.toLocaleLowerCase("de-DE");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = String(agency.id || "");
+    checkbox.checked = !!agency.isDefault;
+
+    const textWrap = document.createElement("div");
+    const main = document.createElement("div");
+    main.className = "vbb-candidate-main";
+    main.textContent = String(agency.name || agency.id || "Betreiber");
+    const meta = document.createElement("div");
+    meta.className = "vbb-candidate-meta";
+    meta.textContent = `${Number(agency.routeCount || 0)} Linien | agency_id ${agency.id}`;
+    textWrap.append(main, meta);
+    row.append(checkbox, textWrap);
+    refs.pickerList.appendChild(row);
+    return { agency, row, checkbox };
+  });
+
+  const updateSelectionState = () => {
+    const selectedCount = entries.filter(entry => entry.checkbox.checked).length;
+    refs.pickerSelectBtn.disabled = selectedCount < 1;
+    if (refs.pickerHint) {
+      refs.pickerHint.textContent = `${selectedCount} von ${entries.length} Betreibern ausgewählt.`;
+    }
+  };
+  const setChecked = predicate => {
+    entries.forEach(entry => {
+      entry.checkbox.checked = !!predicate(entry.agency);
+    });
+    updateSelectionState();
+  };
+  const filterRows = () => {
+    const query = agencySearch.value.trim().toLocaleLowerCase("de-DE");
+    entries.forEach(entry => entry.row.classList.toggle("hidden", !!query && !entry.row.dataset.filterText.includes(query)));
+  };
+
+  entries.forEach(entry => entry.checkbox.addEventListener("change", updateSelectionState));
+  agencySearch.addEventListener("input", filterRows);
+  defaultBtn.addEventListener("click", () => setChecked(agency => agency.isDefault));
+  allBtn.addEventListener("click", () => setChecked(() => true));
+  noneBtn.addEventListener("click", () => setChecked(() => false));
+  updateSelectionState();
+
+  return new Promise(resolve => {
+    const previousCloseHandler = refs.closeBtn.onclick;
+    const finish = value => {
+      refs.pickerSelectBtn.removeEventListener("click", onSelect);
+      refs.pickerCancelBtn.removeEventListener("click", onCancel);
+      refs.closeBtn.onclick = previousCloseHandler;
+      hideVbbCandidatePicker();
+      resolve(value);
+    };
+    const onSelect = () => finish({
+      agencyIds: entries.filter(entry => entry.checkbox.checked).map(entry => String(entry.agency.id)),
+      search: lineSearch.value.trim()
+    });
+    const onCancel = () => finish(null);
+    refs.pickerSelectBtn.addEventListener("click", onSelect);
+    refs.pickerCancelBtn.addEventListener("click", onCancel);
+    refs.closeBtn.onclick = () => {
+      finish(null);
+      closeVbbImportProgressPopup();
+    };
+  });
+}
+
 async function postGtfsImport(fields) {
   const body = new FormData();
   Object.entries(fields).forEach(([key, value]) => {
@@ -1027,7 +1139,32 @@ async function runGtfsImport(loadSource, initialMessage) {
         subtitle: "Datei lesen"
       });
       const upload = await loadSource();
-      const routes = (Array.isArray(upload.routes) ? upload.routes : []).map(route => ({
+      const agencies = Array.isArray(upload.agencies) ? upload.agencies : [];
+      if (!agencies.length) throw new Error("Die GTFS-Datei enthält keine auswählbaren Betreiber.");
+
+      updateVbbImportProgressPopup(`${agencies.length} Betreiber gefunden.`, {
+        level: "info",
+        busy: false,
+        subtitle: "Betreiber auswählen"
+      });
+      const agencySelection = await chooseGtfsAgenciesInPopup(agencies);
+      if (!agencySelection) {
+        setStatus("GTFS-Import abgebrochen.", "warn");
+        return;
+      }
+
+      updateVbbImportProgressPopup("Linien der ausgewählten Betreiber werden geladen ...", {
+        level: "info",
+        busy: true,
+        subtitle: "Linien filtern"
+      });
+      const routeResult = await postGtfsImport({
+        action: "routes",
+        token: upload.token,
+        agencyIds: JSON.stringify(agencySelection.agencyIds),
+        search: agencySelection.search
+      });
+      const routes = (Array.isArray(routeResult.routes) ? routeResult.routes : []).map(route => ({
         ...route,
         meta: [
           route.agencyName || (route.agencyId ? `Agency ${route.agencyId}` : "Betreiber unbekannt"),
@@ -1136,22 +1273,7 @@ async function runGtfsImport(loadSource, initialMessage) {
   }
 }
 
-function promptGtfsRouteFilters() {
-  const searchInput = prompt(
-    "GTFS-Linienfilter:\nLeer lassen: VBB-/Berlin-/Brandenburg-Betreiber anzeigen.\nSuchtext eingeben: deutschlandweit nach Linie oder Betreiber suchen.",
-    ""
-  );
-  if (searchInput === null) return null;
-  const search = String(searchInput || "").trim();
-  return {
-    search,
-    regionFilter: search ? "all" : "vbb"
-  };
-}
-
 function importGtfsZipPrompt() {
-  const filters = promptGtfsRouteFilters();
-  if (!filters) return;
   const input = document.getElementById("gtfsZipInput");
   if (!input) {
     setStatus("GTFS-Dateiauswahl ist nicht verfuegbar.", "error");
@@ -1164,7 +1286,7 @@ function importGtfsZipPrompt() {
     if (!file) return;
     try {
       await runGtfsImport(
-        () => postGtfsImport({ action: "upload", feed: file, ...filters }),
+        () => postGtfsImport({ action: "upload", feed: file }),
         `GTFS-ZIP wird geladen: ${file.name}`
       );
     } finally {
@@ -1175,10 +1297,8 @@ function importGtfsZipPrompt() {
 }
 
 function importGtfsFromServer() {
-  const filters = promptGtfsRouteFilters();
-  if (!filters) return Promise.resolve();
   return runGtfsImport(
-    () => postGtfsImport({ action: "server", ...filters }),
+    () => postGtfsImport({ action: "server" }),
     "GTFS-ZIP wird direkt vom Server geladen ..."
   );
 }

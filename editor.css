@@ -1606,6 +1606,43 @@ button.danger:hover {
   margin-top: 2px;
 }
 
+.vbb-candidate-row input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.gtfs-agency-controls {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  background: #fff;
+  border-bottom: 1px solid #dbe7f4;
+}
+
+.gtfs-agency-controls input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #b9c9db;
+  border-radius: 4px;
+}
+
+.gtfs-agency-select-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gtfs-agency-select-actions button {
+  padding: 5px 8px;
+  border: 1px solid #aebed0;
+  border-radius: 4px;
+  background: #f7f9fc;
+  cursor: pointer;
+}
+
 .vbb-candidate-main {
   font-size: 13px;
   font-weight: 700;
