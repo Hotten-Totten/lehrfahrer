@@ -1336,7 +1336,10 @@ async function rebuildGtfsServerIndex() {
   try {
     const status = await postGtfsImport({ action: "indexStatus" });
     let restart = false;
-    if (status.active) {
+    if (status.job && Number(status.job.version || 0) !== 2) {
+      alert("Der vorhandene GTFS-Indexjob verwendet das alte, speicherintensive Schema und wird neu gestartet.");
+      restart = true;
+    } else if (status.active) {
       const resume = confirm("Ein GTFS-Indexjob ist bereits vorhanden. Mit OK fortsetzen; Abbrechen bietet einen sauberen Neustart an.");
       if (!resume) {
         if (!confirm("Vorhandenen Zwischenstand verwerfen und GTFS-Index neu starten?")) {
@@ -1355,12 +1358,16 @@ async function rebuildGtfsServerIndex() {
     let result = await postGtfsImport({ action: "indexStart", restart: restart ? "1" : "0" });
     let job = result.job || {};
     const renderProgress = currentJob => {
+      const sqlite = currentJob.sqliteDiagnostics || currentJob.sqliteAfterPrepare || null;
       const details = [
         currentJob.step || currentJob.phase || "Indexierung",
         `${Number(currentJob.rowsRead || 0)} Zeilen gelesen`,
         `${Number(currentJob.stopTimeRows || 0)} stop_times-Zeilen`,
         `${Number(currentJob.variantsFound || 0)} Varianten`,
-        currentJob.fileProgress !== undefined ? `${currentJob.fileProgress}% aktuelle Datei` : ""
+        currentJob.fileProgress !== undefined ? `${currentJob.fileProgress}% aktuelle Datei` : "",
+        sqlite ? `SQLite ${(Number(sqlite.fileBytes || 0) / 1048576).toFixed(1)} MB` : "",
+        sqlite ? `${Number(sqlite.pageCount || 0)} Seiten à ${Number(sqlite.pageSize || 0)} Byte` : "",
+        sqlite ? `TEMP_STORE ${sqlite.tempStoreLabel || sqlite.tempStore}` : ""
       ].filter(Boolean).join(" | ");
       updateVbbImportProgressPopup(details, {
         level: currentJob.phase === "done" ? "success" : "info",
