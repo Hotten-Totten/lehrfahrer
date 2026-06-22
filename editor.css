@@ -1442,6 +1442,7 @@ button.danger:hover {
   font-size: 14.5px;
   font-weight: 700;
   color: #0f172a;
+  white-space: pre-wrap;
 }
 
 .vbb-search-options {
@@ -1532,6 +1533,7 @@ button.danger:hover {
   color: #334155;
   border-left: 3px solid #94a3b8;
   padding: 2px 0 2px 8px;
+  white-space: pre-wrap;
 }
 
 .vbb-import-line.vbb-line-success {

@@ -1404,6 +1404,58 @@ async function rebuildGtfsServerIndex() {
   }
 }
 
+async function analyzeGtfsServerIndex() {
+  showVbbImportProgressPopup("", "GTFS-Indexanalyse");
+  updateVbbImportProgressPopup("Turboindex wird schreibgeschützt ausgewertet ...", {
+    level: "info",
+    busy: true,
+    subtitle: "SQLite analysieren"
+  });
+  try {
+    const result = await postGtfsImport({ action: "indexAnalyze" });
+    const summary = result.summary || {};
+    const sqlite = result.sqlite || {};
+    const topRoutes = Array.isArray(result.topRoutes) ? result.topRoutes : [];
+    const agencies = Array.isArray(result.variantsByAgency) ? result.variantsByAgency : [];
+    const objectSizes = Object.entries(sqlite.objectBytes || {})
+      .slice(0, 8)
+      .map(([name, bytes]) => `${name}: ${(Number(bytes) / 1048576).toFixed(1)} MB`)
+      .join(", ");
+    const lines = [
+      `Quelle: ${result.databaseFile || result.source || "SQLite"}`,
+      `${Number(summary.variantCount || 0)} Varianten auf ${Number(summary.routeCount || 0)} Linien`,
+      `${Number(summary.uniqueStopSequences || 0)} feedweit eindeutige Stopfolgen`,
+      `${Number(summary.duplicateVariantKeyGroups || 0)} doppelte Variantenschlüssel`,
+      `Ø ${Number(summary.averageStopCount || 0).toFixed(1)} Stops; stops_json Ø ${(Number(summary.averageStopsJsonBytes || 0) / 1024).toFixed(1)} KB, gesamt ${(Number(summary.totalStopsJsonBytes || 0) / 1048576).toFixed(1)} MB`,
+      `Datenbank ${(Number(sqlite.fileBytes || 0) / 1048576).toFixed(1)} MB`,
+      objectSizes ? `Größte SQLite-Objekte: ${objectSizes}` : (sqlite.objectBytesError || "Tabellengrößen nicht verfügbar."),
+      "",
+      "Top-20 Linien:",
+      ...topRoutes.map((route, index) => `${index + 1}. ${route.route_short_name || route.route_id} | ${route.agency_name || "Betreiber unbekannt"} | ${Number(route.variant_count || 0)} Varianten | ${Number(route.unique_stop_sequences || 0)} Stopfolgen`),
+      "",
+      "Betreiber:",
+      ...agencies.slice(0, 20).map(agency => `${agency.agency_name}: ${Number(agency.variant_count || 0)} Varianten auf ${Number(agency.route_count || 0)} Linien`)
+    ];
+    updateVbbImportProgressPopup(lines.join("\n"), {
+      level: "success",
+      busy: false,
+      allowClose: true,
+      subtitle: "Analyse abgeschlossen"
+    });
+    debug("GTFS-Indexanalyse", result);
+    setStatus(`GTFS-Index analysiert: ${Number(summary.variantCount || 0)} Varianten.`, "success");
+  } catch (err) {
+    error("GTFS-Indexanalyse fehlgeschlagen", err);
+    updateVbbImportProgressPopup(err.message || "GTFS-Indexanalyse fehlgeschlagen.", {
+      level: "error",
+      busy: false,
+      allowClose: true,
+      subtitle: "Analyse fehlgeschlagen"
+    });
+    setStatus(err.message || "GTFS-Indexanalyse fehlgeschlagen.", "error");
+  }
+}
+
 async function importLineFromVbbPrompt() {
   try {
     const lineQueryRaw = prompt("Für welche VBB-Linie sollen Haltestellenfolgen gesucht werden?\nBeispiel: 10");

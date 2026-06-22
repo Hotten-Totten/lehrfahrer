@@ -732,7 +732,7 @@ function gtfs_create_batch_schema(PDO $pdo): void {
     ) WITHOUT ROWID');
 }
 
-function gtfs_sqlite_diagnostics(PDO $pdo, string $label): array {
+function gtfs_sqlite_diagnostics(PDO $pdo, string $label, ?string $databasePath = null): array {
     $pageCount = (int)$pdo->query('PRAGMA page_count')->fetchColumn();
     $pageSize = (int)$pdo->query('PRAGMA page_size')->fetchColumn();
     $freePages = (int)$pdo->query('PRAGMA freelist_count')->fetchColumn();
@@ -760,10 +760,11 @@ function gtfs_sqlite_diagnostics(PDO $pdo, string $label): array {
             ];
         }
     }
-    clearstatcache(true, gtfs_index_building_path());
+    $databasePath = $databasePath ?? gtfs_index_building_path();
+    clearstatcache(true, $databasePath);
     $diagnostics = [
         'label' => $label,
-        'fileBytes' => (int)@filesize(gtfs_index_building_path()),
+        'fileBytes' => (int)@filesize($databasePath),
         'pageCount' => $pageCount,
         'pageSize' => $pageSize,
         'freePages' => $freePages,
@@ -782,6 +783,94 @@ function gtfs_sqlite_diagnostics(PDO $pdo, string $label): array {
     );
     error_log('GTFS SQLite: ' . json_encode($diagnostics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     return $diagnostics;
+}
+
+function gtfs_analyze_server_index(): void {
+    gtfs_require_sqlite();
+    $buildingPath = gtfs_index_building_path();
+    $finalPath = gtfs_index_path();
+    $databasePath = is_file($buildingPath) ? $buildingPath : $finalPath;
+    if (!is_file($databasePath) || !is_readable($databasePath)) {
+        gtfs_error(404, 'Kein GTFS-Turboindex und keine abgebrochene Building-Datei gefunden.');
+    }
+
+    $pdo = new PDO('sqlite:' . $databasePath, null, null, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('PRAGMA query_only=ON; PRAGMA busy_timeout=5000; PRAGMA temp_store=FILE;');
+    $hasVariants = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'variants'")->fetchColumn() > 0;
+    if (!$hasVariants) gtfs_error(422, 'SQLite-Datei enthält keine Variantentabelle.');
+
+    $summary = $pdo->query('SELECT
+        COUNT(*) AS variant_count,
+        COUNT(DISTINCT signature) AS unique_stop_sequences,
+        AVG(stop_count) AS average_stop_count,
+        AVG(LENGTH(stops_json)) AS average_stops_json_bytes,
+        SUM(LENGTH(stops_json)) AS total_stops_json_bytes,
+        COUNT(DISTINCT route_id) AS route_count
+        FROM variants')->fetch();
+    $duplicateKeyGroups = (int)$pdo->query('SELECT COUNT(*) FROM (
+        SELECT route_id, direction_id, signature
+        FROM variants
+        GROUP BY route_id, direction_id, signature
+        HAVING COUNT(*) > 1
+    )')->fetchColumn();
+    $variantsByAgency = $pdo->query('SELECT
+        COALESCE(NULLIF(agency_name, ""), "Betreiber unbekannt") AS agency_name,
+        COUNT(*) AS variant_count,
+        COUNT(DISTINCT route_id) AS route_count
+        FROM variants
+        GROUP BY COALESCE(NULLIF(agency_name, ""), "Betreiber unbekannt")
+        ORDER BY variant_count DESC, agency_name')->fetchAll();
+    $variantsByRoute = $pdo->query('SELECT route_id, COUNT(*) AS variant_count
+        FROM variants
+        GROUP BY route_id
+        ORDER BY variant_count DESC, route_id')->fetchAll();
+    $topRoutes = $pdo->query('SELECT route_id, route_short_name, route_long_name, agency_name, route_type,
+        COUNT(*) AS variant_count,
+        COUNT(DISTINCT signature) AS unique_stop_sequences,
+        AVG(stop_count) AS average_stop_count,
+        SUM(LENGTH(stops_json)) AS stops_json_bytes
+        FROM variants
+        GROUP BY route_id
+        ORDER BY variant_count DESC, route_id
+        LIMIT 20')->fetchAll();
+
+    $job = gtfs_read_index_job();
+    $tripsProcessed = (int)($job['tripsProcessed'] ?? 0);
+    $tripCount = null;
+    $hasTrips = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'trips'")->fetchColumn() > 0;
+    if ($hasTrips) $tripCount = (int)$pdo->query('SELECT COUNT(*) FROM trips')->fetchColumn();
+    $diagnostics = gtfs_sqlite_diagnostics($pdo, 'manual_index_analysis', $databasePath);
+    $pdo = null;
+
+    gtfs_reply([
+        'ok' => true,
+        'source' => $databasePath === $buildingPath ? 'building' : 'final',
+        'databaseFile' => basename($databasePath),
+        'summary' => [
+            'variantCount' => (int)($summary['variant_count'] ?? 0),
+            'uniqueStopSequences' => (int)($summary['unique_stop_sequences'] ?? 0),
+            'routeCount' => (int)($summary['route_count'] ?? 0),
+            'averageStopCount' => round((float)($summary['average_stop_count'] ?? 0), 2),
+            'averageStopsJsonBytes' => round((float)($summary['average_stops_json_bytes'] ?? 0), 2),
+            'totalStopsJsonBytes' => (int)($summary['total_stops_json_bytes'] ?? 0),
+            'duplicateVariantKeyGroups' => $duplicateKeyGroups,
+            'tripsProcessed' => $tripsProcessed,
+            'tripCount' => $tripCount,
+            'approximateCollapsedTrips' => max(0, $tripsProcessed - (int)($summary['variant_count'] ?? 0)),
+        ],
+        'deduplication' => [
+            'key' => 'route_id + direction_id + SHA1(vollständige Stop-ID-Sequenz)',
+            'hashInput' => 'Nur die Stop-IDs in stop_sequence-Reihenfolge; keine trip_id, Zeiten oder Headsign.',
+            'headsignAffectsIdentity' => false,
+        ],
+        'variantsByAgency' => $variantsByAgency,
+        'variantsByRoute' => $variantsByRoute,
+        'topRoutes' => $topRoutes,
+        'sqlite' => $diagnostics,
+    ]);
 }
 
 function gtfs_start_index_job(bool $restart): void {
@@ -1249,6 +1338,7 @@ try {
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
     if ($action === 'indexstatus') gtfs_index_job_status();
+    if ($action === 'indexanalyze') gtfs_analyze_server_index();
     if ($action === 'indexstart') gtfs_start_index_job(($_POST['restart'] ?? '') === '1');
     if ($action === 'indexstep') gtfs_run_index_step();
     $token = trim(strval($_POST['token'] ?? ''));
