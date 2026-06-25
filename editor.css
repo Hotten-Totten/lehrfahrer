@@ -331,8 +331,10 @@ button.detour-phase-build {
 }
 
 .top-group.direction-group {
-  flex: 1 1 480px;
-  min-width: 320px;
+  flex: 0 1 58ch;
+  width: 58ch;
+  max-width: 58ch;
+  min-width: 36ch;
 }
 
 .top-group.description-group {
@@ -343,8 +345,10 @@ button.detour-phase-build {
 
 .search-group {
   position: relative;
-  flex: 0 0 340px;
-  min-width: 260px;
+  flex: 0 1 46ch;
+  width: 46ch;
+  max-width: 46ch;
+  min-width: 30ch;
 }
 
 .search-group input {
