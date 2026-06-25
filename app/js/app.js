@@ -582,6 +582,8 @@ function dbPutLinesCatalog(catalog) {
           categoryFolder: line.categoryFolder || null,
           fileName: line.fileName,
           file: line.file,
+          jsonPath: line.jsonPath || null,
+          gpxPath: line.gpxPath || null,
           fileBase: line.fileBase,
           lineName: line.lineName,
           routeName: line.routeName,
@@ -702,6 +704,13 @@ function buildLineStorageId(line) {
   return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}${line.categoryFolder ? '_' + line.categoryFolder : ''}_${fileBase}`.replace(/\//g, '_');
 }
 
+function buildAppRelativeAssetUrl(path) {
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+  if (!cleanPath) return '';
+  if (/^https?:\/\//i.test(cleanPath) || cleanPath.startsWith('../')) return cleanPath;
+  return `../${cleanPath}`;
+}
+
 async function fetchAndCacheLinePdf(line, dbId) {
   if (!line || !line.hasPdf) return false;
 
@@ -816,11 +825,18 @@ async function downloadLineWithGPX(lineId) {
     }
 
     // Lade von der API
-    let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.file)}`;
+    const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
+    let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
     if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
     if (line.categoryFolder) url += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
 
     const res = await fetch(url, { cache: 'no-store' });
+    console.log('App lade Linie fuer Offline-Cache', {
+      url: res.url,
+      status: res.status,
+      lineFolder: line.lineFolder || null,
+      categoryFolder: line.categoryFolder || null
+    });
     const json = await res.json();
 
     if (!json.ok || !json.line) {
@@ -1402,7 +1418,14 @@ async function loadLines(city) {
     lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
     json.lines.forEach(line => {
       const opt      = document.createElement('option');
-      opt.value      = JSON.stringify({ fileBase: line.fileBase || line.id, lineFolder: line.lineFolder || null, categoryFolder: line.categoryFolder || null });
+      opt.value      = JSON.stringify({
+        city: line.city || city,
+        file: line.file || '',
+        fileBase: line.fileBase || String(line.file || '').replace(/\.json$/i, '') || line.id,
+        lineFolder: line.lineFolder || null,
+        categoryFolder: line.categoryFolder || null,
+        jsonPath: line.jsonPath || null
+      });
       opt.textContent = [
         line.lineName || line.id,
         getAppVariantCategory(line),
@@ -1428,27 +1451,26 @@ async function onLineChange() {
   currentRoute = null;
   if (!lineSelect.value) return;
 
-  const { fileBase, lineFolder, categoryFolder } = JSON.parse(lineSelect.value);
-  const city = citySelect.value;
+  const { city: lineCity, fileBase, lineFolder, categoryFolder, jsonPath, file } = JSON.parse(lineSelect.value);
+  const city = lineCity || citySelect.value;
 
-  await loadAndShowRoute(city, fileBase, lineFolder, categoryFolder);
+  await loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, jsonPath, file);
 }
 
 // ── Route laden und anzeigen ─────────────────────────────────
-async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder) {
-  const key = `${city}/${lineFolder || ''}/${categoryFolder || ''}/${fileBase}`;
+async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, jsonPath = null, fileName = null) {
+  const cleanFileBase = String(fileBase || fileName || '').replace(/\.json$/i, '').trim();
+  const key = `${city}/${lineFolder || ''}/${categoryFolder || ''}/${cleanFileBase}`;
 
   // Erst offline-Cache prüfen
   let data = null;
-  let isOfflineAvailable = false;
   
   try {
     // 1. Checke neue linesData store (gedownloadete Linien)
-    const lineId = `${city}_${lineFolder || ''}_${categoryFolder || ''}_${fileBase}`.replace(/\//g, '_');
+    const lineId = `${city}_${lineFolder || ''}_${categoryFolder || ''}_${cleanFileBase}`.replace(/\//g, '_');
     const lineData = await dbGetLineData(lineId);
     if (lineData) {
       data = lineData;
-      isOfflineAvailable = true;
       console.log('✓ Linie aus Download-Cache geladen');
     }
   } catch (err) {
@@ -1459,7 +1481,6 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder) {
   if (!data) {
     try { 
       data = await dbGet(key);
-      isOfflineAvailable = (data != null);
       if (data) console.log('✓ Linie aus gespeicherten Routen geladen');
     } catch (err) {
       console.warn('Error checking routes store:', err);
@@ -1469,26 +1490,93 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder) {
   // 3. Dann Server versuchen
   if (!data) {
     try {
-      let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}`;
+      let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(cleanFileBase)}`;
       if (lineFolder) url += `&lineFolder=${encodeURIComponent(lineFolder)}`;
       if (categoryFolder) url += `&categoryFolder=${encodeURIComponent(categoryFolder)}`;
 
       const res  = await fetch(`${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`, { cache: 'no-store' });
-      const json = await res.json();
-      if (json.ok && json.line) {
+      console.log('App lade Linie per API', { url: res.url, status: res.status, lineFolder, categoryFolder });
+      const rawText = await res.text();
+      let json = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch (_) {
+        console.warn('API-Antwort ist kein JSON', { url: res.url, status: res.status, rawText });
+      }
+      if (json?.ok && json.line) {
         data = json.line;
+        console.log('App Linie per API geladen', {
+          url: res.url,
+          status: res.status,
+          stops: Array.isArray(data.stops) ? data.stops.length : 0,
+          routePoints: Array.isArray(data.routePoints) ? data.routePoints.length : 0,
+          lineFolder,
+          categoryFolder
+        });
+      } else {
+        console.warn('API konnte Linie nicht laden', {
+          url: res.url,
+          status: res.status,
+          error: json?.error || 'Keine Linie in Antwort',
+          lineFolder,
+          categoryFolder
+        });
       }
     } catch (err) {
       console.warn('Route laden fehlgeschlagen:', err);
     }
   }
 
+  if (!data && jsonPath) {
+    try {
+      const directUrl = buildAppRelativeAssetUrl(jsonPath);
+      const res = await fetch(`${directUrl}${directUrl.includes('?') ? '&' : '?'}_ts=${Date.now()}`, { cache: 'no-store' });
+      console.log('App lade Linie per Direktpfad', { url: res.url, status: res.status, lineFolder, categoryFolder });
+      if (res.ok) {
+        data = await res.json();
+        console.log('App Linie per Direktpfad geladen', {
+          url: res.url,
+          status: res.status,
+          stops: Array.isArray(data.stops) ? data.stops.length : 0,
+          routePoints: Array.isArray(data.routePoints) ? data.routePoints.length : 0,
+          lineFolder,
+          categoryFolder
+        });
+      } else {
+        console.warn('Direktpfad konnte Linie nicht laden', { url: res.url, status: res.status, lineFolder, categoryFolder });
+      }
+    } catch (err) {
+      console.warn('Direkter JSON-Pfad fehlgeschlagen:', err);
+    }
+  }
+
   if (!data) {
-    stopList.innerHTML = '<p class="hint">Route nicht verfügbar – auch offline nicht gespeichert.</p>';
+    console.warn('App Linie nicht verfuegbar', {
+      city,
+      fileBase: cleanFileBase,
+      fileName,
+      jsonPath,
+      lineFolder,
+      categoryFolder
+    });
+    stopList.innerHTML = '<p class="hint">Route nicht verfuegbar - online nicht gefunden und offline nicht gespeichert.</p>';
     return;
   }
 
-  currentRoute = { city, fileBase, lineFolder, categoryFolder, key, data };
+  const stopCount = Array.isArray(data.stops) ? data.stops.length : 0;
+  const routePointCount = Array.isArray(data.routePoints) ? data.routePoints.length : 0;
+  if (stopCount === 0 && routePointCount === 0) {
+    console.warn('Geladene Linie enthaelt keine Stops/RoutePoints', {
+      city,
+      fileBase: cleanFileBase,
+      jsonPath,
+      lineFolder,
+      categoryFolder,
+      data
+    });
+  }
+
+  currentRoute = { city, fileBase: cleanFileBase, lineFolder, categoryFolder, jsonPath, key, data };
 
   displayRoute(data);
 }
@@ -1498,10 +1586,12 @@ function getSelectedLineRef() {
   try {
     const parsed = JSON.parse(lineSelect.value);
     return {
-      city: String(citySelect?.value || '').trim(),
-      fileBase: String(parsed.fileBase || '').trim(),
+      city: String(parsed.city || citySelect?.value || '').trim(),
+      file: parsed.file || '',
+      fileBase: String(parsed.fileBase || parsed.file || '').replace(/\.json$/i, '').trim(),
       lineFolder: parsed.lineFolder || null,
-      categoryFolder: parsed.categoryFolder || null
+      categoryFolder: parsed.categoryFolder || null,
+      jsonPath: parsed.jsonPath || null
     };
   } catch {
     return null;
@@ -1563,16 +1653,19 @@ async function refreshLinesNow() {
       }
 
       const selectedValue = JSON.stringify({
+        city: selectionBefore.city,
+        file: selectionBefore.file || '',
         fileBase: selectionBefore.fileBase,
         lineFolder: selectionBefore.lineFolder,
-        categoryFolder: selectionBefore.categoryFolder
+        categoryFolder: selectionBefore.categoryFolder,
+        jsonPath: selectionBefore.jsonPath || null
       });
 
       if (lineSelect && Array.from(lineSelect.options).some(opt => opt.value === selectedValue)) {
         lineSelect.value = selectedValue;
       }
 
-      await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder, selectionBefore.categoryFolder);
+      await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder, selectionBefore.categoryFolder, selectionBefore.jsonPath, selectionBefore.file);
 
       if (hadNav) {
         startNavigation({ useSimulation: navWasSim });
