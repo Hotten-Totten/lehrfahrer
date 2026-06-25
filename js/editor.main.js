@@ -728,6 +728,8 @@ async function createNewLine() {
 
   lineNameInput.value = "";
   routeNameInput.value = "";
+  setVariantName("Standard");
+  setVariantCategory("Standard");
   directionNameInput.value = "";
   setLineDescription("");
   lineColorInput.value = "#d32f2f";
@@ -746,6 +748,8 @@ async function createNewLine() {
   state.routingMode = "guidedStreet";
   state.preserveManualChains = true;
   state.description = "";
+  state.variantName = "Standard";
+  state.variantCategory = "Standard";
 
   clearSelection();
   clearRouteMultiSelection();

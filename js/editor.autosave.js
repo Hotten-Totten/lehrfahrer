@@ -10,6 +10,8 @@ function buildAutosaveData() {
   return {
     lineName: lineNameInput.value.trim(),
     routeName: routeNameInput.value.trim(),
+    variantName: getVariantName(routeNameInput.value.trim(), directionNameInput.value.trim()),
+    variantCategory: getVariantCategory(),
     directionName: directionNameInput.value.trim(),
     description: getLineDescription(),
     color: lineColorInput.value,
@@ -181,6 +183,14 @@ function clearEditorData() {
   state.routingMode = "guidedStreet";
   state.preserveManualChains = true;
   state.description = "";
+  state.variantName = "";
+  state.variantCategory = "Standard";
+  if (typeof variantNameInput !== "undefined" && variantNameInput) {
+    variantNameInput.value = "";
+  }
+  if (typeof variantCategoryInput !== "undefined" && variantCategoryInput) {
+    variantCategoryInput.value = "Standard";
+  }
   if (typeof lineDescriptionInput !== "undefined" && lineDescriptionInput) {
     lineDescriptionInput.value = "";
   }
@@ -252,6 +262,8 @@ function loadAutosave() {
     lineNameInput.value      = String(data.lineName  || "").replace(/^Linie\s+/i,  "").trim();
     routeNameInput.value     = String(data.routeName  || "").replace(/^Route\s+/i,  "").trim();
     directionNameInput.value = data.directionName || "";
+    setVariantName(data.variantName || "", data.routeName || "", data.directionName || "");
+    setVariantCategory(data.variantCategory || "Standard");
     setLineDescription(data.description || "");
     lineColorInput.value = data.color || "#d32f2f";
 

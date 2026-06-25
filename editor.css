@@ -330,11 +330,24 @@ button.detour-phase-build {
   width: 140px;
 }
 
+.top-group.variant-name-group {
+  flex: 0 1 22ch;
+  width: 22ch;
+  max-width: 22ch;
+  min-width: 16ch;
+}
+
+.top-group.variant-category-group {
+  flex: 0 1 18ch;
+  width: 18ch;
+  max-width: 18ch;
+  min-width: 14ch;
+}
+
 .top-group.direction-group {
-  flex: 0 1 58ch;
-  width: 58ch;
-  max-width: 58ch;
-  min-width: 36ch;
+  flex: 1 1 44ch;
+  max-width: 54ch;
+  min-width: 30ch;
 }
 
 .top-group.description-group {
@@ -1107,6 +1120,16 @@ button.danger:hover {
   gap: 10px;
 }
 
+.line-browser-line-heading {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .line-browser-item {
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -1842,6 +1865,8 @@ button.danger:hover {
 
   .top-group.line-group,
   .top-group.route-group,
+  .top-group.variant-name-group,
+  .top-group.variant-category-group,
   .top-group.direction-group,
   .top-group.description-group,
   .search-group {

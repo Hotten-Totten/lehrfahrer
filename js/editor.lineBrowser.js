@@ -30,6 +30,16 @@ function isDiversionLine(line) {
   return /umleitung_\d{2}/i.test(fileBase) || /umleitung\s*_?\s*\d{2}/i.test(routeName);
 }
 
+function getLineBrowserVariantName(line) {
+  const explicit = String(line?.variantName || "").trim();
+  if (explicit) return explicit;
+  return [line?.routeName, line?.directionName].filter(Boolean).join(" - ") || "Standard";
+}
+
+function getLineBrowserVariantCategory(line) {
+  return String(line?.variantCategory || "").trim() || "Standard";
+}
+
 // Rendert die Liste der Linien im Browser-Fenster
 // Enthält Suche, Sortierung, Gruppenansicht nach Ort, Download-Buttons
 function renderLineBrowser(lines) {
@@ -101,12 +111,16 @@ function renderLineBrowser(lines) {
         return false;
       }
       if (!q) return true;
-      return [line.lineName, line.routeName, line.directionName, line.description, line.city]
+      return [line.lineName, line.routeName, line.directionName, line.description, line.variantName, line.variantCategory, line.city]
         .join(" ").toLowerCase().includes(q);
     });
-    if (sort === "date-desc") filtered.sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""));
-    else if (sort === "date-asc") filtered.sort((a, b) => (a.savedAt || "").localeCompare(b.savedAt || ""));
-    else filtered.sort((a, b) => (a.lineName || "").localeCompare(b.lineName || ""));
+    filtered.sort((a, b) => {
+      const lineCompare = (a.lineName || "").localeCompare(b.lineName || "");
+      if (lineCompare !== 0) return lineCompare;
+      if (sort === "date-desc") return (b.savedAt || "").localeCompare(a.savedAt || "");
+      if (sort === "date-asc") return (a.savedAt || "").localeCompare(b.savedAt || "");
+      return getLineBrowserVariantName(a).localeCompare(getLineBrowserVariantName(b));
+    });
     return filtered;
   }
 
@@ -138,7 +152,17 @@ function renderLineBrowser(lines) {
       const list = document.createElement("div");
       list.className = "line-browser-list";
 
+      let lastLineHeading = null;
       groups[city].forEach(line => {
+        const lineHeadingText = String(line.lineName || "?").trim() || "?";
+        if (lineHeadingText !== lastLineHeading) {
+          const lineHeading = document.createElement("div");
+          lineHeading.className = "line-browser-line-heading";
+          lineHeading.textContent = lineHeadingText;
+          list.appendChild(lineHeading);
+          lastLineHeading = lineHeadingText;
+        }
+
         const item = document.createElement("div");
         item.className = "line-browser-item";
 
@@ -161,11 +185,13 @@ function renderLineBrowser(lines) {
 
         const title = document.createElement("div");
         title.className = "line-browser-title";
-        title.textContent = [line.routeName, line.directionName].filter(Boolean).join(" – ") || "(ohne Bezeichnung)";
+        title.textContent = getLineBrowserVariantName(line);
 
         const meta = document.createElement("div");
         meta.className = "line-browser-meta";
         const parts = [];
+        parts.push(getLineBrowserVariantCategory(line));
+        if (line.directionName) parts.push(line.directionName);
         if (line.stopCount != null) parts.push(line.stopCount + " Halt.");
         if (line.routeLengthMeters) parts.push((line.routeLengthMeters / 1000).toFixed(1) + " km");
         if (line.savedAt) parts.push(formatSavedAt(line.savedAt));

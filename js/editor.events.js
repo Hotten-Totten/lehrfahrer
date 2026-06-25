@@ -63,6 +63,13 @@ if (lineDescriptionInput) {
   lineDescriptionInput.addEventListener("input", syncLineDescriptionFromInput);
   lineDescriptionInput.addEventListener("change", syncLineDescriptionFromInput);
 }
+if (variantNameInput) {
+  variantNameInput.addEventListener("input", syncVariantNameFromInput);
+  variantNameInput.addEventListener("change", syncVariantNameFromInput);
+}
+if (variantCategoryInput) {
+  variantCategoryInput.addEventListener("change", syncVariantCategoryFromInput);
+}
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
     setMode("specialTrack", "Modus: Sondertrasse zeichnen");

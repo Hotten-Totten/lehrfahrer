@@ -148,6 +148,8 @@ function buildExportData() {
   const routeSuffix    = String(routeNameInput.value || "").trim();
   const directionName  = String(directionNameInput.value || "").trim();
   const description    = getLineDescription();
+  const variantName    = getVariantName(routeSuffix ? "Route " + routeSuffix : "", directionName);
+  const variantCategory = getVariantCategory();
 
   // Vollständige Anzeigenamen (werden so gespeichert und angezeigt)
   const lineName  = lineSuffix  ? "Linie "  + lineSuffix  : "";
@@ -241,6 +243,8 @@ const stops = state.stops.map((stop, index) => ({
     routeName,
     directionName,
     description,
+    variantName,
+    variantCategory,
     color: lineColorInput.value,
     routeMode: state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -268,6 +272,8 @@ const stops = state.stops.map((stop, index) => ({
       directionId,
       directionName,
       description,
+      variantName,
+      variantCategory,
       startStopName: startStop ? startStop.name : "",
       endStopName: endStop ? endStop.name : "",
       color: lineColorInput.value,
@@ -347,6 +353,8 @@ async function saveLineToServer() {
   if (citySelect && target.city) citySelect.value = target.city;
   if (lineNameInput) lineNameInput.value = target.lineSuffix;
   if (routeNameInput) routeNameInput.value = target.routeSuffix;
+  setVariantName(target.variantName, target.routeSuffix ? "Route " + target.routeSuffix : "", target.directionName);
+  setVariantCategory(target.variantCategory);
   if (directionNameInput) directionNameInput.value = target.directionName;
   setLineDescription(target.description);
 
@@ -388,6 +396,8 @@ function showSaveConfirmDialog({ data, city }) {
     const cityPicker = document.getElementById("saveConfirmCitySelect");
     const lineInput = document.getElementById("saveConfirmLineInput");
     const routeInput = document.getElementById("saveConfirmRouteInput");
+    const variantInput = document.getElementById("saveConfirmVariantInput");
+    const variantCategorySelect = document.getElementById("saveConfirmVariantCategorySelect");
     const directionInput = document.getElementById("saveConfirmDirectionInput");
     const descriptionInput = document.getElementById("saveConfirmDescriptionInput");
     const fileInfo = document.getElementById("saveConfirmFile");
@@ -402,6 +412,8 @@ function showSaveConfirmDialog({ data, city }) {
     const initialLine = String(lineNameInput?.value ?? lastTarget?.lineSuffix ?? "").trim();
     const initialRoute = String(routeNameInput?.value ?? lastTarget?.routeSuffix ?? "").trim();
     const initialDirection = String(directionNameInput?.value ?? lastTarget?.directionName ?? "").trim();
+    const initialVariantName = String(getVariantName(initialRoute ? "Route " + initialRoute : "", initialDirection) || data.variantName || data.line?.variantName || lastTarget?.variantName || "").trim();
+    const initialVariantCategory = normalizeVariantCategory(getVariantCategory() || data.variantCategory || data.line?.variantCategory || lastTarget?.variantCategory);
     const initialDescription = String(getLineDescription() || data.description || data.line?.description || lastTarget?.description || "").trim();
     const initialTargetCity = String(lastTarget?.city || city || "").trim() || "cottbus";
 
@@ -418,6 +430,17 @@ function showSaveConfirmDialog({ data, city }) {
 
     lineInput.value = initialLine;
     routeInput.value = initialRoute;
+    if (variantInput) variantInput.value = initialVariantName;
+    if (variantCategorySelect) {
+      variantCategorySelect.value = initialVariantCategory;
+      if (variantCategorySelect.value !== initialVariantCategory) {
+        const option = document.createElement("option");
+        option.value = initialVariantCategory;
+        option.textContent = initialVariantCategory;
+        variantCategorySelect.appendChild(option);
+        variantCategorySelect.value = initialVariantCategory;
+      }
+    }
     directionInput.value = initialDirection;
     if (descriptionInput) descriptionInput.value = initialDescription;
 
@@ -475,6 +498,8 @@ function showSaveConfirmDialog({ data, city }) {
         city: String(cityPicker.value || "").trim() || "cottbus",
         lineSuffix,
         routeSuffix,
+        variantName: String(variantInput?.value || "").trim() || buildVariantNameFallback(routeSuffix ? "Route " + routeSuffix : "", String(directionInput.value || "").trim()),
+        variantCategory: normalizeVariantCategory(variantCategorySelect?.value || "Standard"),
         directionName: String(directionInput.value || "").trim(),
         description: String(descriptionInput?.value || "").trim()
       });
@@ -1953,6 +1978,12 @@ function loadLineFromData(data) {
   lineNameInput.value      = String(lineBlock.lineName  || "").replace(/^Linie\s+/i,  "").trim();
   routeNameInput.value     = String(lineBlock.routeName  || "").replace(/^Route\s+/i,  "").trim();
   directionNameInput.value = lineBlock.directionName || "";
+  setVariantName(
+    lineBlock.variantName ?? data.variantName ?? "",
+    lineBlock.routeName || data.routeName || "",
+    lineBlock.directionName || data.directionName || ""
+  );
+  setVariantCategory(lineBlock.variantCategory ?? data.variantCategory ?? "Standard");
   setLineDescription(lineBlock.description ?? data.description ?? "");
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
@@ -2082,6 +2113,8 @@ function loadLineFromData(data) {
 
   debug("Linie geladen", {
     lineName: lineBlock.lineName || "",
+    variantName: lineBlock.variantName || data.variantName || "",
+    variantCategory: lineBlock.variantCategory || data.variantCategory || "",
     description: lineBlock.description || data.description || "",
     stops: state.stops.length,
     routePoints: state.routePoints.length

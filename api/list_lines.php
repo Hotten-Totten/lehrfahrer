@@ -28,6 +28,30 @@ function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
     return $base . '.pdf';
 }
 
+function getLineValue(array $data, string $key, string $fallback = ''): string {
+    $value = $data[$key] ?? ($data['line'][$key] ?? $fallback);
+    return trim((string)$value);
+}
+
+function getVariantNameForList(array $data): string {
+    $variantName = getLineValue($data, 'variantName', '');
+    if ($variantName !== '') {
+        return $variantName;
+    }
+
+    $parts = [];
+    $routeName = getLineValue($data, 'routeName', '');
+    $directionName = getLineValue($data, 'directionName', '');
+    if ($routeName !== '') $parts[] = $routeName;
+    if ($directionName !== '') $parts[] = $directionName;
+    return $parts ? implode(' - ', $parts) : 'Standard';
+}
+
+function getVariantCategoryForList(array $data): string {
+    $category = getLineValue($data, 'variantCategory', '');
+    return $category !== '' ? $category : 'Standard';
+}
+
 if (!is_dir($linienBaseDir)) {
     echo json_encode([
         'ok' => true,
@@ -103,6 +127,8 @@ foreach ($cities as $city) {
                     'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
                     'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
                     'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
+                    'variantName'       => getVariantNameForList($data),
+                    'variantCategory'   => getVariantCategoryForList($data),
                     'description'       => $data['description'] ?? ($data['line']['description'] ?? ''),
                     'color'             => $data['color'] ?? ($data['line']['color'] ?? null),
                     'savedAt'           => $data['savedAt'] ?? null,
@@ -151,6 +177,8 @@ foreach ($cities as $city) {
             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
             'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
             'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
+            'variantName'       => getVariantNameForList($data),
+            'variantCategory'   => getVariantCategoryForList($data),
             'description'       => $data['description'] ?? ($data['line']['description'] ?? ''),
             'color'             => $data['color'] ?? ($data['line']['color'] ?? null),
             'savedAt'           => $data['savedAt'] ?? null,

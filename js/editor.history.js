@@ -11,6 +11,8 @@ function buildHistorySnapshot() {
   return {
     lineName: lineNameInput.value.trim(),
     routeName: routeNameInput.value.trim(),
+    variantName: getVariantName(routeNameInput.value.trim(), directionNameInput.value.trim()),
+    variantCategory: getVariantCategory(),
     directionName: directionNameInput.value.trim(),
     description: getLineDescription(),
     color: lineColorInput.value,
@@ -86,6 +88,8 @@ function applyHistorySnapshot(snapshot) {
     lineNameInput.value      = String(snapshot.lineName  || "").replace(/^Linie\s+/i,  "").trim();
     routeNameInput.value     = String(snapshot.routeName  || "").replace(/^Route\s+/i,  "").trim();
     directionNameInput.value = snapshot.directionName || "";
+    setVariantName(snapshot.variantName || "", snapshot.routeName || "", snapshot.directionName || "");
+    setVariantCategory(snapshot.variantCategory || "Standard");
     setLineDescription(snapshot.description || "");
     lineColorInput.value = snapshot.color || "#d32f2f";
 

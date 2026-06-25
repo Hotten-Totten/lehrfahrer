@@ -204,6 +204,23 @@
       </div>
     </div>
 
+    <div class="top-group variant-name-group">
+      <label>Variante</label>
+      <input id="variantName" placeholder="Standard" title="Name dieser Linienvariante, z. B. Standard, Schülerfahrt, Baustelle Innenstadt">
+    </div>
+
+    <div class="top-group variant-category-group">
+      <label>Kategorie</label>
+      <select id="variantCategory" title="Kategorie oder späterer Variantenordner">
+        <option value="Standard">Standard</option>
+        <option value="Baustellen">Baustellen</option>
+        <option value="Schülerfahrten">Schülerfahrten</option>
+        <option value="Betriebshof">Betriebshof</option>
+        <option value="SEV">SEV</option>
+        <option value="Archiv">Archiv</option>
+      </select>
+    </div>
+
     <div class="top-group direction-group">
       <label>Richtung</label>
       <input id="directionName" placeholder="Start- und Zielpunkt" title="Beschreibung der Fahrtrichtung, z. B. &#39;Hauptbahnhof – Branitz&#39; – wird Teil des Dateinamens">
@@ -429,6 +446,21 @@
         <div class="save-confirm-row">
           <span class="save-confirm-label">Route</span>
           <input id="saveConfirmRouteInput" class="save-confirm-input" placeholder="z. B. 01">
+        </div>
+        <div class="save-confirm-row">
+          <span class="save-confirm-label">Variante</span>
+          <input id="saveConfirmVariantInput" class="save-confirm-input" placeholder="z. B. Standard">
+        </div>
+        <div class="save-confirm-row">
+          <span class="save-confirm-label">Kategorie</span>
+          <select id="saveConfirmVariantCategorySelect" class="save-confirm-input">
+            <option value="Standard">Standard</option>
+            <option value="Baustellen">Baustellen</option>
+            <option value="Schülerfahrten">Schülerfahrten</option>
+            <option value="Betriebshof">Betriebshof</option>
+            <option value="SEV">SEV</option>
+            <option value="Archiv">Archiv</option>
+          </select>
         </div>
         <div class="save-confirm-row">
           <span class="save-confirm-label">Richtung</span>

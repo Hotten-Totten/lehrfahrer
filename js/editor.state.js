@@ -73,6 +73,8 @@ visibleCatalogMarkers: new Map(),
   routingMode: "guidedStreet",
   preserveManualChains: true,
   description: "",
+  variantName: "",
+  variantCategory: "Standard",
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
@@ -514,4 +516,74 @@ function getLineDescription() {
     return syncLineDescriptionFromInput();
   }
   return String(state.description || "").trim();
+}
+
+function normalizeVariantCategory(value) {
+  const category = String(value || "").trim();
+  return category || "Standard";
+}
+
+function buildVariantNameFallback(routeNameValue = "", directionNameValue = "") {
+  const routeText = String(routeNameValue || routeNameInput?.value || "").trim();
+  const directionText = String(directionNameValue || directionNameInput?.value || "").trim();
+  const parts = [];
+  if (routeText) parts.push(routeText.replace(/^Route\s+/i, "Route "));
+  if (directionText) parts.push(directionText);
+  return parts.join(" - ") || "Standard";
+}
+
+function setVariantName(value, fallbackRouteName = "", fallbackDirectionName = "") {
+  const raw = String(value || "").trim();
+  state.variantName = raw || buildVariantNameFallback(fallbackRouteName, fallbackDirectionName);
+  if (typeof variantNameInput !== "undefined" && variantNameInput) {
+    variantNameInput.value = state.variantName;
+  }
+  return state.variantName;
+}
+
+function syncVariantNameFromInput() {
+  state.variantName = String(
+    typeof variantNameInput !== "undefined" && variantNameInput
+      ? variantNameInput.value || ""
+      : state.variantName || ""
+  ).trim();
+  return state.variantName;
+}
+
+function getVariantName(fallbackRouteName = "", fallbackDirectionName = "") {
+  const current = typeof variantNameInput !== "undefined" && variantNameInput
+    ? syncVariantNameFromInput()
+    : String(state.variantName || "").trim();
+  return current || buildVariantNameFallback(fallbackRouteName, fallbackDirectionName);
+}
+
+function setVariantCategory(value) {
+  state.variantCategory = normalizeVariantCategory(value);
+  if (typeof variantCategoryInput !== "undefined" && variantCategoryInput) {
+    variantCategoryInput.value = state.variantCategory;
+    if (variantCategoryInput.value !== state.variantCategory) {
+      const option = document.createElement("option");
+      option.value = state.variantCategory;
+      option.textContent = state.variantCategory;
+      variantCategoryInput.appendChild(option);
+      variantCategoryInput.value = state.variantCategory;
+    }
+  }
+  return state.variantCategory;
+}
+
+function syncVariantCategoryFromInput() {
+  state.variantCategory = normalizeVariantCategory(
+    typeof variantCategoryInput !== "undefined" && variantCategoryInput
+      ? variantCategoryInput.value
+      : state.variantCategory
+  );
+  return state.variantCategory;
+}
+
+function getVariantCategory() {
+  if (typeof variantCategoryInput !== "undefined" && variantCategoryInput) {
+    return syncVariantCategoryFromInput();
+  }
+  return normalizeVariantCategory(state.variantCategory);
 }

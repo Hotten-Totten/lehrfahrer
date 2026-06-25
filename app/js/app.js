@@ -294,7 +294,9 @@ function getCurrentRouteMeta() {
     fileBase: currentRoute.fileBase || null,
     lineFolder: currentRoute.lineFolder || null,
     lineName: currentRoute.data.lineName || null,
-    routeName: currentRoute.data.routeName || null
+    routeName: currentRoute.data.routeName || null,
+    variantName: getAppVariantName(currentRoute.data),
+    variantCategory: getAppVariantCategory(currentRoute.data)
   };
 }
 
@@ -581,6 +583,9 @@ function dbPutLinesCatalog(catalog) {
           fileBase: line.fileBase,
           lineName: line.lineName,
           routeName: line.routeName,
+          directionName: line.directionName || '',
+          variantName: line.variantName || '',
+          variantCategory: line.variantCategory || 'Standard',
           description: line.description || '',
           hasPdf: !!line.hasPdf,
           pdfFile: line.pdfFile || null,
@@ -1394,7 +1399,11 @@ async function loadLines(city) {
     json.lines.forEach(line => {
       const opt      = document.createElement('option');
       opt.value      = JSON.stringify({ fileBase: line.fileBase || line.id, lineFolder: line.lineFolder || null });
-      opt.textContent = `${line.lineName || line.id}${line.routeName ? ' · ' + line.routeName : ''}`;
+      opt.textContent = [
+        line.lineName || line.id,
+        getAppVariantCategory(line),
+        getAppVariantName(line)
+      ].filter(Boolean).join(' → ');
       const description = getAppLineDescription(null, line);
       if (description) {
         opt.textContent = `${opt.textContent} · ${description}`;
@@ -1588,9 +1597,12 @@ function displayRoute(data) {
   // Panel-Header
   const catalogLine = currentRoute ? findCatalogLineBySelection(currentRoute) : null;
   const description = getAppLineDescription(data, catalogLine);
+  const variantName = getAppVariantName(data, catalogLine);
+  const variantCategory = getAppVariantCategory(data, catalogLine);
   panelTitle.textContent = data.lineName  || 'Route';
   panelMeta.textContent  = [
-    data.routeName || '',
+    variantCategory,
+    variantName,
     description ? `Bemerkung: ${description}` : ''
   ].filter(Boolean).join(' · ');
 
@@ -1654,6 +1666,29 @@ function getAppLineDescription(lineData, catalogLine = null) {
     catalogLine?.description ||
     ''
   ).trim();
+}
+
+function getAppVariantCategory(lineData, catalogLine = null) {
+  return String(
+    lineData?.variantCategory ||
+    lineData?.line?.variantCategory ||
+    catalogLine?.variantCategory ||
+    'Standard'
+  ).trim() || 'Standard';
+}
+
+function getAppVariantName(lineData, catalogLine = null) {
+  const explicit = String(
+    lineData?.variantName ||
+    lineData?.line?.variantName ||
+    catalogLine?.variantName ||
+    ''
+  ).trim();
+  if (explicit) return explicit;
+
+  const routeName = String(lineData?.routeName || lineData?.line?.routeName || catalogLine?.routeName || '').trim();
+  const directionName = String(lineData?.directionName || lineData?.line?.directionName || catalogLine?.directionName || '').trim();
+  return [routeName, directionName].filter(Boolean).join(' - ') || 'Standard';
 }
 
 function setPunctualityEnabled(value) {
@@ -1859,6 +1894,8 @@ async function displayAvailableLines() {
       const lineData = line.data || {};
       const lineName = lineData.lineName || lineData?.line?.lineName || catalogLine?.lineName || line.id;
       const routeName = lineData.routeName || lineData?.line?.routeName || catalogLine?.routeName || 'Route';
+      const variantName = getAppVariantName(lineData, catalogLine);
+      const variantCategory = getAppVariantCategory(lineData, catalogLine);
       const description = getAppLineDescription(lineData, catalogLine);
 
       const div = document.createElement('div');
@@ -1879,7 +1916,7 @@ async function displayAvailableLines() {
       textWrap.style.flex = '1';
       textWrap.innerHTML = `
         <div style="font-weight: 600; font-size: 14px;">${lineName}</div>
-        <div style="font-size: 12px; color: var(--text-muted);">${routeName}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">${variantCategory} -> ${variantName}</div>
       `;
       if (description) {
         const descriptionEl = document.createElement('div');
