@@ -729,7 +729,7 @@ async function createNewLine() {
   lineNameInput.value = "";
   routeNameInput.value = "";
   directionNameInput.value = "";
-  if (lineDescriptionInput) lineDescriptionInput.value = "";
+  setLineDescription("");
   lineColorInput.value = "#d32f2f";
 
   if (typeof stopSearchInput !== "undefined" && stopSearchInput) {
@@ -745,6 +745,7 @@ async function createNewLine() {
   state.placementMode = "freeStop";
   state.routingMode = "guidedStreet";
   state.preserveManualChains = true;
+  state.description = "";
 
   clearSelection();
   clearRouteMultiSelection();

@@ -147,7 +147,7 @@ function buildExportData() {
   const lineSuffix     = String(lineNameInput.value || "").trim();
   const routeSuffix    = String(routeNameInput.value || "").trim();
   const directionName  = String(directionNameInput.value || "").trim();
-  const description    = String(lineDescriptionInput?.value || "").trim();
+  const description    = getLineDescription();
 
   // Vollständige Anzeigenamen (werden so gespeichert und angezeigt)
   const lineName  = lineSuffix  ? "Linie "  + lineSuffix  : "";
@@ -348,7 +348,7 @@ async function saveLineToServer() {
   if (lineNameInput) lineNameInput.value = target.lineSuffix;
   if (routeNameInput) routeNameInput.value = target.routeSuffix;
   if (directionNameInput) directionNameInput.value = target.directionName;
-  if (lineDescriptionInput) lineDescriptionInput.value = target.description;
+  setLineDescription(target.description);
 
   try {
     localStorage.setItem(SAVE_TARGET_STORAGE_KEY, JSON.stringify(target));
@@ -402,7 +402,7 @@ function showSaveConfirmDialog({ data, city }) {
     const initialLine = String(lineNameInput?.value ?? lastTarget?.lineSuffix ?? "").trim();
     const initialRoute = String(routeNameInput?.value ?? lastTarget?.routeSuffix ?? "").trim();
     const initialDirection = String(directionNameInput?.value ?? lastTarget?.directionName ?? "").trim();
-    const initialDescription = String(lineDescriptionInput?.value ?? data.description ?? data.line?.description ?? lastTarget?.description ?? "").trim();
+    const initialDescription = String(getLineDescription() || data.description || data.line?.description || lastTarget?.description || "").trim();
     const initialTargetCity = String(lastTarget?.city || city || "").trim() || "cottbus";
 
     cityPicker.innerHTML = "";
@@ -1953,9 +1953,7 @@ function loadLineFromData(data) {
   lineNameInput.value      = String(lineBlock.lineName  || "").replace(/^Linie\s+/i,  "").trim();
   routeNameInput.value     = String(lineBlock.routeName  || "").replace(/^Route\s+/i,  "").trim();
   directionNameInput.value = lineBlock.directionName || "";
-  if (lineDescriptionInput) {
-    lineDescriptionInput.value = String(lineBlock.description ?? data.description ?? "").trim();
-  }
+  setLineDescription(lineBlock.description ?? data.description ?? "");
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";

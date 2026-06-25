@@ -581,6 +581,7 @@ function dbPutLinesCatalog(catalog) {
           fileBase: line.fileBase,
           lineName: line.lineName,
           routeName: line.routeName,
+          description: line.description || '',
           hasPdf: !!line.hasPdf,
           pdfFile: line.pdfFile || null,
           updatedAt: Number(line.updatedAt) || 0
@@ -1394,6 +1395,11 @@ async function loadLines(city) {
       const opt      = document.createElement('option');
       opt.value      = JSON.stringify({ fileBase: line.fileBase || line.id, lineFolder: line.lineFolder || null });
       opt.textContent = `${line.lineName || line.id}${line.routeName ? ' · ' + line.routeName : ''}`;
+      const description = getAppLineDescription(null, line);
+      if (description) {
+        opt.textContent = `${opt.textContent} · ${description}`;
+        opt.title = `Bemerkung: ${description}`;
+      }
       lineSelect.appendChild(opt);
     });
 
@@ -1580,8 +1586,13 @@ function displayRoute(data) {
   });
 
   // Panel-Header
+  const catalogLine = currentRoute ? findCatalogLineBySelection(currentRoute) : null;
+  const description = getAppLineDescription(data, catalogLine);
   panelTitle.textContent = data.lineName  || 'Route';
-  panelMeta.textContent  = data.routeName || '';
+  panelMeta.textContent  = [
+    data.routeName || '',
+    description ? `Bemerkung: ${description}` : ''
+  ].filter(Boolean).join(' · ');
 
   // Haltestellenliste
   renderStopList(visibleStops);
@@ -1634,6 +1645,15 @@ function getPunctualityEnabled() {
   const raw = localStorage.getItem(PUNCTUALITY_ENABLED_KEY);
   if (raw === null) return false;
   return raw === '1';
+}
+
+function getAppLineDescription(lineData, catalogLine = null) {
+  return String(
+    lineData?.description ||
+    lineData?.line?.description ||
+    catalogLine?.description ||
+    ''
+  ).trim();
 }
 
 function setPunctualityEnabled(value) {
@@ -1839,6 +1859,7 @@ async function displayAvailableLines() {
       const lineData = line.data || {};
       const lineName = lineData.lineName || lineData?.line?.lineName || catalogLine?.lineName || line.id;
       const routeName = lineData.routeName || lineData?.line?.routeName || catalogLine?.routeName || 'Route';
+      const description = getAppLineDescription(lineData, catalogLine);
 
       const div = document.createElement('div');
       div.style.cssText = `
@@ -1860,6 +1881,12 @@ async function displayAvailableLines() {
         <div style="font-weight: 600; font-size: 14px;">${lineName}</div>
         <div style="font-size: 12px; color: var(--text-muted);">${routeName}</div>
       `;
+      if (description) {
+        const descriptionEl = document.createElement('div');
+        descriptionEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.35;';
+        descriptionEl.textContent = `Bemerkung: ${description}`;
+        textWrap.appendChild(descriptionEl);
+      }
 
       div.appendChild(icon);
       div.appendChild(textWrap);

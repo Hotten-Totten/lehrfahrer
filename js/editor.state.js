@@ -72,6 +72,7 @@ visibleCatalogMarkers: new Map(),
   placementMode: "freeStop",
   routingMode: "guidedStreet",
   preserveManualChains: true,
+  description: "",
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
@@ -490,3 +491,27 @@ const ICONS = {
   routeMulti: createDivIcon("#a855f7", "#6b21a8", 16),
   routeManualMulti: createDivIcon("#a855f7", "#6b21a8", 16)
 };
+
+function setLineDescription(value) {
+  state.description = String(value || "").trim();
+  if (typeof lineDescriptionInput !== "undefined" && lineDescriptionInput) {
+    lineDescriptionInput.value = state.description;
+  }
+  return state.description;
+}
+
+function syncLineDescriptionFromInput() {
+  state.description = String(
+    typeof lineDescriptionInput !== "undefined" && lineDescriptionInput
+      ? lineDescriptionInput.value || ""
+      : state.description || ""
+  ).trim();
+  return state.description;
+}
+
+function getLineDescription() {
+  if (typeof lineDescriptionInput !== "undefined" && lineDescriptionInput) {
+    return syncLineDescriptionFromInput();
+  }
+  return String(state.description || "").trim();
+}

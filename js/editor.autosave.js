@@ -11,7 +11,7 @@ function buildAutosaveData() {
     lineName: lineNameInput.value.trim(),
     routeName: routeNameInput.value.trim(),
     directionName: directionNameInput.value.trim(),
-    description: String(lineDescriptionInput?.value || "").trim(),
+    description: getLineDescription(),
     color: lineColorInput.value,
     routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -180,6 +180,10 @@ function clearEditorData() {
   state.placementMode = "freeStop";
   state.routingMode = "guidedStreet";
   state.preserveManualChains = true;
+  state.description = "";
+  if (typeof lineDescriptionInput !== "undefined" && lineDescriptionInput) {
+    lineDescriptionInput.value = "";
+  }
   state.previewMode = "original";
 
   if ("guidePoints" in state) {
@@ -248,9 +252,7 @@ function loadAutosave() {
     lineNameInput.value      = String(data.lineName  || "").replace(/^Linie\s+/i,  "").trim();
     routeNameInput.value     = String(data.routeName  || "").replace(/^Route\s+/i,  "").trim();
     directionNameInput.value = data.directionName || "";
-    if (lineDescriptionInput) {
-      lineDescriptionInput.value = String(data.description || "").trim();
-    }
+    setLineDescription(data.description || "");
     lineColorInput.value = data.color || "#d32f2f";
 
     state.routeMode = data.routeMode || "auto";

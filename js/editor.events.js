@@ -59,6 +59,10 @@ if (preserveManualChainsInput) {
     setStatus(`Fahrwegpunkte exakt halten: ${state.preserveManualChains ? "An" : "Aus"}`);
   });
 }
+if (lineDescriptionInput) {
+  lineDescriptionInput.addEventListener("input", syncLineDescriptionFromInput);
+  lineDescriptionInput.addEventListener("change", syncLineDescriptionFromInput);
+}
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
     setMode("specialTrack", "Modus: Sondertrasse zeichnen");
