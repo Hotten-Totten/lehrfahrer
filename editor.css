@@ -331,19 +331,20 @@ button.detour-phase-build {
 }
 
 .top-group.direction-group {
-  flex: 1 1 520px;
-  min-width: 360px;
+  flex: 1 1 480px;
+  min-width: 320px;
 }
 
 .top-group.description-group {
-  flex: 1 1 620px;
-  min-width: 420px;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .search-group {
   position: relative;
-  flex: 0 1 420px;
-  min-width: 300px;
+  flex: 0 0 340px;
+  min-width: 260px;
 }
 
 .search-group input {
