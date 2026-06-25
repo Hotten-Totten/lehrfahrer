@@ -293,6 +293,7 @@ function getCurrentRouteMeta() {
     city: currentRoute.city || null,
     fileBase: currentRoute.fileBase || null,
     lineFolder: currentRoute.lineFolder || null,
+    categoryFolder: currentRoute.categoryFolder || null,
     lineName: currentRoute.data.lineName || null,
     routeName: currentRoute.data.routeName || null,
     variantName: getAppVariantName(currentRoute.data),
@@ -578,6 +579,7 @@ function dbPutLinesCatalog(catalog) {
           id: line.id, 
           city: line.city,
           lineFolder: line.lineFolder,
+          categoryFolder: line.categoryFolder || null,
           fileName: line.fileName,
           file: line.file,
           fileBase: line.fileBase,
@@ -697,7 +699,7 @@ function dbGetLinePDFRecord(id) {
 
 function buildLineStorageId(line) {
   const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
-  return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${fileBase}`.replace(/\//g, '_');
+  return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}${line.categoryFolder ? '_' + line.categoryFolder : ''}_${fileBase}`.replace(/\//g, '_');
 }
 
 async function fetchAndCacheLinePdf(line, dbId) {
@@ -706,6 +708,7 @@ async function fetchAndCacheLinePdf(line, dbId) {
   try {
     let pdfUrl = `${API_BASE}/download_line_pdf.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.fileBase || line.file)}`;
     if (line.lineFolder) pdfUrl += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
+    if (line.categoryFolder) pdfUrl += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
 
     const pdfRes = await fetch(pdfUrl, { cache: 'no-store' });
     if (!pdfRes.ok) return false;
@@ -815,6 +818,7 @@ async function downloadLineWithGPX(lineId) {
     // Lade von der API
     let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(line.file)}`;
     if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
+    if (line.categoryFolder) url += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
 
     const res = await fetch(url, { cache: 'no-store' });
     const json = await res.json();
@@ -1107,7 +1111,7 @@ async function autoDownloadAllLines() {
     const resolveStorageId = (line, useLegacy = false) => {
       const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
       const filePart = useLegacy ? String(line.file || `${fileBase}.json`) : fileBase;
-      return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}_${filePart}`.replace(/\//g, '_');
+      return `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}${line.categoryFolder ? '_' + line.categoryFolder : ''}_${filePart}`.replace(/\//g, '_');
     };
 
     console.log(`📊 Status: ${cachedData.length} cached, ${available.length} available`);
@@ -1398,12 +1402,13 @@ async function loadLines(city) {
     lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
     json.lines.forEach(line => {
       const opt      = document.createElement('option');
-      opt.value      = JSON.stringify({ fileBase: line.fileBase || line.id, lineFolder: line.lineFolder || null });
+      opt.value      = JSON.stringify({ fileBase: line.fileBase || line.id, lineFolder: line.lineFolder || null, categoryFolder: line.categoryFolder || null });
       opt.textContent = [
         line.lineName || line.id,
         getAppVariantCategory(line),
+        line.routeName || '',
         getAppVariantName(line)
-      ].filter(Boolean).join(' → ');
+      ].filter(Boolean).join(' | ');
       const description = getAppLineDescription(null, line);
       if (description) {
         opt.textContent = `${opt.textContent} · ${description}`;
@@ -1423,15 +1428,15 @@ async function onLineChange() {
   currentRoute = null;
   if (!lineSelect.value) return;
 
-  const { fileBase, lineFolder } = JSON.parse(lineSelect.value);
+  const { fileBase, lineFolder, categoryFolder } = JSON.parse(lineSelect.value);
   const city = citySelect.value;
 
-  await loadAndShowRoute(city, fileBase, lineFolder);
+  await loadAndShowRoute(city, fileBase, lineFolder, categoryFolder);
 }
 
 // ── Route laden und anzeigen ─────────────────────────────────
-async function loadAndShowRoute(city, fileBase, lineFolder) {
-  const key = `${city}/${lineFolder || ''}/${fileBase}`;
+async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder) {
+  const key = `${city}/${lineFolder || ''}/${categoryFolder || ''}/${fileBase}`;
 
   // Erst offline-Cache prüfen
   let data = null;
@@ -1439,7 +1444,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
   
   try {
     // 1. Checke neue linesData store (gedownloadete Linien)
-    const lineId = `${city}_${lineFolder || ''}_${fileBase}`.replace(/\//g, '_');
+    const lineId = `${city}_${lineFolder || ''}_${categoryFolder || ''}_${fileBase}`.replace(/\//g, '_');
     const lineData = await dbGetLineData(lineId);
     if (lineData) {
       data = lineData;
@@ -1466,6 +1471,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
     try {
       let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}`;
       if (lineFolder) url += `&lineFolder=${encodeURIComponent(lineFolder)}`;
+      if (categoryFolder) url += `&categoryFolder=${encodeURIComponent(categoryFolder)}`;
 
       const res  = await fetch(`${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
@@ -1482,7 +1488,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder) {
     return;
   }
 
-  currentRoute = { city, fileBase, lineFolder, key, data };
+  currentRoute = { city, fileBase, lineFolder, categoryFolder, key, data };
 
   displayRoute(data);
 }
@@ -1494,7 +1500,8 @@ function getSelectedLineRef() {
     return {
       city: String(citySelect?.value || '').trim(),
       fileBase: String(parsed.fileBase || '').trim(),
-      lineFolder: parsed.lineFolder || null
+      lineFolder: parsed.lineFolder || null,
+      categoryFolder: parsed.categoryFolder || null
     };
   } catch {
     return null;
@@ -1506,10 +1513,12 @@ function findCatalogLineBySelection(selection) {
   return (availableLinesCatalog || []).find(line => {
     const lineFileBase = String(line.fileBase || line.id || '').trim();
     const lineFolder = line.lineFolder || null;
+    const categoryFolder = line.categoryFolder || null;
     return (
       String(line.city || '').trim() === selection.city &&
       lineFileBase === selection.fileBase &&
-      lineFolder === selection.lineFolder
+      lineFolder === selection.lineFolder &&
+      categoryFolder === selection.categoryFolder
     );
   }) || null;
 }
@@ -1555,14 +1564,15 @@ async function refreshLinesNow() {
 
       const selectedValue = JSON.stringify({
         fileBase: selectionBefore.fileBase,
-        lineFolder: selectionBefore.lineFolder
+        lineFolder: selectionBefore.lineFolder,
+        categoryFolder: selectionBefore.categoryFolder
       });
 
       if (lineSelect && Array.from(lineSelect.options).some(opt => opt.value === selectedValue)) {
         lineSelect.value = selectedValue;
       }
 
-      await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder);
+      await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder, selectionBefore.categoryFolder);
 
       if (hadNav) {
         startNavigation({ useSimulation: navWasSim });
@@ -1604,7 +1614,7 @@ function displayRoute(data) {
     variantCategory,
     variantName,
     description ? `Bemerkung: ${description}` : ''
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' | ');
 
   // Haltestellenliste
   renderStopList(visibleStops);
@@ -2654,7 +2664,7 @@ function stopNavigation() {
       .catch(err => console.warn('Auto-save Route fehlgeschlagen:', err));
     
     // Speichere auch in neuer linesData store
-    const lineId = `${currentRoute.city}_${(currentRoute.lineFolder || '')}`.replace(/\//g, '_') + '_' + currentRoute.fileBase;
+    const lineId = `${currentRoute.city}_${currentRoute.lineFolder || ''}_${currentRoute.categoryFolder || ''}_${currentRoute.fileBase}`.replace(/\//g, '_');
     dbPutLineData(lineId, currentRoute.data)
       .catch(err => console.warn('Auto-save linesData fehlgeschlagen:', err));
   }

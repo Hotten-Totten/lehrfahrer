@@ -117,6 +117,8 @@ function renderLineBrowser(lines) {
     filtered.sort((a, b) => {
       const lineCompare = (a.lineName || "").localeCompare(b.lineName || "");
       if (lineCompare !== 0) return lineCompare;
+      const categoryCompare = getLineBrowserVariantCategory(a).localeCompare(getLineBrowserVariantCategory(b));
+      if (categoryCompare !== 0) return categoryCompare;
       if (sort === "date-desc") return (b.savedAt || "").localeCompare(a.savedAt || "");
       if (sort === "date-asc") return (a.savedAt || "").localeCompare(b.savedAt || "");
       return getLineBrowserVariantName(a).localeCompare(getLineBrowserVariantName(b));
@@ -153,6 +155,7 @@ function renderLineBrowser(lines) {
       list.className = "line-browser-list";
 
       let lastLineHeading = null;
+      let lastCategoryHeading = null;
       groups[city].forEach(line => {
         const lineHeadingText = String(line.lineName || "?").trim() || "?";
         if (lineHeadingText !== lastLineHeading) {
@@ -161,6 +164,15 @@ function renderLineBrowser(lines) {
           lineHeading.textContent = lineHeadingText;
           list.appendChild(lineHeading);
           lastLineHeading = lineHeadingText;
+          lastCategoryHeading = null;
+        }
+        const categoryHeadingText = getLineBrowserVariantCategory(line);
+        if (categoryHeadingText !== lastCategoryHeading) {
+          const categoryHeading = document.createElement("div");
+          categoryHeading.className = "line-browser-category-heading";
+          categoryHeading.textContent = categoryHeadingText;
+          list.appendChild(categoryHeading);
+          lastCategoryHeading = categoryHeadingText;
         }
 
         const item = document.createElement("div");
@@ -255,7 +267,7 @@ function renderLineBrowser(lines) {
             e.stopPropagation();
             const a = document.createElement("a");
             a.href = line.lineFolder
-              ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + encodeURIComponent(line.fileBase) + ".gpx"
+              ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + (line.categoryFolder ? encodeURIComponent(line.categoryFolder) + "/" : "") + encodeURIComponent(line.fileBase) + ".gpx"
               : "linien/" + encodeURIComponent(line.city) + "/gpx/" + encodeURIComponent(line.fileBase) + ".gpx";
             a.download = line.fileBase + ".gpx";
             document.body.appendChild(a); a.click(); a.remove();
@@ -271,6 +283,9 @@ function renderLineBrowser(lines) {
             params.set("line", line.fileBase || line.id || "");
             if (line.lineFolder) {
               params.set("lineFolder", line.lineFolder);
+            }
+            if (line.categoryFolder) {
+              params.set("categoryFolder", line.categoryFolder);
             }
             const a = document.createElement("a");
             a.href = "api/download_line_pdf.php?" + params.toString();
@@ -323,14 +338,14 @@ function renderLineBrowser(lines) {
           if (citySelect && line.city) {
             citySelect.value = line.city;
           }
-          await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null, line.city || null);
+          await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null, line.city || null, line.categoryFolder || null);
         });
 
         dlJsonBtn.addEventListener("click", e => {
           e.stopPropagation();
           const a = document.createElement("a");
           a.href = line.lineFolder
-            ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + encodeURIComponent(line.fileBase) + ".json"
+            ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + (line.categoryFolder ? encodeURIComponent(line.categoryFolder) + "/" : "") + encodeURIComponent(line.fileBase) + ".json"
             : "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.fileBase) + ".json";
           a.download = line.fileBase + ".json";
           document.body.appendChild(a); a.click(); a.remove();
@@ -363,8 +378,15 @@ function renderLineBrowser(lines) {
         });
 
         confirmYes.addEventListener("click", async () => {
-          const deleted = await deleteLineFromServer(line.fileBase || line.id, true, line.lineFolder || null, line.city || null);
-          if (deleted) { currentLines = currentLines.filter(l => (l.fileBase || l.id) !== (line.fileBase || line.id)); renderList(); }
+          const deleted = await deleteLineFromServer(line.fileBase || line.id, true, line.lineFolder || null, line.city || null, line.categoryFolder || null);
+          if (deleted) {
+            currentLines = currentLines.filter(l =>
+              (l.fileBase || l.id) !== (line.fileBase || line.id) ||
+              (l.lineFolder || null) !== (line.lineFolder || null) ||
+              (l.categoryFolder || null) !== (line.categoryFolder || null)
+            );
+            renderList();
+          }
           else deleteConfirm.classList.add("hidden");
         });
 

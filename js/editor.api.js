@@ -124,15 +124,15 @@ function getDirectionId() {
 // Erstellt den Basis-Dateinamen aus Linien-, Routen- und Richtungsname
 // Wird für Dateinamen beim Speichern verwendet
 function buildLineFileBase() {
-  const lineSuffix = String(lineNameInput.value || "").trim();
   const routeSuffix = String(routeNameInput.value || "").trim();
   const directionName = String(directionNameInput.value || "").trim();
+  const variantName = String(variantNameInput?.value || "").trim();
 
-  const linePart  = lineSuffix  ? "Linie_"  + lineSuffix  : "Linie";
   const routePart = routeSuffix ? "Route_"  + routeSuffix : "";
+  const variantPart = variantName || directionName;
 
-  const raw = [linePart, routePart, directionName].filter(Boolean).join("_");
-  return sanitizeFilename(raw || "Linie");
+  const raw = [routePart, variantPart].filter(Boolean).join("_");
+  return sanitizeFilename(raw || "Route");
 }
 
 // Erzeugt den Ordnernamen für diese Linie (nur aus dem Linienfeld)
@@ -150,6 +150,7 @@ function buildExportData() {
   const description    = getLineDescription();
   const variantName    = getVariantName(routeSuffix ? "Route " + routeSuffix : "", directionName);
   const variantCategory = getVariantCategory();
+  const categoryFolder = sanitizeFilename(variantCategory || "Standard") || "Standard";
 
   // Vollständige Anzeigenamen (werden so gespeichert und angezeigt)
   const lineName  = lineSuffix  ? "Linie "  + lineSuffix  : "";
@@ -234,6 +235,7 @@ const stops = state.stops.map((stop, index) => ({
     city: citySelect?.value || "cottbus",
     fileBase,
     lineFolder,
+    categoryFolder,
 
     // =====================================
     // ALT-KOMPATIBEL für bestehendes PHP
@@ -245,6 +247,7 @@ const stops = state.stops.map((stop, index) => ({
     description,
     variantName,
     variantCategory,
+    categoryFolder,
     color: lineColorInput.value,
     routeMode: state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -274,6 +277,7 @@ const stops = state.stops.map((stop, index) => ({
       description,
       variantName,
       variantCategory,
+      categoryFolder,
       startStopName: startStop ? startStop.name : "",
       endStopName: endStop ? endStop.name : "",
       color: lineColorInput.value,
@@ -368,12 +372,13 @@ async function saveLineToServer() {
   const city = data.city || citySelect?.value || "cottbus";
   const fileBase = data.fileBase || buildLineFileBase();
   const lineFolder = data.lineFolder || buildLineFolder();
+  const categoryFolder = data.categoryFolder || sanitizeFilename(data.variantCategory || "Standard") || "Standard";
 
   let forceOverwrite = false;
-  const existingEntry = await findExistingLineEntry(city, lineFolder, fileBase);
+  const existingEntry = await findExistingLineEntry(city, lineFolder, categoryFolder, fileBase);
   if (existingEntry) {
     const overwriteOk = confirm(
-      `Diese Datei existiert bereits:\n${lineFolder}/${fileBase}.json\n\nWirklich überschreiben?`
+      `Diese Datei existiert bereits:\n${lineFolder}/${categoryFolder}/${fileBase}.json\n\nWirklich überschreiben?`
     );
     if (!overwriteOk) {
       setStatus("Speichern abgebrochen (Überschreiben nicht bestätigt).", "warn");
@@ -383,7 +388,7 @@ async function saveLineToServer() {
   }
 
   // ---------- Tatsächlich speichern ----------
-  await _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwrite);
+  await _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFolder, forceOverwrite);
 }
 
 // Zeigt den Speichern-Dialog und wartet auf Bestätigung (Promise<object|null>)
@@ -448,15 +453,17 @@ function showSaveConfirmDialog({ data, city }) {
       const lineSuffix = String(lineInput.value || "").trim();
       const routeSuffix = String(routeInput.value || "").trim();
       const directionName = String(directionInput.value || "").trim();
+      const variantName = String(variantInput?.value || "").trim();
+      const variantCategory = normalizeVariantCategory(variantCategorySelect?.value || "Standard");
 
-      const linePart = lineSuffix ? "Linie_" + lineSuffix : "Linie";
       const routePart = routeSuffix ? "Route_" + routeSuffix : "";
-      const rawBase = [linePart, routePart, directionName].filter(Boolean).join("_");
+      const rawBase = [routePart, variantName || directionName].filter(Boolean).join("_");
 
-      const fileBase = sanitizeFilename(rawBase || "Linie");
+      const fileBase = sanitizeFilename(rawBase || "Route");
       const lineFolder = sanitizeFilename(lineSuffix ? "Linie_" + lineSuffix : "Linie");
+      const categoryFolder = sanitizeFilename(variantCategory || "Standard") || "Standard";
 
-      fileInfo.textContent = (lineFolder ? lineFolder + "/" : "") + fileBase + ".json / .gpx / .pdf";
+      fileInfo.textContent = (lineFolder ? lineFolder + "/" : "") + categoryFolder + "/" + fileBase + ".json / .gpx / .pdf";
     }
 
     updateFilePreview();
@@ -479,6 +486,8 @@ function showSaveConfirmDialog({ data, city }) {
       cityPicker.removeEventListener("change", updateFilePreview);
       lineInput.removeEventListener("input", updateFilePreview);
       routeInput.removeEventListener("input", updateFilePreview);
+      if (variantInput) variantInput.removeEventListener("input", updateFilePreview);
+      if (variantCategorySelect) variantCategorySelect.removeEventListener("change", updateFilePreview);
       directionInput.removeEventListener("input", updateFilePreview);
       resolve(result);
     }
@@ -513,11 +522,13 @@ function showSaveConfirmDialog({ data, city }) {
     cityPicker.addEventListener("change", updateFilePreview);
     lineInput.addEventListener("input", updateFilePreview);
     routeInput.addEventListener("input", updateFilePreview);
+    if (variantInput) variantInput.addEventListener("input", updateFilePreview);
+    if (variantCategorySelect) variantCategorySelect.addEventListener("change", updateFilePreview);
     directionInput.addEventListener("input", updateFilePreview);
   });
 }
 
-async function findExistingLineEntry(city, lineFolder, fileBase) {
+async function findExistingLineEntry(city, lineFolder, categoryFolder, fileBase) {
   try {
     const params = new URLSearchParams();
     params.set("city", String(city || "").trim());
@@ -534,12 +545,14 @@ async function findExistingLineEntry(city, lineFolder, fileBase) {
     }
 
     const wantedFolder = String(lineFolder || "").trim().toLowerCase();
+    const wantedCategory = String(categoryFolder || "").trim().toLowerCase();
     const wantedBase = String(fileBase || "").trim().toLowerCase();
 
     return result.lines.find(entry => {
       const entryFolder = String(entry?.lineFolder || "").trim().toLowerCase();
+      const entryCategory = String(entry?.categoryFolder || "").trim().toLowerCase();
       const entryBase = String(entry?.fileBase || "").trim().toLowerCase();
-      return entryFolder === wantedFolder && entryBase === wantedBase;
+      return entryFolder === wantedFolder && entryCategory === wantedCategory && entryBase === wantedBase;
     }) || null;
   } catch (err) {
     warn("Konnte bestehende Datei vor dem Speichern nicht prüfen: " + err.message);
@@ -548,7 +561,7 @@ async function findExistingLineEntry(city, lineFolder, fileBase) {
 }
 
 // Führt den eigentlichen Speicher-Vorgang durch (intern)
-async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwrite = false) {
+async function _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFolder, forceOverwrite = false) {
   try {
     setStatus("Speichern …");
 
@@ -580,7 +593,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
     const pdfPath = (result.pdfPath || "").toString().trim();
     const pdfTriedPaths = Array.isArray(result.pdfTriedPaths) ? result.pdfTriedPaths : [];
     try {
-      const gpxResult = await saveGpxToServer(`${actualFileBase}.gpx`, gpx, city, lineFolder);
+      const gpxResult = await saveGpxToServer(`${actualFileBase}.gpx`, gpx, city, lineFolder, categoryFolder);
       gpxSaved = !!(gpxResult && gpxResult.ok !== false);
     } catch (gpxErr) {
       warn("GPX konnte nicht gespeichert werden: " + gpxErr.message);
@@ -595,7 +608,8 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
       pdfTriedPaths,
       city,
       fileBase: actualFileBase,
-      lineFolder
+      lineFolder,
+      categoryFolder
     });
 
     if (!pdfSaved) {
@@ -613,7 +627,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, forceOverwr
         savedAt: result.savedAt || new Date().toISOString()
       });
     }
-    setStatus(`Gespeichert: ${lineFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})${pdfSaved && pdfPath ? " - PDF: " + pdfPath : ""}${!pdfSaved && pdfError ? " - PDF-Fehler: " + pdfError : ""}`);
+    setStatus(`Gespeichert: ${lineFolder}/${categoryFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})${pdfSaved && pdfPath ? " - PDF: " + pdfPath : ""}${!pdfSaved && pdfError ? " - PDF-Fehler: " + pdfError : ""}`);
   } catch (err) {
     error("Fehler beim Server-Speichern", err);
     setStatus(err.message || "Fehler beim Speichern auf Server.", "error");
@@ -1771,7 +1785,7 @@ async function fetchLineListFromServer(cityFilter = null) {
 
 // Lädt eine spezifische Linie vom Server anhand der ID
 // Parst die JSON-Daten und füllt den Editor mit den geladenen Werten
-async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride = null) {
+async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride = null, categoryFolder = null) {
   try {
     if (!lineId) {
       setStatus("Keine Linien-ID übergeben.", "warn");
@@ -1797,7 +1811,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
     }
 
     const loadRes = await fetch(
-      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(normalizedLineId)}&lineFolder=${encodeURIComponent(lineFolder || "")}`,
+      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(normalizedLineId)}&lineFolder=${encodeURIComponent(lineFolder || "")}&categoryFolder=${encodeURIComponent(categoryFolder || "")}`,
       { cache: "no-store" }
     );
 
@@ -1835,7 +1849,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
 }
 
 // Löscht eine Linie vom Server anhand der ID
-async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFolder = null, cityOverride = null) {
+async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFolder = null, cityOverride = null, categoryFolder = null) {
   try {
     if (!lineId) {
       setStatus("Keine Linien-ID zum Löschen übergeben.", "warn");
@@ -1877,7 +1891,8 @@ async function deleteLineFromServer(lineId = null, skipConfirm = false, lineFold
       body: JSON.stringify({
         city,
         line: normalizedLineId,
-        lineFolder: lineFolder || ""
+        lineFolder: lineFolder || "",
+        categoryFolder: categoryFolder || ""
       })
     });
 
@@ -1904,6 +1919,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
     const city = line.city || citySelect?.value || "cottbus";
     const fileBase = line.fileBase || line.id || "";
     const lineFolder = line.lineFolder || null;
+    const categoryFolder = line.categoryFolder || null;
 
     if (!fileBase) {
       setStatus("Keine Linien-ID zum Umbenennen.", "error");
@@ -1911,7 +1927,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
     }
 
     const loadRes = await fetch(
-      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}&lineFolder=${encodeURIComponent(lineFolder || "")}`,
+      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}&lineFolder=${encodeURIComponent(lineFolder || "")}&categoryFolder=${encodeURIComponent(categoryFolder || "")}`,
       { cache: "no-store" }
     );
     const loadResult = await loadRes.json();
@@ -1928,6 +1944,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
     lineData.lineName = newLineName;
     lineData.routeName = newRouteName;
     lineData.directionName = newDirectionName;
+    lineData.categoryFolder = categoryFolder || lineData.categoryFolder || "";
 
     const saveRes = await fetch(API_SAVE_LINE_URL, {
       method: "POST",

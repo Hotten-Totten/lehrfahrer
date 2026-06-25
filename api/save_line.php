@@ -276,8 +276,15 @@ if ($lineFolder === '') {
     $lineFolder = 'Linie';
 }
 
+$categoryFolder = trim((string)($data['categoryFolder'] ?? ($data['variantCategory'] ?? ($data['line']['variantCategory'] ?? 'Standard'))));
+$categoryFolder = sanitizeForFilesystem($categoryFolder);
+if ($categoryFolder === '') {
+    $categoryFolder = 'Standard';
+}
+
 $cityDir = $baseDir . '/linien/' . $city;
-$lineDir = $cityDir . '/' . $lineFolder;
+$lineBaseDir = $cityDir . '/' . $lineFolder;
+$lineDir = $lineBaseDir . '/' . $categoryFolder;
 
 if (!is_dir($lineDir)) {
     if (!mkdir($lineDir, 0775, true)) {
@@ -308,6 +315,12 @@ if ($fileBase === '') {
 }
 
 $data['savedAt'] = date('c');
+$data['lineFolder'] = $lineFolder;
+$data['categoryFolder'] = $categoryFolder;
+if (isset($data['line']) && is_array($data['line'])) {
+    $data['line']['lineFolder'] = $lineFolder;
+    $data['line']['categoryFolder'] = $categoryFolder;
+}
 
 $forceOverwrite = !empty($data['forceOverwrite']);
 
@@ -400,7 +413,7 @@ if ($result === false) {
 }
 
 $pdfSaved = false;
-$pdfFile = buildPdfStorageFileName($lineFolder, $fileBase);
+$pdfFile = buildPdfStorageFileName($lineFolder . '_' . $categoryFolder, $fileBase);
 $pdfPath = $lineDir . '/' . $pdfFile;
 $pdfError = null;
 $pdfSavedPath = null;
@@ -410,6 +423,7 @@ try {
     $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
 
     $candidates = [];
+    $candidates[] = $lineDir . '/' . $fileBase . '.pdf';
 
     // Primärer Speicherort: zentraler PDF-Ordner je Stadt (analog alter gpx-Idee).
     $cityPdfDir = $cityDir . '/pdf';
@@ -473,6 +487,7 @@ echo json_encode([
     'pdfTriedPaths' => $pdfTriedPaths,
     'fileBase' => $fileBase,
     'lineFolder' => $lineFolder,
+    'categoryFolder' => $categoryFolder,
     'city' => $city,
     'savedAt' => $data['savedAt']
 ], JSON_UNESCAPED_UNICODE);

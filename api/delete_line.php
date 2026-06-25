@@ -53,6 +53,8 @@ $line = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $line);
 
 $lineFolder = trim($data['lineFolder'] ?? '');
 $lineFolder = sanitizeForFilesystem($lineFolder);
+$categoryFolder = trim($data['categoryFolder'] ?? '');
+$categoryFolder = sanitizeForFilesystem($categoryFolder);
 
 if ($line === '') {
     http_response_code(400);
@@ -65,15 +67,25 @@ if ($line === '') {
 
 $cityDir  = $baseDir . '/linien/' . $city;
 
-// Neues Format: linien/{city}/{lineFolder}/{line}.json + .gpx
+// Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json + .gpx
+// Zwischenformat: linien/{city}/{lineFolder}/{line}.json + .gpx
 // Fallback:     linien/{city}/{line}.json + /gpx/{line}.gpx
-if ($lineFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $line . '.json')) {
+if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json')) {
+    $jsonPath = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json';
+    $gpxPath  = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.gpx';
+    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName($lineFolder . '_' . $categoryFolder, $line);
+    $legacyPdfPathA = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf';
+    $legacyPdfPathB = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/gpx/' . $line . '.pdf';
+    $folderToClean = $cityDir . '/' . $lineFolder . '/' . $categoryFolder;
+    $parentFolderToClean = $cityDir . '/' . $lineFolder;
+} elseif ($lineFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $line . '.json')) {
     $jsonPath = $cityDir . '/' . $lineFolder . '/' . $line . '.json';
     $gpxPath  = $cityDir . '/' . $lineFolder . '/' . $line . '.gpx';
     $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName($lineFolder, $line);
     $legacyPdfPathA = $cityDir . '/' . $lineFolder . '/' . $line . '.pdf';
     $legacyPdfPathB = $cityDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
     $folderToClean = $cityDir . '/' . $lineFolder;
+    $parentFolderToClean = null;
 } else {
     $jsonPath = $cityDir . '/' . $line . '.json';
     $gpxPath  = $cityDir . '/gpx/' . $line . '.gpx';
@@ -81,6 +93,7 @@ if ($lineFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $line
     $legacyPdfPathA = $cityDir . '/' . $line . '.pdf';
     $legacyPdfPathB = $cityDir . '/gpx/' . $line . '.pdf';
     $folderToClean = null;
+    $parentFolderToClean = null;
 }
 
 if (!file_exists($jsonPath)) {
@@ -113,6 +126,12 @@ if ($folderToClean && is_dir($folderToClean)) {
     $remaining = array_diff(scandir($folderToClean), ['.', '..']);
     if (empty($remaining)) {
         rmdir($folderToClean);
+    }
+}
+if ($parentFolderToClean && is_dir($parentFolderToClean)) {
+    $remaining = array_diff(scandir($parentFolderToClean), ['.', '..']);
+    if (empty($remaining)) {
+        rmdir($parentFolderToClean);
     }
 }
 

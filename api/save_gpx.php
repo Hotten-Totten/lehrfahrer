@@ -29,6 +29,7 @@ $city = isset($data["city"]) ? trim($data["city"]) : "";
 $filename = isset($data["filename"]) ? trim($data["filename"]) : "";
 $gpx = isset($data["gpx"]) ? $data["gpx"] : "";
 $lineFolder = isset($data["lineFolder"]) ? trim($data["lineFolder"]) : "";
+$categoryFolder = isset($data["categoryFolder"]) ? trim($data["categoryFolder"]) : "";
 
 if ($city === "" || $filename === "" || $gpx === "") {
     http_response_code(400);
@@ -47,14 +48,19 @@ if ($lineFolder === '') {
     $lineFolder = 'Linie';
 }
 
+$categoryFolder = sanitizeForFilesystem($categoryFolder);
+if ($categoryFolder === '') {
+    $categoryFolder = 'Standard';
+}
+
 $filename = preg_replace('/[\\\\\/:*?"<>|]+/', "_", $filename);
 
 if (!preg_match('/\.gpx$/i', $filename)) {
     $filename .= ".gpx";
 }
 
-// Neues Format: linien/{city}/{lineFolder}/{filename}
-$baseDir = __DIR__ . "/../linien/" . $city . "/" . $lineFolder;
+// Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{filename}
+$baseDir = __DIR__ . "/../linien/" . $city . "/" . $lineFolder . "/" . $categoryFolder;
 
 if (!is_dir($baseDir)) {
     if (!mkdir($baseDir, 0775, true)) {
@@ -84,5 +90,5 @@ echo json_encode([
     "ok" => true,
     "filename" => $filename,
     "fileBase" => preg_replace('/\.gpx$/i', '', $filename),
-    "path" => "linien/" . $city . "/" . $lineFolder . "/" . $filename
+    "path" => "linien/" . $city . "/" . $lineFolder . "/" . $categoryFolder . "/" . $filename
 ]);

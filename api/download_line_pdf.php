@@ -36,6 +36,8 @@ $line = sanitizeForFilesystem($line);
 
 $lineFolder = trim((string)($_GET['lineFolder'] ?? ''));
 $lineFolder = sanitizeForFilesystem($lineFolder);
+$categoryFolder = trim((string)($_GET['categoryFolder'] ?? ''));
+$categoryFolder = sanitizeForFilesystem($categoryFolder);
 
 if ($line === '') {
     http_response_code(400);
@@ -50,10 +52,12 @@ if ($line === '') {
 $lineDir = $baseDir . '/linien/' . $city;
 $pdfPath = '';
 
-$pdfStorageFile = buildPdfStorageFileName($lineFolder, $line);
+$pdfStorageFile = buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $line);
 
 if (file_exists($lineDir . '/pdf/' . $pdfStorageFile)) {
     $pdfPath = $lineDir . '/pdf/' . $pdfStorageFile;
+} elseif ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf')) {
+    $pdfPath = $lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf';
 } elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/' . $line . '.pdf';
 } elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf')) {

@@ -1130,6 +1130,16 @@ button.danger:hover {
   font-weight: 700;
 }
 
+.line-browser-category-heading {
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-left: 3px solid #94a3b8;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .line-browser-item {
   border: 1px solid #ddd;
   border-radius: 8px;

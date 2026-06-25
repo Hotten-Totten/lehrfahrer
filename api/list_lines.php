@@ -95,6 +95,63 @@ foreach ($cities as $city) {
             $subPath = $cityDir . '/' . $entry;
             if (!is_dir($subPath)) continue;  // nur Unterordner (= lineFolders)
 
+            $categoryEntries = @scandir($subPath);
+            if ($categoryEntries) {
+                foreach ($categoryEntries as $categoryEntry) {
+                    if ($categoryEntry === '.' || $categoryEntry === '..' || $categoryEntry === 'gpx' || $categoryEntry === 'backup') continue;
+                    $categoryPath = $subPath . '/' . $categoryEntry;
+                    if (!is_dir($categoryPath)) continue;
+
+                    $categoryFiles = glob($categoryPath . '/*.json');
+                    foreach ($categoryFiles as $file) {
+                        $content = file_get_contents($file);
+                        $data    = json_decode($content, true);
+                        if (!is_array($data)) continue;
+
+                        $fileBase = pathinfo($file, PATHINFO_FILENAME);
+                        $fileMtime = @filemtime($file);
+                        $gpxPath  = $categoryPath . '/' . $fileBase . '.gpx';
+                        $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName($entry . '_' . $categoryEntry, $fileBase);
+                        $pdfPath  = $categoryPath . '/' . $fileBase . '.pdf';
+                        $pdfPathGpx = $categoryPath . '/gpx/' . $fileBase . '.pdf';
+                        $hasGpx   = file_exists($gpxPath);
+                        $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
+                        $pdfFileName = null;
+                        if (file_exists($pdfPathCentral)) {
+                            $pdfFileName = basename($pdfPathCentral);
+                        } elseif (file_exists($pdfPath)) {
+                            $pdfFileName = basename($pdfPath);
+                        } elseif (file_exists($pdfPathGpx)) {
+                            $pdfFileName = basename($pdfPathGpx);
+                        }
+
+                        $lines[] = [
+                            'city'              => $city,
+                            'lineFolder'        => $entry,
+                            'categoryFolder'    => $categoryEntry,
+                            'file'              => basename($file),
+                            'fileBase'          => $fileBase,
+                            'id'                => $city . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase,
+                            'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
+                            'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
+                            'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
+                            'variantName'       => getVariantNameForList($data),
+                            'variantCategory'   => getVariantCategoryForList($data),
+                            'description'       => $data['description'] ?? ($data['line']['description'] ?? ''),
+                            'color'             => $data['color'] ?? ($data['line']['color'] ?? null),
+                            'savedAt'           => $data['savedAt'] ?? null,
+                            'updatedAt'         => $fileMtime ? intval($fileMtime) : null,
+                            'stopCount'         => count($data['stops'] ?? []),
+                            'routePointCount'   => count($data['routePoints'] ?? []),
+                            'routeLengthMeters' => $data['stats']['routeLengthMeters'] ?? null,
+                            'hasGpx'            => $hasGpx,
+                            'hasPdf'            => $hasPdf,
+                            'pdfFile'           => $pdfFileName,
+                        ];
+                    }
+                }
+            }
+
             $files = glob($subPath . '/*.json');
             foreach ($files as $file) {
                 $content = file_get_contents($file);
@@ -121,9 +178,10 @@ foreach ($cities as $city) {
                 $lines[] = [
                     'city'              => $city,
                     'lineFolder'        => $entry,
+                    'categoryFolder'    => null,
                     'file'              => basename($file),
                     'fileBase'          => $fileBase,
-                    'id'                => $data['id'] ?? $fileBase,
+                    'id'                => $city . '/' . $entry . '/' . $fileBase,
                     'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
                     'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
                     'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
@@ -171,9 +229,10 @@ foreach ($cities as $city) {
         $lines[] = [
             'city'              => $city,
             'lineFolder'        => null,  // altes Format – kein Unterordner
+            'categoryFolder'    => null,
             'file'              => basename($file),
             'fileBase'          => $fileBase,
-            'id'                => $data['id'] ?? $fileBase,
+            'id'                => $city . '/' . $fileBase,
             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
             'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
             'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),

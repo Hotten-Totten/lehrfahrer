@@ -110,7 +110,7 @@ const waypointXml = waypoints.map(wpt => `
 </gpx>`;
 }
 
-async function saveGpxToServer(filename, gpx, city, lineFolder) {
+async function saveGpxToServer(filename, gpx, city, lineFolder, categoryFolder) {
   const response = await fetch(`${API_BASE}/save_gpx.php`, {
     method: "POST",
     headers: withApiAuthHeaders({
@@ -120,7 +120,8 @@ async function saveGpxToServer(filename, gpx, city, lineFolder) {
       filename,
       gpx,
       city,
-      lineFolder: lineFolder || ""
+      lineFolder: lineFolder || "",
+      categoryFolder: categoryFolder || ""
     })
   });
 

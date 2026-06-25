@@ -41,6 +41,8 @@ $line = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $line);
 
 $lineFolder = trim($_GET['lineFolder'] ?? '');
 $lineFolder = sanitizeForFilesystem($lineFolder);
+$categoryFolder = trim($_GET['categoryFolder'] ?? '');
+$categoryFolder = sanitizeForFilesystem($categoryFolder);
 
 if ($line === '') {
     http_response_code(400);
@@ -51,10 +53,13 @@ if ($line === '') {
     exit;
 }
 
-// Neues Format: linien/{city}/{lineFolder}/{line}.json
+// Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json
+// Zwischenformat: linien/{city}/{lineFolder}/{line}.json
 // Fallback:     linien/{city}/{line}.json  (alte Dateien)
 $filePath = '';
-if ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.json')) {
+if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json')) {
+    $filePath = $lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json';
+} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.json')) {
     $filePath = $lineDir . '/' . $lineFolder . '/' . $line . '.json';
 } elseif (file_exists($lineDir . '/' . $line . '.json')) {
     $filePath = $lineDir . '/' . $line . '.json';
@@ -100,12 +105,25 @@ if (file_exists($gpxPath)) {
 }
 
 $pdfFile = null;
-$pdfPath = $lineDir . '/pdf/' . buildPdfStorageFileName($lineFolder, $baseName);
+$pdfPath = $lineDir . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $baseName);
 if (!file_exists($pdfPath)) {
     $pdfPath = $dirName . '/' . $baseName . '.pdf';
 }
 if (file_exists($pdfPath)) {
     $pdfFile = basename($pdfPath);
+}
+
+if ($lineFolder !== '') {
+    $data['lineFolder'] = $lineFolder;
+    if (isset($data['line']) && is_array($data['line'])) {
+        $data['line']['lineFolder'] = $lineFolder;
+    }
+}
+if ($categoryFolder !== '') {
+    $data['categoryFolder'] = $categoryFolder;
+    if (isset($data['line']) && is_array($data['line'])) {
+        $data['line']['categoryFolder'] = $categoryFolder;
+    }
 }
 
 echo json_encode([
