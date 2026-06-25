@@ -263,18 +263,33 @@ button.detour-phase-build {
   gap: 4px;
 }
 
+.topbar-row-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
 .top-group label {
   font-size: 13px;
   font-weight: bold;
 }
 
 .top-group input,
-.top-group select {
+.top-group select,
+.top-group textarea {
   width: 100%;
   min-width: 0;
   padding: 7px 8px;
   font-size: 14px;
   box-sizing: border-box;
+}
+
+.top-group textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.4;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-family: inherit;
 }
 
 /* Prefix-Eingabe (z. B. "Linie [16]") */
@@ -316,24 +331,48 @@ button.detour-phase-build {
 }
 
 .top-group.direction-group {
-  width: 420px;
+  flex: 1 1 520px;
+  min-width: 360px;
 }
 
 .top-group.description-group {
-  width: 320px;
-}
-
-.top-group.color-group {
-  width: 50px;
+  flex: 1 1 620px;
+  min-width: 420px;
 }
 
 .search-group {
   position: relative;
-  width: 420px;
+  flex: 0 1 420px;
+  min-width: 300px;
 }
 
 .search-group input {
   width: 100%;
+}
+
+.menu-color-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  color: #222;
+  box-sizing: border-box;
+}
+
+.menu-color-item input[type="color"] {
+  width: 38px;
+  height: 28px;
+  padding: 1px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
 }
 
 /* =========================
@@ -1799,9 +1838,10 @@ button.danger:hover {
   .top-group.line-group,
   .top-group.route-group,
   .top-group.direction-group,
-  .top-group.color-group,
+  .top-group.description-group,
   .search-group {
     width: 100%;
+    min-width: 0;
   }
 }
 
