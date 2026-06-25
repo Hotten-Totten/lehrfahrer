@@ -729,6 +729,7 @@ async function createNewLine() {
   lineNameInput.value = "";
   routeNameInput.value = "";
   directionNameInput.value = "";
+  if (lineDescriptionInput) lineDescriptionInput.value = "";
   lineColorInput.value = "#d32f2f";
 
   if (typeof stopSearchInput !== "undefined" && stopSearchInput) {

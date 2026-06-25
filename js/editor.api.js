@@ -147,6 +147,7 @@ function buildExportData() {
   const lineSuffix     = String(lineNameInput.value || "").trim();
   const routeSuffix    = String(routeNameInput.value || "").trim();
   const directionName  = String(directionNameInput.value || "").trim();
+  const description    = String(lineDescriptionInput?.value || "").trim();
 
   // Vollständige Anzeigenamen (werden so gespeichert und angezeigt)
   const lineName  = lineSuffix  ? "Linie "  + lineSuffix  : "";
@@ -239,6 +240,7 @@ const stops = state.stops.map((stop, index) => ({
     lineName,
     routeName,
     directionName,
+    description,
     color: lineColorInput.value,
     routeMode: state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -265,6 +267,7 @@ const stops = state.stops.map((stop, index) => ({
       routeName,
       directionId,
       directionName,
+      description,
       startStopName: startStop ? startStop.name : "",
       endStopName: endStop ? endStop.name : "",
       color: lineColorInput.value,
@@ -345,6 +348,7 @@ async function saveLineToServer() {
   if (lineNameInput) lineNameInput.value = target.lineSuffix;
   if (routeNameInput) routeNameInput.value = target.routeSuffix;
   if (directionNameInput) directionNameInput.value = target.directionName;
+  if (lineDescriptionInput) lineDescriptionInput.value = target.description;
 
   try {
     localStorage.setItem(SAVE_TARGET_STORAGE_KEY, JSON.stringify(target));
@@ -385,6 +389,7 @@ function showSaveConfirmDialog({ data, city }) {
     const lineInput = document.getElementById("saveConfirmLineInput");
     const routeInput = document.getElementById("saveConfirmRouteInput");
     const directionInput = document.getElementById("saveConfirmDirectionInput");
+    const descriptionInput = document.getElementById("saveConfirmDescriptionInput");
     const fileInfo = document.getElementById("saveConfirmFile");
 
     let lastTarget = null;
@@ -394,9 +399,10 @@ function showSaveConfirmDialog({ data, city }) {
       lastTarget = null;
     }
 
-    const initialLine = String(lastTarget?.lineSuffix ?? lineNameInput?.value ?? "").trim();
-    const initialRoute = String(lastTarget?.routeSuffix ?? routeNameInput?.value ?? "").trim();
-    const initialDirection = String(lastTarget?.directionName ?? directionNameInput?.value ?? "").trim();
+    const initialLine = String(lineNameInput?.value ?? lastTarget?.lineSuffix ?? "").trim();
+    const initialRoute = String(routeNameInput?.value ?? lastTarget?.routeSuffix ?? "").trim();
+    const initialDirection = String(directionNameInput?.value ?? lastTarget?.directionName ?? "").trim();
+    const initialDescription = String(lineDescriptionInput?.value ?? data.description ?? data.line?.description ?? lastTarget?.description ?? "").trim();
     const initialTargetCity = String(lastTarget?.city || city || "").trim() || "cottbus";
 
     cityPicker.innerHTML = "";
@@ -413,6 +419,7 @@ function showSaveConfirmDialog({ data, city }) {
     lineInput.value = initialLine;
     routeInput.value = initialRoute;
     directionInput.value = initialDirection;
+    if (descriptionInput) descriptionInput.value = initialDescription;
 
     function updateFilePreview() {
       const lineSuffix = String(lineInput.value || "").trim();
@@ -468,7 +475,8 @@ function showSaveConfirmDialog({ data, city }) {
         city: String(cityPicker.value || "").trim() || "cottbus",
         lineSuffix,
         routeSuffix,
-        directionName: String(directionInput.value || "").trim()
+        directionName: String(directionInput.value || "").trim(),
+        description: String(descriptionInput?.value || "").trim()
       });
     }
     function onCancel()  { cleanup(null); }
@@ -1945,6 +1953,9 @@ function loadLineFromData(data) {
   lineNameInput.value      = String(lineBlock.lineName  || "").replace(/^Linie\s+/i,  "").trim();
   routeNameInput.value     = String(lineBlock.routeName  || "").replace(/^Route\s+/i,  "").trim();
   directionNameInput.value = lineBlock.directionName || "";
+  if (lineDescriptionInput) {
+    lineDescriptionInput.value = String(lineBlock.description ?? data.description ?? "").trim();
+  }
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";
@@ -2073,6 +2084,7 @@ function loadLineFromData(data) {
 
   debug("Linie geladen", {
     lineName: lineBlock.lineName || "",
+    description: lineBlock.description || data.description || "",
     stops: state.stops.length,
     routePoints: state.routePoints.length
   });

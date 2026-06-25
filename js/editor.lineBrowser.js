@@ -101,7 +101,7 @@ function renderLineBrowser(lines) {
         return false;
       }
       if (!q) return true;
-      return [line.lineName, line.routeName, line.directionName, line.city]
+      return [line.lineName, line.routeName, line.directionName, line.description, line.city]
         .join(" ").toLowerCase().includes(q);
     });
     if (sort === "date-desc") filtered.sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""));
@@ -171,6 +171,14 @@ function renderLineBrowser(lines) {
         if (line.savedAt) parts.push(formatSavedAt(line.savedAt));
         meta.textContent = parts.join("  ·  ");
 
+        const descriptionText = String(line.description || "").trim();
+        const description = document.createElement("div");
+        description.className = "line-browser-description";
+        description.textContent = descriptionText || "Keine Bemerkung";
+        if (!descriptionText) {
+          description.classList.add("line-browser-description-empty");
+        }
+
         // Datei-Badges (JSON / GPX / PDF)
         const fileBadges = document.createElement("div");
         fileBadges.className = "lbr-file-badges";
@@ -195,6 +203,7 @@ function renderLineBrowser(lines) {
 
         info.appendChild(title);
         info.appendChild(meta);
+        info.appendChild(description);
         info.appendChild(fileBadges);
 
         // Aktions-Buttons

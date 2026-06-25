@@ -205,6 +205,11 @@
       <input id="directionName" placeholder="Start- und Zielpunkt" title="Beschreibung der Fahrtrichtung, z. B. &#39;Hauptbahnhof – Branitz&#39; – wird Teil des Dateinamens">
     </div>
 
+    <div class="top-group description-group">
+      <label>Bemerkung</label>
+      <input id="lineDescription" placeholder="z. B. Fährt über Betriebshof" title="Besonderheiten dieser Linie oder Variante, z. B. Schülerfahrt, Betriebshof, Umleitung bei Veranstaltungen">
+    </div>
+
     <div class="top-group color-group">
       <label>Farbe</label>
       <input id="lineColor" type="color" value="#d32f2f" title="Linienfarbe für die Anzeige auf der Karte">
@@ -427,6 +432,10 @@
         <div class="save-confirm-row">
           <span class="save-confirm-label">Richtung</span>
           <input id="saveConfirmDirectionInput" class="save-confirm-input" placeholder="Start - Ziel">
+        </div>
+        <div class="save-confirm-row save-confirm-row-block">
+          <span class="save-confirm-label">Bemerkung</span>
+          <textarea id="saveConfirmDescriptionInput" class="save-confirm-input save-confirm-textarea" placeholder="z. B. Fährt über Betriebshof"></textarea>
         </div>
         <div class="save-confirm-row">
           <span class="save-confirm-label">Dateiname</span>

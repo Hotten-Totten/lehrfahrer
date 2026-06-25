@@ -316,7 +316,11 @@ button.detour-phase-build {
 }
 
 .top-group.direction-group {
-  width: 560px;
+  width: 420px;
+}
+
+.top-group.description-group {
+  width: 320px;
 }
 
 .top-group.color-group {
@@ -325,7 +329,7 @@ button.detour-phase-build {
 
 .search-group {
   position: relative;
-  width: 460px;
+  width: 420px;
 }
 
 .search-group input {
@@ -1107,6 +1111,18 @@ button.danger:hover {
   color: #64748b;
 }
 
+.line-browser-description {
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.35;
+}
+
+.line-browser-description-empty {
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .line-browser-actions {
   display: flex;
   gap: 6px;
@@ -1264,6 +1280,9 @@ button.danger:hover {
   font-size: 14px;
 }
 .save-confirm-row:last-of-type { border-bottom: none; }
+.save-confirm-row-block {
+  align-items: flex-start;
+}
 .save-confirm-label {
   width: 110px;
   flex-shrink: 0;
@@ -1291,6 +1310,11 @@ button.danger:hover {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+.save-confirm-textarea {
+  min-height: 66px;
+  resize: vertical;
+  line-height: 1.4;
 }
 .save-confirm-file {
   font-family: monospace;

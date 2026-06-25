@@ -11,6 +11,7 @@ function buildAutosaveData() {
     lineName: lineNameInput.value.trim(),
     routeName: routeNameInput.value.trim(),
     directionName: directionNameInput.value.trim(),
+    description: String(lineDescriptionInput?.value || "").trim(),
     color: lineColorInput.value,
     routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -247,6 +248,9 @@ function loadAutosave() {
     lineNameInput.value      = String(data.lineName  || "").replace(/^Linie\s+/i,  "").trim();
     routeNameInput.value     = String(data.routeName  || "").replace(/^Route\s+/i,  "").trim();
     directionNameInput.value = data.directionName || "";
+    if (lineDescriptionInput) {
+      lineDescriptionInput.value = String(data.description || "").trim();
+    }
     lineColorInput.value = data.color || "#d32f2f";
 
     state.routeMode = data.routeMode || "auto";

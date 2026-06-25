@@ -11,6 +11,7 @@ const createCityBtn = document.getElementById("createCityBtn");
 const lineNameInput = document.getElementById("lineName");
 const routeNameInput = document.getElementById("routeName");
 const directionNameInput = document.getElementById("directionName");
+const lineDescriptionInput = document.getElementById("lineDescription");
 const lineColorInput = document.getElementById("lineColor");
 
 const stopSearchInput = document.getElementById("stopSearchInput");
