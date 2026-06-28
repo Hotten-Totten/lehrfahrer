@@ -413,7 +413,7 @@ if ($result === false) {
 }
 
 $pdfSaved = false;
-$pdfFile = buildPdfStorageFileName($lineFolder . '_' . $categoryFolder, $fileBase);
+$pdfFile = $fileBase . '.pdf';
 $pdfPath = $lineDir . '/' . $pdfFile;
 $pdfError = null;
 $pdfSavedPath = null;
@@ -422,28 +422,7 @@ $pdfTriedPaths = [];
 try {
     $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
 
-    $candidates = [];
-    $candidates[] = $lineDir . '/' . $fileBase . '.pdf';
-
-    // Primärer Speicherort: zentraler PDF-Ordner je Stadt (analog alter gpx-Idee).
-    $cityPdfDir = $cityDir . '/pdf';
-    if (!is_dir($cityPdfDir)) {
-        @mkdir($cityPdfDir, 0775, true);
-    }
-    if (is_dir($cityPdfDir)) {
-        $candidates[] = $cityPdfDir . '/' . $pdfFile;
-    }
-
-    // Fallbacks für ältere Struktur / restriktive Hosts.
-    $candidates[] = $lineDir . '/' . $fileBase . '.pdf';
-
-    $gpxDir = $lineDir . '/gpx';
-    if (!is_dir($gpxDir)) {
-        @mkdir($gpxDir, 0775, true);
-    }
-    if (is_dir($gpxDir)) {
-        $candidates[] = $gpxDir . '/' . $fileBase . '.pdf';
-    }
+    $candidates = [$pdfPath];
 
     foreach ($candidates as $candidatePath) {
         $pdfTriedPaths[] = $candidatePath;

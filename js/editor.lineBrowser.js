@@ -40,10 +40,13 @@ function getLineBrowserVariantCategory(line) {
   return String(line?.variantCategory || "").trim() || "Standard";
 }
 
-function getLineBrowserLineLabel(line) {
-  const lineName = String(line?.lineName || "").trim();
+function getLineBrowserLineValue(line) {
   const folderName = String(line?.lineFolder || "").trim().replace(/^Linie[_\s-]*/i, "");
-  const value = lineName || folderName || "Unbekannt";
+  return folderName || String(line?.lineName || "").trim() || "Unbekannt";
+}
+
+function getLineBrowserLineLabel(line) {
+  const value = getLineBrowserLineValue(line);
   return /^Linie\b/i.test(value) ? value : "Linie " + value;
 }
 
@@ -61,7 +64,7 @@ function createLineBrowserGroup(className, label, count, open) {
 
   const countNode = document.createElement("span");
   countNode.className = "line-browser-tree-count";
-  countNode.textContent = count + (count === 1 ? " Variante" : " Varianten");
+  countNode.textContent = "(" + count + (count === 1 ? " Variante)" : " Varianten)");
 
   summary.appendChild(labelNode);
   summary.appendChild(countNode);
@@ -224,7 +227,7 @@ function renderLineBrowser(lines) {
         // Farb-Badge
         const badge = document.createElement("div");
         badge.className = "line-browser-badge";
-        badge.textContent = line.lineName || "?";
+        badge.textContent = getLineBrowserLineValue(line);
         if (line.color) {
           badge.style.background = line.color;
           // Dunkel-/Helligkeitsanpassung für Text
@@ -240,13 +243,13 @@ function renderLineBrowser(lines) {
 
         const title = document.createElement("div");
         title.className = "line-browser-title";
-        title.textContent = getLineBrowserVariantName(line);
+        title.textContent = "Variante: " + getLineBrowserVariantName(line);
 
         const meta = document.createElement("div");
         meta.className = "line-browser-meta";
         const parts = [];
-        if (line.routeName) parts.push(line.routeName);
-        if (line.directionName) parts.push(line.directionName);
+        const routeAndDirection = [line.routeName, line.directionName].filter(Boolean).join(" – ");
+        if (routeAndDirection) parts.push(routeAndDirection);
         if (line.stopCount != null) parts.push(line.stopCount + " Halt.");
         if (line.routeLengthMeters) parts.push((line.routeLengthMeters / 1000).toFixed(1) + " km");
         if (line.savedAt) parts.push(formatSavedAt(line.savedAt));

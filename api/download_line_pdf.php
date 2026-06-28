@@ -54,10 +54,10 @@ $pdfPath = '';
 
 $pdfStorageFile = buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $line);
 
-if (file_exists($lineDir . '/pdf/' . $pdfStorageFile)) {
-    $pdfPath = $lineDir . '/pdf/' . $pdfStorageFile;
-} elseif ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf')) {
+if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf';
+} elseif (file_exists($lineDir . '/pdf/' . $pdfStorageFile)) {
+    $pdfPath = $lineDir . '/pdf/' . $pdfStorageFile;
 } elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
     $pdfPath = $lineDir . '/' . $lineFolder . '/' . $line . '.pdf';
 } elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf')) {

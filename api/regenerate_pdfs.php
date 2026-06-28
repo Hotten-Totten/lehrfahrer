@@ -358,6 +358,24 @@ function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
                     'fileBase' => pathinfo($jsonFile, PATHINFO_FILENAME)
                 ];
             }
+            foreach (scandir($subPath) as $categoryEntry) {
+                if ($categoryEntry === '.' || $categoryEntry === '..') {
+                    continue;
+                }
+                $categoryPath = $subPath . '/' . $categoryEntry;
+                if (!is_dir($categoryPath)) {
+                    continue;
+                }
+                foreach (glob($categoryPath . '/*.json') as $jsonFile) {
+                    $lines[] = [
+                        'city' => $citySlug,
+                        'lineFolder' => $entry,
+                        'categoryFolder' => $categoryEntry,
+                        'jsonPath' => $jsonFile,
+                        'fileBase' => pathinfo($jsonFile, PATHINFO_FILENAME)
+                    ];
+                }
+            }
         }
     }
 
@@ -418,10 +436,6 @@ $errors = [];
 
 foreach ($cities as $citySlug) {
     $cityDir = $linienBaseDir . '/' . $citySlug;
-    $cityPdfDir = $cityDir . '/pdf';
-    if (!is_dir($cityPdfDir)) {
-        @mkdir($cityPdfDir, 0775, true);
-    }
 
     $lineEntries = collectJsonLinesForCity($cityDir, $citySlug);
 
@@ -443,18 +457,9 @@ foreach ($cities as $citySlug) {
             $lineData['savedAt'] = date('c');
         }
 
-        $pdfFile = buildPdfStorageFileName($entry['lineFolder'], $entry['fileBase']);
-        $targetPdfPath = $cityPdfDir . '/' . $pdfFile;
-        $targetGpxPath = '';
-        if ($entry['lineFolder'] !== '') {
-            $targetGpxPath = $cityDir . '/' . $entry['lineFolder'] . '/' . $entry['fileBase'] . '.gpx';
-        } else {
-            $legacyGpxDir = $cityDir . '/gpx';
-            if (!is_dir($legacyGpxDir)) {
-                @mkdir($legacyGpxDir, 0775, true);
-            }
-            $targetGpxPath = $legacyGpxDir . '/' . $entry['fileBase'] . '.gpx';
-        }
+        $targetDir = dirname($entry['jsonPath']);
+        $targetPdfPath = $targetDir . '/' . $entry['fileBase'] . '.pdf';
+        $targetGpxPath = $targetDir . '/' . $entry['fileBase'] . '.gpx';
 
         try {
             $pdfBinary = buildLineOverviewPdf($lineData, $citySlug, $entry['lineFolder'] ?: '-');
