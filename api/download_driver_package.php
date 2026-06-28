@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_driver_packages.php';
 lehrfahrer_require_write_auth();
 
 if (!class_exists('ZipArchive')) {
@@ -12,23 +13,15 @@ if (!class_exists('ZipArchive')) {
     exit;
 }
 
-$relativePackage = str_replace('\\', '/', trim((string)($_GET['package'] ?? '')));
-if (!preg_match('#^fahrerunterlagen/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/paket\.json$#', $relativePackage)) {
-    http_response_code(400);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => false, 'error' => 'Ungültiger Paketpfad.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-$root = realpath(dirname(__DIR__) . '/fahrerunterlagen');
-$packageFile = realpath(dirname(__DIR__) . '/' . $relativePackage);
-if ($root === false || $packageFile === false || !str_starts_with($packageFile, $root . DIRECTORY_SEPARATOR)) {
+$package = driverPackageFind(trim((string)($_GET['id'] ?? '')));
+if ($package === null) {
     http_response_code(404);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['ok' => false, 'error' => 'Paket nicht gefunden.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
+$packageFile = $package['file'];
 $packageData = json_decode((string)file_get_contents($packageFile), true);
 if (!is_array($packageData)) {
     http_response_code(500);
@@ -38,30 +31,23 @@ if (!is_array($packageData)) {
 }
 
 $packageDir = dirname($packageFile);
-$tempFile = tempnam(sys_get_temp_dir(), 'lehrfahrer_zip_');
-if ($tempFile === false) {
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => false, 'error' => 'Temporäre ZIP-Datei konnte nicht erstellt werden.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-$zip = new ZipArchive();
-if ($zip->open($tempFile, ZipArchive::OVERWRITE) !== true) {
-    @unlink($tempFile);
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => false, 'error' => 'ZIP-Datei konnte nicht erstellt werden.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-$zip->addFile($packageFile, 'paket.json');
-foreach (glob($packageDir . '/*.pdf') ?: [] as $pdfFile) {
-    if (is_file($pdfFile)) {
-        $zip->addFile($pdfFile, basename($pdfFile));
+$zipPath = $packageDir . '/paket.zip';
+if (!is_file($zipPath)) {
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'ZIP-Datei konnte nicht erstellt werden.'], JSON_UNESCAPED_UNICODE);
+        exit;
     }
+    $zip->addFile($packageFile, 'paket.json');
+    foreach (glob($packageDir . '/*.pdf') ?: [] as $pdfFile) {
+        if (is_file($pdfFile)) {
+            $zip->addFile($pdfFile, basename($pdfFile));
+        }
+    }
+    $zip->close();
 }
-$zip->close();
 
 $driverName = trim((string)($packageData['driverName'] ?? ''));
 $driverSlug = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $driverName);
@@ -70,9 +56,8 @@ $packageTimestamp = basename($packageDir);
 $downloadName = 'Fahrerunterlagen_' . $driverSlug . '_' . $packageTimestamp . '.zip';
 
 header('Content-Type: application/zip');
-header('Content-Length: ' . filesize($tempFile));
+header('Content-Length: ' . filesize($zipPath));
 header('Content-Disposition: attachment; filename="' . rawurlencode($downloadName) . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
 header('X-Content-Type-Options: nosniff');
-readfile($tempFile);
-@unlink($tempFile);
+readfile($zipPath);
 exit;

@@ -1,9 +1,10 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_driver_packages.php';
 lehrfahrer_require_write_auth();
 
-$root = dirname(__DIR__) . '/fahrerunterlagen';
+$root = driverPackageRoot();
 $packages = [];
 
 if (is_dir($root)) {
@@ -24,17 +25,22 @@ if (is_dir($root)) {
         }
 
         $packages[] = [
+            'id' => trim((string)($data['id'] ?? '')) ?: driverPackageLegacyId($packageFile),
             'driverName' => trim((string)($data['driverName'] ?? '')),
-            'createdAt' => trim((string)($data['createdAt'] ?? '')),
+            'created' => trim((string)($data['created'] ?? ($data['createdAt'] ?? ''))) ?: date('c', (int)filemtime($packageFile)),
+            'updated' => trim((string)($data['updated'] ?? ($data['createdAt'] ?? ''))) ?: date('c', (int)filemtime($packageFile)),
+            'version' => (int)($data['version'] ?? 1),
+            'status' => 'Erstellt',
             'documentCount' => count($documents),
             'documents' => $documents,
+            'selectedItems' => is_array($data['selectedItems'] ?? null) ? $data['selectedItems'] : [],
             'packagePath' => $relativePath
         ];
     }
 }
 
 usort($packages, static function (array $a, array $b): int {
-    return strcmp($b['createdAt'], $a['createdAt']);
+    return strcmp($b['created'], $a['created']);
 });
 
 echo json_encode([

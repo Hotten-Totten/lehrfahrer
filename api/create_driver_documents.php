@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_driver_packages.php';
 lehrfahrer_require_write_auth();
 
 function driverDocSlug(string $value, string $fallback): string {
@@ -224,23 +225,46 @@ if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items'])
 }
 
 $driverName = trim((string)($input['driverName'] ?? ''));
-$driverFolder = driverDocSlug($driverName, 'Unbenannt');
-$root = dirname(__DIR__) . '/fahrerunterlagen';
-$driverDir = $root . '/' . $driverFolder;
-$timestamp = date('Y-m-d_His');
-$packageDir = $driverDir . '/' . $timestamp;
-$suffix = 1;
-while (file_exists($packageDir)) {
-    $packageDir = $driverDir . '/' . $timestamp . '_' . str_pad((string)$suffix++, 2, '0', STR_PAD_LEFT);
-}
-if (!mkdir($packageDir, 0775, true)) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Paketordner konnte nicht erstellt werden.']);
-    exit;
+$mode = trim((string)($input['mode'] ?? 'new'));
+$requestedPackageId = trim((string)($input['packageId'] ?? ''));
+$existingPackage = $mode === 'update' ? driverPackageFind($requestedPackageId) : null;
+$now = date('c');
+$oldPdfPaths = [];
+
+if ($mode === 'update') {
+    if ($existingPackage === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Zu aktualisierendes Paket wurde nicht gefunden.']);
+        exit;
+    }
+    $packageDir = $existingPackage['dir'];
+    $driverFolder = basename(dirname($packageDir));
+    $packageId = $existingPackage['storedId'] !== '' ? $existingPackage['storedId'] : driverPackageNewId();
+    $created = trim((string)($existingPackage['data']['created'] ?? ($existingPackage['data']['createdAt'] ?? ''))) ?: $now;
+    $oldPdfPaths = glob($packageDir . '/*.pdf') ?: [];
+    @unlink($packageDir . '/paket.zip');
+} else {
+    $driverFolder = driverDocSlug($driverName, 'Unbenannt');
+    $root = driverPackageRoot();
+    $driverDir = $root . '/' . $driverFolder;
+    $timestamp = date('Y-m-d_His');
+    $packageDir = $driverDir . '/' . $timestamp;
+    $suffix = 1;
+    while (file_exists($packageDir)) {
+        $packageDir = $driverDir . '/' . $timestamp . '_' . str_pad((string)$suffix++, 2, '0', STR_PAD_LEFT);
+    }
+    if (!mkdir($packageDir, 0775, true)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Paketordner konnte nicht erstellt werden.']);
+        exit;
+    }
+    $packageId = driverPackageNewId();
+    $created = $now;
 }
 
 $documents = [];
 $usedNames = [];
+$selectedItems = [];
 foreach ($input['items'] as $item) {
     if (!is_array($item)) continue;
     $city = driverDocSlug((string)($item['city'] ?? ''), '');
@@ -248,6 +272,12 @@ foreach ($input['items'] as $item) {
     $categoryFolder = driverDocSlug((string)($item['categoryFolder'] ?? ''), '');
     $fileBase = driverDocSlug((string)($item['fileBase'] ?? ''), '');
     if ($city === '' || $fileBase === '') continue;
+    $selectedItems[] = [
+        'city' => $city,
+        'lineFolder' => $lineFolder,
+        'categoryFolder' => $categoryFolder,
+        'fileBase' => $fileBase
+    ];
 
     $cityDir = dirname(__DIR__) . '/linien/' . $city;
     if (!is_dir($cityDir) && is_dir(dirname(__DIR__) . '/linien/linien/' . $city)) {
@@ -292,17 +322,32 @@ foreach ($input['items'] as $item) {
 }
 
 if (!$documents) {
-    @rmdir($packageDir);
+    if ($mode !== 'update') @rmdir($packageDir);
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Keine PDF-Unterlagen konnten erzeugt werden.']);
     exit;
 }
 
+$currentPdfNames = array_map(static function (array $document): string {
+    return basename((string)$document['path']);
+}, $documents);
+foreach ($oldPdfPaths as $oldPdfPath) {
+    if (!in_array(basename($oldPdfPath), $currentPdfNames, true)) {
+        @unlink($oldPdfPath);
+    }
+}
+
 $package = [
+    'id' => $packageId,
     'driverName' => $driverName,
-    'createdAt' => date('c'),
+    'created' => $created,
+    'updated' => $now,
+    'createdAt' => $created,
+    'version' => 2,
+    'status' => 'Erstellt',
     'documentCount' => count($documents),
-    'documents' => $documents
+    'documents' => $documents,
+    'selectedItems' => $selectedItems
 ];
 $packageWrite = file_put_contents(
     $packageDir . '/paket.json',
@@ -314,8 +359,22 @@ if ($packageWrite === false) {
     exit;
 }
 
+$zipAvailable = class_exists('ZipArchive');
+if ($zipAvailable) {
+    $zip = new ZipArchive();
+    $zipPath = $packageDir . '/paket.zip';
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+        $zip->addFile($packageDir . '/paket.json', 'paket.json');
+        foreach (glob($packageDir . '/*.pdf') ?: [] as $pdfFile) {
+            $zip->addFile($pdfFile, basename($pdfFile));
+        }
+        $zip->close();
+    }
+}
+
 echo json_encode([
     'ok' => true,
     'package' => $package,
-    'packagePath' => 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/paket.json'
+    'packagePath' => 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/paket.json',
+    'zipAvailable' => $zipAvailable
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
