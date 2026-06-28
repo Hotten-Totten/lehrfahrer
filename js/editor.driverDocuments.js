@@ -39,6 +39,25 @@ async function openDriverDocumentsDialog(options = {}) {
     }
 
     body.innerHTML = "";
+    const drivers = await fetchDrivers().catch(() => []);
+    const driverSelectLabel = document.createElement("label");
+    driverSelectLabel.className = "driver-documents-driver";
+    const driverSelectCaption = document.createElement("span");
+    driverSelectCaption.textContent = "Fahrer auswählen";
+    const driverSelect = document.createElement("select");
+    const guestOption = document.createElement("option");
+    guestOption.value = "";
+    guestOption.textContent = "Gastfahrer / Freitext";
+    driverSelect.appendChild(guestOption);
+    drivers.filter(driver => driver.active !== false).forEach(driver => {
+      const option = document.createElement("option");
+      option.value = driver.id;
+      option.textContent = getDriverDisplayName(driver);
+      option.dataset.driverName = getDriverFullName(driver);
+      driverSelect.appendChild(option);
+    });
+    driverSelectLabel.append(driverSelectCaption, driverSelect);
+
     const driverLabel = document.createElement("label");
     driverLabel.className = "driver-documents-driver";
     const driverCaption = document.createElement("span");
@@ -48,6 +67,10 @@ async function openDriverDocumentsDialog(options = {}) {
     driverInput.placeholder = "optional";
     driverInput.value = String(options.driverName || "");
     driverLabel.append(driverCaption, driverInput);
+    driverSelect.addEventListener("change", () => {
+      const option = driverSelect.selectedOptions[0];
+      if (option?.value) driverInput.value = option.dataset.driverName || option.textContent || "";
+    });
 
     const actions = document.createElement("div");
     actions.className = "driver-documents-selection-actions";
@@ -144,6 +167,7 @@ async function openDriverDocumentsDialog(options = {}) {
           headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             driverName: driverInput.value.trim(),
+            driverId: driverSelect.value || "",
             mode: packageMode.mode,
             packageId: packageMode.packageId,
             items: selected.map(entry => ({
@@ -165,9 +189,188 @@ async function openDriverDocumentsDialog(options = {}) {
       }
     });
 
-    body.append(driverLabel, actions, list, footer);
+    body.append(driverSelectLabel, driverLabel, actions, list, footer);
   } catch (error) {
     body.textContent = error.message || "Fahrerunterlagen konnten nicht vorbereitet werden.";
+  }
+}
+
+function getDriverDisplayName(driver) {
+  const name = getDriverFullName(driver);
+  return driver.personnelNumber ? `${name} (${driver.personnelNumber})` : name;
+}
+
+function getDriverFullName(driver) {
+  return [driver.firstName, driver.lastName].filter(Boolean).join(" ").trim();
+}
+
+async function fetchDrivers() {
+  const response = await fetch("api/drivers.php", {
+    cache: "no-store",
+    headers: withApiAuthHeaders({})
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "Fahrerliste konnte nicht geladen werden.");
+  }
+  return Array.isArray(result.drivers) ? result.drivers : [];
+}
+
+async function saveDriverAction(payload) {
+  const response = await fetch("api/drivers.php", {
+    method: "POST",
+    headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "Fahreraktion fehlgeschlagen.");
+  }
+  return result;
+}
+
+async function openDriversDialog() {
+  const modal = getDriverDocumentsModal("Fahrer verwalten");
+  const body = modal.querySelector(".driver-documents-body");
+  body.textContent = "Fahrerliste wird geladen ...";
+  modal.classList.remove("hidden");
+
+  try {
+    let drivers = await fetchDrivers();
+    let editingId = "";
+    body.innerHTML = "";
+
+    const form = document.createElement("div");
+    form.className = "driver-management-form";
+    const fields = {};
+    [
+      ["firstName", "Vorname", "text"],
+      ["lastName", "Nachname", "text"],
+      ["personnelNumber", "Personalnummer", "text"],
+      ["depot", "Betriebshof", "text"],
+      ["note", "Bemerkung", "textarea"]
+    ].forEach(([key, labelText, type]) => {
+      const label = document.createElement("label");
+      const caption = document.createElement("span");
+      caption.textContent = labelText;
+      const input = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
+      if (type !== "textarea") input.type = type;
+      label.append(caption, input);
+      form.appendChild(label);
+      fields[key] = input;
+    });
+    const activeLabel = document.createElement("label");
+    activeLabel.className = "driver-management-active";
+    const activeInput = document.createElement("input");
+    activeInput.type = "checkbox";
+    activeInput.checked = true;
+    activeLabel.append(activeInput, document.createTextNode(" aktiv"));
+    const formActions = document.createElement("div");
+    formActions.className = "driver-documents-selection-actions";
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.textContent = "Fahrer anlegen";
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.textContent = "Bearbeitung abbrechen";
+    cancelButton.hidden = true;
+    formActions.append(saveButton, cancelButton);
+    form.append(activeLabel, formActions);
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.className = "driver-management-search";
+    searchInput.placeholder = "Name oder Personalnummer suchen";
+    const list = document.createElement("div");
+    list.className = "driver-management-list";
+
+    const resetForm = () => {
+      editingId = "";
+      Object.values(fields).forEach(field => { field.value = ""; });
+      activeInput.checked = true;
+      saveButton.textContent = "Fahrer anlegen";
+      cancelButton.hidden = true;
+    };
+
+    const renderDrivers = () => {
+      list.innerHTML = "";
+      const query = searchInput.value.trim().toLocaleLowerCase("de-DE");
+      drivers
+        .filter(driver => [
+          driver.firstName,
+          driver.lastName,
+          driver.personnelNumber
+        ].join(" ").toLocaleLowerCase("de-DE").includes(query))
+        .forEach(driver => {
+          const row = document.createElement("div");
+          row.className = "driver-management-row";
+          if (driver.active === false) row.classList.add("driver-management-inactive");
+          const info = document.createElement("div");
+          const name = document.createElement("strong");
+          name.textContent = getDriverDisplayName(driver);
+          const meta = document.createElement("small");
+          meta.textContent = [
+            driver.depot,
+            driver.active === false ? "inaktiv" : "aktiv",
+            driver.note
+          ].filter(Boolean).join(" | ");
+          info.append(name, meta);
+          const actions = document.createElement("div");
+          actions.className = "driver-documents-card-actions";
+          const editButton = document.createElement("button");
+          editButton.type = "button";
+          editButton.textContent = "Bearbeiten";
+          editButton.addEventListener("click", () => {
+            editingId = driver.id;
+            Object.keys(fields).forEach(key => { fields[key].value = driver[key] || ""; });
+            activeInput.checked = driver.active !== false;
+            saveButton.textContent = "Änderungen speichern";
+            cancelButton.hidden = false;
+          });
+          const toggleButton = document.createElement("button");
+          toggleButton.type = "button";
+          toggleButton.textContent = driver.active === false ? "Aktivieren" : "Deaktivieren";
+          toggleButton.addEventListener("click", async () => {
+            await saveDriverAction({ action: "toggle", id: driver.id });
+            drivers = await fetchDrivers();
+            renderDrivers();
+          });
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.textContent = "Löschen";
+          deleteButton.addEventListener("click", async () => {
+            if (!confirm("Fahrer wirklich löschen?")) return;
+            await saveDriverAction({ action: "delete", id: driver.id });
+            drivers = await fetchDrivers();
+            renderDrivers();
+          });
+          actions.append(editButton, toggleButton, deleteButton);
+          row.append(info, actions);
+          list.appendChild(row);
+        });
+    };
+
+    saveButton.addEventListener("click", async () => {
+      await saveDriverAction({
+        action: editingId ? "update" : "create",
+        id: editingId,
+        firstName: fields.firstName.value,
+        lastName: fields.lastName.value,
+        personnelNumber: fields.personnelNumber.value,
+        depot: fields.depot.value,
+        note: fields.note.value,
+        active: activeInput.checked
+      });
+      drivers = await fetchDrivers();
+      resetForm();
+      renderDrivers();
+    });
+    cancelButton.addEventListener("click", resetForm);
+    searchInput.addEventListener("input", renderDrivers);
+    renderDrivers();
+    body.append(form, searchInput, list);
+  } catch (error) {
+    body.textContent = error.message || "Fahrerliste konnte nicht geladen werden.";
   }
 }
 

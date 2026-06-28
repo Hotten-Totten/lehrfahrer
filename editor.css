@@ -1451,6 +1451,85 @@ button.danger:hover {
   flex: 1;
 }
 
+.driver-management-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.driver-management-form label:not(.driver-management-active) {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.driver-management-form input,
+.driver-management-form textarea,
+.driver-management-search,
+.driver-documents-driver select {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.driver-management-form textarea {
+  min-height: 68px;
+  resize: vertical;
+}
+
+.driver-management-active,
+.driver-management-form .driver-documents-selection-actions {
+  align-self: end;
+}
+
+.driver-management-list {
+  display: grid;
+  gap: 7px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.driver-management-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.driver-management-row strong,
+.driver-management-row small {
+  display: block;
+}
+
+.driver-management-row small {
+  margin-top: 3px;
+  color: #64748b;
+}
+
+.driver-management-inactive {
+  opacity: 0.62;
+}
+
+@media (max-width: 700px) {
+  .driver-management-form {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-management-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .driver-documents-package-card small {
   margin-top: 3px;
   color: #64748b;

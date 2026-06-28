@@ -249,6 +249,10 @@ if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items'])
 }
 
 $driverName = trim((string)($input['driverName'] ?? ''));
+$driverId = trim((string)($input['driverId'] ?? ''));
+if ($driverId !== '' && !preg_match('/^drv_[a-f0-9]{32}$/', $driverId)) {
+    $driverId = '';
+}
 $mode = trim((string)($input['mode'] ?? 'new'));
 $requestedPackageId = trim((string)($input['packageId'] ?? ''));
 $existingPackage = $mode === 'update' ? driverPackageFind($requestedPackageId) : null;
@@ -363,6 +367,7 @@ foreach ($oldPdfPaths as $oldPdfPath) {
 
 $package = [
     'id' => $packageId,
+    'driverId' => $driverId,
     'driverName' => $driverName,
     'created' => $created,
     'updated' => $now,
