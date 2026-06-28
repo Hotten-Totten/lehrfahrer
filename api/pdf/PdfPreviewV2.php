@@ -11,17 +11,18 @@ final class PdfPreviewV2
 {
     private string $stream = '';
     private array $completedStreams = [];
+    private string $documentVersion = 'PDF 3.0';
+    private ?array $logoImage = null;
 
     public function render(array $project): string
     {
+        $this->stream = '';
+        $this->completedStreams = [];
+        $this->logoImage = null;
         $data = PdfHelpers::prepareProjectData($project);
-        $branding = (new PdfBranding([
-            'fallbackLogoText' => 'Lehrfahrer®',
-            'primaryColor' => '#B3262D',
-            'secondaryColor' => '#B8C0C7',
-            'accentColor' => '#EEF1F3',
-            'website' => 'www.lehrfahrer.de',
-        ]))->toArray();
+        $branding = PdfBranding::loadFromDirectory(dirname(__DIR__, 2) . '/assets/company')->toArray();
+        $this->documentVersion = trim((string) $data['version']) ?: 'PDF 3.0';
+        $this->logoImage = $this->prepareLogoImage((string) $branding['logoPath']);
         $stops = $this->prepareStops($project);
         $lineData = is_array($project['line'] ?? null) ? $project['line'] : [];
         $data['start'] = trim((string) (
@@ -51,7 +52,14 @@ final class PdfPreviewV2
     {
         $primary = $this->color($branding['primaryColor'], [0.2, 0.31, 0.41]);
 
-        $this->text(62, 775, (string) $branding['fallbackLogoText'], 16, true);
+        if ($this->logoImage !== null) {
+            $this->drawLogoImage(50, 764, 112, 38);
+        } else {
+            $this->text(52, 775, (string) $branding['fallbackLogoText'], 15, true);
+        }
+        if (trim((string) $branding['companyName']) !== '') {
+            $this->text(52, 746, $this->crop((string) $branding['companyName'], 25), 7);
+        }
         $this->text(210, 772, (string) $data['title'], 22, true);
         $this->rectangle(489, 758, 40, 40, [1, 1, 1], $primary);
         $this->text(502, 775, 'QR', 8, true);
@@ -207,6 +215,54 @@ final class PdfPreviewV2
     private function fillRectangle(float $x, float $y, float $width, float $height, array $fill): void
     {
         $this->stream .= implode(' ', $fill) . " rg\n{$x} {$y} {$width} {$height} re\nf\n";
+    }
+
+    private function drawLogoImage(float $x, float $y, float $maxWidth, float $maxHeight): void
+    {
+        if ($this->logoImage === null) {
+            return;
+        }
+        $scale = min(
+            $maxWidth / $this->logoImage['width'],
+            $maxHeight / $this->logoImage['height']
+        );
+        $width = round($this->logoImage['width'] * $scale, 2);
+        $height = round($this->logoImage['height'] * $scale, 2);
+        $this->stream .= "q\n{$width} 0 0 {$height} {$x} {$y} cm\n/Logo Do\nQ\n";
+    }
+
+    private function prepareLogoImage(string $path): ?array
+    {
+        if (
+            $path === ''
+            || !is_file($path)
+            || !function_exists('imagecreatefrompng')
+            || !function_exists('imagecreatetruecolor')
+            || !function_exists('imagecolorallocate')
+            || !function_exists('imagejpeg')
+        ) {
+            return null;
+        }
+        $source = @imagecreatefrompng($path);
+        if ($source === false) {
+            return null;
+        }
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $canvas = imagecreatetruecolor($width, $height);
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        imagefill($canvas, 0, 0, $white);
+        imagealphablending($canvas, true);
+        imagecopy($canvas, $source, 0, 0, 0, 0, $width, $height);
+        ob_start();
+        $written = imagejpeg($canvas, null, 90);
+        $jpeg = ob_get_clean();
+        imagedestroy($canvas);
+        imagedestroy($source);
+        if (!$written || !is_string($jpeg) || $jpeg === '') {
+            return null;
+        }
+        return ['data' => $jpeg, 'width' => $width, 'height' => $height];
     }
 
     private function wrap(string $text, int $length, int $maxLines): array
@@ -380,8 +436,8 @@ final class PdfPreviewV2
             $this->line(42, 52, 553, 52, 0.6, $border);
             $this->text(42, 34, 'Erstellt mit Lehrfahrer®', 7);
             $this->text(175, 34, (string) $branding['website'], 7);
-            $this->text(278, 34, '© 2026 Frank Fudeus', 7);
-            $this->text(407, 34, 'Preview V2', 7);
+            $this->text(278, 34, (string) $branding['copyright'], 7);
+            $this->text(407, 34, $this->crop($this->documentVersion, 16), 7);
             $this->text(492, 34, 'Seite ' . ($index + 1) . ' von ' . $pageCount, 7);
             $footer = $this->stream;
             $this->stream = $originalStream;
@@ -396,13 +452,26 @@ final class PdfPreviewV2
             4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
         ];
         $nextId = 5;
+        $logoObjectId = null;
+        if ($this->logoImage !== null) {
+            $logoObjectId = $nextId++;
+            $logoData = $this->logoImage['data'];
+            $objects[$logoObjectId] = '<< /Type /XObject /Subtype /Image'
+                . ' /Width ' . $this->logoImage['width']
+                . ' /Height ' . $this->logoImage['height']
+                . ' /ColorSpace /DeviceRGB /BitsPerComponent 8'
+                . ' /Filter /DCTDecode /Length ' . strlen($logoData)
+                . " >>\nstream\n{$logoData}\nendstream";
+        }
         $pageIds = [];
         foreach ($streams as $stream) {
             $contentId = $nextId++;
             $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n{$stream}\nendstream";
             $pageId = $nextId++;
+            $xObject = $logoObjectId !== null ? " /XObject << /Logo {$logoObjectId} 0 R >>" : '';
             $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-                . "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {$contentId} 0 R >>";
+                . "/Resources << /Font << /F1 3 0 R /F2 4 0 R >>{$xObject} >> "
+                . "/Contents {$contentId} 0 R >>";
             $pageIds[] = $pageId;
         }
         $objects[2] = '<< /Type /Pages /Kids ['
