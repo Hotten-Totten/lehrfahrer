@@ -1,0 +1,106 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1457 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 28.06.2026 11:29:31) Tj
+T*
+() Tj
+T*
+(Ort: test) Tj
+T*
+(Linienordner: Linie_18) Tj
+T*
+(Datei: Route_01_Route_01_-_Klein_Stroebitz_-_Stroebitzer_Hauptstrasse) Tj
+T*
+(Linie: Linie 18) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Klein Stroebitz - Stroebitzer Hauptstrasse) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 9) Tj
+T*
+(Routenpunkte: 90) Tj
+T*
+(Linienlaenge: 3,89 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Klein Stroebitz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.743450, 14.287505) Tj
+T*
+(2. Klein Gaglower Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.743404, 14.291571) Tj
+T*
+(3. Am Priorgraben) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.748177, 14.293986) Tj
+T*
+(4. Stroebitz Muehlenweg) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.747284, 14.288771) Tj
+T*
+(5. Stroebitz Ziegelstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.748430, 14.281314) Tj
+T*
+(6. Abzweig Steinteichmuehle) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.750954, 14.279848) Tj
+T*
+(7. Stroebitz Friedhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.752525, 14.290492) Tj
+T*
+(8. Kornblumenweg) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.753353, 14.297327) Tj
+T*
+(9. Stroebitzer Hauptstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.754480, 14.303370) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000117 00000 n 
+0000000187 00000 n 
+0000001696 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1822
+%%EOF

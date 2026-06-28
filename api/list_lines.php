@@ -65,11 +65,16 @@ $requestedCity = strtolower($requestedCity);
 $requestedCity = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $requestedCity);
 
 $cities = [];
+$cityDirs = [];
 
 if ($requestedCity !== '') {
     $cityDir = $linienBaseDir . '/' . $requestedCity;
     if (is_dir($cityDir)) {
         $cities[] = $requestedCity;
+        $cityDirs[$requestedCity] = $cityDir;
+    } elseif (is_dir($linienBaseDir . '/linien/' . $requestedCity)) {
+        $cities[] = $requestedCity;
+        $cityDirs[$requestedCity] = $linienBaseDir . '/linien/' . $requestedCity;
     }
 } else {
     $entries = scandir($linienBaseDir);
@@ -77,7 +82,19 @@ if ($requestedCity !== '') {
         if ($entry === '.' || $entry === '..') continue;
         $fullPath = $linienBaseDir . '/' . $entry;
         if (is_dir($fullPath)) {
-            $cities[] = $entry;
+            if ($entry === 'linien') {
+                foreach (@scandir($fullPath) ?: [] as $nestedCity) {
+                    if ($nestedCity === '.' || $nestedCity === '..') continue;
+                    $nestedPath = $fullPath . '/' . $nestedCity;
+                    if (is_dir($nestedPath) && !isset($cityDirs[$nestedCity])) {
+                        $cities[] = $nestedCity;
+                        $cityDirs[$nestedCity] = $nestedPath;
+                    }
+                }
+            } else {
+                $cities[] = $entry;
+                $cityDirs[$entry] = $fullPath;
+            }
         }
     }
 }
@@ -85,7 +102,8 @@ if ($requestedCity !== '') {
 $lines = [];
 
 foreach ($cities as $city) {
-    $cityDir = $linienBaseDir . '/' . $city;
+    $cityDir = $cityDirs[$city] ?? ($linienBaseDir . '/' . $city);
+    $cityUrlBase = str_replace('\\', '/', substr($cityDir, strlen($baseDir) + 1));
 
     // ---- Neues Format: linien/{city}/{lineFolder}/*.json ----
     $entries = @scandir($cityDir);
@@ -130,8 +148,8 @@ foreach ($cities as $city) {
                             'lineFolder'        => $entry,
                             'categoryFolder'    => $categoryEntry,
                             'file'              => basename($file),
-                            'jsonPath'          => 'linien/' . $city . '/' . $entry . '/' . $categoryEntry . '/' . basename($file),
-                            'gpxPath'           => $hasGpx ? 'linien/' . $city . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase . '.gpx' : null,
+                            'jsonPath'          => $cityUrlBase . '/' . $entry . '/' . $categoryEntry . '/' . basename($file),
+                            'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase . '.gpx' : null,
                             'fileBase'          => $fileBase,
                             'id'                => $city . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase,
                             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
@@ -182,8 +200,8 @@ foreach ($cities as $city) {
                     'lineFolder'        => $entry,
                     'categoryFolder'    => null,
                     'file'              => basename($file),
-                    'jsonPath'          => 'linien/' . $city . '/' . $entry . '/' . basename($file),
-                    'gpxPath'           => $hasGpx ? 'linien/' . $city . '/' . $entry . '/' . $fileBase . '.gpx' : null,
+                    'jsonPath'          => $cityUrlBase . '/' . $entry . '/' . basename($file),
+                    'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $fileBase . '.gpx' : null,
                     'fileBase'          => $fileBase,
                     'id'                => $city . '/' . $entry . '/' . $fileBase,
                     'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
@@ -235,8 +253,8 @@ foreach ($cities as $city) {
             'lineFolder'        => null,  // altes Format – kein Unterordner
             'categoryFolder'    => null,
             'file'              => basename($file),
-            'jsonPath'          => 'linien/' . $city . '/' . basename($file),
-            'gpxPath'           => $hasGpx ? 'linien/' . $city . '/gpx/' . $fileBase . '.gpx' : null,
+            'jsonPath'          => $cityUrlBase . '/' . basename($file),
+            'gpxPath'           => $hasGpx ? $cityUrlBase . '/gpx/' . $fileBase . '.gpx' : null,
             'fileBase'          => $fileBase,
             'id'                => $city . '/' . $fileBase,
             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),

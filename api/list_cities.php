@@ -18,7 +18,8 @@ function cityHasLineJson(string $cityPath): bool {
         return true;
     }
 
-    // Neues Format: linien/{city}/{lineFolder}/*.json
+    // Zwischenformat: linien/{city}/{lineFolder}/*.json
+    // Neues Format:     linien/{city}/{lineFolder}/{categoryFolder}/*.json
     $subEntries = @scandir($cityPath);
     if (!$subEntries) {
         return false;
@@ -32,6 +33,15 @@ function cityHasLineJson(string $cityPath): bool {
         if (!empty($jsonFiles)) {
             return true;
         }
+        $categoryEntries = @scandir($subPath);
+        if (!$categoryEntries) continue;
+        foreach ($categoryEntries as $category) {
+            if ($category === '.' || $category === '..' || $category === 'backup' || $category === 'gpx' || $category === 'pdf') continue;
+            $categoryPath = $subPath . '/' . $category;
+            if (is_dir($categoryPath) && !empty(glob($categoryPath . '/*.json'))) {
+                return true;
+            }
+        }
     }
 
     return false;
@@ -44,6 +54,18 @@ foreach ($entries as $entry) {
     $fullPath = $baseDir . "/" . $entry;
 
     if (!is_dir($fullPath)) continue;
+
+    // Lesefallback für versehentlich doppelt angelegte Struktur linien/linien/{city}.
+    if ($entry === 'linien') {
+        foreach (@scandir($fullPath) ?: [] as $nestedCity) {
+            if ($nestedCity === '.' || $nestedCity === '..') continue;
+            $nestedCityPath = $fullPath . '/' . $nestedCity;
+            if (is_dir($nestedCityPath) && ($includeEmpty || cityHasLineJson($nestedCityPath))) {
+                $cities[] = $nestedCity;
+            }
+        }
+        continue;
+    }
 
     if ($includeEmpty || cityHasLineJson($fullPath)) {
         $cities[] = $entry;

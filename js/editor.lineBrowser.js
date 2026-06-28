@@ -408,9 +408,6 @@ function renderLineBrowser(lines) {
           renameSaveBtn.disabled = true; renameSaveBtn.textContent = "Speichern …";
           const ok = await renameLineOnServer(line, f_line.input.value.trim(), f_route.input.value.trim(), f_dir.input.value.trim());
           if (ok) {
-            line.lineName = f_line.input.value.trim();
-            line.routeName = f_route.input.value.trim();
-            line.directionName = f_dir.input.value.trim();
             renderList();
           } else { renameSaveBtn.disabled = false; renameSaveBtn.textContent = "Speichern"; }
         });

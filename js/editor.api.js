@@ -1048,6 +1048,18 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
 
 function chooseGtfsAgenciesInPopup(agencies, options = {}) {
   const isIndexSelection = options.mode === "index";
+  const storageKey = isIndexSelection
+    ? "lehrfahrer_gtfs_index_agency_filter"
+    : "lehrfahrer_gtfs_import_agency_filter";
+  let savedSelection = null;
+  try {
+    savedSelection = JSON.parse(localStorage.getItem(storageKey) || "null");
+  } catch (_) {
+    savedSelection = null;
+  }
+  const savedAgencyIds = new Set(
+    Array.isArray(savedSelection?.agencyIds) ? savedSelection.agencyIds.map(String) : []
+  );
   const refs = getVbbImportModalRefs();
   if (!refs.picker || !refs.pickerList || !refs.pickerSelectBtn || !refs.pickerCancelBtn || !refs.closeBtn) {
     return Promise.resolve(null);
@@ -1070,6 +1082,7 @@ function chooseGtfsAgenciesInPopup(agencies, options = {}) {
   agencySearch.type = "search";
   agencySearch.placeholder = "Betreiberliste filtern";
   agencySearch.setAttribute("aria-label", "Betreiberliste filtern");
+  agencySearch.value = String(savedSelection?.filter || "");
 
   const lineSearch = document.createElement("input");
   lineSearch.type = "search";
@@ -1106,7 +1119,9 @@ function chooseGtfsAgenciesInPopup(agencies, options = {}) {
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.value = String(agency.id || "");
-    checkbox.checked = !!agency.isDefault;
+    checkbox.checked = savedAgencyIds.size
+      ? savedAgencyIds.has(String(agency.id || ""))
+      : /cottbusverkehr/i.test(String(agency.name || ""));
 
     const textWrap = document.createElement("div");
     const main = document.createElement("div");
@@ -1127,6 +1142,14 @@ function chooseGtfsAgenciesInPopup(agencies, options = {}) {
     if (refs.pickerHint) {
       refs.pickerHint.textContent = `${selectedCount} von ${entries.length} Betreibern ausgewählt.`;
     }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        agencyIds: entries.filter(entry => entry.checkbox.checked).map(entry => String(entry.agency.id)),
+        filter: agencySearch.value.trim()
+      }));
+    } catch (_) {
+      // Import bleibt auch ohne lokalen Speicher nutzbar.
+    }
   };
   const setChecked = predicate => {
     entries.forEach(entry => {
@@ -1140,12 +1163,20 @@ function chooseGtfsAgenciesInPopup(agencies, options = {}) {
   };
 
   entries.forEach(entry => entry.checkbox.addEventListener("change", updateSelectionState));
-  agencySearch.addEventListener("input", filterRows);
+  agencySearch.addEventListener("input", () => {
+    filterRows();
+    updateSelectionState();
+  });
   defaultBtn.addEventListener("click", () => setChecked(agency => agency.isDefault));
   cottbusBtn.addEventListener("click", () => setChecked(agency => /cottbusverkehr/i.test(String(agency.name || ""))));
   allBtn.addEventListener("click", () => setChecked(() => true));
   noneBtn.addEventListener("click", () => setChecked(() => false));
-  updateSelectionState();
+  if (!entries.some(entry => entry.checkbox.checked)) {
+    setChecked(agency => agency.isDefault);
+  } else {
+    updateSelectionState();
+  }
+  filterRows();
 
   return new Promise(resolve => {
     const previousCloseHandler = refs.closeBtn.onclick;
@@ -1918,8 +1949,12 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
   try {
     const city = line.city || citySelect?.value || "cottbus";
     const fileBase = line.fileBase || line.id || "";
-    const lineFolder = line.lineFolder || null;
-    const categoryFolder = line.categoryFolder || null;
+    const oldLineFolder = line.lineFolder || null;
+    const oldCategoryFolder = line.categoryFolder || null;
+    const categoryFolder = line.categoryFolder || sanitizeFilename(line.variantCategory || "Standard") || "Standard";
+    const lineSuffix = String(newLineName || "").trim().replace(/^Linie[\s_-]*/i, "").trim();
+    const normalizedLineName = lineSuffix ? "Linie " + lineSuffix : String(newLineName || "").trim();
+    const newLineFolder = sanitizeFilename(lineSuffix ? "Linie_" + lineSuffix : "Linie");
 
     if (!fileBase) {
       setStatus("Keine Linien-ID zum Umbenennen.", "error");
@@ -1927,7 +1962,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
     }
 
     const loadRes = await fetch(
-      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}&lineFolder=${encodeURIComponent(lineFolder || "")}&categoryFolder=${encodeURIComponent(categoryFolder || "")}`,
+      `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}&lineFolder=${encodeURIComponent(oldLineFolder || "")}&categoryFolder=${encodeURIComponent(oldCategoryFolder || "")}`,
       { cache: "no-store" }
     );
     const loadResult = await loadRes.json();
@@ -1941,10 +1976,49 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
       throw new Error("Keine gültigen Liniendaten erhalten");
     }
 
-    lineData.lineName = newLineName;
+    const existingTarget = await findExistingLineEntry(city, newLineFolder, categoryFolder, fileBase);
+    const sameTarget = String(oldLineFolder || "") === newLineFolder
+      && String(oldCategoryFolder || "") === categoryFolder;
+    if (existingTarget) {
+      const overwriteOk = confirm(
+        `Diese Datei existiert bereits:\n${newLineFolder}/${categoryFolder || "Standard"}/${fileBase}.json\n\nWirklich überschreiben?`
+      );
+      if (!overwriteOk) {
+        setStatus("Umbenennen abgebrochen (Überschreiben nicht bestätigt).", "warn");
+        return false;
+      }
+    }
+
+    let existingGpx = null;
+    if (line.hasGpx) {
+      const gpxUrl = line.gpxPath
+        ? String(line.gpxPath)
+        : "linien/" + [city, oldLineFolder, categoryFolder, fileBase + ".gpx"]
+          .filter(Boolean)
+          .map(part => encodeURIComponent(part))
+          .join("/");
+      const gpxResponse = await fetch(gpxUrl, { cache: "no-store" });
+      if (!gpxResponse.ok) {
+        throw new Error("Vorhandene GPX-Datei konnte für den Ordnerwechsel nicht geladen werden.");
+      }
+      existingGpx = await gpxResponse.text();
+    }
+
+    lineData.city = city;
+    lineData.fileBase = fileBase;
+    lineData.lineFolder = newLineFolder;
+    lineData.lineName = normalizedLineName;
     lineData.routeName = newRouteName;
     lineData.directionName = newDirectionName;
     lineData.categoryFolder = categoryFolder || lineData.categoryFolder || "";
+    if (lineData.line && typeof lineData.line === "object") {
+      lineData.line.lineName = normalizedLineName;
+      lineData.line.routeName = newRouteName;
+      lineData.line.directionName = newDirectionName;
+      lineData.line.lineFolder = newLineFolder;
+      lineData.line.categoryFolder = lineData.categoryFolder;
+    }
+    lineData.forceOverwrite = !!existingTarget;
 
     const saveRes = await fetch(API_SAVE_LINE_URL, {
       method: "POST",
@@ -1957,7 +2031,24 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
       throw new Error(saveResult.error || "Umbenennen konnte nicht gespeichert werden");
     }
 
-    setStatus(`Linie umbenannt: ${newLineName}`);
+    if (existingGpx !== null) {
+      await saveGpxToServer(fileBase + ".gpx", existingGpx, city, newLineFolder, categoryFolder);
+    }
+
+    if (!sameTarget) {
+      const deletedOld = await deleteLineFromServer(fileBase, true, oldLineFolder, city, oldCategoryFolder);
+      if (!deletedOld) {
+        throw new Error("Neuer Linienordner wurde gespeichert, der alte Pfad konnte aber nicht entfernt werden.");
+      }
+    }
+
+    line.lineName = normalizedLineName;
+    line.lineFolder = newLineFolder;
+    line.categoryFolder = categoryFolder;
+    line.routeName = newRouteName;
+    line.directionName = newDirectionName;
+    line.fileBase = saveResult.fileBase || fileBase;
+    setStatus(`Linie umbenannt: ${normalizedLineName}`);
     return true;
   } catch (err) {
     error("Fehler beim Umbenennen", err);

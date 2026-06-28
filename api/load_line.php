@@ -34,6 +34,9 @@ if ($city === '') {
 }
 
 $lineDir = $baseDir . '/linien/' . $city;
+if (!is_dir($lineDir) && is_dir($baseDir . '/linien/linien/' . $city)) {
+    $lineDir = $baseDir . '/linien/linien/' . $city;
+}
 
 $line = $_GET['line'] ?? '';
 $line = preg_replace('/\.json$/i', '', $line);

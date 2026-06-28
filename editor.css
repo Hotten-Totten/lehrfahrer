@@ -1053,7 +1053,12 @@ button.danger:hover {
    LINIEN-BROWSER
 ========================= */
 #lineBrowserModal .help-modal-content {
-  width: min(920px, 100%);
+  width: min(1180px, calc(100vw - 32px));
+  min-width: min(720px, calc(100vw - 32px));
+  min-height: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  resize: both;
 }
 
 #lineBrowserModal .help-modal-header {
@@ -1246,6 +1251,8 @@ button.danger:hover {
 
 .line-browser-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
 }

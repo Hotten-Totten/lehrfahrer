@@ -1378,9 +1378,23 @@ async function loadCities() {
   try {
     const res  = await fetch(`${API_BASE}/list_cities.php`, { cache: 'no-store' });
     const json = await res.json();
-    if (!json.ok || !json.cities.length) return;
+    let cities = json.ok && Array.isArray(json.cities) ? json.cities : [];
 
-    json.cities.forEach(city => {
+    // Fallback: Der Linienkatalog ist die verlässlichste Quelle, falls eine
+    // ältere list_cities.php Kategorienordner noch nicht erkennt.
+    if (!cities.length) {
+      const catalogRes = await fetch(`${API_BASE}/list_lines.php?_ts=${Date.now()}`, { cache: 'no-store' });
+      const catalogJson = await catalogRes.json();
+      if (catalogJson.ok && Array.isArray(catalogJson.lines)) {
+        cities = Array.from(new Set(catalogJson.lines.map(line => String(line.city || '').trim()).filter(Boolean)));
+      }
+    }
+    if (!cities.length) {
+      citySelect.innerHTML = '<option value="">Keine Orte vorhanden</option>';
+      return;
+    }
+
+    cities.sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).forEach(city => {
       const opt = document.createElement('option');
       opt.value       = city;
       opt.textContent = capitalizeCity(city);
@@ -1388,9 +1402,9 @@ async function loadCities() {
     });
 
     // Einzige Stadt automatisch vorwählen
-    if (json.cities.length === 1) {
-      citySelect.value = json.cities[0];
-      await loadLines(json.cities[0]);
+    if (cities.length === 1) {
+      citySelect.value = cities[0];
+      await loadLines(cities[0]);
     }
   } catch (err) {
     console.warn('Städte laden fehlgeschlagen:', err);

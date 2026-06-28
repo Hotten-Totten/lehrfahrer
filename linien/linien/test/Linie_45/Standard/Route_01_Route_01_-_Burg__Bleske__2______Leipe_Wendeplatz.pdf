@@ -1,0 +1,102 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1353 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 28.06.2026 12:43:46) Tj
+T*
+() Tj
+T*
+(Ort: test) Tj
+T*
+(Linienordner: Linie_45) Tj
+T*
+(Datei: Route_01_Route_01_-_Burg,_Bleske_\(2\)_-_Leipe_Wendeplatz) Tj
+T*
+(Linie: Linie 45) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Burg, Bleske \(2\) - Leipe Wendeplatz) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 8) Tj
+T*
+(Routenpunkte: 345) Tj
+T*
+(Linienlaenge: 9,56 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Burg, Bleske \(2\)) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.832417, 14.149009) Tj
+T*
+(2. Burg, Schule) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.836510, 14.141938) Tj
+T*
+(3. Burg Schulenburgstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.838970, 14.137053) Tj
+T*
+(4. Burg Bleichestrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.842106, 14.124412) Tj
+T*
+(5. Burg Erste Kolonie) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.842945, 14.109437) Tj
+T*
+(6. Burg Abzweig nach Vetschau/Leipe) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.838570, 14.082467) Tj
+T*
+(7. Leiper Dorfstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.855940, 14.047576) Tj
+T*
+(8. Leipe Wendeplatz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.856396, 14.042991) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000117 00000 n 
+0000000187 00000 n 
+0000001592 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1718
+%%EOF
