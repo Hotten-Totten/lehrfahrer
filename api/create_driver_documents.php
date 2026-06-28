@@ -44,6 +44,36 @@ function driverDocCrop(string $value, int $length): string {
     return strlen($value) > $length ? rtrim(substr($value, 0, $length - 3)) . '...' : $value;
 }
 
+function driverDocInstruction(array $stop): string {
+    foreach ([
+        'nextDrivingInstruction',
+        'nextInstruction',
+        'drivingInstruction',
+        'instruction',
+        'turnInstruction',
+        'routeInstruction',
+        'drivingHint',
+        'nextManeuver',
+        'nextManoeuvre'
+    ] as $key) {
+        $value = $stop[$key] ?? null;
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
+        }
+    }
+    foreach (['maneuver', 'manoeuvre', 'nextManeuver', 'nextManoeuvre', 'navigation'] as $containerKey) {
+        $container = $stop[$containerKey] ?? null;
+        if (!is_array($container)) continue;
+        foreach (['instruction', 'text', 'description', 'name', 'type', 'modifier'] as $key) {
+            $value = $container[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+    }
+    return '-';
+}
+
 function driverDocSimplePdf(array $pages): string {
     $objects = [
         1 => '<< /Type /Catalog /Pages 2 0 R >>',
@@ -170,13 +200,7 @@ function driverDocBuildPdf(array $data, string $driverName): string {
         if ($ghost) continue;
 
         $number++;
-        $instruction = (string)(
-            $stop['nextDrivingInstruction']
-            ?? $stop['nextInstruction']
-            ?? $stop['drivingInstruction']
-            ?? $stop['instruction']
-            ?? ''
-        );
+        $instruction = driverDocInstruction($stop);
         $lines[] = sprintf(
             '%-3d | %-35s | %s',
             $number,

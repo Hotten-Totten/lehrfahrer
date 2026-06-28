@@ -194,6 +194,38 @@ function buildSimplePdf(array $pages): string {
     return $pdf;
 }
 
+function getPdfStopInstruction(array $stop): string {
+    $directKeys = [
+        'nextDrivingInstruction',
+        'nextInstruction',
+        'drivingInstruction',
+        'instruction',
+        'turnInstruction',
+        'routeInstruction',
+        'drivingHint',
+        'nextManeuver',
+        'nextManoeuvre'
+    ];
+    foreach ($directKeys as $key) {
+        $value = $stop[$key] ?? null;
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
+        }
+    }
+
+    foreach (['maneuver', 'manoeuvre', 'nextManeuver', 'nextManoeuvre', 'navigation'] as $containerKey) {
+        $container = $stop[$containerKey] ?? null;
+        if (!is_array($container)) continue;
+        foreach (['instruction', 'text', 'description', 'name', 'type', 'modifier'] as $key) {
+            $value = $container[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+    }
+    return '-';
+}
+
 function buildLineOverviewPdf(array $data, string $city, string $lineFolder): string {
     $lineName = trim((string)getLineValue($data, 'lineName', ''));
     $routeName = trim((string)getLineValue($data, 'routeName', ''));
@@ -280,13 +312,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     } else {
         foreach ($realStops as $idx => $stop) {
             $name = trim((string)($stop['name'] ?? ('Haltestelle ' . ($idx + 1))));
-            $instruction = trim((string)(
-                $stop['nextDrivingInstruction']
-                ?? $stop['nextInstruction']
-                ?? $stop['drivingInstruction']
-                ?? $stop['instruction']
-                ?? ''
-            ));
+            $instruction = getPdfStopInstruction($stop);
             $lines[] = sprintf(
                 '%-3d | %-35s | %s',
                 $idx + 1,
