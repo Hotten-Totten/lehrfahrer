@@ -17,7 +17,7 @@ final class PdfPreviewV2
         $data = PdfHelpers::prepareProjectData($project);
         $branding = (new PdfBranding([
             'fallbackLogoText' => 'Lehrfahrer®',
-            'primaryColor' => '#344F68',
+            'primaryColor' => '#B3262D',
             'secondaryColor' => '#B8C0C7',
             'accentColor' => '#EEF1F3',
             'website' => 'www.lehrfahrer.de',
@@ -40,8 +40,9 @@ final class PdfPreviewV2
 
         $this->drawHeader($data, $branding);
         $this->drawInformationArea($data, $branding);
-        $tableBottom = $this->drawStopTable($stops, $branding);
-        $this->drawSpecialNotes((string) $data['description'], $tableBottom, $branding);
+        $tableTop = $this->drawSpecialNotes((string) $data['description'], $branding);
+        $tableBottom = $this->drawStopTable($stops, $branding, $tableTop);
+        $this->drawTrainingRecord($tableBottom, $branding);
 
         return $this->buildPdf($branding);
     }
@@ -66,11 +67,9 @@ final class PdfPreviewV2
             'Richtung' => (string) $data['direction'],
         ];
         $rightRows = [
-            'Start' => (string) $data['start'],
-            'Ziel' => (string) $data['end'],
-            'Haltestellen' => (string) $data['stopCount'],
-            'Streckenlänge' => (string) $data['distance'],
-            'Fahrzeit' => (string) $data['duration'],
+            'Kategorie' => (string) $data['category'],
+            'Gültigkeit' => (string) $data['validFrom'],
+            'Version' => (string) $data['version'],
         ];
 
         $y = 681.0;
@@ -90,15 +89,14 @@ final class PdfPreviewV2
         }
     }
 
-    private function drawStopTable(array $stops, array $branding): float
+    private function drawStopTable(array $stops, array $branding, float $tableTop): float
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $tableTop = 545.0;
-        $this->text(42, 569, 'Haltestellen und Fahranweisungen', 13, true);
+        $this->text(42, $tableTop + 24, 'Haltestellen und Fahranweisungen', 13, true);
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
-        foreach ($stops as $stop) {
+        foreach ($stops as $rowIndex => $stop) {
             $stopLines = $this->wrap((string) ($stop['stop'] ?? ''), 35, 4);
             $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 43, 8);
             $lineCount = max(count($stopLines), count($instructionLines), 1);
@@ -111,7 +109,8 @@ final class PdfPreviewV2
             }
 
             $rowBottom = $rowTop - $rowHeight;
-            $this->rectangle(42, $rowBottom, 511, $rowHeight, [1, 1, 1], $border);
+            $rowFill = $rowIndex % 2 === 1 ? [0.97, 0.975, 0.98] : [1, 1, 1];
+            $this->rectangle(42, $rowBottom, 511, $rowHeight, $rowFill, $border);
             $this->line(93, $rowBottom, 93, $rowTop, 0.5, $border);
             $this->line(297, $rowBottom, 297, $rowTop, 0.5, $border);
             $textY = $rowTop - 15;
@@ -136,37 +135,55 @@ final class PdfPreviewV2
         $this->line(297, $bottom, 297, $top, 0.5, $border);
         $this->text(61, $bottom + 8, 'Nr.', 9, true);
         $this->text(171, $bottom + 8, 'Haltestelle', 9, true);
-        $this->text(418, $bottom + 8, 'Hinweise', 9, true);
+        $this->text(397, $bottom + 8, 'Fahranweisung', 9, true);
         $this->line(42, $bottom, 553, $bottom, 1.0, $border);
         return $bottom;
     }
 
-    private function drawSpecialNotes(string $description, float $tableBottom, array $branding): void
+    private function drawSpecialNotes(string $description, array $branding): float
+    {
+        if (trim($description) === '') {
+            return 585.0;
+        }
+
+        $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
+        $lines = $this->wrap($description, 82, 4);
+        $height = 32 + (count($lines) * 13);
+        $top = 608.0;
+        $this->fillRectangle(42, $top - $height, 511, $height, $accent);
+        $this->text(54, $top - 17, 'Besonderheiten', 10, true);
+        foreach ($lines as $index => $line) {
+            $this->text(54, $top - 36 - ($index * 13), $line, 8.5);
+        }
+        return $top - $height - 38;
+    }
+
+    private function drawTrainingRecord(float $tableBottom, array $branding): void
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
-        $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $lines = $this->wrap($description !== '' ? $description : 'Keine Besonderheiten hinterlegt.', 82, 4);
-        $height = 42 + (count($lines) * 13);
-        $top = $tableBottom - 57;
-
-        if ($top - $height < 70) {
+        $top = $tableBottom - 34;
+        if ($top - 128 < 70) {
             $this->newPage();
             $top = 790;
         }
 
-        $this->rectangle(42, $top - $height, 511, $height, [1, 1, 1], $border);
-        $this->rectangle(42, $top - 26, 511, 26, $accent, $border);
-        $this->text(56, $top - 18, 'Besonderheiten', 10, true);
-        foreach ($lines as $index => $line) {
-            $this->text(56, $top - 45 - ($index * 13), $line, 8.5);
+        $this->text(42, $top, 'Nachweis der Streckeneinweisung', 11, true);
+        $fields = ['Name Fahrer', 'Abgefahren am', 'Unterschrift Fahrer', 'Unterschrift Einweiser'];
+        foreach ($fields as $index => $field) {
+            $y = $top - 30 - ($index * 27);
+            $this->text(42, $y, $field, 9, true);
+            $this->line(175, $y - 3, 540, $y - 3, 0.6, $border);
         }
     }
 
     private function text(float $x, float $y, string $text, float $size, bool $bold = false): void
     {
         $font = $bold ? 'F2' : 'F1';
+        $copyrightMark = '__LEHRFAHRER_COPYRIGHT__';
+        $escaped = PdfHelpers::escapePdfText(str_replace('©', $copyrightMark, $text));
+        $escaped = str_replace($copyrightMark, '\\251', $escaped);
         $this->stream .= "0 g\nBT\n/{$font} {$size} Tf\n{$x} {$y} Td\n("
-            . PdfHelpers::escapePdfText($text) . ") Tj\nET\n";
+            . $escaped . ") Tj\nET\n";
     }
 
     private function line(float $x1, float $y1, float $x2, float $y2, float $width, array $color): void
@@ -185,6 +202,11 @@ final class PdfPreviewV2
         $this->stream .= implode(' ', $fill) . " rg\n"
             . implode(' ', $stroke) . " RG\n"
             . "0.7 w\n{$x} {$y} {$width} {$height} re\nB\n";
+    }
+
+    private function fillRectangle(float $x, float $y, float $width, float $height, array $fill): void
+    {
+        $this->stream .= implode(' ', $fill) . " rg\n{$x} {$y} {$width} {$height} re\nf\n";
     }
 
     private function wrap(string $text, int $length, int $maxLines): array
@@ -228,7 +250,16 @@ final class PdfPreviewV2
 
     private function isTechnicalStop(array $stop): bool
     {
-        foreach (['isGhostPoint', 'isGhost', 'ghost', 'synthetic', 'manual', 'isRoutePoint', 'isGuidePoint'] as $flag) {
+        foreach (['isGhostPoint', 'isGhost', 'ghost', 'isRoutePoint', 'isGuidePoint'] as $flag) {
+            if (!empty($stop[$flag])) {
+                return true;
+            }
+        }
+        $kind = strtolower(trim((string) ($stop['kind'] ?? '')));
+        if ($kind === 'replacementstop') {
+            return false;
+        }
+        foreach (['synthetic', 'manual'] as $flag) {
             if (!empty($stop[$flag])) {
                 return true;
             }
@@ -347,10 +378,11 @@ final class PdfPreviewV2
             $originalStream = $this->stream;
             $this->stream = '';
             $this->line(42, 52, 553, 52, 0.6, $border);
-            $this->text(42, 34, 'Erstellt mit Lehrfahrer®', 8);
-            $this->text(225, 34, (string) $branding['website'], 8);
-            $this->text(395, 34, 'Preview V2', 8);
-            $this->text(492, 34, 'Seite ' . ($index + 1) . ' von ' . $pageCount, 8);
+            $this->text(42, 34, 'Erstellt mit Lehrfahrer®', 7);
+            $this->text(175, 34, (string) $branding['website'], 7);
+            $this->text(278, 34, '© 2026 Frank Fudeus', 7);
+            $this->text(407, 34, 'Preview V2', 7);
+            $this->text(492, 34, 'Seite ' . ($index + 1) . ' von ' . $pageCount, 7);
             $footer = $this->stream;
             $this->stream = $originalStream;
             $stream .= $footer;
