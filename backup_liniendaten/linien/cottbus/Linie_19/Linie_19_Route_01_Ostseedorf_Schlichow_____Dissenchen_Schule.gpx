@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Lehrfahrer Linieneditor" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>19 - 01 - Ostseedorf Schlichow – Dissenchen Schule</name>
+    <desc>Export aus dem Lehrfahrer Linieneditor | Farbe: #d32f2f</desc>
+  </metadata>
+  <wpt lat="51.76343" lon="14.418789">
+    <name>Ostseedorf Schlichow</name>
+    <cmt>SollMinute:0;Stop:1</cmt>
+    <desc>Stopp 1 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.762146" lon="14.415508">
+    <name>Schlichower Dorfstraße</name>
+    <cmt>SollMinute:0;Stop:2</cmt>
+    <desc>Stopp 2 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.762844" lon="14.411475">
+    <name>Schlichower Höhe</name>
+    <cmt>SollMinute:0;Stop:3</cmt>
+    <desc>Stopp 3 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.76365" lon="14.398194">
+    <name>Haasower Straße</name>
+    <cmt>SollMinute:0;Stop:4</cmt>
+    <desc>Stopp 4 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.764732" lon="14.392846">
+    <name>Dissenchen Schule</name>
+    <cmt>SollMinute:0;Stop:5</cmt>
+    <desc>Stopp 5 | SollMinute: 0</desc>
+  </wpt>
+  <trk>
+    <name>19 - 01 - Ostseedorf Schlichow – Dissenchen Schule</name>
+    <desc>Route für Maps.me Offline-Nutzung</desc>
+    <trkseg>
+      <trkpt lat="51.76343" lon="14.418789"></trkpt>
+      <trkpt lat="51.763354" lon="14.418664"></trkpt>
+      <trkpt lat="51.763347" lon="14.418651"></trkpt>
+      <trkpt lat="51.763181" lon="14.418371"></trkpt>
+      <trkpt lat="51.762934" lon="14.417747"></trkpt>
+      <trkpt lat="51.76289" lon="14.417609"></trkpt>
+      <trkpt lat="51.762771" lon="14.417232"></trkpt>
+      <trkpt lat="51.762095" lon="14.415562"></trkpt>
+      <trkpt lat="51.762095" lon="14.415561"></trkpt>
+      <trkpt lat="51.761783" lon="14.414791"></trkpt>
+      <trkpt lat="51.761621" lon="14.414405"></trkpt>
+      <trkpt lat="51.761583" lon="14.414106"></trkpt>
+      <trkpt lat="51.761565" lon="14.413796"></trkpt>
+      <trkpt lat="51.761595" lon="14.413544"></trkpt>
+      <trkpt lat="51.761622" lon="14.413422"></trkpt>
+      <trkpt lat="51.761659" lon="14.41332"></trkpt>
+      <trkpt lat="51.761815" lon="14.413"></trkpt>
+      <trkpt lat="51.761989" lon="14.412707"></trkpt>
+      <trkpt lat="51.762318" lon="14.412196"></trkpt>
+      <trkpt lat="51.762825" lon="14.411442"></trkpt>
+      <trkpt lat="51.762949" lon="14.411258"></trkpt>
+      <trkpt lat="51.763037" lon="14.411114"></trkpt>
+      <trkpt lat="51.763212" lon="14.41075"></trkpt>
+      <trkpt lat="51.763305" lon="14.410486"></trkpt>
+      <trkpt lat="51.763378" lon="14.410195"></trkpt>
+      <trkpt lat="51.76342" lon="14.409898"></trkpt>
+      <trkpt lat="51.763448" lon="14.409602"></trkpt>
+      <trkpt lat="51.763464" lon="14.408499"></trkpt>
+      <trkpt lat="51.763482" lon="14.407246"></trkpt>
+      <trkpt lat="51.763491" lon="14.406606"></trkpt>
+      <trkpt lat="51.763519" lon="14.405885"></trkpt>
+      <trkpt lat="51.763521" lon="14.405642"></trkpt>
+      <trkpt lat="51.763529" lon="14.404862"></trkpt>
+      <trkpt lat="51.763526" lon="14.404523"></trkpt>
+      <trkpt lat="51.763532" lon="14.404049"></trkpt>
+      <trkpt lat="51.763535" lon="14.403499"></trkpt>
+      <trkpt lat="51.763573" lon="14.400574"></trkpt>
+      <trkpt lat="51.763591" lon="14.399316"></trkpt>
+      <trkpt lat="51.763594" lon="14.39898"></trkpt>
+      <trkpt lat="51.763594" lon="14.398935"></trkpt>
+      <trkpt lat="51.763596" lon="14.39877"></trkpt>
+      <trkpt lat="51.763597" lon="14.398706"></trkpt>
+      <trkpt lat="51.763603" lon="14.398227"></trkpt>
+      <trkpt lat="51.763604" lon="14.398192"></trkpt>
+      <trkpt lat="51.763605" lon="14.398099"></trkpt>
+      <trkpt lat="51.763607" lon="14.397971"></trkpt>
+      <trkpt lat="51.763607" lon="14.39794"></trkpt>
+      <trkpt lat="51.763615" lon="14.397351"></trkpt>
+      <trkpt lat="51.763615" lon="14.397295"></trkpt>
+      <trkpt lat="51.763659" lon="14.39389"></trkpt>
+      <trkpt lat="51.763659" lon="14.393491"></trkpt>
+      <trkpt lat="51.763744" lon="14.393453"></trkpt>
+      <trkpt lat="51.764072" lon="14.393248"></trkpt>
+      <trkpt lat="51.764527" lon="14.392936"></trkpt>
+      <trkpt lat="51.764698" lon="14.392818"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

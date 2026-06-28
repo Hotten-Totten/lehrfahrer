@@ -1,0 +1,114 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1671 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 25.06.2026 16:04:49) Tj
+T*
+() Tj
+T*
+(Ort: cottbus) Tj
+T*
+(Linienordner: Linie_999) Tj
+T*
+(Datei: Linie_999_Route_Test001_BHs-Cottbus_Ueber_Stadtring\)) Tj
+T*
+(Linie: Linie 999) Tj
+T*
+(Route: Route Test001) Tj
+T*
+(Richtung: BHs-Cottbus Ueber Stadtring\)) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 11) Tj
+T*
+(Routenpunkte: 267) Tj
+T*
+(Linienlaenge: 8,91 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Betriebshof Schmellwitz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.788836, 14.332073) Tj
+T*
+(2. Schmellwitzer Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.787647, 14.335217) Tj
+T*
+(3. Am Lug) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.785857, 14.338941) Tj
+T*
+(4. Am Fliess) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.786481, 14.343002) Tj
+T*
+(5. Cottbus, Schmellwitzer Weg) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.786800, 14.349319) Tj
+T*
+(6. Cottbus, Neue Strasse/Marjana-Doma??kojc-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.780513, 14.352118) Tj
+T*
+(7. Cottbus, Gerhart-Hauptmann-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.772662, 14.345170) Tj
+T*
+(8. Cottbus, Warschauer Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.763921, 14.358468) Tj
+T*
+(9. Messehallen) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.750708, 14.346540) Tj
+T*
+(10. Freie Haltestelle 10) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.746178, 14.327958) Tj
+T*
+(11. Freie Haltestelle 11) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.746098, 14.323458) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000117 00000 n 
+0000000187 00000 n 
+0000001910 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2036
+%%EOF

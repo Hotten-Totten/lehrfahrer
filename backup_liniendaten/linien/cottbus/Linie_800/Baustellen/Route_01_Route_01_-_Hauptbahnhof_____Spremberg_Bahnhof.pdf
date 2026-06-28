@@ -1,0 +1,149 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2258 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 25.06.2026 19:22:12) Tj
+T*
+() Tj
+T*
+(Ort: cottbus) Tj
+T*
+(Linienordner: Linie_800) Tj
+T*
+(Datei: Route_01_Route_01_-_Hauptbahnhof_-_Spremberg_Bahnhof) Tj
+T*
+(Linie: Linie 800) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Hauptbahnhof - Spremberg Bahnhof) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 16) Tj
+T*
+(Routenpunkte: 0) Tj
+T*
+(Linienlaenge: -) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Hauptbahnhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.749920, 14.327379) Tj
+T*
+(2. Thiemstrasse/Klinikum) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.743920, 14.326532) Tj
+T*
+(3. Suedfriedhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.737120, 14.335941) Tj
+T*
+(4. Cottbus, Madlow Gaglower Landstr.6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.719900, 14.347195) Tj
+T*
+(5. Cottbus, Gallinchen Spreewiesen6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.713993, 14.352493) Tj
+T*
+(6. Cottbus, Gallinchen Friedensplatz6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.709602, 14.356656) Tj
+T*
+(7. Cottbus, Gallinchen Spremberger Ring6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.705208, 14.360603) Tj
+T*
+(8. Neuhausen/Spree, OT Gross Ossnig, Siedlung) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.684036, 14.358660) Tj
+T*
+(9. Neuhausen/Spree, OT Gross Ossnig, Dorfstr. 6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.678116, 14.356878) Tj
+T*
+(10. Neuhausen/Spree, OT Klein Doebbern, B97 6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.660170, 14.359516) Tj
+T*
+(11. Neuhausen/Spree, OT Klein Doebbern, Schaeferberg) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.650696, 14.361237) Tj
+T*
+(12. Spremberg, OT Sellessen, Buehlow, B 97 Abzweig Buehlow6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.610268, 14.363246) Tj
+T*
+(13. Spremberg, Cantdorf Gaertnerei1) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.585007, 14.359948) Tj
+T*
+(14. Spremberg, Schwimmhalle6) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.571003, 14.367552) Tj
+T*
+(15. Spremberg, Busbahnhof 2A) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.568620, 14.375008) Tj
+T*
+(16. Spremberg Bahnhof) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 97 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 0 | Typ: catalog | Position: 51.575200, 14.396791) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000193 00000 n 
+0000002503 00000 n 
+0000002629 00000 n 
+0000002776 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2902
+%%EOF

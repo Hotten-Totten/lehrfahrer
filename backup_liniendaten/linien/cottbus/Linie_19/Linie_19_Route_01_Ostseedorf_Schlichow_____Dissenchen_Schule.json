@@ -1,0 +1,731 @@
+{
+    "city": "cottbus",
+    "fileBase": "Linie_19_Route_01_Ostseedorf_Schlichow_–_Dissenchen_Schule",
+    "lineFolder": "Linie_19",
+    "id": "linie_19_a",
+    "lineName": "Linie 19",
+    "routeName": "Route 01",
+    "directionName": "Ostseedorf Schlichow – Dissenchen Schule",
+    "color": "#d32f2f",
+    "routeMode": "street",
+    "placementMode": "freeStop",
+    "routingMode": "guidedStreet",
+    "preserveManualChains": true,
+    "stops": [
+        {
+            "id": "stop_1",
+            "catalogId": "311706",
+            "groupId": "311706",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Ostseedorf Schlichow",
+            "lat": 51.76343,
+            "lon": 14.418789,
+            "order": 1,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": true
+        },
+        {
+            "id": "stop_2",
+            "catalogId": "504537",
+            "groupId": "504537",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Schlichower Dorfstraße",
+            "lat": 51.762146,
+            "lon": 14.415508,
+            "order": 2,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_3",
+            "catalogId": "314636",
+            "groupId": "314636",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Schlichower Höhe",
+            "lat": 51.762844,
+            "lon": 14.411475,
+            "order": 3,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_4",
+            "catalogId": "576866",
+            "groupId": "576866",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Haasower Straße",
+            "lat": 51.76365,
+            "lon": 14.398194,
+            "order": 4,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_5",
+            "catalogId": "617476",
+            "groupId": "617476",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Dissenchen Schule",
+            "lat": 51.764732,
+            "lon": 14.392846,
+            "order": 5,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": true
+        }
+    ],
+    "routePoints": [
+        [
+            51.76343,
+            14.418789
+        ],
+        [
+            51.763354,
+            14.418664
+        ],
+        [
+            51.763347,
+            14.418651
+        ],
+        [
+            51.763181,
+            14.418371
+        ],
+        [
+            51.762934,
+            14.417747
+        ],
+        [
+            51.76289,
+            14.417609
+        ],
+        [
+            51.762771,
+            14.417232
+        ],
+        [
+            51.762095,
+            14.415562
+        ],
+        [
+            51.762095,
+            14.415561
+        ],
+        [
+            51.761783,
+            14.414791
+        ],
+        [
+            51.761621,
+            14.414405
+        ],
+        [
+            51.761583,
+            14.414106
+        ],
+        [
+            51.761565,
+            14.413796
+        ],
+        [
+            51.761595,
+            14.413544
+        ],
+        [
+            51.761622,
+            14.413422
+        ],
+        [
+            51.761659,
+            14.41332
+        ],
+        [
+            51.761815,
+            14.413
+        ],
+        [
+            51.761989,
+            14.412707
+        ],
+        [
+            51.762318,
+            14.412196
+        ],
+        [
+            51.762825,
+            14.411442
+        ],
+        [
+            51.762949,
+            14.411258
+        ],
+        [
+            51.763037,
+            14.411114
+        ],
+        [
+            51.763212,
+            14.41075
+        ],
+        [
+            51.763305,
+            14.410486
+        ],
+        [
+            51.763378,
+            14.410195
+        ],
+        [
+            51.76342,
+            14.409898
+        ],
+        [
+            51.763448,
+            14.409602
+        ],
+        [
+            51.763464,
+            14.408499
+        ],
+        [
+            51.763482,
+            14.407246
+        ],
+        [
+            51.763491,
+            14.406606
+        ],
+        [
+            51.763519,
+            14.405885
+        ],
+        [
+            51.763521,
+            14.405642
+        ],
+        [
+            51.763529,
+            14.404862
+        ],
+        [
+            51.763526,
+            14.404523
+        ],
+        [
+            51.763532,
+            14.404049
+        ],
+        [
+            51.763535,
+            14.403499
+        ],
+        [
+            51.763573,
+            14.400574
+        ],
+        [
+            51.763591,
+            14.399316
+        ],
+        [
+            51.763594,
+            14.39898
+        ],
+        [
+            51.763594,
+            14.398935
+        ],
+        [
+            51.763596,
+            14.39877
+        ],
+        [
+            51.763597,
+            14.398706
+        ],
+        [
+            51.763603,
+            14.398227
+        ],
+        [
+            51.763604,
+            14.398192
+        ],
+        [
+            51.763605,
+            14.398099
+        ],
+        [
+            51.763607,
+            14.397971
+        ],
+        [
+            51.763607,
+            14.39794
+        ],
+        [
+            51.763615,
+            14.397351
+        ],
+        [
+            51.763615,
+            14.397295
+        ],
+        [
+            51.763659,
+            14.39389
+        ],
+        [
+            51.763659,
+            14.393491
+        ],
+        [
+            51.763744,
+            14.393453
+        ],
+        [
+            51.764072,
+            14.393248
+        ],
+        [
+            51.764527,
+            14.392936
+        ],
+        [
+            51.764698,
+            14.392818
+        ]
+    ],
+    "routePointsSimplified": [],
+    "meta": {
+        "formatVersion": "1.2",
+        "exportedAt": "2026-06-22T08:59:04.657Z",
+        "source": "Lehrfahrer Linien-Editor"
+    },
+    "line": {
+        "id": "linie_19_a",
+        "lineName": "Linie 19",
+        "routeName": "Route 01",
+        "directionId": "a",
+        "directionName": "Ostseedorf Schlichow – Dissenchen Schule",
+        "startStopName": "Ostseedorf Schlichow",
+        "endStopName": "Dissenchen Schule",
+        "color": "#d32f2f",
+        "routeMode": "street",
+        "placementMode": "freeStop",
+        "routingMode": "guidedStreet",
+        "preserveManualChains": true
+    },
+    "stats": {
+        "routeLengthMeters": 2008,
+        "estimatedDriveMinutes": 6,
+        "stopCount": 5,
+        "routePointCount": 55,
+        "hasFreeStops": false
+    },
+    "mapView": {
+        "centerLat": 51.764231,
+        "centerLon": 14.396175,
+        "zoom": 18
+    },
+    "bounds": {
+        "minLat": 51.761565,
+        "minLon": 14.392818,
+        "maxLat": 51.764732,
+        "maxLon": 14.418789
+    },
+    "route": {
+        "original": [
+            {
+                "lat": 51.76343,
+                "lon": 14.418789,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763354,
+                "lon": 14.418664,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763347,
+                "lon": 14.418651,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763181,
+                "lon": 14.418371,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762934,
+                "lon": 14.417747,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76289,
+                "lon": 14.417609,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762771,
+                "lon": 14.417232,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762095,
+                "lon": 14.415562,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762095,
+                "lon": 14.415561,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761783,
+                "lon": 14.414791,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761621,
+                "lon": 14.414405,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761583,
+                "lon": 14.414106,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761565,
+                "lon": 14.413796,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761595,
+                "lon": 14.413544,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761622,
+                "lon": 14.413422,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761659,
+                "lon": 14.41332,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761815,
+                "lon": 14.413,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.761989,
+                "lon": 14.412707,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762318,
+                "lon": 14.412196,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762825,
+                "lon": 14.411442,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.762949,
+                "lon": 14.411258,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763037,
+                "lon": 14.411114,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763212,
+                "lon": 14.41075,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763305,
+                "lon": 14.410486,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763378,
+                "lon": 14.410195,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.76342,
+                "lon": 14.409898,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763448,
+                "lon": 14.409602,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763464,
+                "lon": 14.408499,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763482,
+                "lon": 14.407246,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763491,
+                "lon": 14.406606,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763519,
+                "lon": 14.405885,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763521,
+                "lon": 14.405642,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763529,
+                "lon": 14.404862,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763526,
+                "lon": 14.404523,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763532,
+                "lon": 14.404049,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763535,
+                "lon": 14.403499,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763573,
+                "lon": 14.400574,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763591,
+                "lon": 14.399316,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763594,
+                "lon": 14.39898,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763594,
+                "lon": 14.398935,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763596,
+                "lon": 14.39877,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763597,
+                "lon": 14.398706,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763603,
+                "lon": 14.398227,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763604,
+                "lon": 14.398192,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763605,
+                "lon": 14.398099,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763607,
+                "lon": 14.397971,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763607,
+                "lon": 14.39794,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763615,
+                "lon": 14.397351,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763615,
+                "lon": 14.397295,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763659,
+                "lon": 14.39389,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763659,
+                "lon": 14.393491,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.763744,
+                "lon": 14.393453,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.764072,
+                "lon": 14.393248,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.764527,
+                "lon": 14.392936,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.764698,
+                "lon": 14.392818,
+                "sourceType": "street"
+            }
+        ],
+        "simplified": null
+    },
+    "schedule": {
+        "timeMode": "relative",
+        "startTime": null
+    },
+    "app": {
+        "version": "1.0",
+        "hasTimingPoints": true
+    },
+    "forceOverwrite": false,
+    "savedAt": "2026-06-22T10:59:04+02:00"
+}

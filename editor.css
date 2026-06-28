@@ -1115,34 +1115,78 @@ button.danger:hover {
 }
 
 .line-browser-list {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0 8px;
+}
+
+.line-browser-tree-group {
+  min-width: 0;
+}
+
+.line-browser-tree-summary {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 9px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
 }
 
-.line-browser-line-heading {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: #eef2ff;
-  color: #1e3a8a;
-  font-size: 14px;
-  font-weight: 700;
+.line-browser-tree-summary::-webkit-details-marker {
+  display: none;
 }
 
-.line-browser-category-heading {
-  margin-top: 2px;
-  padding: 4px 10px;
-  border-left: 3px solid #94a3b8;
+.line-browser-tree-summary::before {
+  content: "›";
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.line-browser-tree-group[open] > .line-browser-tree-summary::before {
+  transform: rotate(90deg);
+}
+
+.line-browser-tree-summary:hover {
+  background: #f1f5f9;
+}
+
+.line-browser-tree-summary:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.line-browser-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-browser-tree-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #e2e8f0;
   color: #475569;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
+}
+
+.line-browser-tree-content {
+  min-width: 0;
 }
 
 .line-browser-item {
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 10px 12px;
   background: #fff;
 }
@@ -1806,17 +1850,57 @@ button.danger:hover {
    LINIEN-BROWSER ERWEITERUNGEN
 ========================= */
 .line-browser-city-group {
-  margin-bottom: 18px;
-}
-.line-browser-city-heading {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #64748b;
-  padding: 6px 4px 6px;
-  border-bottom: 2px solid #e2e8f0;
   margin-bottom: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.line-browser-city-group > .line-browser-tree-summary {
+  background: #e8eef5;
+  color: #172033;
+}
+
+.line-browser-city-group > .line-browser-tree-summary .line-browser-tree-label::before {
+  content: "Ort: ";
+  color: #64748b;
+  font-weight: 600;
+}
+
+.line-browser-city-group > .line-browser-tree-content {
+  padding: 5px 8px 8px 24px;
+}
+
+.line-browser-line-group {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.line-browser-line-group:last-child {
+  border-bottom: 0;
+}
+
+.line-browser-line-group > .line-browser-tree-summary {
+  color: #1e293b;
+}
+
+.line-browser-line-group > .line-browser-tree-content {
+  padding-left: 24px;
+}
+
+.line-browser-category-group > .line-browser-tree-summary {
+  min-height: 30px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.line-browser-category-group > .line-browser-tree-summary .line-browser-tree-label::before {
+  content: "Kategorie: ";
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.line-browser-category-group > .line-browser-tree-content {
+  padding-left: 24px;
 }
 .line-browser-badge[style*="background"] {
   /* Farbe kommt dynamisch per style */
@@ -1893,6 +1977,22 @@ button.danger:hover {
 
   .menu-dropdown {
     min-width: 200px;
+  }
+
+  .line-browser-city-group > .line-browser-tree-content,
+  .line-browser-line-group > .line-browser-tree-content,
+  .line-browser-category-group > .line-browser-tree-content {
+    padding-left: 10px;
+  }
+
+  .line-browser-main {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .line-browser-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 }
 

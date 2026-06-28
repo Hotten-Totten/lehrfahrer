@@ -1,0 +1,114 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1664 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 22.06.2026 15:25:40) Tj
+T*
+() Tj
+T*
+(Ort: cottbus) Tj
+T*
+(Linienordner: Linie_13) Tj
+T*
+(Datei: Linie_13_Route_01_Gelsenkirchener_Platz_-_Am_Eichengrund) Tj
+T*
+(Linie: Linie 13) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Gelsenkirchener Platz - Am Eichengrund) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 11) Tj
+T*
+(Routenpunkte: 153) Tj
+T*
+(Linienlaenge: 4,04 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Gelsenkirchener Platz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.727670, 14.326318) Tj
+T*
+(2. BTU/Campus Sachsendorf \(Ost\)) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.726100, 14.320895) Tj
+T*
+(3. Behoerdenzentrum Lipezker Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.724010, 14.319521) Tj
+T*
+(4. Lausitz Park \(West\)) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.716995, 14.318127) Tj
+T*
+(5. Chausseestrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.714090, 14.318738) Tj
+T*
+(6. Gross Gaglow Schule) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.713184, 14.328490) Tj
+T*
+(7. Harnischdorfer Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.713010, 14.335402) Tj
+T*
+(8. Brandenburger Ring) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.712845, 14.341090) Tj
+T*
+(9. Freie Haltestelle 10) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.712798, 14.341707) Tj
+T*
+(10. Freie Haltestelle 11) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.714412, 14.341698) Tj
+T*
+(11. Am Eichengrund) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.714897, 14.338170) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000117 00000 n 
+0000000187 00000 n 
+0000001903 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2029
+%%EOF

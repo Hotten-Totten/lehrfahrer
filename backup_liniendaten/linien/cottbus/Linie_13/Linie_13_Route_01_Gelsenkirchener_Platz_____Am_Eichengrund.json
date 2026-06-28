@@ -1,0 +1,1811 @@
+{
+    "city": "cottbus",
+    "fileBase": "Linie_13_Route_01_Gelsenkirchener_Platz_–_Am_Eichengrund",
+    "lineFolder": "Linie_13",
+    "id": "linie_13_a",
+    "lineName": "Linie 13",
+    "routeName": "Route 01",
+    "directionName": "Gelsenkirchener Platz – Am Eichengrund",
+    "color": "#d32f2f",
+    "routeMode": "street",
+    "placementMode": "freeStop",
+    "routingMode": "guidedStreet",
+    "preserveManualChains": true,
+    "stops": [
+        {
+            "id": "stop_1",
+            "catalogId": "154658",
+            "groupId": "154658",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Gelsenkirchener Platz",
+            "lat": 51.72767,
+            "lon": 14.326318,
+            "order": 1,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": true
+        },
+        {
+            "id": "stop_2",
+            "catalogId": "435241",
+            "groupId": "435241",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "BTU/Campus Sachsendorf (Ost)",
+            "lat": 51.7261,
+            "lon": 14.320895,
+            "order": 2,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_3",
+            "catalogId": "132669",
+            "groupId": "132669",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Behördenzentrum Lipezker Straße",
+            "lat": 51.72401,
+            "lon": 14.319521,
+            "order": 3,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_4",
+            "catalogId": "442734",
+            "groupId": "442734",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Lausitz Park (West)",
+            "lat": 51.716995,
+            "lon": 14.318127,
+            "order": 4,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_5",
+            "catalogId": "407184",
+            "groupId": "407184",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Chausseestraße",
+            "lat": 51.71409,
+            "lon": 14.318738,
+            "order": 5,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_6",
+            "catalogId": "416820",
+            "groupId": "416820",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Groß Gaglow Schule",
+            "lat": 51.713184,
+            "lon": 14.32849,
+            "order": 6,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_7",
+            "catalogId": "618191",
+            "groupId": "618191",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Harnischdorfer Straße",
+            "lat": 51.71301,
+            "lon": 14.335402,
+            "order": 7,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_8",
+            "catalogId": "33257",
+            "groupId": "33257",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Brandenburger Ring",
+            "lat": 51.712845,
+            "lon": 14.34109,
+            "order": 8,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_10",
+            "catalogId": null,
+            "groupId": null,
+            "sourceType": "free",
+            "type": "free",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Freie Haltestelle 10",
+            "lat": 51.712798,
+            "lon": 14.341707,
+            "order": 9,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": true,
+            "isGhost": true,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_12",
+            "catalogId": null,
+            "groupId": null,
+            "sourceType": "free",
+            "type": "free",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Freie Haltestelle 11",
+            "lat": 51.714412,
+            "lon": 14.341698,
+            "order": 10,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": true,
+            "isGhost": true,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": false
+        },
+        {
+            "id": "stop_9",
+            "catalogId": "310248",
+            "groupId": "310248",
+            "sourceType": "catalog",
+            "type": "catalog",
+            "platformCode": null,
+            "directionHint": null,
+            "side": null,
+            "oppositeStopId": null,
+            "name": "Am Eichengrund",
+            "lat": 51.714897,
+            "lon": 14.33817,
+            "order": 11,
+            "minuteFromStart": 0,
+            "minuteMode": "auto",
+            "segmentMinutes": 0,
+            "arrivalMinute": 0,
+            "departureMinute": 0,
+            "hafasPlannedDate": null,
+            "hafasPlannedTime": null,
+            "hafasRealtimeDate": null,
+            "hafasRealtimeTime": null,
+            "note": "",
+            "isGhostPoint": false,
+            "isGhost": false,
+            "isDetourReplacement": false,
+            "detourId": null,
+            "detourRole": null,
+            "detourOriginalStopIds": [],
+            "detourOriginalStopNames": [],
+            "isTimingPoint": true
+        }
+    ],
+    "routePoints": [
+        [
+            51.72767,
+            14.326342
+        ],
+        [
+            51.727597,
+            14.326345
+        ],
+        [
+            51.727535,
+            14.326344
+        ],
+        [
+            51.727547,
+            14.326148
+        ],
+        [
+            51.727604,
+            14.325354
+        ],
+        [
+            51.727675,
+            14.324391
+        ],
+        [
+            51.727702,
+            14.323952
+        ],
+        [
+            51.727751,
+            14.323572
+        ],
+        [
+            51.727875,
+            14.322772
+        ],
+        [
+            51.727882,
+            14.322724
+        ],
+        [
+            51.727938,
+            14.322455
+        ],
+        [
+            51.727972,
+            14.322256
+        ],
+        [
+            51.727881,
+            14.322187
+        ],
+        [
+            51.727766,
+            14.322103
+        ],
+        [
+            51.726849,
+            14.321527
+        ],
+        [
+            51.726356,
+            14.321186
+        ],
+        [
+            51.726214,
+            14.321087
+        ],
+        [
+            51.726075,
+            14.320998
+        ],
+        [
+            51.726054,
+            14.320985
+        ],
+        [
+            51.725697,
+            14.320757
+        ],
+        [
+            51.725212,
+            14.320461
+        ],
+        [
+            51.725037,
+            14.320354
+        ],
+        [
+            51.724528,
+            14.320009
+        ],
+        [
+            51.724406,
+            14.319926
+        ],
+        [
+            51.724162,
+            14.319762
+        ],
+        [
+            51.724009,
+            14.319659
+        ],
+        [
+            51.72398,
+            14.319639
+        ],
+        [
+            51.723363,
+            14.319225
+        ],
+        [
+            51.723322,
+            14.319198
+        ],
+        [
+            51.72309,
+            14.319089
+        ],
+        [
+            51.7229,
+            14.319032
+        ],
+        [
+            51.722756,
+            14.318988
+        ],
+        [
+            51.722195,
+            14.318933
+        ],
+        [
+            51.722031,
+            14.318939
+        ],
+        [
+            51.721862,
+            14.318937
+        ],
+        [
+            51.721436,
+            14.318939
+        ],
+        [
+            51.721205,
+            14.31895
+        ],
+        [
+            51.720721,
+            14.318973
+        ],
+        [
+            51.720518,
+            14.31894
+        ],
+        [
+            51.72034,
+            14.318902
+        ],
+        [
+            51.719957,
+            14.318692
+        ],
+        [
+            51.719469,
+            14.318409
+        ],
+        [
+            51.719334,
+            14.318336
+        ],
+        [
+            51.719258,
+            14.318305
+        ],
+        [
+            51.719173,
+            14.318287
+        ],
+        [
+            51.719115,
+            14.318276
+        ],
+        [
+            51.719074,
+            14.318272
+        ],
+        [
+            51.718986,
+            14.318266
+        ],
+        [
+            51.718892,
+            14.318271
+        ],
+        [
+            51.718801,
+            14.318284
+        ],
+        [
+            51.718564,
+            14.318346
+        ],
+        [
+            51.718491,
+            14.318371
+        ],
+        [
+            51.718381,
+            14.318402
+        ],
+        [
+            51.718317,
+            14.318398
+        ],
+        [
+            51.718262,
+            14.318394
+        ],
+        [
+            51.717857,
+            14.318348
+        ],
+        [
+            51.717797,
+            14.318341
+        ],
+        [
+            51.717704,
+            14.31833
+        ],
+        [
+            51.71761,
+            14.318315
+        ],
+        [
+            51.717557,
+            14.318309
+        ],
+        [
+            51.71704,
+            14.318246
+        ],
+        [
+            51.71699,
+            14.31824
+        ],
+        [
+            51.716841,
+            14.318221
+        ],
+        [
+            51.716774,
+            14.318212
+        ],
+        [
+            51.716735,
+            14.318206
+        ],
+        [
+            51.716132,
+            14.31812
+        ],
+        [
+            51.715935,
+            14.318091
+        ],
+        [
+            51.715853,
+            14.318079
+        ],
+        [
+            51.71556,
+            14.318036
+        ],
+        [
+            51.715274,
+            14.317993
+        ],
+        [
+            51.715228,
+            14.317988
+        ],
+        [
+            51.715083,
+            14.31797
+        ],
+        [
+            51.715065,
+            14.317968
+        ],
+        [
+            51.714949,
+            14.317956
+        ],
+        [
+            51.71477,
+            14.317928
+        ],
+        [
+            51.714752,
+            14.317924
+        ],
+        [
+            51.714547,
+            14.317887
+        ],
+        [
+            51.714502,
+            14.317881
+        ],
+        [
+            51.714327,
+            14.317858
+        ],
+        [
+            51.71426,
+            14.317892
+        ],
+        [
+            51.714225,
+            14.317951
+        ],
+        [
+            51.714194,
+            14.318075
+        ],
+        [
+            51.714154,
+            14.31841
+        ],
+        [
+            51.714116,
+            14.318729
+        ],
+        [
+            51.714114,
+            14.318746
+        ],
+        [
+            51.714055,
+            14.319219
+        ],
+        [
+            51.714036,
+            14.319363
+        ],
+        [
+            51.713988,
+            14.319804
+        ],
+        [
+            51.713887,
+            14.320657
+        ],
+        [
+            51.713753,
+            14.321735
+        ],
+        [
+            51.713641,
+            14.322676
+        ],
+        [
+            51.713585,
+            14.323155
+        ],
+        [
+            51.713427,
+            14.32438
+        ],
+        [
+            51.713361,
+            14.324948
+        ],
+        [
+            51.713348,
+            14.325052
+        ],
+        [
+            51.713321,
+            14.325255
+        ],
+        [
+            51.713266,
+            14.325739
+        ],
+        [
+            51.713214,
+            14.326311
+        ],
+        [
+            51.713215,
+            14.327887
+        ],
+        [
+            51.713215,
+            14.327968
+        ],
+        [
+            51.713215,
+            14.328368
+        ],
+        [
+            51.713215,
+            14.32844
+        ],
+        [
+            51.713213,
+            14.32958
+        ],
+        [
+            51.713201,
+            14.333453
+        ],
+        [
+            51.7132,
+            14.334185
+        ],
+        [
+            51.713197,
+            14.334802
+        ],
+        [
+            51.713188,
+            14.334866
+        ],
+        [
+            51.713186,
+            14.334884
+        ],
+        [
+            51.713169,
+            14.334904
+        ],
+        [
+            51.713162,
+            14.334912
+        ],
+        [
+            51.713136,
+            14.334942
+        ],
+        [
+            51.713108,
+            14.334994
+        ],
+        [
+            51.713052,
+            14.335145
+        ],
+        [
+            51.713021,
+            14.335342
+        ],
+        [
+            51.713015,
+            14.335403
+        ],
+        [
+            51.713014,
+            14.335411
+        ],
+        [
+            51.713008,
+            14.335503
+        ],
+        [
+            51.713022,
+            14.335772
+        ],
+        [
+            51.713017,
+            14.335972
+        ],
+        [
+            51.712962,
+            14.338293
+        ],
+        [
+            51.712918,
+            14.339491
+        ],
+        [
+            51.71286,
+            14.341056
+        ],
+        [
+            51.712857,
+            14.341092
+        ],
+        [
+            51.712811,
+            14.34171
+        ],
+        [
+            51.712801,
+            14.341843
+        ],
+        [
+            51.712846,
+            14.341877
+        ],
+        [
+            51.71312,
+            14.341852
+        ],
+        [
+            51.713152,
+            14.341849
+        ],
+        [
+            51.713712,
+            14.341795
+        ],
+        [
+            51.714239,
+            14.341742
+        ],
+        [
+            51.714385,
+            14.341696
+        ],
+        [
+            51.71441,
+            14.341686
+        ],
+        [
+            51.714512,
+            14.341644
+        ],
+        [
+            51.714616,
+            14.341541
+        ],
+        [
+            51.71473,
+            14.341421
+        ],
+        [
+            51.71492,
+            14.341117
+        ],
+        [
+            51.715104,
+            14.34084
+        ],
+        [
+            51.715118,
+            14.340818
+        ],
+        [
+            51.715213,
+            14.340566
+        ],
+        [
+            51.715277,
+            14.340332
+        ],
+        [
+            51.71531,
+            14.340151
+        ],
+        [
+            51.715333,
+            14.339979
+        ],
+        [
+            51.715354,
+            14.339743
+        ],
+        [
+            51.715351,
+            14.339501
+        ],
+        [
+            51.715346,
+            14.339457
+        ],
+        [
+            51.715319,
+            14.339236
+        ],
+        [
+            51.71526,
+            14.338947
+        ],
+        [
+            51.715207,
+            14.338778
+        ],
+        [
+            51.715141,
+            14.338622
+        ],
+        [
+            51.71501,
+            14.338376
+        ],
+        [
+            51.714992,
+            14.338348
+        ],
+        [
+            51.714913,
+            14.338239
+        ],
+        [
+            51.714882,
+            14.338209
+        ]
+    ],
+    "routePointsSimplified": [],
+    "meta": {
+        "formatVersion": "1.2",
+        "exportedAt": "2026-06-22T13:25:40.779Z",
+        "source": "Lehrfahrer Linien-Editor"
+    },
+    "line": {
+        "id": "linie_13_a",
+        "lineName": "Linie 13",
+        "routeName": "Route 01",
+        "directionId": "a",
+        "directionName": "Gelsenkirchener Platz – Am Eichengrund",
+        "startStopName": "Gelsenkirchener Platz",
+        "endStopName": "Am Eichengrund",
+        "color": "#d32f2f",
+        "routeMode": "street",
+        "placementMode": "freeStop",
+        "routingMode": "guidedStreet",
+        "preserveManualChains": true
+    },
+    "stats": {
+        "routeLengthMeters": 4037,
+        "estimatedDriveMinutes": 12,
+        "stopCount": 11,
+        "routePointCount": 153,
+        "hasFreeStops": true
+    },
+    "mapView": {
+        "centerLat": 51.727324,
+        "centerLon": 14.331563,
+        "zoom": 17
+    },
+    "bounds": {
+        "minLat": 51.712798,
+        "minLon": 14.317858,
+        "maxLat": 51.727972,
+        "maxLon": 14.341877
+    },
+    "route": {
+        "original": [
+            {
+                "lat": 51.72767,
+                "lon": 14.326342,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727597,
+                "lon": 14.326345,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727535,
+                "lon": 14.326344,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727547,
+                "lon": 14.326148,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727604,
+                "lon": 14.325354,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727675,
+                "lon": 14.324391,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727702,
+                "lon": 14.323952,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727751,
+                "lon": 14.323572,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727875,
+                "lon": 14.322772,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727882,
+                "lon": 14.322724,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727938,
+                "lon": 14.322455,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727972,
+                "lon": 14.322256,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727881,
+                "lon": 14.322187,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.727766,
+                "lon": 14.322103,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.726849,
+                "lon": 14.321527,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.726356,
+                "lon": 14.321186,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.726214,
+                "lon": 14.321087,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.726075,
+                "lon": 14.320998,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.726054,
+                "lon": 14.320985,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.725697,
+                "lon": 14.320757,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.725212,
+                "lon": 14.320461,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.725037,
+                "lon": 14.320354,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.724528,
+                "lon": 14.320009,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.724406,
+                "lon": 14.319926,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.724162,
+                "lon": 14.319762,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.724009,
+                "lon": 14.319659,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.72398,
+                "lon": 14.319639,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.723363,
+                "lon": 14.319225,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.723322,
+                "lon": 14.319198,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.72309,
+                "lon": 14.319089,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.7229,
+                "lon": 14.319032,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.722756,
+                "lon": 14.318988,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.722195,
+                "lon": 14.318933,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.722031,
+                "lon": 14.318939,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.721862,
+                "lon": 14.318937,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.721436,
+                "lon": 14.318939,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.721205,
+                "lon": 14.31895,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.720721,
+                "lon": 14.318973,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.720518,
+                "lon": 14.31894,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.72034,
+                "lon": 14.318902,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719957,
+                "lon": 14.318692,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719469,
+                "lon": 14.318409,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719334,
+                "lon": 14.318336,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719258,
+                "lon": 14.318305,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719173,
+                "lon": 14.318287,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719115,
+                "lon": 14.318276,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.719074,
+                "lon": 14.318272,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718986,
+                "lon": 14.318266,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718892,
+                "lon": 14.318271,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718801,
+                "lon": 14.318284,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718564,
+                "lon": 14.318346,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718491,
+                "lon": 14.318371,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718381,
+                "lon": 14.318402,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718317,
+                "lon": 14.318398,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.718262,
+                "lon": 14.318394,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.717857,
+                "lon": 14.318348,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.717797,
+                "lon": 14.318341,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.717704,
+                "lon": 14.31833,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71761,
+                "lon": 14.318315,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.717557,
+                "lon": 14.318309,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71704,
+                "lon": 14.318246,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71699,
+                "lon": 14.31824,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.716841,
+                "lon": 14.318221,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.716774,
+                "lon": 14.318212,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.716735,
+                "lon": 14.318206,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.716132,
+                "lon": 14.31812,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715935,
+                "lon": 14.318091,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715853,
+                "lon": 14.318079,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71556,
+                "lon": 14.318036,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715274,
+                "lon": 14.317993,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715228,
+                "lon": 14.317988,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715083,
+                "lon": 14.31797,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715065,
+                "lon": 14.317968,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714949,
+                "lon": 14.317956,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71477,
+                "lon": 14.317928,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714752,
+                "lon": 14.317924,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714547,
+                "lon": 14.317887,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714502,
+                "lon": 14.317881,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714327,
+                "lon": 14.317858,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71426,
+                "lon": 14.317892,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714225,
+                "lon": 14.317951,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714194,
+                "lon": 14.318075,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714154,
+                "lon": 14.31841,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714116,
+                "lon": 14.318729,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714114,
+                "lon": 14.318746,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714055,
+                "lon": 14.319219,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714036,
+                "lon": 14.319363,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713988,
+                "lon": 14.319804,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713887,
+                "lon": 14.320657,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713753,
+                "lon": 14.321735,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713641,
+                "lon": 14.322676,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713585,
+                "lon": 14.323155,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713427,
+                "lon": 14.32438,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713361,
+                "lon": 14.324948,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713348,
+                "lon": 14.325052,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713321,
+                "lon": 14.325255,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713266,
+                "lon": 14.325739,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713214,
+                "lon": 14.326311,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713215,
+                "lon": 14.327887,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713215,
+                "lon": 14.327968,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713215,
+                "lon": 14.328368,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713215,
+                "lon": 14.32844,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713213,
+                "lon": 14.32958,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713201,
+                "lon": 14.333453,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.7132,
+                "lon": 14.334185,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713197,
+                "lon": 14.334802,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713188,
+                "lon": 14.334866,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713186,
+                "lon": 14.334884,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713169,
+                "lon": 14.334904,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713162,
+                "lon": 14.334912,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713136,
+                "lon": 14.334942,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713108,
+                "lon": 14.334994,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713052,
+                "lon": 14.335145,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713021,
+                "lon": 14.335342,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713015,
+                "lon": 14.335403,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713014,
+                "lon": 14.335411,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713008,
+                "lon": 14.335503,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713022,
+                "lon": 14.335772,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713017,
+                "lon": 14.335972,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712962,
+                "lon": 14.338293,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712918,
+                "lon": 14.339491,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71286,
+                "lon": 14.341056,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712857,
+                "lon": 14.341092,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712811,
+                "lon": 14.34171,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712801,
+                "lon": 14.341843,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.712846,
+                "lon": 14.341877,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71312,
+                "lon": 14.341852,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713152,
+                "lon": 14.341849,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.713712,
+                "lon": 14.341795,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714239,
+                "lon": 14.341742,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714385,
+                "lon": 14.341696,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71441,
+                "lon": 14.341686,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714512,
+                "lon": 14.341644,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714616,
+                "lon": 14.341541,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71473,
+                "lon": 14.341421,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71492,
+                "lon": 14.341117,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715104,
+                "lon": 14.34084,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715118,
+                "lon": 14.340818,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715213,
+                "lon": 14.340566,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715277,
+                "lon": 14.340332,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71531,
+                "lon": 14.340151,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715333,
+                "lon": 14.339979,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715354,
+                "lon": 14.339743,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715351,
+                "lon": 14.339501,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715346,
+                "lon": 14.339457,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715319,
+                "lon": 14.339236,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71526,
+                "lon": 14.338947,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715207,
+                "lon": 14.338778,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.715141,
+                "lon": 14.338622,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.71501,
+                "lon": 14.338376,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714992,
+                "lon": 14.338348,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714913,
+                "lon": 14.338239,
+                "sourceType": "street"
+            },
+            {
+                "lat": 51.714882,
+                "lon": 14.338209,
+                "sourceType": "street"
+            }
+        ],
+        "simplified": null
+    },
+    "schedule": {
+        "timeMode": "relative",
+        "startTime": null
+    },
+    "app": {
+        "version": "1.0",
+        "hasTimingPoints": true
+    },
+    "forceOverwrite": false,
+    "savedAt": "2026-06-22T15:25:40+02:00"
+}

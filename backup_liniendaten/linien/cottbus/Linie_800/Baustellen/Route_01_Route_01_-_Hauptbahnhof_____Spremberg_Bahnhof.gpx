@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Lehrfahrer Linieneditor" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>800 - 01 - Hauptbahnhof – Spremberg Bahnhof</name>
+    <desc>Export aus dem Lehrfahrer Linieneditor | Farbe: #d32f2f</desc>
+  </metadata>
+  <wpt lat="51.74992" lon="14.327379">
+    <name>Hauptbahnhof</name>
+    <cmt>SollMinute:0;Stop:1</cmt>
+    <desc>Stopp 1 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.74392" lon="14.326532">
+    <name>Thiemstraße/Klinikum</name>
+    <cmt>SollMinute:0;Stop:2</cmt>
+    <desc>Stopp 2 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.73712" lon="14.335941">
+    <name>Südfriedhof</name>
+    <cmt>SollMinute:0;Stop:3</cmt>
+    <desc>Stopp 3 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.7199" lon="14.347195">
+    <name>Cottbus, Madlow Gaglower Landstr.6</name>
+    <cmt>SollMinute:0;Stop:4</cmt>
+    <desc>Stopp 4 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.713993" lon="14.352493">
+    <name>Cottbus, Gallinchen Spreewiesen6</name>
+    <cmt>SollMinute:0;Stop:5</cmt>
+    <desc>Stopp 5 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.709602" lon="14.356656">
+    <name>Cottbus, Gallinchen Friedensplatz6</name>
+    <cmt>SollMinute:0;Stop:6</cmt>
+    <desc>Stopp 6 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.705208" lon="14.360603">
+    <name>Cottbus, Gallinchen Spremberger Ring6</name>
+    <cmt>SollMinute:0;Stop:7</cmt>
+    <desc>Stopp 7 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.684036" lon="14.35866">
+    <name>Neuhausen/Spree, OT Groß Oßnig, Siedlung</name>
+    <cmt>SollMinute:0;Stop:8</cmt>
+    <desc>Stopp 8 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.678116" lon="14.356878">
+    <name>Neuhausen/Spree, OT Groß Oßnig, Dorfstr. 6</name>
+    <cmt>SollMinute:0;Stop:9</cmt>
+    <desc>Stopp 9 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.66017" lon="14.359516">
+    <name>Neuhausen/Spree, OT Klein Döbbern, B97 6</name>
+    <cmt>SollMinute:0;Stop:10</cmt>
+    <desc>Stopp 10 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.650696" lon="14.361237">
+    <name>Neuhausen/Spree, OT Klein Döbbern, Schäferberg</name>
+    <cmt>SollMinute:0;Stop:11</cmt>
+    <desc>Stopp 11 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.610268" lon="14.363246">
+    <name>Spremberg, OT Sellessen, Bühlow, B 97 Abzweig Bühlow6</name>
+    <cmt>SollMinute:0;Stop:12</cmt>
+    <desc>Stopp 12 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.585007" lon="14.359948">
+    <name>Spremberg, Cantdorf Gärtnerei1</name>
+    <cmt>SollMinute:0;Stop:13</cmt>
+    <desc>Stopp 13 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.571003" lon="14.367552">
+    <name>Spremberg, Schwimmhalle6</name>
+    <cmt>SollMinute:0;Stop:14</cmt>
+    <desc>Stopp 14 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.56862" lon="14.375008">
+    <name>Spremberg, Busbahnhof 2A</name>
+    <cmt>SollMinute:0;Stop:15</cmt>
+    <desc>Stopp 15 | SollMinute: 0</desc>
+  </wpt>
+  <wpt lat="51.5752" lon="14.396791">
+    <name>Spremberg Bahnhof</name>
+    <cmt>SollMinute:0;Stop:16</cmt>
+    <desc>Stopp 16 | SollMinute: 0</desc>
+  </wpt>
+  <trk>
+    <name>800 - 01 - Hauptbahnhof – Spremberg Bahnhof</name>
+    <desc>Route für Maps.me Offline-Nutzung</desc>
+    <trkseg>
+      <trkpt lat="51.74992" lon="14.327379"></trkpt>
+      <trkpt lat="51.74392" lon="14.326532"></trkpt>
+      <trkpt lat="51.73712" lon="14.335941"></trkpt>
+      <trkpt lat="51.7199" lon="14.347195"></trkpt>
+      <trkpt lat="51.713993" lon="14.352493"></trkpt>
+      <trkpt lat="51.709602" lon="14.356656"></trkpt>
+      <trkpt lat="51.705208" lon="14.360603"></trkpt>
+      <trkpt lat="51.684036" lon="14.35866"></trkpt>
+      <trkpt lat="51.678116" lon="14.356878"></trkpt>
+      <trkpt lat="51.66017" lon="14.359516"></trkpt>
+      <trkpt lat="51.650696" lon="14.361237"></trkpt>
+      <trkpt lat="51.610268" lon="14.363246"></trkpt>
+      <trkpt lat="51.585007" lon="14.359948"></trkpt>
+      <trkpt lat="51.571003" lon="14.367552"></trkpt>
+      <trkpt lat="51.56862" lon="14.375008"></trkpt>
+      <trkpt lat="51.5752" lon="14.396791"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

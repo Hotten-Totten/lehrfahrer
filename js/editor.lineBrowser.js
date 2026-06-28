@@ -40,6 +40,39 @@ function getLineBrowserVariantCategory(line) {
   return String(line?.variantCategory || "").trim() || "Standard";
 }
 
+function getLineBrowserLineLabel(line) {
+  const lineName = String(line?.lineName || "").trim();
+  const folderName = String(line?.lineFolder || "").trim().replace(/^Linie[_\s-]*/i, "");
+  const value = lineName || folderName || "Unbekannt";
+  return /^Linie\b/i.test(value) ? value : "Linie " + value;
+}
+
+function createLineBrowserGroup(className, label, count, open) {
+  const details = document.createElement("details");
+  details.className = "line-browser-tree-group " + className;
+  details.open = open;
+
+  const summary = document.createElement("summary");
+  summary.className = "line-browser-tree-summary";
+
+  const labelNode = document.createElement("span");
+  labelNode.className = "line-browser-tree-label";
+  labelNode.textContent = label;
+
+  const countNode = document.createElement("span");
+  countNode.className = "line-browser-tree-count";
+  countNode.textContent = count + (count === 1 ? " Variante" : " Varianten");
+
+  summary.appendChild(labelNode);
+  summary.appendChild(countNode);
+  details.appendChild(summary);
+
+  const content = document.createElement("div");
+  content.className = "line-browser-tree-content";
+  details.appendChild(content);
+  return { details, content };
+}
+
 // Rendert die Liste der Linien im Browser-Fenster
 // Enthält Suche, Sortierung, Gruppenansicht nach Ort, Download-Buttons
 function renderLineBrowser(lines) {
@@ -134,46 +167,56 @@ function renderLineBrowser(lines) {
       return;
     }
 
-    // Nach Ort gruppieren
-    const groups = {};
+    const groups = new Map();
     filtered.forEach(line => {
-      const c = line.city || "unbekannt";
-      if (!groups[c]) groups[c] = [];
-      groups[c].push(line);
+      const city = String(line.city || "Unbekannt").trim() || "Unbekannt";
+      const lineKey = String(line.lineFolder || line.lineName || "Unbekannt").trim() || "Unbekannt";
+      const category = getLineBrowserVariantCategory(line);
+      if (!groups.has(city)) groups.set(city, new Map());
+      const cityGroup = groups.get(city);
+      if (!cityGroup.has(lineKey)) cityGroup.set(lineKey, new Map());
+      const lineGroup = cityGroup.get(lineKey);
+      if (!lineGroup.has(category)) lineGroup.set(category, []);
+      lineGroup.get(category).push(line);
     });
 
-    Object.keys(groups).sort().forEach(city => {
-      const group = document.createElement("div");
-      group.className = "line-browser-city-group";
+    const searchActive = Boolean(searchInput.value.trim());
+    Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, "de")).forEach(city => {
+      const cityGroups = groups.get(city);
+      const cityCount = Array.from(cityGroups.values()).reduce(
+        (sum, lineGroups) => sum + Array.from(lineGroups.values()).reduce((lineSum, entries) => lineSum + entries.length, 0),
+        0
+      );
+      const cityTree = createLineBrowserGroup(
+        "line-browser-city-group",
+        city.charAt(0).toUpperCase() + city.slice(1),
+        cityCount,
+        true
+      );
 
-      const heading = document.createElement("div");
-      heading.className = "line-browser-city-heading";
-      heading.textContent = city.charAt(0).toUpperCase() + city.slice(1) + " (" + groups[city].length + ")";
-      group.appendChild(heading);
+      Array.from(cityGroups.keys()).sort((a, b) => a.localeCompare(b, "de", { numeric: true })).forEach(lineKey => {
+        const categoryGroups = cityGroups.get(lineKey);
+        const lineCount = Array.from(categoryGroups.values()).reduce((sum, entries) => sum + entries.length, 0);
+        const firstLine = Array.from(categoryGroups.values())[0][0];
+        const lineTree = createLineBrowserGroup(
+          "line-browser-line-group",
+          getLineBrowserLineLabel(firstLine),
+          lineCount,
+          searchActive || cityGroups.size === 1
+        );
 
-      const list = document.createElement("div");
-      list.className = "line-browser-list";
+        Array.from(categoryGroups.keys()).sort((a, b) => a.localeCompare(b, "de")).forEach(category => {
+          const categoryLines = categoryGroups.get(category);
+          const categoryTree = createLineBrowserGroup(
+            "line-browser-category-group",
+            category,
+            categoryLines.length,
+            searchActive
+          );
+          const list = document.createElement("div");
+          list.className = "line-browser-list";
 
-      let lastLineHeading = null;
-      let lastCategoryHeading = null;
-      groups[city].forEach(line => {
-        const lineHeadingText = String(line.lineName || "?").trim() || "?";
-        if (lineHeadingText !== lastLineHeading) {
-          const lineHeading = document.createElement("div");
-          lineHeading.className = "line-browser-line-heading";
-          lineHeading.textContent = lineHeadingText;
-          list.appendChild(lineHeading);
-          lastLineHeading = lineHeadingText;
-          lastCategoryHeading = null;
-        }
-        const categoryHeadingText = getLineBrowserVariantCategory(line);
-        if (categoryHeadingText !== lastCategoryHeading) {
-          const categoryHeading = document.createElement("div");
-          categoryHeading.className = "line-browser-category-heading";
-          categoryHeading.textContent = categoryHeadingText;
-          list.appendChild(categoryHeading);
-          lastCategoryHeading = categoryHeadingText;
-        }
+          categoryLines.forEach(line => {
 
         const item = document.createElement("div");
         item.className = "line-browser-item";
@@ -202,7 +245,7 @@ function renderLineBrowser(lines) {
         const meta = document.createElement("div");
         meta.className = "line-browser-meta";
         const parts = [];
-        parts.push(getLineBrowserVariantCategory(line));
+        if (line.routeName) parts.push(line.routeName);
         if (line.directionName) parts.push(line.directionName);
         if (line.stopCount != null) parts.push(line.stopCount + " Halt.");
         if (line.routeLengthMeters) parts.push((line.routeLengthMeters / 1000).toFixed(1) + " km");
@@ -395,11 +438,17 @@ function renderLineBrowser(lines) {
         item.appendChild(mainRow);
         item.appendChild(renameForm);
         item.appendChild(deleteConfirm);
-        list.appendChild(item);
+            list.appendChild(item);
+          });
+
+          categoryTree.content.appendChild(list);
+          lineTree.content.appendChild(categoryTree.details);
+        });
+
+        cityTree.content.appendChild(lineTree.details);
       });
 
-      group.appendChild(list);
-      container.appendChild(group);
+      container.appendChild(cityTree.details);
     });
   }
 

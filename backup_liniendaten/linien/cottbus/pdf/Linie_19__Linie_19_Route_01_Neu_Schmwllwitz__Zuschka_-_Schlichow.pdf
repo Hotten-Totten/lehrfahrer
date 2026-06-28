@@ -1,0 +1,260 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R 9 0 R ] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2027 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 22.06.2026 10:43:41) Tj
+T*
+() Tj
+T*
+(Ort: cottbus) Tj
+T*
+(Linienordner: Linie_19) Tj
+T*
+(Datei: Linie_19_Route_01_Neu_Schmwllwitz,_Zuschka_-_Schlichow) Tj
+T*
+(Linie: Linie 19) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Neu Schmwllwitz, Zuschka - Schlichow) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 40) Tj
+T*
+(Routenpunkte: 547) Tj
+T*
+(Linienlaenge: 15,43 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Freie Haltestelle 1) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.785143, 14.343923) Tj
+T*
+(2. Am Fliess) Tj
+T*
+(Minute: 1 | Typ: catalog | Position: 51.786525, 14.342989) Tj
+T*
+(3. Am Lug) Tj
+T*
+(Minute: 2 | Typ: catalog | Position: 51.785883, 14.338911) Tj
+T*
+(4. Schmellwitzer Strasse) Tj
+T*
+(Minute: 4 | Typ: catalog | Position: 51.787590, 14.334378) Tj
+T*
+(5. Freie Haltestelle 5) Tj
+T*
+(Minute: 6 | Typ: free | Position: 51.786910, 14.330077) Tj
+T*
+(6. Nordparkstrasse) Tj
+T*
+(Minute: 7 | Typ: catalog | Position: 51.786414, 14.327180) Tj
+T*
+(7. Guhrower Strasse/Cottbus Center) Tj
+T*
+(Minute: 10 | Typ: catalog | Position: 51.784879, 14.318528) Tj
+T*
+(8. Freie Haltestelle 8) Tj
+T*
+(Minute: 11 | Typ: free | Position: 51.783643, 14.318458) Tj
+T*
+(9. Freie Haltestelle 9) Tj
+T*
+(Minute: 12 | Typ: free | Position: 51.782484, 14.319783) Tj
+T*
+(10. Byhlener Strasse) Tj
+T*
+(Minute: 13 | Typ: catalog | Position: 51.783607, 14.326013) Tj
+T*
+(11. Albrecht-Duerer-Strasse) Tj
+T*
+(Minute: 15 | Typ: catalog | Position: 51.782168, 14.328571) Tj
+T*
+(12. Eigene Scholle) Tj
+T*
+(Minute: 17 | Typ: catalog | Position: 51.777126, 14.329062) Tj
+T*
+(13. Straupitzer Strasse) Tj
+T*
+(Minute: 19 | Typ: catalog | Position: 51.776530, 14.325105) Tj
+T*
+(14. Meisenweg) Tj
+T*
+(Minute: 20 | Typ: catalog | Position: 51.775577, 14.319663) Tj
+T*
+(15. Amselweg) Tj
+T*
+(Minute: 23 | Typ: catalog | Position: 51.773429, 14.313389) Tj
+T*
+(16. Freie Haltestelle 16) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2464 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 24 | Typ: free | Position: 51.772809, 14.310808) Tj
+T*
+(17. Freie Haltestelle 17) Tj
+T*
+(Minute: 25 | Typ: free | Position: 51.771681, 14.313689) Tj
+T*
+(18. Freie Haltestelle 18) Tj
+T*
+(Minute: 26 | Typ: free | Position: 51.773324, 14.317127) Tj
+T*
+(19. Goyatzer Strasse) Tj
+T*
+(Minute: 29 | Typ: catalog | Position: 51.774090, 14.325149) Tj
+T*
+(20. Freizeitbad Lagune) Tj
+T*
+(Minute: 30 | Typ: catalog | Position: 51.771396, 14.328193) Tj
+T*
+(21. Cottbus, BTU/Bibliothek) Tj
+T*
+(Minute: 33 | Typ: catalog | Position: 51.766468, 14.328291) Tj
+T*
+(22. Cottbus, Stadtverwaltung) Tj
+T*
+(Minute: 34 | Typ: catalog | Position: 51.763230, 14.327353) Tj
+T*
+(23. August-Bebel-Strasse) Tj
+T*
+(Minute: 37 | Typ: catalog | Position: 51.758319, 14.327821) Tj
+T*
+(24. Cottbus, Stadtpromenade) Tj
+T*
+(Minute: 38 | Typ: catalog | Position: 51.757172, 14.332138) Tj
+T*
+(25. Cottbus, Freiheitsstrasse) Tj
+T*
+(Minute: 40 | Typ: catalog | Position: 51.757639, 14.336939) Tj
+T*
+(26. Cottbus, Carl-Blechen-Park) Tj
+T*
+(Minute: 41 | Typ: catalog | Position: 51.759192, 14.342987) Tj
+T*
+(27. Cottbus, Warmbad) Tj
+T*
+(Minute: 43 | Typ: catalog | Position: 51.760223, 14.346458) Tj
+T*
+(28. Cottbus, Hans-Beimler-Strasse) Tj
+T*
+(Minute: 44 | Typ: catalog | Position: 51.762353, 14.352351) Tj
+T*
+(29. Cottbus, Dissenchener Strasse) Tj
+T*
+(Minute: 47 | Typ: catalog | Position: 51.762271, 14.357247) Tj
+T*
+(30. An der Pastoa) Tj
+T*
+(Minute: 48 | Typ: catalog | Position: 51.762330, 14.360456) Tj
+T*
+(31. Heizkraftwerk) Tj
+T*
+(Minute: 50 | Typ: catalog | Position: 51.762346, 14.367935) Tj
+T*
+(32. Heidesiedlung) Tj
+T*
+(Minute: 51 | Typ: catalog | Position: 51.763617, 14.373987) Tj
+T*
+(33. Dissenchen Birkenstrasse) Tj
+T*
+(Minute: 54 | Typ: catalog | Position: 51.763794, 14.381823) Tj
+T*
+(34. Dissenchen Turnstrasse) Tj
+T*
+(Minute: 56 | Typ: catalog | Position: 51.763666, 14.391144) Tj
+T*
+(35. Dissenchen Haasower Strasse) Tj
+T*
+(Minute: 58 | Typ: catalog | Position: 51.763599, 14.398070) Tj
+T*
+(36. Cottbus, Schlichower Hoehe) Tj
+T*
+(Minute: 61 | Typ: catalog | Position: 51.762905, 14.411326) Tj
+T*
+(37. Cottbus, Schlichower Dorfstrasse) Tj
+T*
+(Minute: 63 | Typ: catalog | Position: 51.762111, 14.415535) Tj
+T*
+(38. Freie Haltestelle 38) Tj
+T*
+(Minute: 64 | Typ: free | Position: 51.763043, 14.418086) Tj
+T*
+(39. Freie Haltestelle 39) Tj
+T*
+(Minute: 65 | Typ: free | Position: 51.763557, 14.419867) Tj
+T*
+(40. Cottbus, Ostseedorf Schlichow) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 98 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 66 | Typ: catalog | Position: 51.763488, 14.418856) Tj
+T*
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000129 00000 n 
+0000000199 00000 n 
+0000002278 00000 n 
+0000002404 00000 n 
+0000004920 00000 n 
+0000005046 00000 n 
+0000005194 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+5320
+%%EOF

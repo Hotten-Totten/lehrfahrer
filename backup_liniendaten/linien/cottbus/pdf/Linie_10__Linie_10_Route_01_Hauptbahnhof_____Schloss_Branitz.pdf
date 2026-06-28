@@ -1,0 +1,157 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1996 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 25.06.2026 18:47:08) Tj
+T*
+() Tj
+T*
+(Ort: cottbus) Tj
+T*
+(Linienordner: Linie_10) Tj
+T*
+(Datei: Linie_10_Route_01_Hauptbahnhof_-_Schloss_Branitz) Tj
+T*
+(Linie: Linie 10) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Hauptbahnhof - Schloss Branitz) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 18) Tj
+T*
+(Routenpunkte: 286) Tj
+T*
+(Linienlaenge: 7,88 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Hauptbahnhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.750201, 14.326483) Tj
+T*
+(2. Freie Haltestelle 16) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.750097, 14.327736) Tj
+T*
+(3. Freie Haltestelle 17) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.749901, 14.326427) Tj
+T*
+(4. Stadtmuseum) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.755430, 14.328314) Tj
+T*
+(5. Stadtpromenade) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.757160, 14.332204) Tj
+T*
+(6. Freiheitsstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.757640, 14.337093) Tj
+T*
+(7. Carl-Blechen-Park) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.759132, 14.343081) Tj
+T*
+(8. Georg-Schlesinger-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.757023, 14.346009) Tj
+T*
+(9. Vorpark) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.751137, 14.354009) Tj
+T*
+(10. Bleyerstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.751785, 14.360430) Tj
+T*
+(11. Feuerbachstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.752020, 14.364107) Tj
+T*
+(12. Spitzwegstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.753624, 14.365629) Tj
+T*
+(13. Branitzer Siedlung) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.757034, 14.369417) Tj
+T*
+(14. Freie Haltestelle 18) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.755894, 14.365633) Tj
+T*
+(15. Spitzwegstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.754620, 14.365259) Tj
+T*
+(16. Feuerbachstrasse) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 286 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 0 | Typ: catalog | Position: 51.752003, 14.363785) Tj
+T*
+(17. Baumuniversitaet) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.751540, 14.363956) Tj
+T*
+(18. Schloss Branitz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.742992, 14.375012) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000193 00000 n 
+0000002241 00000 n 
+0000002367 00000 n 
+0000002704 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2830
+%%EOF
