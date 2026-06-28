@@ -34,11 +34,7 @@ final class PdfPreviewV2
     private function drawHeader(array $data, array $branding): void
     {
         $primary = $this->color($branding['primaryColor'], [0.2, 0.31, 0.41]);
-        $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
 
-        $this->rectangle(42, 742, 511, 72, [1, 1, 1], $border);
-        $this->line(178, 742, 178, 814, 0.7, $border);
-        $this->line(465, 742, 465, 814, 0.7, $border);
         $this->text(62, 775, (string) $branding['fallbackLogoText'], 16, true);
         $this->text(210, 772, (string) $data['title'], 22, true);
         $this->rectangle(489, 758, 40, 40, [1, 1, 1], $primary);
@@ -51,12 +47,12 @@ final class PdfPreviewV2
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
 
-        $this->infoColumn(42, 690, 248, 160, 'Strecke', [
+        $this->infoColumn(42, 670, 248, 160, 'Streckendaten', [
             'Linie' => $data['line'],
             'Route' => $data['route'],
             'Richtung' => $data['direction'],
         ], $border, $accent);
-        $this->infoColumn(305, 690, 248, 160, 'Variante', [
+        $this->infoColumn(305, 670, 248, 160, 'Dokument', [
             'Variante' => $data['variant'],
             'Kategorie' => $data['category'],
             'Gültig ab' => $data['validFrom'],
@@ -93,8 +89,8 @@ final class PdfPreviewV2
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $tableTop = 478.0;
-        $this->text(42, 502, 'Haltestellen und Fahranweisungen', 13, true);
+        $tableTop = 458.0;
+        $this->text(42, 482, 'Haltestellen und Fahranweisungen', 13, true);
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
         foreach ($stops as $stop) {
@@ -109,7 +105,7 @@ final class PdfPreviewV2
             $this->line(93, $rowBottom, 93, $rowTop, 0.5, $border);
             $this->line(323, $rowBottom, 323, $rowTop, 0.5, $border);
             $this->text(63, $rowBottom + 7, (string) ($stop['number'] ?? ''), 8);
-            $this->text(103, $rowBottom + 7, $this->crop((string) ($stop['stop'] ?? ''), 38), 8);
+            $this->text(103, $rowBottom + 7, $this->crop((string) ($stop['stop'] ?? ''), 38), 8.5);
             $instruction = trim((string) ($stop['instruction'] ?? ''));
             if ($instruction === '-') {
                 $instruction = '';
@@ -130,6 +126,7 @@ final class PdfPreviewV2
         $this->text(61, $bottom + 8, 'Nr.', 9, true);
         $this->text(183, $bottom + 8, 'Haltestelle', 9, true);
         $this->text(418, $bottom + 8, 'Fahrhinweis', 9, true);
+        $this->line(42, $bottom, 553, $bottom, 1.0, $border);
         return $bottom;
     }
 
@@ -150,7 +147,7 @@ final class PdfPreviewV2
         $this->rectangle(42, $top - 26, 511, 26, $accent, $border);
         $this->text(56, $top - 18, 'Besonderheiten', 10, true);
         foreach ($lines as $index => $line) {
-            $this->text(56, $top - 45 - ($index * 13), $line, 9);
+            $this->text(56, $top - 45 - ($index * 13), $line, 8.5);
         }
     }
 
@@ -240,8 +237,8 @@ final class PdfPreviewV2
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
             2 => '',
-            3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+            3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+            4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
         ];
         $nextId = 5;
         $pageIds = [];
