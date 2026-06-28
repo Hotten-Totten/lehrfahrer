@@ -9,8 +9,13 @@ namespace Lehrfahrer\Pdf;
  */
 final class PdfSections
 {
-    public function renderHeader(): void
+    public function renderHeader(
+        array $data = [],
+        ?PdfBranding $branding = null,
+        ?PdfLayout $layout = null
+    ): void
     {
+        // Future header: logo/fallback, title, route metadata, and optional QR placeholder.
     }
 
     public function renderInfoBoxes(): void

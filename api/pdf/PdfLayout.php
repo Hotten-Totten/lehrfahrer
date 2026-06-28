@@ -9,5 +9,19 @@ namespace Lehrfahrer\Pdf;
  */
 final class PdfLayout
 {
-    // Boxes, tables, page breaks, and font definitions will be added later.
+    public function drawHeaderArea(array $options = []): void
+    {
+    }
+
+    public function drawLogoBlock(array $branding = []): void
+    {
+    }
+
+    public function drawTitleBlock(string $title = '', array $options = []): void
+    {
+    }
+
+    public function drawMetaLine(string $label = '', string $value = '', array $options = []): void
+    {
+    }
 }
