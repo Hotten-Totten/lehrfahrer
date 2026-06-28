@@ -138,29 +138,86 @@ async function openDriverDocumentsDialog() {
 
 function renderDriverDocumentsResult(container, result) {
   container.innerHTML = "";
+  const packageData = result.package || {};
   const heading = document.createElement("h4");
-  heading.textContent = "Paket erstellt";
-  const summary = document.createElement("p");
-  summary.textContent = `${Number(result.package?.documentCount || 0)} Unterlagen wurden erzeugt.`;
-  const packageLink = document.createElement("a");
-  packageLink.href = result.packagePath;
-  packageLink.target = "_blank";
-  packageLink.rel = "noopener";
-  packageLink.textContent = "Paketübersicht öffnen";
+  heading.textContent = "Fahrerunterlagen-Paket";
+  const meta = document.createElement("dl");
+  meta.className = "driver-documents-package-meta";
+  const createdAt = packageData.createdAt
+    ? new Date(packageData.createdAt).toLocaleString("de-DE")
+    : "";
+  [
+    ["Fahrer/in", packageData.driverName || "Unbenannt"],
+    ["Erstellt", createdAt],
+    ["Unterlagen", String(Number(packageData.documentCount || 0))]
+  ].forEach(([label, value]) => {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    meta.append(term, description);
+  });
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "driver-documents-package-toolbar";
+  const zipButton = document.createElement("button");
+  zipButton.type = "button";
+  zipButton.className = "driver-documents-create";
+  zipButton.textContent = "Gesamtes Paket herunterladen";
+  const zipStatus = document.createElement("span");
+  zipButton.addEventListener("click", async () => {
+    zipButton.disabled = true;
+    zipStatus.textContent = "ZIP wird erstellt ...";
+    try {
+      const response = await fetch(
+        `api/download_driver_package.php?package=${encodeURIComponent(result.packagePath)}`,
+        { headers: withApiAuthHeaders({}) }
+      );
+      if (!response.ok) {
+        const errorResult = await response.json().catch(() => ({}));
+        throw new Error(errorResult.error || "ZIP konnte nicht erstellt werden.");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const filename = encodedName ? decodeURIComponent(encodedName) : "Fahrerunterlagen.zip";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      zipStatus.textContent = "ZIP heruntergeladen.";
+    } catch (error) {
+      zipStatus.textContent = error.message || "ZIP konnte nicht erstellt werden.";
+    } finally {
+      zipButton.disabled = false;
+    }
+  });
+  toolbar.append(zipButton, zipStatus);
+
   const list = document.createElement("ul");
   list.className = "driver-documents-result-list";
-  (result.package?.documents || []).forEach(documentInfo => {
+  (packageData.documents || []).forEach(documentInfo => {
     const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = [
+      documentInfo.lineName,
+      documentInfo.variantName || documentInfo.routeName
+    ].filter(Boolean).join(" – ");
     const link = document.createElement("a");
     link.href = documentInfo.path;
     link.target = "_blank";
     link.rel = "noopener";
-    link.textContent = [
-      documentInfo.lineName,
-      documentInfo.variantName || documentInfo.routeName
-    ].filter(Boolean).join(" – ");
-    item.appendChild(link);
+    link.className = "driver-documents-open";
+    link.textContent = "Öffnen";
+    item.append(text, link);
     list.appendChild(item);
   });
-  container.append(heading, summary, packageLink, list);
+  const savedHint = document.createElement("small");
+  savedHint.className = "driver-documents-saved-hint";
+  savedHint.textContent = "Paketdaten gespeichert";
+  container.append(heading, meta, toolbar, list, savedHint);
 }

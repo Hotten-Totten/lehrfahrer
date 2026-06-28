@@ -1330,9 +1330,61 @@ button.danger:hover {
 
 .driver-documents-result-list {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.driver-documents-package-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 14px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.driver-documents-package-meta dt {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.driver-documents-package-meta dd {
+  margin: 0;
+}
+
+.driver-documents-package-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.driver-documents-result-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.driver-documents-open {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.driver-documents-saved-hint {
+  color: #64748b;
 }
 
 .line-browser-actions {

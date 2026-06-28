@@ -116,17 +116,35 @@ function buildSimplePdf(array $pages): string {
     $objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
     $objects[2] = '';
     $objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    $objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+    $objects[5] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>';
 
-    $nextId = 4;
+    $nextId = 6;
     $pageRefs = [];
 
     $pageCount = count($pages);
     foreach ($pages as $pageIndex => $lines) {
-        $stream = "BT\n/F1 10 Tf\n14 TL\n50 800 Td\n";
+        $stream = '';
+        $y = 800;
         foreach ($lines as $line) {
-            $stream .= '(' . pdfEscapeText($line) . ") Tj\nT*\n";
+            if (preg_match('/^[-=]{10,}$/', $line)) {
+                $stream .= "0.7 w\n50 {$y} m\n545 {$y} l\nS\n";
+                $y -= 10;
+                continue;
+            }
+            if ($line === '') {
+                $y -= 10;
+                continue;
+            }
+            $isTitle = $line === 'Lehrfahrer';
+            $isHeading = in_array($line, ['Besonderheiten', 'Haltestellen', 'Nachweis der Streckeneinweisung'], true);
+            $isTable = str_contains($line, ' | ');
+            $font = $isTitle || $isHeading ? 'F2' : ($isTable ? 'F3' : 'F1');
+            $size = $isTitle ? 18 : ($isHeading ? 13 : ($isTable ? 9 : 10));
+            $step = $isTitle ? 26 : ($isHeading ? 20 : 14);
+            $stream .= "BT\n/{$font} {$size} Tf\n50 {$y} Td\n(" . pdfEscapeText($line) . ") Tj\nET\n";
+            $y -= $step;
         }
-        $stream .= "ET\n";
         $footer = 'Lehrfahrer | Seite ' . ($pageIndex + 1) . ' von ' . $pageCount;
         $stream .= "BT\n/F1 9 Tf\n50 28 Td\n(" . pdfEscapeText($footer) . ") Tj\nET";
 
@@ -134,7 +152,7 @@ function buildSimplePdf(array $pages): string {
         $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
 
         $pageId = $nextId++;
-        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentId} 0 R >>";
+        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents {$contentId} 0 R >>";
         $pageRefs[] = $pageId;
     }
 
