@@ -24,12 +24,29 @@ final class PdfLayout
         $this->documentMeta = is_array($options['meta'] ?? null) ? $options['meta'] : [];
         $primary = $this->color('primaryColor', [0.24, 0.36, 0.48]);
         $secondary = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
-        $this->drawRectangle(48, 768, 128, 40, [1, 1, 1], $secondary);
-        $this->drawText(60, 785, (string) ($options['logoText'] ?? ''), 15, true);
-        $this->drawText(208, 788, (string) ($options['title'] ?? ''), 20, true);
-        $this->drawRectangle(507, 768, 40, 40, [1, 1, 1], $primary);
-        $this->drawText(520, 785, 'QR', 8, true);
-        $this->drawLine(48, 748, 547, 748, 1.0, $primary);
+        $headerLeft = 48.0;
+        $headerBottom = 748.0;
+        $headerWidth = 499.0;
+        $headerHeight = 68.0;
+        $logoDivider = 180.0;
+        $qrDivider = 462.0;
+
+        $this->drawRectangle(
+            $headerLeft,
+            $headerBottom,
+            $headerWidth,
+            $headerHeight,
+            [1, 1, 1],
+            $secondary
+        );
+        $this->drawLine($logoDivider, $headerBottom, $logoDivider, $headerBottom + $headerHeight, 0.7, $secondary);
+        $this->drawLine($qrDivider, $headerBottom, $qrDivider, $headerBottom + $headerHeight, 0.7, $secondary);
+
+        $this->drawText(67, 779, (string) ($options['logoText'] ?? ''), 15, true);
+        $this->drawText(211, 777, (string) ($options['title'] ?? ''), 22, true);
+        $this->drawRectangle(484, 760, 40, 40, [1, 1, 1], $primary);
+        $this->drawText(497, 777, 'QR', 8, true);
+        $this->drawLine(48, 738, 547, 738, 1.0, $primary);
     }
 
     public function drawLogoBlock(array $branding = []): void
