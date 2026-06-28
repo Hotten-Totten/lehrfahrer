@@ -7,8 +7,24 @@
 // Öffnet das Hilfe-Fenster und füllt den Hilfetext.
 const HELP_DOCUMENTS = {
   handbook: {
-    title: "Benutzerhandbuch",
+    title: "Handbuch",
     path: "docs/handbuch.md"
+  },
+  vision: {
+    title: "Vision",
+    path: "VISION.md"
+  },
+  changelog: {
+    title: "Changelog",
+    path: "CHANGELOG.md"
+  },
+  development: {
+    title: "Entwicklung",
+    path: "DEPLOY.md"
+  },
+  gitWorkflow: {
+    title: "Git-Workflow",
+    path: "docs/development-workflow.md"
   },
   detourWizard: {
     title: "Umleitungs-Wizard Hilfe",
@@ -76,10 +92,7 @@ async function openHelpDocument(documentKey) {
     helpModalBody.textContent = markdown;
   } catch (err) {
     if (requestId !== helpDocumentRequestId) return;
-    helpModalBody.textContent =
-      "Das Dokument konnte nicht geladen werden.\n\n" +
-      `Direkter Pfad: ${documentConfig.path}\n` +
-      `Fehler: ${err.message || "Unbekannter Fehler"}`;
+    helpModalBody.textContent = "Dokument noch nicht vorhanden.";
   }
 }
 
