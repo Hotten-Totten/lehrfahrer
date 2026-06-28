@@ -48,10 +48,10 @@ function formatLineBrowserDate(value) {
 function getLineBrowserValidityText(line) {
   const from = formatLineBrowserDate(line?.validFrom);
   const until = formatLineBrowserDate(line?.validUntil);
-  if (from && until) return `Gültig: ${from} – ${until}`;
-  if (from) return `Gültig: ab ${from}`;
-  if (until) return `Gültig: bis ${until}`;
-  return "";
+  if (from && until) return `Gültig: ${from} bis ${until}`;
+  if (from) return `Gültig ab: ${from}`;
+  if (until) return `Gültig bis: ${until}`;
+  return "Immer gültig";
 }
 
 function getLineBrowserLineValue(line) {
@@ -281,7 +281,6 @@ function renderLineBrowser(lines) {
         const validity = document.createElement("div");
         validity.className = "line-browser-validity";
         validity.textContent = validityText;
-        validity.hidden = !validityText;
 
         // Datei-Badges (JSON / GPX / PDF)
         const fileBadges = document.createElement("div");

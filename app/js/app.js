@@ -1806,10 +1806,10 @@ function formatAppValidity(lineData, catalogLine = null) {
   const validity = getAppValidity(lineData, catalogLine);
   const from = formatDate(validity.validFrom);
   const until = formatDate(validity.validUntil);
-  if (from && until) return `Gültig: ${from} – ${until}`;
-  if (from) return `Gültig: ab ${from}`;
-  if (until) return `Gültig: bis ${until}`;
-  return '';
+  if (from && until) return `Gültig: ${from} bis ${until}`;
+  if (from) return `Gültig ab: ${from}`;
+  if (until) return `Gültig bis: ${until}`;
+  return 'Immer gültig';
 }
 
 function getAppVariantCategory(lineData, catalogLine = null) {
