@@ -116,12 +116,15 @@ function buildSimplePdf(array $pages): string {
     $nextId = 4;
     $pageRefs = [];
 
-    foreach ($pages as $lines) {
+    $pageCount = count($pages);
+    foreach ($pages as $pageIndex => $lines) {
         $stream = "BT\n/F1 10 Tf\n14 TL\n50 800 Td\n";
         foreach ($lines as $line) {
             $stream .= '(' . pdfEscapeText($line) . ") Tj\nT*\n";
         }
-        $stream .= "ET";
+        $stream .= "ET\n";
+        $footer = 'Lehrfahrer | Seite ' . ($pageIndex + 1) . ' von ' . $pageCount;
+        $stream .= "BT\n/F1 9 Tf\n50 28 Td\n(" . pdfEscapeText($footer) . ") Tj\nET";
 
         $contentId = $nextId++;
         $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
@@ -173,52 +176,102 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     $lineName = trim((string)getLineValue($data, 'lineName', ''));
     $routeName = trim((string)getLineValue($data, 'routeName', ''));
     $directionName = trim((string)getLineValue($data, 'directionName', ''));
-    $color = trim((string)getLineValue($data, 'color', ''));
+    $variantName = trim((string)getLineValue($data, 'variantName', ''));
+    $variantCategory = trim((string)getLineValue($data, 'variantCategory', ''));
+    $description = trim((string)getLineValue($data, 'description', ''));
+    $validFrom = trim((string)getLineValue($data, 'validFrom', ''));
+    $validUntil = trim((string)getLineValue($data, 'validUntil', ''));
     $savedAt = trim((string)($data['savedAt'] ?? date('c')));
-    $fileBase = trim((string)($data['fileBase'] ?? getLineValue($data, 'id', 'linie')));
-
     $stops = is_array($data['stops'] ?? null) ? $data['stops'] : [];
-    $routePoints = is_array($data['routePoints'] ?? null) ? $data['routePoints'] : [];
 
-    $routeLengthMeters = null;
-    if (isset($data['stats']) && is_array($data['stats']) && isset($data['stats']['routeLengthMeters'])) {
-        $routeLengthMeters = floatval($data['stats']['routeLengthMeters']);
+    $formatDate = static function (string $value): string {
+        $date = DateTime::createFromFormat('!Y-m-d', $value);
+        return $date && $date->format('Y-m-d') === $value ? $date->format('d.m.Y') : '';
+    };
+    $fromText = $formatDate($validFrom);
+    $untilText = $formatDate($validUntil);
+    if ($fromText !== '' && $untilText !== '') {
+        $validityText = 'Gueltig: ' . $fromText . ' bis ' . $untilText;
+    } elseif ($fromText !== '') {
+        $validityText = 'Gueltig ab: ' . $fromText;
+    } elseif ($untilText !== '') {
+        $validityText = 'Gueltig bis: ' . $untilText;
+    } else {
+        $validityText = 'Immer gueltig';
     }
-    if (!$routeLengthMeters && !empty($routePoints)) {
-        $routeLengthMeters = estimateRouteLengthMeters($routePoints);
-    }
+
+    $isGhostStop = static function (array $stop): bool {
+        $sourceType = strtolower(trim((string)($stop['sourceType'] ?? '')));
+        $kind = strtolower(trim((string)($stop['kind'] ?? '')));
+        $role = strtolower(trim((string)($stop['detourRole'] ?? '')));
+        return !empty($stop['isGhostPoint'])
+            || !empty($stop['isGhost'])
+            || in_array($sourceType, ['ghost', 'passthrough', 'passthroughstop'], true)
+            || $kind === 'passthroughstop'
+            || $role === 'passthrough';
+    };
+    $realStops = array_values(array_filter($stops, static function ($stop) use ($isGhostStop): bool {
+        return is_array($stop) && !$isGhostStop($stop);
+    }));
+
+    $crop = static function (string $value, int $maxLength): string {
+        $value = trim(preg_replace('/\s+/', ' ', $value));
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return mb_strlen($value, 'UTF-8') > $maxLength
+                ? rtrim(mb_substr($value, 0, $maxLength - 3, 'UTF-8')) . '...'
+                : $value;
+        }
+        return strlen($value) > $maxLength ? rtrim(substr($value, 0, $maxLength - 3)) . '...' : $value;
+    };
 
     $lines = [];
-    $lines[] = 'Lehrfahrer Linienuebersicht';
-    $lines[] = '----------------------------------------';
-    $lines[] = 'Stand: ' . date('d.m.Y H:i:s', strtotime($savedAt));
+    $lines[] = 'Lehrfahrer';
+    $lines[] = '============================================================';
     $lines[] = '';
-    $lines[] = 'Ort: ' . $city;
-    $lines[] = 'Linienordner: ' . $lineFolder;
-    $lines[] = 'Datei: ' . $fileBase;
-    $lines[] = 'Linie: ' . ($lineName !== '' ? $lineName : '-');
-    $lines[] = 'Route: ' . ($routeName !== '' ? $routeName : '-');
-    $lines[] = 'Richtung: ' . ($directionName !== '' ? $directionName : '-');
-    $lines[] = 'Farbe: ' . ($color !== '' ? $color : '-');
-    $lines[] = 'Haltestellen: ' . count($stops);
-    $lines[] = 'Routenpunkte: ' . count($routePoints);
-    $lines[] = 'Linienlaenge: ' . ($routeLengthMeters ? number_format($routeLengthMeters / 1000, 2, ',', '.') . ' km' : '-');
+    $lines[] = 'Linie: ' . $lineName;
+    $lines[] = 'Linienname: ' . trim((string)getLineValue($data, 'lineLongName', ''));
+    $lines[] = 'Route: ' . $routeName;
+    $lines[] = 'Richtung: ' . $directionName;
+    $lines[] = 'Variante: ' . $variantName;
+    $lines[] = 'Kategorie: ' . $variantCategory;
+    $lines[] = 'Gueltigkeit: ' . $validityText;
+    $createdTimestamp = strtotime($savedAt);
+    $lines[] = 'Erstellt: ' . ($createdTimestamp ? date('d.m.Y H:i', $createdTimestamp) : '');
     $lines[] = '';
-    $lines[] = 'Haltestellenliste';
-    $lines[] = '----------------------------------------';
+    if ($description !== '') {
+        $lines[] = 'Besonderheiten';
+        $lines[] = '------------------------------------------------------------';
+        foreach (preg_split('/\R/u', $description) as $descriptionLine) {
+            foreach (wrapPdfLine($descriptionLine) as $wrappedDescriptionLine) {
+                $lines[] = $wrappedDescriptionLine;
+            }
+        }
+        $lines[] = '';
+    }
 
-    if (!$stops) {
+    $lines[] = 'Haltestellen';
+    $lines[] = '------------------------------------------------------------';
+    $lines[] = 'Nr. | Haltestelle                         | Naechste Fahranweisung';
+    $lines[] = '------------------------------------------------------------';
+
+    if (!$realStops) {
         $lines[] = 'Keine Haltestellen vorhanden.';
     } else {
-        foreach ($stops as $idx => $stop) {
+        foreach ($realStops as $idx => $stop) {
             $name = trim((string)($stop['name'] ?? ('Haltestelle ' . ($idx + 1))));
-            $minute = isset($stop['minuteFromStart']) ? (string)intval($stop['minuteFromStart']) : '0';
-            $source = trim((string)($stop['sourceType'] ?? ''));
-            $lat = isset($stop['lat']) ? number_format(floatval($stop['lat']), 6, '.', '') : '-';
-            $lon = isset($stop['lon']) ? number_format(floatval($stop['lon']), 6, '.', '') : '-';
-
-            $lines[] = ($idx + 1) . '. ' . $name;
-            $lines[] = 'Minute: ' . $minute . ' | Typ: ' . ($source !== '' ? $source : '-') . ' | Position: ' . $lat . ', ' . $lon;
+            $instruction = trim((string)(
+                $stop['nextDrivingInstruction']
+                ?? $stop['nextInstruction']
+                ?? $stop['drivingInstruction']
+                ?? $stop['instruction']
+                ?? ''
+            ));
+            $lines[] = sprintf(
+                '%-3d | %-35s | %s',
+                $idx + 1,
+                $crop($name, 35),
+                $crop($instruction, 35)
+            );
         }
     }
 
