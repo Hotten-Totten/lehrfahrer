@@ -1261,6 +1261,80 @@ button.danger:hover {
   font-weight: 700;
 }
 
+.driver-documents-modal-content {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.driver-documents-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.driver-documents-driver {
+  display: grid;
+  gap: 5px;
+  font-weight: 700;
+}
+
+.driver-documents-driver input {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  font: inherit;
+}
+
+.driver-documents-selection-actions,
+.driver-documents-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.driver-documents-list {
+  display: grid;
+  gap: 5px;
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  padding: 8px;
+}
+
+.driver-documents-entry {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 7px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.driver-documents-entry span,
+.driver-documents-entry small {
+  display: block;
+}
+
+.driver-documents-entry small {
+  margin-top: 2px;
+  color: #64748b;
+}
+
+.driver-documents-footer {
+  justify-content: space-between;
+}
+
+.driver-documents-create {
+  font-weight: 700;
+}
+
+.driver-documents-result-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+}
+
 .line-browser-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,0 +1,303 @@
+<?php
+header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/_auth.php';
+lehrfahrer_require_write_auth();
+
+function driverDocSlug(string $value, string $fallback): string {
+    $value = str_replace(
+        ['ä', 'ö', 'ü', 'Ä', 'Ö', 'Ü', 'ß'],
+        ['ae', 'oe', 'ue', 'Ae', 'Oe', 'Ue', 'ss'],
+        trim($value)
+    );
+    $value = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $value);
+    $value = trim($value, '_');
+    return $value !== '' ? $value : $fallback;
+}
+
+function driverDocValue(array $data, string $key, string $fallback = ''): string {
+    return trim((string)($data[$key] ?? ($data['line'][$key] ?? $fallback)));
+}
+
+function driverDocEscape(string $text): string {
+    $text = strtr($text, [
+        'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue',
+        'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue',
+        'ß' => 'ss', '–' => '-', '—' => '-'
+    ]);
+    $text = preg_replace('/[^\x20-\x7E]/', '?', $text);
+    return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $text);
+}
+
+function driverDocWrap(string $line, int $length = 94): array {
+    $line = trim(preg_replace('/\s+/', ' ', str_replace(["\r", "\n", "\t"], ' ', $line)));
+    return $line === '' ? [''] : explode("\n", wordwrap($line, $length, "\n", true));
+}
+
+function driverDocCrop(string $value, int $length): string {
+    $value = trim(preg_replace('/\s+/', ' ', $value));
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        return mb_strlen($value, 'UTF-8') > $length
+            ? rtrim(mb_substr($value, 0, $length - 3, 'UTF-8')) . '...'
+            : $value;
+    }
+    return strlen($value) > $length ? rtrim(substr($value, 0, $length - 3)) . '...' : $value;
+}
+
+function driverDocSimplePdf(array $pages): string {
+    $objects = [
+        1 => '<< /Type /Catalog /Pages 2 0 R >>',
+        2 => '',
+        3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+    ];
+    $nextId = 4;
+    $pageRefs = [];
+    $pageCount = count($pages);
+
+    foreach ($pages as $pageIndex => $lines) {
+        $stream = "BT\n/F1 10 Tf\n14 TL\n50 800 Td\n";
+        foreach ($lines as $line) {
+            $stream .= '(' . driverDocEscape($line) . ") Tj\nT*\n";
+        }
+        $stream .= "ET\n";
+        $footer = 'Lehrfahrer | Seite ' . ($pageIndex + 1) . ' von ' . $pageCount;
+        $stream .= "BT\n/F1 9 Tf\n50 28 Td\n(" . driverDocEscape($footer) . ") Tj\nET";
+
+        $contentId = $nextId++;
+        $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
+        $pageId = $nextId++;
+        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentId} 0 R >>";
+        $pageRefs[] = $pageId;
+    }
+
+    $objects[2] = '<< /Type /Pages /Kids [ ' . implode(' ', array_map(
+        static function ($id) {
+            return $id . ' 0 R';
+        },
+        $pageRefs
+    )) . ' ] /Count ' . count($pageRefs) . ' >>';
+
+    $pdf = "%PDF-1.4\n";
+    $offsets = [0];
+    for ($id = 1; $id < $nextId; $id++) {
+        $offsets[$id] = strlen($pdf);
+        $pdf .= $id . " 0 obj\n" . ($objects[$id] ?? '') . "\nendobj\n";
+    }
+    $xref = strlen($pdf);
+    $pdf .= "xref\n0 {$nextId}\n0000000000 65535 f \n";
+    for ($id = 1; $id < $nextId; $id++) {
+        $pdf .= sprintf("%010d 00000 n \n", $offsets[$id]);
+    }
+    return $pdf . "trailer\n<< /Size {$nextId} /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
+}
+
+function driverDocBuildPdf(array $data, string $driverName): string {
+    $formatDate = static function (string $value): string {
+        $date = DateTime::createFromFormat('!Y-m-d', $value);
+        return $date && $date->format('Y-m-d') === $value ? $date->format('d.m.Y') : '';
+    };
+    $from = $formatDate(driverDocValue($data, 'validFrom'));
+    $until = $formatDate(driverDocValue($data, 'validUntil'));
+    if ($from && $until) {
+        $validity = 'Gueltig: ' . $from . ' bis ' . $until;
+    } elseif ($from) {
+        $validity = 'Gueltig ab: ' . $from;
+    } elseif ($until) {
+        $validity = 'Gueltig bis: ' . $until;
+    } else {
+        $validity = 'Immer gueltig';
+    }
+
+    $lines = [
+        'Lehrfahrer',
+        '============================================================',
+        '',
+        'Linie: ' . driverDocValue($data, 'lineName'),
+        'Route: ' . driverDocValue($data, 'routeName'),
+        'Richtung: ' . driverDocValue($data, 'directionName'),
+        'Variante: ' . driverDocValue($data, 'variantName'),
+        'Kategorie: ' . driverDocValue($data, 'variantCategory'),
+        'Gueltigkeit: ' . $validity,
+        'Erstellt: ' . date('d.m.Y H:i'),
+        ''
+    ];
+
+    $description = driverDocValue($data, 'description');
+    if ($description !== '') {
+        $lines[] = 'Besonderheiten';
+        $lines[] = '------------------------------------------------------------';
+        foreach (preg_split('/\R/u', $description) as $descriptionLine) {
+            foreach (driverDocWrap($descriptionLine) as $wrapped) {
+                $lines[] = $wrapped;
+            }
+        }
+        $lines[] = '';
+    }
+
+    $lines[] = 'Haltestellen';
+    $lines[] = '------------------------------------------------------------';
+    $lines[] = 'Nr. | Haltestelle                         | Naechste Fahranweisung';
+    $lines[] = '------------------------------------------------------------';
+    $number = 0;
+    foreach (($data['stops'] ?? []) as $stop) {
+        if (!is_array($stop)) continue;
+        $source = strtolower(trim((string)($stop['sourceType'] ?? '')));
+        $kind = strtolower(trim((string)($stop['kind'] ?? '')));
+        $role = strtolower(trim((string)($stop['detourRole'] ?? '')));
+        $ghost = !empty($stop['isGhostPoint'])
+            || !empty($stop['isGhost'])
+            || in_array($source, ['ghost', 'passthrough', 'passthroughstop'], true)
+            || $kind === 'passthroughstop'
+            || $role === 'passthrough';
+        if ($ghost) continue;
+
+        $number++;
+        $instruction = (string)(
+            $stop['nextDrivingInstruction']
+            ?? $stop['nextInstruction']
+            ?? $stop['drivingInstruction']
+            ?? $stop['instruction']
+            ?? ''
+        );
+        $lines[] = sprintf(
+            '%-3d | %-35s | %s',
+            $number,
+            driverDocCrop((string)($stop['name'] ?? ''), 35),
+            driverDocCrop($instruction, 35)
+        );
+    }
+    if ($number === 0) {
+        $lines[] = 'Keine Haltestellen vorhanden.';
+    }
+
+    $proofLineCount = 10;
+    $remainingOnPage = 48 - (count($lines) % 48);
+    if ($remainingOnPage < $proofLineCount) {
+        $lines = array_merge($lines, array_fill(0, $remainingOnPage, ''));
+    }
+    $lines[] = '';
+    $lines[] = 'Nachweis der Streckeneinweisung';
+    $lines[] = '------------------------------------------------------------';
+    $lines[] = 'Name Fahrer/in: ' . ($driverName !== '' ? $driverName : '___________________________');
+    $lines[] = '';
+    $lines[] = 'Abgefahren am: ____ . ____ . ________';
+    $lines[] = '';
+    $lines[] = 'Unterschrift Fahrer/in: ____________________';
+    $lines[] = '';
+    $lines[] = 'Unterschrift Einweiser/in: _________________';
+
+    $wrappedLines = [];
+    foreach ($lines as $line) {
+        foreach (driverDocWrap($line) as $wrapped) {
+            $wrappedLines[] = $wrapped;
+        }
+    }
+    $pages = [];
+    while ($wrappedLines) {
+        $pages[] = array_splice($wrappedLines, 0, 48);
+    }
+    return driverDocSimplePdf($pages);
+}
+
+$input = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items']) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Keine Unterlagen ausgewaehlt.']);
+    exit;
+}
+
+$driverName = trim((string)($input['driverName'] ?? ''));
+$driverFolder = driverDocSlug($driverName, 'Unbenannt');
+$root = dirname(__DIR__) . '/fahrerunterlagen';
+$driverDir = $root . '/' . $driverFolder;
+$timestamp = date('Y-m-d_His');
+$packageDir = $driverDir . '/' . $timestamp;
+$suffix = 1;
+while (file_exists($packageDir)) {
+    $packageDir = $driverDir . '/' . $timestamp . '_' . str_pad((string)$suffix++, 2, '0', STR_PAD_LEFT);
+}
+if (!mkdir($packageDir, 0775, true)) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'Paketordner konnte nicht erstellt werden.']);
+    exit;
+}
+
+$documents = [];
+$usedNames = [];
+foreach ($input['items'] as $item) {
+    if (!is_array($item)) continue;
+    $city = driverDocSlug((string)($item['city'] ?? ''), '');
+    $lineFolder = driverDocSlug((string)($item['lineFolder'] ?? ''), '');
+    $categoryFolder = driverDocSlug((string)($item['categoryFolder'] ?? ''), '');
+    $fileBase = driverDocSlug((string)($item['fileBase'] ?? ''), '');
+    if ($city === '' || $fileBase === '') continue;
+
+    $cityDir = dirname(__DIR__) . '/linien/' . $city;
+    if (!is_dir($cityDir) && is_dir(dirname(__DIR__) . '/linien/linien/' . $city)) {
+        $cityDir = dirname(__DIR__) . '/linien/linien/' . $city;
+    }
+    $candidates = [];
+    if ($lineFolder && $categoryFolder) $candidates[] = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json';
+    if ($lineFolder) $candidates[] = $cityDir . '/' . $lineFolder . '/' . $fileBase . '.json';
+    $candidates[] = $cityDir . '/' . $fileBase . '.json';
+    $sourcePath = '';
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            $sourcePath = $candidate;
+            break;
+        }
+    }
+    if ($sourcePath === '') continue;
+    $data = json_decode((string)file_get_contents($sourcePath), true);
+    if (!is_array($data)) continue;
+
+    $lineLabel = driverDocSlug(driverDocValue($data, 'lineName'), 'Linie');
+    $variantLabel = driverDocSlug(driverDocValue($data, 'variantName'), driverDocSlug(driverDocValue($data, 'routeName'), 'Variante'));
+    $pdfBase = $lineLabel . '_' . $variantLabel;
+    $pdfName = $pdfBase . '.pdf';
+    $number = 2;
+    while (isset($usedNames[strtolower($pdfName)]) || file_exists($packageDir . '/' . $pdfName)) {
+        $pdfName = $pdfBase . '_' . $number++ . '.pdf';
+    }
+    $usedNames[strtolower($pdfName)] = true;
+    if (file_put_contents($packageDir . '/' . $pdfName, driverDocBuildPdf($data, $driverName)) === false) {
+        continue;
+    }
+    $relativePath = 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/' . $pdfName;
+    $documents[] = [
+        'lineName' => driverDocValue($data, 'lineName'),
+        'routeName' => driverDocValue($data, 'routeName'),
+        'directionName' => driverDocValue($data, 'directionName'),
+        'variantName' => driverDocValue($data, 'variantName'),
+        'variantCategory' => driverDocValue($data, 'variantCategory'),
+        'path' => $relativePath
+    ];
+}
+
+if (!$documents) {
+    @rmdir($packageDir);
+    http_response_code(422);
+    echo json_encode(['ok' => false, 'error' => 'Keine PDF-Unterlagen konnten erzeugt werden.']);
+    exit;
+}
+
+$package = [
+    'driverName' => $driverName,
+    'createdAt' => date('c'),
+    'documentCount' => count($documents),
+    'documents' => $documents
+];
+$packageWrite = file_put_contents(
+    $packageDir . '/paket.json',
+    json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+);
+if ($packageWrite === false) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'Paketuebersicht konnte nicht gespeichert werden.']);
+    exit;
+}
+
+echo json_encode([
+    'ok' => true,
+    'package' => $package,
+    'packagePath' => 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/paket.json'
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

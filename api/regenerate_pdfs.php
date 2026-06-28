@@ -229,7 +229,6 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     $lines[] = '============================================================';
     $lines[] = '';
     $lines[] = 'Linie: ' . $lineName;
-    $lines[] = 'Linienname: ' . trim((string)getLineValue($data, 'lineLongName', ''));
     $lines[] = 'Route: ' . $routeName;
     $lines[] = 'Richtung: ' . $directionName;
     $lines[] = 'Variante: ' . $variantName;
@@ -274,6 +273,21 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
             );
         }
     }
+    $proofLineCount = 10;
+    $remainingOnPage = 48 - (count($lines) % 48);
+    if ($remainingOnPage < $proofLineCount) {
+        $lines = array_merge($lines, array_fill(0, $remainingOnPage, ''));
+    }
+    $lines[] = '';
+    $lines[] = 'Nachweis der Streckeneinweisung';
+    $lines[] = '------------------------------------------------------------';
+    $lines[] = 'Name Fahrer/in: ___________________________';
+    $lines[] = '';
+    $lines[] = 'Abgefahren am: ____ . ____ . ________';
+    $lines[] = '';
+    $lines[] = 'Unterschrift Fahrer/in: ____________________';
+    $lines[] = '';
+    $lines[] = 'Unterschrift Einweiser/in: _________________';
 
     $wrappedLines = [];
     foreach ($lines as $line) {

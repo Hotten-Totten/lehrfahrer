@@ -17,6 +17,7 @@ GTFS-Haltestellendatenaeätze/
 *.gtfs.zip
 latest.zip
 gtfs/imports/
+fahrerunterlagen/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
