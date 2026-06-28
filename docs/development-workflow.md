@@ -8,10 +8,10 @@
 4. Änderungen committen und pushen.
 5. GitHub-Actions-Ergebnis prüfen.
 
-Das Hilfsskript fragt die Commit-Nachricht interaktiv ab, erstellt keinen Commit ohne Bestätigung und wartet bei installierter GitHub CLI auf den Workflow-Abschluss.
+Das Deploy-Tool bietet ein Menü für Status, Commit und Push, Deployment-Überwachung und die letzten zehn Commits. Commit, Push und das Öffnen der Webseite erfolgen nur nach Bestätigung.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/push-lehrfahrer.ps1
 ```
 
-Ist der Working Tree sauber, wird nur gepusht, wenn der aktuelle Branch gegenüber seinem Upstream voraus ist.
+Für die Deployment-Überwachung wird eine installierte und angemeldete GitHub CLI (`gh`) benötigt. Nach erfolgreichem Workflow kann das Tool optional `https://www.lehrfahrer.de` öffnen.

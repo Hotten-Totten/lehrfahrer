@@ -1,0 +1,173 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 5 0 R 7 0 R ] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2104 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Lehrfahrer Linienuebersicht) Tj
+T*
+(----------------------------------------) Tj
+T*
+(Stand: 28.06.2026 13:54:31) Tj
+T*
+() Tj
+T*
+(Ort: test) Tj
+T*
+(Linienordner: Linie_2) Tj
+T*
+(Datei: Route_01_Route_01_-_Betriebshof_Schmellwitz_-_Jessener_Strasse) Tj
+T*
+(Linie: Linie 2) Tj
+T*
+(Route: Route 01) Tj
+T*
+(Richtung: Betriebshof Schmellwitz - Jessener Strasse) Tj
+T*
+(Farbe: #d32f2f) Tj
+T*
+(Haltestellen: 22) Tj
+T*
+(Routenpunkte: 480) Tj
+T*
+(Linienlaenge: 10,93 km) Tj
+T*
+() Tj
+T*
+(Haltestellenliste) Tj
+T*
+(----------------------------------------) Tj
+T*
+(1. Betriebshof Schmellwitz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.788840, 14.331720) Tj
+T*
+(2. Neu Schmellwitz Zuschka) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.784880, 14.344128) Tj
+T*
+(3. Freie Haltestelle 16) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.781077, 14.337802) Tj
+T*
+(4. Cottbus, Gerhart-Hauptmann-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.772662, 14.345170) Tj
+T*
+(5. Cottbus, Nordring/Am TKC) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.771327, 14.341898) Tj
+T*
+(6. Bonnaskenplatz) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.767525, 14.334433) Tj
+T*
+(7. Zimmerstrasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.765446, 14.332924) Tj
+T*
+(8. Freie Haltestelle 16) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.763597, 14.331890) Tj
+T*
+(9. Freie Haltestelle 17) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.762110, 14.331053) Tj
+T*
+(10. Stadthalle Puschkinpromenade) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.761566, 14.330943) Tj
+T*
+(11. Stadthalle Post) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.761242, 14.329633) Tj
+T*
+(12. August-Bebel-Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.758310, 14.327765) Tj
+T*
+(13. Stadtmuseum) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.755238, 14.328143) Tj
+T*
+(14. Hauptbahnhof) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.750046, 14.326596) Tj
+T*
+(15. Cottbus, Finsterwalder Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.746549, 14.321730) Tj
+T*
+(16. Cottbus, Welzower Strasse/Klinikum) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 675 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Minute: 0 | Typ: catalog | Position: 51.744411, 14.318244) Tj
+T*
+(17. Platz der Freundschaft) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.745394, 14.311248) Tj
+T*
+(18. Jessener Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.747395, 14.308038) Tj
+T*
+(19. Jessener Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.747635, 14.307143) Tj
+T*
+(20. Freie Haltestelle 20) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.748036, 14.306230) Tj
+T*
+(21. Jessener Strasse) Tj
+T*
+(Minute: 0 | Typ: catalog | Position: 51.747532, 14.306769) Tj
+T*
+(22. Freie Haltestelle 22) Tj
+T*
+(Minute: 0 | Typ: free | Position: 51.748030, 14.308469) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000123 00000 n 
+0000000193 00000 n 
+0000002349 00000 n 
+0000002475 00000 n 
+0000003201 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+3327
+%%EOF
