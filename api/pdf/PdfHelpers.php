@@ -49,6 +49,7 @@ final class PdfHelpers
             'category' => $value('variantCategory'),
             'duration' => $durationMinutes > 0 ? $durationMinutes . ' min' : '-',
             'validFrom' => self::formatProjectDate($value('validFrom')),
+            'created' => self::formatProjectDate(substr($value('savedAt'), 0, 10)),
             'version' => $value('formatVersion', 'PDF 3.0 Preview'),
             'description' => $value('description'),
             'stops' => $stops,

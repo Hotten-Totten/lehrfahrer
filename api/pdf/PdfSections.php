@@ -24,6 +24,11 @@ final class PdfSections
         $layout->drawHeaderArea([
             'logoText' => $brandingData['fallbackLogoText'],
             'title' => (string) ($data['title'] ?? 'Streckeneinweisung'),
+            'meta' => [
+                'line' => (string) ($data['line'] ?? ''),
+                'route' => (string) ($data['route'] ?? ''),
+                'direction' => (string) ($data['direction'] ?? ''),
+            ],
         ]);
     }
 
@@ -44,8 +49,6 @@ final class PdfSections
                     'Linie' => (string) ($data['line'] ?? ''),
                     'Route' => (string) ($data['route'] ?? ''),
                     'Richtung' => (string) ($data['direction'] ?? ''),
-                    'Streckenlänge' => (string) ($data['distance'] ?? ''),
-                    'Haltestellen' => (string) ($data['stopCount'] ?? ''),
                 ],
             ],
             [
@@ -53,8 +56,8 @@ final class PdfSections
                 'content' => [
                     'Variante' => (string) ($data['variant'] ?? ''),
                     'Kategorie' => (string) ($data['category'] ?? ''),
-                    'Fahrzeit' => (string) ($data['duration'] ?? ''),
                     'Gültig ab' => (string) ($data['validFrom'] ?? ''),
+                    'Erstellt' => (string) ($data['created'] ?? ''),
                     'Version' => (string) ($data['version'] ?? ''),
                 ],
             ],

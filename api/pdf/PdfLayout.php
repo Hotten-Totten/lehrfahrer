@@ -12,6 +12,7 @@ final class PdfLayout
     private string $stream = '';
     private array $completedStreams = [];
     private array $branding = [];
+    private array $documentMeta = [];
 
     public function applyBranding(array $branding): void
     {
@@ -20,12 +21,13 @@ final class PdfLayout
 
     public function drawHeaderArea(array $options = []): void
     {
-        $this->drawText(48, 790, (string) ($options['logoText'] ?? ''), 17, true);
+        $this->documentMeta = is_array($options['meta'] ?? null) ? $options['meta'] : [];
+        $this->drawText(48, 792, (string) ($options['logoText'] ?? ''), 16, true);
         $primary = $this->color('primaryColor', [0.24, 0.36, 0.48]);
-        $this->drawText(218, 790, (string) ($options['title'] ?? ''), 18, true);
-        $this->drawRectangle(505, 770, 42, 42, [1, 1, 1], $primary);
-        $this->drawText(518, 788, 'QR', 9, true);
-        $this->drawLine(48, 755, 547, 755, 1.1, $primary);
+        $this->drawText(210, 790, (string) ($options['title'] ?? ''), 19, true);
+        $this->drawRectangle(507, 768, 40, 40, [1, 1, 1], $primary);
+        $this->drawText(520, 785, 'QR', 8, true);
+        $this->drawLine(48, 750, 547, 750, 1.0, $primary);
     }
 
     public function drawLogoBlock(array $branding = []): void
@@ -76,8 +78,16 @@ final class PdfLayout
         $rowY = $y - 52;
         foreach ($content as $label => $value) {
             $this->drawInfoLabel((string) $label, ['x' => $x + 14, 'y' => $rowY]);
-            $this->drawInfoValue((string) $value, ['x' => $x + 105, 'y' => $rowY]);
-            $rowY -= 24;
+            $valueLines = $label === 'Richtung'
+                ? $this->wrapText((string) $value, 26, 2)
+                : [$this->shortenText((string) $value, 29)];
+            foreach ($valueLines as $lineIndex => $line) {
+                $this->drawInfoValue($line, [
+                    'x' => $x + 105,
+                    'y' => $rowY - ($lineIndex * 11),
+                ]);
+            }
+            $rowY -= count($valueLines) > 1 ? 34 : 24;
         }
     }
 
@@ -138,8 +148,8 @@ final class PdfLayout
         foreach ($rows as $index => $row) {
             if ($index === 5 || ($index > 5 && (($index - 5) % 18) === 0)) {
                 $this->newPage();
-                $top = 760.0;
-                $this->drawText(48, 785, 'Haltestellen und Fahranweisungen', 12, true);
+                $top = 715.0;
+                $this->drawText(48, 742, 'Haltestellen und Fahranweisungen', 12, true);
                 $this->drawRectangle(48, $top - $rowHeight, 499, $rowHeight, $heading, $border);
                 $this->drawText(60, $top - 16, 'Nr.', 9, true);
                 $this->drawText(103, $top - 16, 'Haltestelle', 9, true);
@@ -216,6 +226,13 @@ final class PdfLayout
     {
         $this->completedStreams[] = $this->stream;
         $this->stream = '';
+        $primary = $this->color('primaryColor', [0.24, 0.36, 0.48]);
+        $line = $this->shortenText((string) ($this->documentMeta['line'] ?? ''), 12);
+        $route = $this->shortenText((string) ($this->documentMeta['route'] ?? ''), 12);
+        $direction = $this->shortenText((string) ($this->documentMeta['direction'] ?? ''), 48);
+        $this->drawText(48, 800, 'Streckeneinweisung', 13, true);
+        $this->drawText(48, 779, "Linie {$line} | Route {$route} | Richtung {$direction}", 9);
+        $this->drawLine(48, 766, 547, 766, 0.8, $primary);
     }
 
     private function drawText(float $x, float $y, string $text, float $size, bool $bold = false): void
@@ -261,5 +278,28 @@ final class PdfLayout
             hexdec(substr($value, 2, 2)) / 255,
             hexdec(substr($value, 4, 2)) / 255,
         ];
+    }
+
+    private function shortenText(string $text, int $maxLength): string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', $text));
+        $length = function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
+        if ($length <= $maxLength) {
+            return $text;
+        }
+        $shortened = function_exists('mb_substr')
+            ? mb_substr($text, 0, $maxLength - 3, 'UTF-8')
+            : substr($text, 0, $maxLength - 3);
+        return rtrim($shortened) . '...';
+    }
+
+    private function wrapText(string $text, int $maxLength, int $maxLines): array
+    {
+        $lines = explode("\n", wordwrap(trim($text), $maxLength, "\n", true));
+        if (count($lines) > $maxLines) {
+            $lines = array_slice($lines, 0, $maxLines);
+            $lines[$maxLines - 1] = $this->shortenText($lines[$maxLines - 1], $maxLength);
+        }
+        return $lines ?: [''];
     }
 }
