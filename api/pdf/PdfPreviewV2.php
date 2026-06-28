@@ -84,7 +84,7 @@ final class PdfPreviewV2
 
         foreach ($stops as $stop) {
             $stopLines = $this->wrap((string) ($stop['stop'] ?? ''), 35, 4);
-            $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 43, 5);
+            $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 43, 8);
             $lineCount = max(count($stopLines), count($instructionLines), 1);
             $rowHeight = max(22, 10 + ($lineCount * 11));
 
@@ -120,7 +120,7 @@ final class PdfPreviewV2
         $this->line(297, $bottom, 297, $top, 0.5, $border);
         $this->text(61, $bottom + 8, 'Nr.', 9, true);
         $this->text(171, $bottom + 8, 'Haltestelle', 9, true);
-        $this->text(406, $bottom + 8, 'Fahrhinweis', 9, true);
+        $this->text(418, $bottom + 8, 'Hinweise', 9, true);
         $this->line(42, $bottom, 553, $bottom, 1.0, $border);
         return $bottom;
     }
@@ -228,6 +228,9 @@ final class PdfPreviewV2
 
     private function findDrivingInstruction(array $stop): string
     {
+        // Busbezogene Hinweise können später u. a. Abbiegen, Kreisverkehr,
+        // Vorfahrt, Engstellen, Bussteige, Ersatzhalte, Wendestellen und Umleitungen abbilden.
+        $instructions = [];
         foreach ([
             'nextDrivingInstruction',
             'nextInstruction',
@@ -240,25 +243,63 @@ final class PdfPreviewV2
             'fahrhinweis',
             'nextManeuver',
             'nextManoeuvre',
+            'hint',
+            'hints',
+            'note',
+            'notes',
+            'remark',
+            'remarks',
+            'specialNote',
+            'specialNotes',
+            'warning',
+            'warnings',
+            'drivingInstructions',
         ] as $key) {
-            $value = $stop[$key] ?? null;
-            if (is_string($value) && trim($value) !== '') {
-                return trim($value);
-            }
+            $this->appendInstructionValues($instructions, $stop[$key] ?? null);
         }
-        foreach (['maneuver', 'manoeuvre', 'navigation'] as $containerKey) {
+        foreach (['maneuver', 'manoeuvre', 'navigation', 'instructionData'] as $containerKey) {
             $container = $stop[$containerKey] ?? null;
             if (!is_array($container)) {
                 continue;
             }
-            foreach (['instruction', 'text', 'description', 'name'] as $key) {
-                $value = $container[$key] ?? null;
-                if (is_string($value) && trim($value) !== '') {
-                    return trim($value);
-                }
+            foreach (['instruction', 'text', 'description', 'name', 'hint', 'note', 'warning'] as $key) {
+                $this->appendInstructionValues($instructions, $container[$key] ?? null);
             }
         }
-        return '';
+        return implode("\n", array_values(array_unique($instructions)));
+    }
+
+    private function appendInstructionValues(array &$instructions, $value): void
+    {
+        if (is_string($value)) {
+            foreach (preg_split('/\R/u', trim($value)) as $line) {
+                $line = trim($line);
+                if ($line !== '' && $line !== '-') {
+                    $instructions[] = $line;
+                }
+            }
+            return;
+        }
+        if (!is_array($value)) {
+            return;
+        }
+        $items = array_keys($value) === range(0, count($value) - 1)
+            ? $value
+            : array_intersect_key($value, array_flip([
+                'instruction',
+                'text',
+                'description',
+                'name',
+                'hint',
+                'note',
+                'remark',
+                'warning',
+            ]));
+        foreach ($items as $item) {
+            if (is_string($item) || is_array($item)) {
+                $this->appendInstructionValues($instructions, $item);
+            }
+        }
     }
 
     private function newPage(): void
