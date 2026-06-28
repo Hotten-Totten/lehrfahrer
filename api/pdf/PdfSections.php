@@ -56,7 +56,7 @@ final class PdfSections
                 'content' => [
                     'Variante' => (string) ($data['variant'] ?? ''),
                     'Kategorie' => (string) ($data['category'] ?? ''),
-                    'Gültig ab' => (string) ($data['validFrom'] ?? ''),
+                    'Gültigkeit' => (string) ($data['validFrom'] ?? ''),
                     'Erstellt' => (string) ($data['created'] ?? ''),
                     'Version' => (string) ($data['version'] ?? ''),
                 ],

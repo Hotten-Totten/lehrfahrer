@@ -22,12 +22,14 @@ final class PdfLayout
     public function drawHeaderArea(array $options = []): void
     {
         $this->documentMeta = is_array($options['meta'] ?? null) ? $options['meta'] : [];
-        $this->drawText(48, 792, (string) ($options['logoText'] ?? ''), 16, true);
         $primary = $this->color('primaryColor', [0.24, 0.36, 0.48]);
-        $this->drawText(210, 790, (string) ($options['title'] ?? ''), 19, true);
+        $secondary = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
+        $this->drawRectangle(48, 768, 128, 40, [1, 1, 1], $secondary);
+        $this->drawText(60, 785, (string) ($options['logoText'] ?? ''), 15, true);
+        $this->drawText(208, 788, (string) ($options['title'] ?? ''), 20, true);
         $this->drawRectangle(507, 768, 40, 40, [1, 1, 1], $primary);
         $this->drawText(520, 785, 'QR', 8, true);
-        $this->drawLine(48, 750, 547, 750, 1.0, $primary);
+        $this->drawLine(48, 748, 547, 748, 1.0, $primary);
     }
 
     public function drawLogoBlock(array $branding = []): void
@@ -80,7 +82,7 @@ final class PdfLayout
             $this->drawInfoLabel((string) $label, ['x' => $x + 14, 'y' => $rowY]);
             $valueLines = $label === 'Richtung'
                 ? $this->wrapText((string) $value, 26, 2)
-                : [$this->shortenText((string) $value, 29)];
+                : [$this->shortenText((string) $value, 25)];
             foreach ($valueLines as $lineIndex => $line) {
                 $this->drawInfoValue($line, [
                     'x' => $x + 105,
@@ -115,7 +117,7 @@ final class PdfLayout
     public function drawInfoGrid(array $boxes = [], array $options = []): void
     {
         $x = (float) ($options['x'] ?? 48);
-        $y = (float) ($options['y'] ?? 680);
+        $y = (float) ($options['y'] ?? 720);
         $gap = (float) ($options['gap'] ?? 18);
         $width = (float) ($options['boxWidth'] ?? 240);
 
@@ -126,7 +128,7 @@ final class PdfLayout
                     'x' => $x + ($index * ($width + $gap)),
                     'y' => $y,
                     'width' => $width,
-                    'height' => (float) ($options['boxHeight'] ?? 170),
+                    'height' => (float) ($options['boxHeight'] ?? 185),
                     'title' => (string) ($box['title'] ?? 'Informationen'),
                 ]
             );
