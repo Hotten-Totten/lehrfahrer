@@ -19,6 +19,7 @@ final class LehrfahrerProfessionalPdf {
     private int $page = -1;
     private float $y = 0;
     private string $version;
+    private array $metadata = [];
 
     public function __construct(string $version) {
         $this->version = $version !== '' ? $version : 'V2.1.000';
@@ -49,15 +50,28 @@ final class LehrfahrerProfessionalPdf {
         $this->pages[] = '';
         $this->page = count($this->pages) - 1;
         $this->y = 792;
-        if ($continuedTable) {
-            $this->text(45, 802, 'Streckeneinweisung', 12, true);
-            $this->line(45, 790, 550, 790);
-            $this->y = 770;
-            $this->tableHeader();
+        if ($this->page > 0) {
+            $this->compactHeader();
+            if ($continuedTable) $this->tableHeader();
         }
     }
 
+    private function compactHeader(): void {
+        $this->text(45, 807, 'Streckeneinweisung', 12, true);
+        $this->text(45, 786, 'Linie', 8, true);
+        $this->text(78, 786, (string)($this->metadata['Linie'] ?? ''), 9);
+        $this->text(145, 786, 'Route', 8, true);
+        $this->text(180, 786, (string)($this->metadata['Route'] ?? ''), 9);
+        $this->text(245, 786, 'Richtung', 8, true);
+        $this->text(295, 786, (string)($this->metadata['Richtung'] ?? ''), 9);
+        $this->text(405, 786, 'Variante', 8, true);
+        $this->text(455, 786, (string)($this->metadata['Variante'] ?? ''), 9);
+        $this->line(45, 776, 550, 776);
+        $this->y = 760;
+    }
+
     public function header(array $metadata): void {
+        $this->metadata = $metadata;
         $this->text(45, 800, 'Lehrfahrer', 17, true);
         $this->text(405, 800, 'Streckeneinweisung', 15, true);
         $this->line(45, 785, 550, 785, 1.2);
