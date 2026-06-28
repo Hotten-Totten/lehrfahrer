@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_driver_packages.php';
+require_once __DIR__ . '/_professional_pdf.php';
 lehrfahrer_require_write_auth();
 
 function driverDocSlug(string $value, string $fallback): string {
@@ -202,6 +203,32 @@ function driverDocBuildPdf(array $data, string $driverName): string {
     } else {
         $validity = 'Immer gueltig';
     }
+
+    $professionalStops = [];
+    foreach (driverDocRealStops(is_array($data['stops'] ?? null) ? $data['stops'] : []) as $idx => $stop) {
+        $professionalStops[] = [
+            'number' => $idx + 1,
+            'name' => (string)($stop['name'] ?? ''),
+            'instruction' => driverDocInstruction($stop)
+        ];
+    }
+    $version = driverDocValue($data, 'formatVersion', 'V2.1.000');
+    return lehrfahrer_build_professional_pdf([
+        'version' => $version,
+        'metadata' => [
+            'Linie' => preg_replace('/^Linie\s+/i', '', driverDocValue($data, 'lineName')),
+            'Route' => preg_replace('/^Route\s+/i', '', driverDocValue($data, 'routeName')),
+            'Richtung' => driverDocValue($data, 'directionName'),
+            'Variante' => driverDocValue($data, 'variantName'),
+            'Kategorie' => driverDocValue($data, 'variantCategory'),
+            'Gültigkeit' => $validity,
+            'Erstellt' => date('d.m.Y H:i'),
+            'Version' => $version
+        ],
+        'description' => driverDocValue($data, 'description'),
+        'stops' => $professionalStops,
+        'driverName' => $driverName
+    ]);
 
     $lines = [
         'Lehrfahrer',

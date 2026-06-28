@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_professional_pdf.php';
 lehrfahrer_require_write_auth();
 
 function sanitizeForFilesystem(string $value): string {
@@ -302,6 +303,31 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     }
 
     $realStops = getPdfRealStops($stops);
+
+    $professionalStops = [];
+    foreach ($realStops as $idx => $stop) {
+        $professionalStops[] = [
+            'number' => $idx + 1,
+            'name' => trim((string)($stop['name'] ?? ('Haltestelle ' . ($idx + 1)))),
+            'instruction' => getPdfStopInstruction($stop)
+        ];
+    }
+    $createdTimestamp = strtotime($savedAt);
+    return lehrfahrer_build_professional_pdf([
+        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.000')),
+        'metadata' => [
+            'Linie' => preg_replace('/^Linie\s+/i', '', $lineName),
+            'Route' => preg_replace('/^Route\s+/i', '', $routeName),
+            'Richtung' => $directionName,
+            'Variante' => $variantName,
+            'Kategorie' => $variantCategory,
+            'Gültigkeit' => $validityText,
+            'Erstellt' => $createdTimestamp ? date('d.m.Y H:i', $createdTimestamp) : '',
+            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.000'))
+        ],
+        'description' => $description,
+        'stops' => $professionalStops
+    ]);
 
     $crop = static function (string $value, int $maxLength): string {
         $value = trim(preg_replace('/\s+/', ' ', $value));
