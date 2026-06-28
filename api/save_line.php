@@ -317,8 +317,8 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     $lines[] = 'Lehrfahrer';
     $lines[] = '============================================================';
     $lines[] = '';
-    $lines[] = 'Linie: ' . $lineName;
-    $lines[] = 'Route: ' . $routeName;
+    $lines[] = 'Linie: ' . preg_replace('/^Linie\s+/i', '', $lineName);
+    $lines[] = 'Route: ' . preg_replace('/^Route\s+/i', '', $routeName);
     $lines[] = 'Richtung: ' . $directionName;
     $lines[] = 'Variante: ' . $variantName;
     $lines[] = 'Kategorie: ' . $variantCategory;
@@ -328,12 +328,13 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     $lines[] = '';
     if ($description !== '') {
         $lines[] = 'Besonderheiten';
-        $lines[] = '------------------------------------------------------------';
+        $lines[] = '';
         foreach (preg_split('/\R/u', $description) as $descriptionLine) {
             foreach (wrapPdfLine($descriptionLine) as $wrappedDescriptionLine) {
                 $lines[] = $wrappedDescriptionLine;
             }
         }
+        $lines[] = '------------------------------------------------------------';
         $lines[] = '';
     }
 

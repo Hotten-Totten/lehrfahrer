@@ -207,8 +207,8 @@ function driverDocBuildPdf(array $data, string $driverName): string {
         'Lehrfahrer',
         '============================================================',
         '',
-        'Linie: ' . driverDocValue($data, 'lineName'),
-        'Route: ' . driverDocValue($data, 'routeName'),
+        'Linie: ' . preg_replace('/^Linie\s+/i', '', driverDocValue($data, 'lineName')),
+        'Route: ' . preg_replace('/^Route\s+/i', '', driverDocValue($data, 'routeName')),
         'Richtung: ' . driverDocValue($data, 'directionName'),
         'Variante: ' . driverDocValue($data, 'variantName'),
         'Kategorie: ' . driverDocValue($data, 'variantCategory'),
@@ -220,12 +220,13 @@ function driverDocBuildPdf(array $data, string $driverName): string {
     $description = driverDocValue($data, 'description');
     if ($description !== '') {
         $lines[] = 'Besonderheiten';
-        $lines[] = '------------------------------------------------------------';
+        $lines[] = '';
         foreach (preg_split('/\R/u', $description) as $descriptionLine) {
             foreach (driverDocWrap($descriptionLine) as $wrapped) {
                 $lines[] = $wrapped;
             }
         }
+        $lines[] = '------------------------------------------------------------';
         $lines[] = '';
     }
 
