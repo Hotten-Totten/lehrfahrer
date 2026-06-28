@@ -15,7 +15,15 @@ final class PdfSections
         ?PdfLayout $layout = null
     ): void
     {
-        // Future header: logo/fallback, title, route metadata, and optional QR placeholder.
+        if ($layout === null) {
+            return;
+        }
+
+        $brandingData = ($branding ?? new PdfBranding())->toArray();
+        $layout->drawHeaderArea([
+            'logoText' => $brandingData['fallbackLogoText'],
+            'title' => (string) ($data['title'] ?? 'Streckeneinweisung'),
+        ]);
     }
 
     public function renderInfoBoxes(
@@ -24,8 +32,32 @@ final class PdfSections
         ?PdfHelpers $helpers = null
     ): void
     {
-        // Future left box: line, route, direction, distance, and stop count.
-        // Future right box: variant, category, duration, valid-from date, and version.
+        if ($layout === null) {
+            return;
+        }
+
+        $layout->drawInfoGrid([
+            [
+                'title' => 'Strecke',
+                'content' => [
+                    'Linie' => (string) ($data['line'] ?? ''),
+                    'Route' => (string) ($data['route'] ?? ''),
+                    'Richtung' => (string) ($data['direction'] ?? ''),
+                    'Streckenlänge' => (string) ($data['distance'] ?? ''),
+                    'Haltestellen' => (string) ($data['stopCount'] ?? ''),
+                ],
+            ],
+            [
+                'title' => 'Ausführung',
+                'content' => [
+                    'Variante' => (string) ($data['variant'] ?? ''),
+                    'Kategorie' => (string) ($data['category'] ?? ''),
+                    'Fahrzeit' => (string) ($data['duration'] ?? ''),
+                    'Gültig ab' => (string) ($data['validFrom'] ?? ''),
+                    'Version' => (string) ($data['version'] ?? ''),
+                ],
+            ],
+        ]);
     }
 
     public function renderRemark(): void
