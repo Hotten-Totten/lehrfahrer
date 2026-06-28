@@ -18,8 +18,14 @@ final class PdfSections
         // Future header: logo/fallback, title, route metadata, and optional QR placeholder.
     }
 
-    public function renderInfoBoxes(): void
+    public function renderInfoBoxes(
+        array $data = [],
+        ?PdfLayout $layout = null,
+        ?PdfHelpers $helpers = null
+    ): void
     {
+        // Future left box: line, route, direction, distance, and stop count.
+        // Future right box: variant, category, duration, valid-from date, and version.
     }
 
     public function renderRemark(): void

@@ -24,4 +24,24 @@ final class PdfLayout
     public function drawMetaLine(string $label = '', string $value = '', array $options = []): void
     {
     }
+
+    public function drawInfoBox(array $content = [], array $options = []): void
+    {
+        // Draws one information box in a later implementation.
+    }
+
+    public function drawInfoLabel(string $label = '', array $options = []): void
+    {
+        // Draws a label inside an information box in a later implementation.
+    }
+
+    public function drawInfoValue(string $value = '', array $options = []): void
+    {
+        // Draws a value inside an information box in a later implementation.
+    }
+
+    public function drawInfoGrid(array $boxes = [], array $options = []): void
+    {
+        // Arranges information boxes in a grid in a later implementation.
+    }
 }
