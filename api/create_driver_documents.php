@@ -74,6 +74,53 @@ function driverDocInstruction(array $stop): string {
     return '-';
 }
 
+function driverDocTechnicalStop(array $stop): bool {
+    foreach (['isGhostPoint', 'isGhost', 'ghost', 'synthetic', 'manual', 'isRoutePoint', 'isGuidePoint'] as $flag) {
+        if (!empty($stop[$flag])) return true;
+    }
+    $technicalValues = ['ghost', 'synthetic', 'manual', 'routepoint', 'route_point', 'guidepoint', 'guide_point', 'geometry', 'passthrough', 'passthroughstop'];
+    foreach (['sourceType', 'type', 'stopType', 'kind', 'detourRole'] as $field) {
+        $value = strtolower(trim((string)($stop[$field] ?? '')));
+        if (in_array($value, $technicalValues, true)) return true;
+    }
+    return false;
+}
+
+function driverDocStopQuality(array $stop): int {
+    $score = 0;
+    $source = strtolower(trim((string)($stop['sourceType'] ?? '')));
+    $type = strtolower(trim((string)($stop['type'] ?? ($stop['stopType'] ?? ''))));
+    if (in_array($source, ['catalog', 'import', 'gtfs', 'hafas'], true)) $score += 4;
+    if (!empty($stop['catalogId']) || !empty($stop['stopId'])) $score += 3;
+    if (in_array($type, ['bus', 'tram', 'bus_tram', 'station', 'stop'], true)) $score += 2;
+    elseif ($type === 'catalog') $score += 1;
+    if (!empty($stop['isTimingPoint'])) $score += 1;
+    return $score;
+}
+
+function driverDocNormalizeStopName(string $name): string {
+    $name = strtr($name, ['Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue', 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+    return strtolower(trim(preg_replace('/[^a-z0-9]+/i', ' ', $name)));
+}
+
+function driverDocRealStops(array $stops): array {
+    $result = [];
+    foreach ($stops as $stop) {
+        if (!is_array($stop) || driverDocTechnicalStop($stop)) continue;
+        $nameKey = driverDocNormalizeStopName((string)($stop['name'] ?? ''));
+        if ($nameKey === '') continue;
+        $lastIndex = count($result) - 1;
+        if ($lastIndex >= 0 && driverDocNormalizeStopName((string)($result[$lastIndex]['name'] ?? '')) === $nameKey) {
+            if (driverDocStopQuality($stop) > driverDocStopQuality($result[$lastIndex])) {
+                $result[$lastIndex] = $stop;
+            }
+            continue;
+        }
+        $result[] = $stop;
+    }
+    return $result;
+}
+
 function driverDocSimplePdf(array $pages): string {
     $objects = [
         1 => '<< /Type /Catalog /Pages 2 0 R >>',
@@ -187,18 +234,7 @@ function driverDocBuildPdf(array $data, string $driverName): string {
     $lines[] = 'Nr. | Haltestelle                         | Naechste Fahranweisung';
     $lines[] = '------------------------------------------------------------';
     $number = 0;
-    foreach (($data['stops'] ?? []) as $stop) {
-        if (!is_array($stop)) continue;
-        $source = strtolower(trim((string)($stop['sourceType'] ?? '')));
-        $kind = strtolower(trim((string)($stop['kind'] ?? '')));
-        $role = strtolower(trim((string)($stop['detourRole'] ?? '')));
-        $ghost = !empty($stop['isGhostPoint'])
-            || !empty($stop['isGhost'])
-            || in_array($source, ['ghost', 'passthrough', 'passthroughstop'], true)
-            || $kind === 'passthroughstop'
-            || $role === 'passthrough';
-        if ($ghost) continue;
-
+    foreach (driverDocRealStops(is_array($data['stops'] ?? null) ? $data['stops'] : []) as $stop) {
         $number++;
         $instruction = driverDocInstruction($stop);
         $lines[] = sprintf(

@@ -222,6 +222,53 @@ function getPdfStopInstruction(array $stop): string {
     return '-';
 }
 
+function isPdfTechnicalStop(array $stop): bool {
+    foreach (['isGhostPoint', 'isGhost', 'ghost', 'synthetic', 'manual', 'isRoutePoint', 'isGuidePoint'] as $flag) {
+        if (!empty($stop[$flag])) return true;
+    }
+    $technicalValues = ['ghost', 'synthetic', 'manual', 'routepoint', 'route_point', 'guidepoint', 'guide_point', 'geometry', 'passthrough', 'passthroughstop'];
+    foreach (['sourceType', 'type', 'stopType', 'kind', 'detourRole'] as $field) {
+        $value = strtolower(trim((string)($stop[$field] ?? '')));
+        if (in_array($value, $technicalValues, true)) return true;
+    }
+    return false;
+}
+
+function pdfStopQuality(array $stop): int {
+    $score = 0;
+    $source = strtolower(trim((string)($stop['sourceType'] ?? '')));
+    $type = strtolower(trim((string)($stop['type'] ?? ($stop['stopType'] ?? ''))));
+    if (in_array($source, ['catalog', 'import', 'gtfs', 'hafas'], true)) $score += 4;
+    if (!empty($stop['catalogId']) || !empty($stop['stopId'])) $score += 3;
+    if (in_array($type, ['bus', 'tram', 'bus_tram', 'station', 'stop'], true)) $score += 2;
+    elseif ($type === 'catalog') $score += 1;
+    if (!empty($stop['isTimingPoint'])) $score += 1;
+    return $score;
+}
+
+function normalizePdfStopName(string $name): string {
+    $name = strtr($name, ['Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue', 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+    return strtolower(trim(preg_replace('/[^a-z0-9]+/i', ' ', $name)));
+}
+
+function getPdfRealStops(array $stops): array {
+    $result = [];
+    foreach ($stops as $stop) {
+        if (!is_array($stop) || isPdfTechnicalStop($stop)) continue;
+        $nameKey = normalizePdfStopName((string)($stop['name'] ?? ''));
+        if ($nameKey === '') continue;
+        $lastIndex = count($result) - 1;
+        if ($lastIndex >= 0 && normalizePdfStopName((string)($result[$lastIndex]['name'] ?? '')) === $nameKey) {
+            if (pdfStopQuality($stop) > pdfStopQuality($result[$lastIndex])) {
+                $result[$lastIndex] = $stop;
+            }
+            continue;
+        }
+        $result[] = $stop;
+    }
+    return $result;
+}
+
 function buildLineOverviewPdf(array $data, string $city, string $lineFolder): string {
     $lineName = trim((string)getLineValue($data, 'lineName', ''));
     $routeName = trim((string)getLineValue($data, 'routeName', ''));
@@ -250,19 +297,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
         $validityText = 'Immer gueltig';
     }
 
-    $isGhostStop = static function (array $stop): bool {
-        $sourceType = strtolower(trim((string)($stop['sourceType'] ?? '')));
-        $kind = strtolower(trim((string)($stop['kind'] ?? '')));
-        $role = strtolower(trim((string)($stop['detourRole'] ?? '')));
-        return !empty($stop['isGhostPoint'])
-            || !empty($stop['isGhost'])
-            || in_array($sourceType, ['ghost', 'passthrough', 'passthroughstop'], true)
-            || $kind === 'passthroughstop'
-            || $role === 'passthrough';
-    };
-    $realStops = array_values(array_filter($stops, static function ($stop) use ($isGhostStop): bool {
-        return is_array($stop) && !$isGhostStop($stop);
-    }));
+    $realStops = getPdfRealStops($stops);
 
     $crop = static function (string $value, int $maxLength): string {
         $value = trim(preg_replace('/\s+/', ' ', $value));
