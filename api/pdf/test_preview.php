@@ -14,9 +14,18 @@ require_once __DIR__ . '/PdfLayout.php';
 require_once __DIR__ . '/PdfSections.php';
 require_once __DIR__ . '/PdfGenerator.php';
 
-// Development-only preview with static sample data.
+// Development-only preview. POST a project JSON to render real project data.
 header('Content-Type: application/pdf');
 header('Content-Disposition: inline; filename="Lehrfahrer_PDF_3_Preview.pdf"');
 header('Cache-Control: no-store');
 
-echo (new PdfGenerator())->generatePreview();
+$rawInput = file_get_contents('php://input');
+$project = $rawInput !== '' ? json_decode($rawInput, true) : null;
+if (!is_array($project)) {
+    http_response_code(400);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Für die PDF-3.0-Preview werden Projektdaten als JSON benötigt.';
+    exit;
+}
+
+echo (new PdfGenerator())->generateProjectPreview($project);

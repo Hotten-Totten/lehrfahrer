@@ -10,6 +10,7 @@ namespace Lehrfahrer\Pdf;
 final class PdfLayout
 {
     private string $stream = '';
+    private array $completedStreams = [];
     private array $branding = [];
 
     public function applyBranding(array $branding): void
@@ -135,14 +136,25 @@ final class PdfLayout
         $this->drawText(350, $top - 16, 'Fahrhinweis', 9, true);
 
         foreach ($rows as $index => $row) {
-            $rowTop = $top - (($index + 1) * $rowHeight);
+            if ($index === 5 || ($index > 5 && (($index - 5) % 18) === 0)) {
+                $this->newPage();
+                $top = 760.0;
+                $this->drawText(48, 785, 'Haltestellen und Fahranweisungen', 12, true);
+                $this->drawRectangle(48, $top - $rowHeight, 499, $rowHeight, $heading, $border);
+                $this->drawText(60, $top - 16, 'Nr.', 9, true);
+                $this->drawText(103, $top - 16, 'Haltestelle', 9, true);
+                $this->drawText(350, $top - 16, 'Fahrhinweis', 9, true);
+            }
+            $pageRowIndex = $index < 5 ? $index : (($index - 5) % 18);
+            $rowTop = $top - (($pageRowIndex + 1) * $rowHeight);
             $this->drawRectangle(48, $rowTop - $rowHeight, 499, $rowHeight, [1, 1, 1], $border);
             $this->drawText(60, $rowTop - 16, (string) ($row['number'] ?? ''), 9);
             $this->drawText(103, $rowTop - 16, (string) ($row['stop'] ?? ''), 9);
             $this->drawText(350, $rowTop - 16, (string) ($row['instruction'] ?? ''), 9);
         }
 
-        $bottom = $top - ((count($rows) + 1) * $rowHeight);
+        $visibleRows = count($rows) <= 5 ? count($rows) : ((count($rows) - 5 - 1) % 18) + 1;
+        $bottom = $top - (($visibleRows + 1) * $rowHeight);
         $this->drawLine(88, $top, 88, $bottom, 0.7, $border);
         $this->drawLine(335, $top, 335, $bottom, 0.7, $border);
     }
@@ -193,6 +205,17 @@ final class PdfLayout
     public function getStream(): string
     {
         return $this->stream;
+    }
+
+    public function getStreams(): array
+    {
+        return array_merge($this->completedStreams, [$this->stream]);
+    }
+
+    private function newPage(): void
+    {
+        $this->completedStreams[] = $this->stream;
+        $this->stream = '';
     }
 
     private function drawText(float $x, float $y, string $text, float $size, bool $bold = false): void
