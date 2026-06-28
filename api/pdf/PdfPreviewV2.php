@@ -44,44 +44,33 @@ final class PdfPreviewV2
 
     private function drawInformationArea(array $data, array $branding): void
     {
-        $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
-        $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
+        $leftRows = [
+            'Linie' => (string) $data['line'],
+            'Route' => (string) $data['route'],
+            'Richtung' => (string) $data['direction'],
+        ];
+        $rightRows = [
+            'Variante' => (string) $data['variant'],
+            'Kategorie' => (string) $data['category'],
+            'Gültigkeit' => (string) $data['validFrom'],
+        ];
 
-        $this->infoColumn(42, 670, 248, 160, 'Streckendaten', [
-            'Linie' => $data['line'],
-            'Route' => $data['route'],
-            'Richtung' => $data['direction'],
-        ], $border, $accent);
-        $this->infoColumn(305, 670, 248, 160, 'Dokument', [
-            'Variante' => $data['variant'],
-            'Kategorie' => $data['category'],
-            'Gültig ab' => $data['validFrom'],
-            'Erstellt' => $data['created'],
-            'Version' => $data['version'],
-        ], $border, $accent);
-    }
-
-    private function infoColumn(
-        float $x,
-        float $top,
-        float $width,
-        float $height,
-        string $title,
-        array $rows,
-        array $border,
-        array $accent
-    ): void {
-        $this->rectangle($x, $top - $height, $width, $height, [1, 1, 1], $border);
-        $this->rectangle($x, $top - 28, $width, 28, $accent, $border);
-        $this->text($x + 14, $top - 19, $title, 10, true);
-
-        $y = $top - 54;
-        foreach ($rows as $label => $value) {
-            $this->text($x + 14, $y, (string) $label, 9, true);
-            foreach ($this->wrap((string) $value, 28, 2) as $lineIndex => $line) {
-                $this->text($x + 102, $y - ($lineIndex * 11), $line, 9);
+        $y = 700.0;
+        foreach ($leftRows as $label => $value) {
+            $this->text(42, $y, $label, 9, true);
+            foreach ($this->wrap($value, 31, 2) as $lineIndex => $line) {
+                $this->text(112, $y - ($lineIndex * 11), $line, 9);
             }
             $y -= $label === 'Richtung' ? 34 : 23;
+        }
+
+        $y = 700.0;
+        foreach ($rightRows as $label => $value) {
+            $this->text(320, $y, $label, 9, true);
+            foreach ($this->wrap($value, 25, 2) as $lineIndex => $line) {
+                $this->text(400, $y - ($lineIndex * 11), $line, 9);
+            }
+            $y -= 23;
         }
     }
 
@@ -89,8 +78,8 @@ final class PdfPreviewV2
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $tableTop = 458.0;
-        $this->text(42, 482, 'Haltestellen und Fahranweisungen', 13, true);
+        $tableTop = 591.0;
+        $this->text(42, 615, 'Haltestellen und Fahranweisungen', 13, true);
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
         foreach ($stops as $stop) {
