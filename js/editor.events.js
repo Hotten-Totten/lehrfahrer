@@ -63,6 +63,14 @@ if (lineDescriptionInput) {
   lineDescriptionInput.addEventListener("input", syncLineDescriptionFromInput);
   lineDescriptionInput.addEventListener("change", syncLineDescriptionFromInput);
 }
+if (validFromInput) {
+  validFromInput.addEventListener("input", syncLineValidityFromInputs);
+  validFromInput.addEventListener("change", syncLineValidityFromInputs);
+}
+if (validUntilInput) {
+  validUntilInput.addEventListener("input", syncLineValidityFromInputs);
+  validUntilInput.addEventListener("change", syncLineValidityFromInputs);
+}
 if (variantNameInput) {
   variantNameInput.addEventListener("input", syncVariantNameFromInput);
   variantNameInput.addEventListener("change", syncVariantNameFromInput);

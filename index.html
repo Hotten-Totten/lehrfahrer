@@ -234,6 +234,16 @@
       <div id="searchResults" class="search-results hidden"></div>
     </div>
 
+    <div class="top-group validity-group">
+      <label>Gültig ab</label>
+      <input id="validFrom" type="date">
+    </div>
+
+    <div class="top-group validity-group">
+      <label>Gültig bis</label>
+      <input id="validUntil" type="date">
+    </div>
+
     <div class="topbar-row-break" aria-hidden="true"></div>
 
     <div class="top-group description-group">
@@ -468,6 +478,14 @@
         <div class="save-confirm-row">
           <span class="save-confirm-label">Richtung</span>
           <input id="saveConfirmDirectionInput" class="save-confirm-input" placeholder="Start - Ziel">
+        </div>
+        <div class="save-confirm-row">
+          <span class="save-confirm-label">Gültig ab</span>
+          <input id="saveConfirmValidFromInput" type="date" class="save-confirm-input">
+        </div>
+        <div class="save-confirm-row">
+          <span class="save-confirm-label">Gültig bis</span>
+          <input id="saveConfirmValidUntilInput" type="date" class="save-confirm-input">
         </div>
         <div class="save-confirm-row save-confirm-row-block">
           <span class="save-confirm-label">Bemerkung</span>

@@ -148,6 +148,7 @@ function buildExportData() {
   const routeSuffix    = String(routeNameInput.value || "").trim();
   const directionName  = String(directionNameInput.value || "").trim();
   const description    = getLineDescription();
+  const { validFrom, validUntil } = getLineValidity();
   const variantName    = getVariantName(routeSuffix ? "Route " + routeSuffix : "", directionName);
   const variantCategory = getVariantCategory();
   const categoryFolder = sanitizeFilename(variantCategory || "Standard") || "Standard";
@@ -245,6 +246,8 @@ const stops = state.stops.map((stop, index) => ({
     routeName,
     directionName,
     description,
+    validFrom,
+    validUntil,
     variantName,
     variantCategory,
     categoryFolder,
@@ -275,6 +278,8 @@ const stops = state.stops.map((stop, index) => ({
       directionId,
       directionName,
       description,
+      validFrom,
+      validUntil,
       variantName,
       variantCategory,
       categoryFolder,
@@ -361,6 +366,7 @@ async function saveLineToServer() {
   setVariantCategory(target.variantCategory);
   if (directionNameInput) directionNameInput.value = target.directionName;
   setLineDescription(target.description);
+  setLineValidity(target.validFrom, target.validUntil);
 
   try {
     localStorage.setItem(SAVE_TARGET_STORAGE_KEY, JSON.stringify(target));
@@ -405,6 +411,8 @@ function showSaveConfirmDialog({ data, city }) {
     const variantCategorySelect = document.getElementById("saveConfirmVariantCategorySelect");
     const directionInput = document.getElementById("saveConfirmDirectionInput");
     const descriptionInput = document.getElementById("saveConfirmDescriptionInput");
+    const validFromDialogInput = document.getElementById("saveConfirmValidFromInput");
+    const validUntilDialogInput = document.getElementById("saveConfirmValidUntilInput");
     const fileInfo = document.getElementById("saveConfirmFile");
 
     let lastTarget = null;
@@ -420,6 +428,9 @@ function showSaveConfirmDialog({ data, city }) {
     const initialVariantName = String(getVariantName(initialRoute ? "Route " + initialRoute : "", initialDirection) || data.variantName || data.line?.variantName || lastTarget?.variantName || "").trim();
     const initialVariantCategory = normalizeVariantCategory(getVariantCategory() || data.variantCategory || data.line?.variantCategory || lastTarget?.variantCategory);
     const initialDescription = String(getLineDescription() || data.description || data.line?.description || lastTarget?.description || "").trim();
+    const currentValidity = getLineValidity();
+    const initialValidFrom = String(currentValidity.validFrom || data.validFrom || data.line?.validFrom || lastTarget?.validFrom || "").trim();
+    const initialValidUntil = String(currentValidity.validUntil || data.validUntil || data.line?.validUntil || lastTarget?.validUntil || "").trim();
     const initialTargetCity = String(lastTarget?.city || city || "").trim() || "cottbus";
 
     cityPicker.innerHTML = "";
@@ -448,6 +459,8 @@ function showSaveConfirmDialog({ data, city }) {
     }
     directionInput.value = initialDirection;
     if (descriptionInput) descriptionInput.value = initialDescription;
+    if (validFromDialogInput) validFromDialogInput.value = initialValidFrom;
+    if (validUntilDialogInput) validUntilDialogInput.value = initialValidUntil;
 
     function updateFilePreview() {
       const lineSuffix = String(lineInput.value || "").trim();
@@ -510,7 +523,9 @@ function showSaveConfirmDialog({ data, city }) {
         variantName: String(variantInput?.value || "").trim() || buildVariantNameFallback(routeSuffix ? "Route " + routeSuffix : "", String(directionInput.value || "").trim()),
         variantCategory: normalizeVariantCategory(variantCategorySelect?.value || "Standard"),
         directionName: String(directionInput.value || "").trim(),
-        description: String(descriptionInput?.value || "").trim()
+        description: String(descriptionInput?.value || "").trim(),
+        validFrom: String(validFromDialogInput?.value || "").trim(),
+        validUntil: String(validUntilDialogInput?.value || "").trim()
       });
     }
     function onCancel()  { cleanup(null); }
@@ -2093,6 +2108,7 @@ function loadLineFromData(data) {
   );
   setVariantCategory(lineBlock.variantCategory ?? data.variantCategory ?? "Standard");
   setLineDescription(lineBlock.description ?? data.description ?? "");
+  setLineValidity(lineBlock.validFrom ?? data.validFrom ?? "", lineBlock.validUntil ?? data.validUntil ?? "");
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";
@@ -2224,6 +2240,8 @@ function loadLineFromData(data) {
     variantName: lineBlock.variantName || data.variantName || "",
     variantCategory: lineBlock.variantCategory || data.variantCategory || "",
     description: lineBlock.description || data.description || "",
+    validFrom: lineBlock.validFrom || data.validFrom || "",
+    validUntil: lineBlock.validUntil || data.validUntil || "",
     stops: state.stops.length,
     routePoints: state.routePoints.length
   });

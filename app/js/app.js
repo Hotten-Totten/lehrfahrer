@@ -297,7 +297,9 @@ function getCurrentRouteMeta() {
     lineName: currentRoute.data.lineName || null,
     routeName: currentRoute.data.routeName || null,
     variantName: getAppVariantName(currentRoute.data),
-    variantCategory: getAppVariantCategory(currentRoute.data)
+    variantCategory: getAppVariantCategory(currentRoute.data),
+    validFrom: getAppValidity(currentRoute.data).validFrom,
+    validUntil: getAppValidity(currentRoute.data).validUntil
   };
 }
 
@@ -591,6 +593,8 @@ function dbPutLinesCatalog(catalog) {
           variantName: line.variantName || '',
           variantCategory: line.variantCategory || 'Standard',
           description: line.description || '',
+          validFrom: line.validFrom || '',
+          validUntil: line.validUntil || '',
           hasPdf: !!line.hasPdf,
           pdfFile: line.pdfFile || null,
           updatedAt: Number(line.updatedAt) || 0
@@ -1716,11 +1720,13 @@ function displayRoute(data) {
   const description = getAppLineDescription(data, catalogLine);
   const variantName = getAppVariantName(data, catalogLine);
   const variantCategory = getAppVariantCategory(data, catalogLine);
+  const validityText = formatAppValidity(data, catalogLine);
   panelTitle.textContent = data.lineName  || 'Route';
   panelMeta.textContent  = [
     variantCategory,
     variantName,
-    description ? `Bemerkung: ${description}` : ''
+    description ? `Bemerkung: ${description}` : '',
+    validityText
   ].filter(Boolean).join(' | ');
 
   // Haltestellenliste
@@ -1783,6 +1789,27 @@ function getAppLineDescription(lineData, catalogLine = null) {
     catalogLine?.description ||
     ''
   ).trim();
+}
+
+function getAppValidity(lineData, catalogLine = null) {
+  return {
+    validFrom: String(lineData?.validFrom || lineData?.line?.validFrom || catalogLine?.validFrom || '').trim(),
+    validUntil: String(lineData?.validUntil || lineData?.line?.validUntil || catalogLine?.validUntil || '').trim()
+  };
+}
+
+function formatAppValidity(lineData, catalogLine = null) {
+  const formatDate = value => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : '';
+  };
+  const validity = getAppValidity(lineData, catalogLine);
+  const from = formatDate(validity.validFrom);
+  const until = formatDate(validity.validUntil);
+  if (from && until) return `Gültig: ${from} – ${until}`;
+  if (from) return `Gültig: ab ${from}`;
+  if (until) return `Gültig: bis ${until}`;
+  return '';
 }
 
 function getAppVariantCategory(lineData, catalogLine = null) {
@@ -2014,6 +2041,7 @@ async function displayAvailableLines() {
       const variantName = getAppVariantName(lineData, catalogLine);
       const variantCategory = getAppVariantCategory(lineData, catalogLine);
       const description = getAppLineDescription(lineData, catalogLine);
+      const validityText = formatAppValidity(lineData, catalogLine);
 
       const div = document.createElement('div');
       div.style.cssText = `
@@ -2040,6 +2068,12 @@ async function displayAvailableLines() {
         descriptionEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.35;';
         descriptionEl.textContent = `Bemerkung: ${description}`;
         textWrap.appendChild(descriptionEl);
+      }
+      if (validityText) {
+        const validityEl = document.createElement('div');
+        validityEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;font-weight:600;';
+        validityEl.textContent = validityText;
+        textWrap.appendChild(validityEl);
       }
 
       div.appendChild(icon);

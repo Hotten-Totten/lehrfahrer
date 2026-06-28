@@ -751,6 +751,7 @@ async function createNewLine() {
   state.description = "";
   state.variantName = "Standard";
   state.variantCategory = "Standard";
+  setLineValidity("", "");
 
   clearSelection();
   clearRouteMultiSelection();

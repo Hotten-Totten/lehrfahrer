@@ -75,6 +75,8 @@ visibleCatalogMarkers: new Map(),
   description: "",
   variantName: "",
   variantCategory: "Standard",
+  validFrom: "",
+  validUntil: "",
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
@@ -516,6 +518,34 @@ function getLineDescription() {
     return syncLineDescriptionFromInput();
   }
   return String(state.description || "").trim();
+}
+
+function setLineValidity(validFrom = "", validUntil = "") {
+  state.validFrom = String(validFrom || "").trim();
+  state.validUntil = String(validUntil || "").trim();
+  if (typeof validFromInput !== "undefined" && validFromInput) {
+    validFromInput.value = state.validFrom;
+  }
+  if (typeof validUntilInput !== "undefined" && validUntilInput) {
+    validUntilInput.value = state.validUntil;
+  }
+  return { validFrom: state.validFrom, validUntil: state.validUntil };
+}
+
+function syncLineValidityFromInputs() {
+  state.validFrom = String(validFromInput?.value || "").trim();
+  state.validUntil = String(validUntilInput?.value || "").trim();
+  return { validFrom: state.validFrom, validUntil: state.validUntil };
+}
+
+function getLineValidity() {
+  if (typeof validFromInput !== "undefined" && typeof validUntilInput !== "undefined") {
+    return syncLineValidityFromInputs();
+  }
+  return {
+    validFrom: String(state.validFrom || "").trim(),
+    validUntil: String(state.validUntil || "").trim()
+  };
 }
 
 function normalizeVariantCategory(value) {

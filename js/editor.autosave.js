@@ -14,6 +14,7 @@ function buildAutosaveData() {
     variantCategory: getVariantCategory(),
     directionName: directionNameInput.value.trim(),
     description: getLineDescription(),
+    ...getLineValidity(),
     color: lineColorInput.value,
     routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
     placementMode: normalizeEditorPlacementMode(state.placementMode, state.routeMode),
@@ -185,6 +186,8 @@ function clearEditorData() {
   state.description = "";
   state.variantName = "";
   state.variantCategory = "Standard";
+  state.validFrom = "";
+  state.validUntil = "";
   if (typeof variantNameInput !== "undefined" && variantNameInput) {
     variantNameInput.value = "";
   }
@@ -194,6 +197,7 @@ function clearEditorData() {
   if (typeof lineDescriptionInput !== "undefined" && lineDescriptionInput) {
     lineDescriptionInput.value = "";
   }
+  setLineValidity("", "");
   state.previewMode = "original";
 
   if ("guidePoints" in state) {
@@ -265,6 +269,7 @@ function loadAutosave() {
     setVariantName(data.variantName || "", data.routeName || "", data.directionName || "");
     setVariantCategory(data.variantCategory || "Standard");
     setLineDescription(data.description || "");
+    setLineValidity(data.validFrom || "", data.validUntil || "");
     lineColorInput.value = data.color || "#d32f2f";
 
     state.routeMode = data.routeMode || "auto";

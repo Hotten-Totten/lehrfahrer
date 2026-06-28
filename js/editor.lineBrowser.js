@@ -40,6 +40,20 @@ function getLineBrowserVariantCategory(line) {
   return String(line?.variantCategory || "").trim() || "Standard";
 }
 
+function formatLineBrowserDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : "";
+}
+
+function getLineBrowserValidityText(line) {
+  const from = formatLineBrowserDate(line?.validFrom);
+  const until = formatLineBrowserDate(line?.validUntil);
+  if (from && until) return `Gültig: ${from} – ${until}`;
+  if (from) return `Gültig: ab ${from}`;
+  if (until) return `Gültig: bis ${until}`;
+  return "";
+}
+
 function getLineBrowserLineValue(line) {
   const folderName = String(line?.lineFolder || "").trim().replace(/^Linie[_\s-]*/i, "");
   return folderName || String(line?.lineName || "").trim() || "Unbekannt";
@@ -147,7 +161,7 @@ function renderLineBrowser(lines) {
         return false;
       }
       if (!q) return true;
-      return [line.lineName, line.routeName, line.directionName, line.description, line.variantName, line.variantCategory, line.city]
+      return [line.lineName, line.routeName, line.directionName, line.description, line.variantName, line.variantCategory, line.validFrom, line.validUntil, line.city]
         .join(" ").toLowerCase().includes(q);
     });
     filtered.sort((a, b) => {
@@ -263,6 +277,12 @@ function renderLineBrowser(lines) {
           description.classList.add("line-browser-description-empty");
         }
 
+        const validityText = getLineBrowserValidityText(line);
+        const validity = document.createElement("div");
+        validity.className = "line-browser-validity";
+        validity.textContent = validityText;
+        validity.hidden = !validityText;
+
         // Datei-Badges (JSON / GPX / PDF)
         const fileBadges = document.createElement("div");
         fileBadges.className = "lbr-file-badges";
@@ -288,6 +308,7 @@ function renderLineBrowser(lines) {
         info.appendChild(title);
         info.appendChild(meta);
         info.appendChild(description);
+        info.appendChild(validity);
         info.appendChild(fileBadges);
 
         // Aktions-Buttons

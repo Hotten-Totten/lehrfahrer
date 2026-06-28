@@ -13,6 +13,8 @@ const routeNameInput = document.getElementById("routeName");
 const variantNameInput = document.getElementById("variantName");
 const variantCategoryInput = document.getElementById("variantCategory");
 const directionNameInput = document.getElementById("directionName");
+const validFromInput = document.getElementById("validFrom");
+const validUntilInput = document.getElementById("validUntil");
 const lineDescriptionInput = document.getElementById("lineDescription");
 const lineColorInput = document.getElementById("lineColor");
 

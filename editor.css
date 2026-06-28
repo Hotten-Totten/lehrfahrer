@@ -350,6 +350,11 @@ button.detour-phase-build {
   min-width: 30ch;
 }
 
+.top-group.validity-group {
+  flex: 0 1 150px;
+  min-width: 140px;
+}
+
 .top-group.description-group {
   flex: 1 1 100%;
   width: 100%;
@@ -1249,6 +1254,13 @@ button.danger:hover {
   font-style: italic;
 }
 
+.line-browser-validity {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .line-browser-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1969,6 +1981,7 @@ button.danger:hover {
   .top-group.variant-name-group,
   .top-group.variant-category-group,
   .top-group.direction-group,
+  .top-group.validity-group,
   .top-group.description-group,
   .search-group {
     width: 100%;
