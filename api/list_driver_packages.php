@@ -19,9 +19,28 @@ if (is_dir($root)) {
             $documents[] = [
                 'lineName' => trim((string)($document['lineName'] ?? '')),
                 'routeName' => trim((string)($document['routeName'] ?? '')),
+                'directionName' => trim((string)($document['directionName'] ?? '')),
                 'variantName' => trim((string)($document['variantName'] ?? '')),
+                'variantCategory' => trim((string)($document['variantCategory'] ?? '')),
+                'validFrom' => trim((string)($document['validFrom'] ?? '')),
+                'validUntil' => trim((string)($document['validUntil'] ?? '')),
                 'path' => trim((string)($document['path'] ?? ''))
             ];
+        }
+
+        $lineNames = [];
+        $categories = [];
+        $validity = [];
+        foreach ($documents as $document) {
+            if ($document['lineName'] !== '') $lineNames[$document['lineName']] = true;
+            if ($document['variantCategory'] !== '') $categories[$document['variantCategory']] = true;
+            $validityKey = $document['validFrom'] . '|' . $document['validUntil'];
+            if ($validityKey !== '|') {
+                $validity[$validityKey] = [
+                    'validFrom' => $document['validFrom'],
+                    'validUntil' => $document['validUntil']
+                ];
+            }
         }
 
         $packages[] = [
@@ -31,7 +50,11 @@ if (is_dir($root)) {
             'updated' => trim((string)($data['updated'] ?? ($data['createdAt'] ?? ''))) ?: date('c', (int)filemtime($packageFile)),
             'version' => (int)($data['version'] ?? 1),
             'status' => 'Erstellt',
+            'note' => trim((string)($data['note'] ?? ($data['description'] ?? ''))),
             'documentCount' => count($documents),
+            'lineCount' => count($lineNames),
+            'categories' => array_keys($categories),
+            'validity' => array_values($validity),
             'documents' => $documents,
             'selectedItems' => is_array($data['selectedItems'] ?? null) ? $data['selectedItems'] : [],
             'packagePath' => $relativePath

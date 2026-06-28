@@ -71,6 +71,14 @@ async function openDriverDocumentsDialog(options = {}) {
       const option = driverSelect.selectedOptions[0];
       if (option?.value) driverInput.value = option.dataset.driverName || option.textContent || "";
     });
+    const noteLabel = document.createElement("label");
+    noteLabel.className = "driver-documents-driver";
+    const noteCaption = document.createElement("span");
+    noteCaption.textContent = "Bemerkung zum Paket";
+    const noteInput = document.createElement("textarea");
+    noteInput.placeholder = "optional";
+    noteInput.value = String(options.note || "");
+    noteLabel.append(noteCaption, noteInput);
 
     const actions = document.createElement("div");
     actions.className = "driver-documents-selection-actions";
@@ -168,6 +176,7 @@ async function openDriverDocumentsDialog(options = {}) {
           body: JSON.stringify({
             driverName: driverInput.value.trim(),
             driverId: driverSelect.value || "",
+            note: noteInput.value.trim(),
             mode: packageMode.mode,
             packageId: packageMode.packageId,
             items: selected.map(entry => ({
@@ -189,7 +198,7 @@ async function openDriverDocumentsDialog(options = {}) {
       }
     });
 
-    body.append(driverSelectLabel, driverLabel, actions, list, footer);
+    body.append(driverSelectLabel, driverLabel, noteLabel, actions, list, footer);
   } catch (error) {
     body.textContent = error.message || "Fahrerunterlagen konnten nicht vorbereitet werden.";
   }
@@ -444,92 +453,129 @@ async function openDriverPackagesDialog() {
 
   try {
     body.innerHTML = "";
-    const packages = await fetchDriverPackages();
+    const packages = (await fetchDriverPackages()).sort((a, b) =>
+      String(b.created || "").localeCompare(String(a.created || ""))
+    );
     if (!packages.length) {
       body.textContent = "Noch keine Einweisungspakete vorhanden.";
       return;
     }
 
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.className = "driver-packages-search";
+    searchInput.placeholder = "Fahrer, Linie, Richtung, Variante oder Kategorie suchen";
     const list = document.createElement("div");
     list.className = "driver-documents-packages";
-    packages.forEach(packageInfo => {
-      const card = document.createElement("div");
-      card.className = "driver-documents-package-card";
-      const text = document.createElement("div");
-      const title = document.createElement("strong");
-      title.textContent = packageInfo.driverName || "Unbenannt";
-      const meta = document.createElement("small");
-      const created = packageInfo.created
-        ? new Date(packageInfo.created).toLocaleString("de-DE")
-        : "";
-      const updated = packageInfo.updated
-        ? new Date(packageInfo.updated).toLocaleString("de-DE")
-        : "";
-      meta.textContent = `Erstellt: ${created} | Geändert: ${updated} | Status: ${packageInfo.status || "Erstellt"} | ${Number(packageInfo.documentCount || 0)} Unterlagen`;
-      text.append(title, meta);
-      const cardActions = document.createElement("div");
-      cardActions.className = "driver-documents-card-actions";
-      const openButton = document.createElement("button");
-      openButton.type = "button";
-      openButton.textContent = "Öffnen";
-      openButton.addEventListener("click", () => {
-        renderDriverDocumentsResult(body, {
-          package: packageInfo,
-          packagePath: packageInfo.packagePath
-        });
-      });
-      const pdfButton = document.createElement("button");
-      pdfButton.type = "button";
-      pdfButton.textContent = "PDF anzeigen";
-      pdfButton.disabled = !packageInfo.documents?.length;
-      pdfButton.addEventListener("click", () => {
-        if (packageInfo.documents?.[0]?.path) window.open(packageInfo.documents[0].path, "_blank", "noopener");
-      });
-      const zipButton = document.createElement("button");
-      zipButton.type = "button";
-      zipButton.textContent = "ZIP herunterladen";
-      zipButton.addEventListener("click", () => downloadDriverPackageZip(packageInfo.id, zipButton));
-      const updateButton = document.createElement("button");
-      updateButton.type = "button";
-      updateButton.textContent = "Aktualisieren";
-      updateButton.addEventListener("click", () => openDriverDocumentsDialog({
-        updatePackageId: packageInfo.id,
-        driverName: packageInfo.driverName,
-        selectedItems: packageInfo.selectedItems
-      }));
-      const renameButton = document.createElement("button");
-      renameButton.type = "button";
-      renameButton.textContent = "Umbenennen";
-      renameButton.addEventListener("click", async () => {
-        const newName = prompt("Neuer Fahrername:", packageInfo.driverName || "");
-        if (newName === null) return;
-        try {
-          await manageDriverPackage("rename", packageInfo.id, { driverName: newName.trim() });
-          openDriverPackagesDialog();
-        } catch (error) {
-          alert(error.message || "Paket konnte nicht umbenannt werden.");
-        }
-      });
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.textContent = "Löschen";
-      deleteButton.addEventListener("click", async () => {
-        if (!confirm("Einweisungspaket wirklich löschen?")) return;
-        try {
-          await manageDriverPackage("delete", packageInfo.id);
-          openDriverPackagesDialog();
-        } catch (error) {
-          alert(error.message || "Paket konnte nicht gelöscht werden.");
-        }
-      });
-      cardActions.append(openButton, pdfButton, zipButton, updateButton, renameButton, deleteButton);
-      card.append(text, cardActions);
-      list.appendChild(card);
-    });
-    body.appendChild(list);
+
+    const renderPackages = () => {
+      list.innerHTML = "";
+      const query = searchInput.value.trim().toLocaleLowerCase("de-DE");
+      packages
+        .filter(packageInfo => getDriverPackageSearchText(packageInfo).includes(query))
+        .forEach(packageInfo => list.appendChild(createDriverPackageCard(packageInfo, body)));
+      if (!list.children.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "Keine passenden Einweisungspakete gefunden.";
+        list.appendChild(empty);
+      }
+    };
+    searchInput.addEventListener("input", renderPackages);
+    renderPackages();
+    body.append(searchInput, list);
   } catch (error) {
     body.textContent = error.message || "Einweisungspakete konnten nicht geladen werden.";
   }
+}
+
+function getDriverPackageSearchText(packageInfo) {
+  return [
+    packageInfo.driverName,
+    ...(packageInfo.documents || []).flatMap(documentInfo => [
+      documentInfo.lineName,
+      documentInfo.directionName,
+      documentInfo.variantName,
+      documentInfo.variantCategory
+    ])
+  ].filter(Boolean).join(" ").toLocaleLowerCase("de-DE");
+}
+
+function formatDriverPackageDate(value) {
+  return value ? new Date(value).toLocaleString("de-DE") : "–";
+}
+
+function createDriverPackageCard(packageInfo, body) {
+  const card = document.createElement("article");
+  card.className = "driver-documents-package-card";
+  const content = document.createElement("div");
+  content.className = "driver-package-card-content";
+  const title = document.createElement("h4");
+  title.textContent = packageInfo.driverName || "Unbenannt";
+  const facts = document.createElement("div");
+  facts.className = "driver-package-card-facts";
+  [
+    ["Erstellt", formatDriverPackageDate(packageInfo.created)],
+    ["Zuletzt geändert", formatDriverPackageDate(packageInfo.updated)],
+    ["Unterlagen", String(Number(packageInfo.documentCount || 0))],
+    ["Status", packageInfo.status || "Erstellt"]
+  ].forEach(([label, value]) => {
+    const fact = document.createElement("span");
+    fact.textContent = `${label}: ${value}`;
+    facts.appendChild(fact);
+  });
+  content.append(title, facts);
+  if (packageInfo.note) {
+    const note = document.createElement("p");
+    note.className = "driver-package-note";
+    note.textContent = packageInfo.note;
+    content.appendChild(note);
+  }
+  const actions = createDriverPackageActions(packageInfo, body);
+  card.append(content, actions);
+  return card;
+}
+
+function createDriverPackageActions(packageInfo, body) {
+  const actions = document.createElement("div");
+  actions.className = "driver-documents-card-actions";
+  const makeButton = (text, handler) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    button.addEventListener("click", handler);
+    actions.appendChild(button);
+    return button;
+  };
+  makeButton("Öffnen", () => renderDriverPackageDetail(body, packageInfo));
+  const zipButton = makeButton("ZIP", () => downloadDriverPackageZip(packageInfo.id, zipButton));
+  const pdfButton = makeButton("PDFs", () => renderDriverPackageDetail(body, packageInfo));
+  pdfButton.disabled = !packageInfo.documents?.length;
+  makeButton("Aktualisieren", () => openDriverDocumentsDialog({
+    updatePackageId: packageInfo.id,
+    driverName: packageInfo.driverName,
+    note: packageInfo.note,
+    selectedItems: packageInfo.selectedItems
+  }));
+  makeButton("Umbenennen", async () => {
+    const newName = prompt("Neuer Fahrername:", packageInfo.driverName || "");
+    if (newName === null) return;
+    try {
+      await manageDriverPackage("rename", packageInfo.id, { driverName: newName.trim() });
+      openDriverPackagesDialog();
+    } catch (error) {
+      alert(error.message || "Paket konnte nicht umbenannt werden.");
+    }
+  });
+  makeButton("Löschen", async () => {
+    if (!confirm("Einweisungspaket wirklich löschen?")) return;
+    try {
+      await manageDriverPackage("delete", packageInfo.id);
+      openDriverPackagesDialog();
+    } catch (error) {
+      alert(error.message || "Paket konnte nicht gelöscht werden.");
+    }
+  });
+  return actions;
 }
 
 async function manageDriverPackage(action, id, extra = {}) {
@@ -546,10 +592,38 @@ async function manageDriverPackage(action, id, extra = {}) {
 }
 
 function renderDriverDocumentsResult(container, result) {
+  renderDriverPackageDetail(container, result.package || {});
+}
+
+function formatDriverDocumentValidity(documentInfo) {
+  const formatDate = value => {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : "";
+  };
+  const from = formatDate(documentInfo.validFrom);
+  const until = formatDate(documentInfo.validUntil);
+  if (from && until) return `${from} bis ${until}`;
+  if (from) return `ab ${from}`;
+  if (until) return `bis ${until}`;
+  return "Immer gültig";
+}
+
+function renderDriverPackageDetail(container, packageData) {
   container.innerHTML = "";
-  const packageData = result.package || {};
+  const detailHeader = document.createElement("div");
+  detailHeader.className = "driver-package-detail-header";
+  const headingWrap = document.createElement("div");
+  const eyebrow = document.createElement("small");
+  eyebrow.textContent = "Einweisungspaket";
   const heading = document.createElement("h4");
-  heading.textContent = "Fahrerunterlagen-Paket";
+  heading.textContent = packageData.driverName || "Unbenannt";
+  headingWrap.append(eyebrow, heading);
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.textContent = "Zur Übersicht";
+  backButton.addEventListener("click", openDriverPackagesDialog);
+  detailHeader.append(headingWrap, backButton);
+
   const meta = document.createElement("dl");
   meta.className = "driver-documents-package-meta";
   const createdAt = packageData.created || packageData.createdAt
@@ -559,11 +633,10 @@ function renderDriverDocumentsResult(container, result) {
     ? new Date(packageData.updated).toLocaleString("de-DE")
     : createdAt;
   [
-    ["Fahrer/in", packageData.driverName || "Unbenannt"],
+    ["Fahrer", packageData.driverName || "Unbenannt"],
     ["Erstellt", createdAt],
     ["Zuletzt geändert", updatedAt],
-    ["Status", packageData.status || "Erstellt"],
-    ["Unterlagen", String(Number(packageData.documentCount || 0))]
+    ["Status", packageData.status || "Erstellt"]
   ].forEach(([label, value]) => {
     const term = document.createElement("dt");
     term.textContent = label;
@@ -572,38 +645,65 @@ function renderDriverDocumentsResult(container, result) {
     meta.append(term, description);
   });
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "driver-documents-package-toolbar";
-  const zipButton = document.createElement("button");
-  zipButton.type = "button";
-  zipButton.className = "driver-documents-create";
-  zipButton.textContent = "Gesamtes Paket herunterladen";
-  const zipStatus = document.createElement("span");
-  zipButton.addEventListener("click", () => downloadDriverPackageZip(packageData.id, zipButton, zipStatus));
-  toolbar.append(zipButton, zipStatus);
+  const documents = packageData.documents || [];
+  const lineCount = packageData.lineCount ?? new Set(documents.map(item => item.lineName).filter(Boolean)).size;
+  const categories = packageData.categories?.length
+    ? packageData.categories
+    : Array.from(new Set(documents.map(item => item.variantCategory).filter(Boolean)));
+  const validityLabels = Array.from(new Set(documents.map(formatDriverDocumentValidity)));
+  const packageInfo = document.createElement("div");
+  packageInfo.className = "driver-package-information";
+  [
+    ["Unterlagen", String(Number(packageData.documentCount ?? documents.length))],
+    ["Linien", String(Number(lineCount || 0))],
+    ["Kategorien", categories.join(", ") || "–"],
+    ["Gültigkeit", validityLabels.join(", ") || "Immer gültig"],
+    ["Version", String(packageData.version || 1)]
+  ].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const content = document.createElement("strong");
+    content.textContent = value;
+    item.append(caption, content);
+    packageInfo.appendChild(item);
+  });
 
-  const list = document.createElement("ul");
-  list.className = "driver-documents-result-list";
-  (packageData.documents || []).forEach(documentInfo => {
-    const item = document.createElement("li");
-    const text = document.createElement("span");
-    text.textContent = [
-      documentInfo.lineName,
-      documentInfo.variantName || documentInfo.routeName
-    ].filter(Boolean).join(" – ");
+  const sectionTitle = document.createElement("h4");
+  sectionTitle.textContent = "Alle Unterlagen";
+  const list = document.createElement("div");
+  list.className = "driver-document-cards";
+  documents.forEach(documentInfo => {
+    const item = document.createElement("article");
+    item.className = "driver-document-card";
+    const info = document.createElement("dl");
+    [
+      ["Linie", documentInfo.lineName || "–"],
+      ["Route", documentInfo.routeName || "–"],
+      ["Richtung", documentInfo.directionName || "–"],
+      ["Variante", documentInfo.variantName || "–"],
+      ["Kategorie", documentInfo.variantCategory || "Standard"]
+    ].forEach(([label, value]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const description = document.createElement("dd");
+      description.textContent = value;
+      info.append(term, description);
+    });
     const link = document.createElement("a");
     link.href = documentInfo.path;
     link.target = "_blank";
     link.rel = "noopener";
     link.className = "driver-documents-open";
-    link.textContent = "Öffnen";
-    item.append(text, link);
+    link.textContent = "PDF öffnen";
+    item.append(info, link);
     list.appendChild(item);
   });
+
   const savedHint = document.createElement("small");
   savedHint.className = "driver-documents-saved-hint";
   savedHint.textContent = "Paketdaten gespeichert";
-  container.append(heading, meta, toolbar, list, savedHint);
+  container.append(detailHeader, meta, packageInfo, sectionTitle, list, savedHint);
 }
 
 async function downloadDriverPackageZip(packageId, button, statusElement = null) {

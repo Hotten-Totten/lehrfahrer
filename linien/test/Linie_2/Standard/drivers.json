@@ -1,0 +1,13 @@
+[
+    {
+        "id": "drv_8b833dcc58b8c1893747b49aca95e318",
+        "firstName": "Frank",
+        "lastName": "Fudeus",
+        "personnelNumber": "0565",
+        "depot": "BHS",
+        "note": "",
+        "active": true,
+        "created": "2026-06-28T16:19:31+02:00",
+        "updated": "2026-06-28T16:19:31+02:00"
+    }
+]

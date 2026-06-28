@@ -285,6 +285,7 @@ if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items'])
 }
 
 $driverName = trim((string)($input['driverName'] ?? ''));
+$packageNote = trim((string)($input['note'] ?? ''));
 $driverId = trim((string)($input['driverId'] ?? ''));
 if ($driverId !== '' && !preg_match('/^drv_[a-f0-9]{32}$/', $driverId)) {
     $driverId = '';
@@ -381,6 +382,8 @@ foreach ($input['items'] as $item) {
         'directionName' => driverDocValue($data, 'directionName'),
         'variantName' => driverDocValue($data, 'variantName'),
         'variantCategory' => driverDocValue($data, 'variantCategory'),
+        'validFrom' => driverDocValue($data, 'validFrom'),
+        'validUntil' => driverDocValue($data, 'validUntil'),
         'path' => $relativePath
     ];
 }
@@ -401,6 +404,21 @@ foreach ($oldPdfPaths as $oldPdfPath) {
     }
 }
 
+$packageLineNames = [];
+$packageCategories = [];
+$packageValidity = [];
+foreach ($documents as $document) {
+    if ($document['lineName'] !== '') $packageLineNames[$document['lineName']] = true;
+    if ($document['variantCategory'] !== '') $packageCategories[$document['variantCategory']] = true;
+    $validityKey = $document['validFrom'] . '|' . $document['validUntil'];
+    if ($validityKey !== '|') {
+        $packageValidity[$validityKey] = [
+            'validFrom' => $document['validFrom'],
+            'validUntil' => $document['validUntil']
+        ];
+    }
+}
+
 $package = [
     'id' => $packageId,
     'driverId' => $driverId,
@@ -410,7 +428,11 @@ $package = [
     'createdAt' => $created,
     'version' => 2,
     'status' => 'Erstellt',
+    'note' => $packageNote,
     'documentCount' => count($documents),
+    'lineCount' => count($packageLineNames),
+    'categories' => array_keys($packageCategories),
+    'validity' => array_values($packageValidity),
     'documents' => $documents,
     'selectedItems' => $selectedItems
 ];
