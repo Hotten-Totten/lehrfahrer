@@ -22,10 +22,25 @@ final class PdfPreviewV2
             'accentColor' => '#EEF1F3',
             'website' => 'www.lehrfahrer.de',
         ]))->toArray();
+        $stops = $this->prepareStops($project);
+        $lineData = is_array($project['line'] ?? null) ? $project['line'] : [];
+        $data['start'] = trim((string) (
+            $project['startStopName']
+            ?? $lineData['startStopName']
+            ?? ($stops[0]['stop'] ?? '')
+        ));
+        $data['end'] = trim((string) (
+            $project['endStopName']
+            ?? $lineData['endStopName']
+            ?? ($stops[count($stops) - 1]['stop'] ?? '')
+        ));
+        $data['stopCount'] = (string) count($stops);
+        $data['distance'] = $data['distance'] === '-' ? '' : $data['distance'];
+        $data['duration'] = $data['duration'] === '-' ? '' : $data['duration'];
 
         $this->drawHeader($data, $branding);
         $this->drawInformationArea($data, $branding);
-        $tableBottom = $this->drawStopTable($this->prepareStops($project), $branding);
+        $tableBottom = $this->drawStopTable($stops, $branding);
         $this->drawSpecialNotes((string) $data['description'], $tableBottom, $branding);
 
         return $this->buildPdf($branding);
@@ -44,18 +59,21 @@ final class PdfPreviewV2
 
     private function drawInformationArea(array $data, array $branding): void
     {
+        $this->text(42, 706, 'Streckenübersicht', 11, true);
         $leftRows = [
             'Linie' => (string) $data['line'],
             'Route' => (string) $data['route'],
             'Richtung' => (string) $data['direction'],
         ];
         $rightRows = [
-            'Variante' => (string) $data['variant'],
-            'Kategorie' => (string) $data['category'],
-            'Gültigkeit' => (string) $data['validFrom'],
+            'Start' => (string) $data['start'],
+            'Ziel' => (string) $data['end'],
+            'Haltestellen' => (string) $data['stopCount'],
+            'Streckenlänge' => (string) $data['distance'],
+            'Fahrzeit' => (string) $data['duration'],
         ];
 
-        $y = 700.0;
+        $y = 681.0;
         foreach ($leftRows as $label => $value) {
             $this->text(42, $y, $label, 9, true);
             foreach ($this->wrap($value, 31, 2) as $lineIndex => $line) {
@@ -64,12 +82,10 @@ final class PdfPreviewV2
             $y -= $label === 'Richtung' ? 34 : 23;
         }
 
-        $y = 700.0;
+        $y = 681.0;
         foreach ($rightRows as $label => $value) {
             $this->text(320, $y, $label, 9, true);
-            foreach ($this->wrap($value, 25, 2) as $lineIndex => $line) {
-                $this->text(400, $y - ($lineIndex * 11), $line, 9);
-            }
+            $this->text(400, $y, $this->crop($value, 25), 9);
             $y -= 23;
         }
     }
@@ -78,8 +94,8 @@ final class PdfPreviewV2
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $tableTop = 591.0;
-        $this->text(42, 615, 'Haltestellen und Fahranweisungen', 13, true);
+        $tableTop = 545.0;
+        $this->text(42, 569, 'Haltestellen und Fahranweisungen', 13, true);
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
         foreach ($stops as $stop) {
