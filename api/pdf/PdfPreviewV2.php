@@ -10,6 +10,7 @@ namespace Lehrfahrer\Pdf;
 final class PdfPreviewV2
 {
     private string $stream = '';
+    private array $completedStreams = [];
 
     public function render(array $project): string
     {
@@ -24,10 +25,10 @@ final class PdfPreviewV2
 
         $this->drawHeader($data, $branding);
         $this->drawInformationArea($data, $branding);
-        $this->drawPreviewBody($data, $branding);
-        $this->drawFooter($branding);
+        $tableBottom = $this->drawStopTable($data['stops'], $branding);
+        $this->drawSpecialNotes((string) $data['description'], $tableBottom, $branding);
 
-        return $this->buildPdf();
+        return $this->buildPdf($branding);
     }
 
     private function drawHeader(array $data, array $branding): void
@@ -88,27 +89,69 @@ final class PdfPreviewV2
         }
     }
 
-    private function drawPreviewBody(array $data, array $branding): void
+    private function drawStopTable(array $stops, array $branding): float
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
         $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
-        $this->text(42, 500, 'PDF 3.0 Preview V2', 13, true);
-        $this->rectangle(42, 410, 511, 70, [1, 1, 1], $border);
-        $this->rectangle(42, 456, 511, 24, $accent, $border);
-        $this->text(56, 464, 'Dokumentvorschau', 10, true);
-        $this->text(56, 438, 'Haltestellen: ' . (string) $data['stopCount'], 9);
-        $this->text(210, 438, 'Streckenlänge: ' . (string) $data['distance'], 9);
-        $this->text(390, 438, 'Fahrzeit: ' . (string) $data['duration'], 9);
+        $tableTop = 478.0;
+        $this->text(42, 502, 'Haltestellen und Fahranweisungen', 13, true);
+        $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
+
+        foreach ($stops as $stop) {
+            if ($rowTop - 22 < 120) {
+                $this->newPage();
+                $this->text(42, 808, 'Haltestellen und Fahranweisungen', 13, true);
+                $rowTop = $this->drawStopTableHeader(790, $border, $accent);
+            }
+
+            $rowBottom = $rowTop - 22;
+            $this->rectangle(42, $rowBottom, 511, 22, [1, 1, 1], $border);
+            $this->line(93, $rowBottom, 93, $rowTop, 0.5, $border);
+            $this->line(323, $rowBottom, 323, $rowTop, 0.5, $border);
+            $this->text(63, $rowBottom + 7, (string) ($stop['number'] ?? ''), 8);
+            $this->text(103, $rowBottom + 7, $this->crop((string) ($stop['stop'] ?? ''), 38), 8);
+            $instruction = trim((string) ($stop['instruction'] ?? ''));
+            if ($instruction === '-') {
+                $instruction = '';
+            }
+            $this->text(333, $rowBottom + 7, $this->crop($instruction, 36), 8);
+            $rowTop = $rowBottom;
+        }
+
+        return $rowTop;
     }
 
-    private function drawFooter(array $branding): void
+    private function drawStopTableHeader(float $top, array $border, array $accent): float
+    {
+        $bottom = $top - 24;
+        $this->rectangle(42, $bottom, 511, 24, $accent, $border);
+        $this->line(93, $bottom, 93, $top, 0.5, $border);
+        $this->line(323, $bottom, 323, $top, 0.5, $border);
+        $this->text(61, $bottom + 8, 'Nr.', 9, true);
+        $this->text(183, $bottom + 8, 'Haltestelle', 9, true);
+        $this->text(418, $bottom + 8, 'Fahrhinweis', 9, true);
+        return $bottom;
+    }
+
+    private function drawSpecialNotes(string $description, float $tableBottom, array $branding): void
     {
         $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
-        $this->line(42, 52, 553, 52, 0.6, $border);
-        $this->text(42, 34, 'Erstellt mit Lehrfahrer®', 8);
-        $this->text(225, 34, (string) $branding['website'], 8);
-        $this->text(395, 34, 'Preview V2', 8);
-        $this->text(492, 34, 'Seite 1 von 1', 8);
+        $accent = $this->color($branding['accentColor'], [0.93, 0.94, 0.95]);
+        $lines = $this->wrap($description !== '' ? $description : 'Keine Besonderheiten hinterlegt.', 82, 4);
+        $height = 42 + (count($lines) * 13);
+        $top = $tableBottom - 57;
+
+        if ($top - $height < 70) {
+            $this->newPage();
+            $top = 790;
+        }
+
+        $this->rectangle(42, $top - $height, 511, $height, [1, 1, 1], $border);
+        $this->rectangle(42, $top - 26, 511, 26, $accent, $border);
+        $this->text(56, $top - 18, 'Besonderheiten', 10, true);
+        foreach ($lines as $index => $line) {
+            $this->text(56, $top - 45 - ($index * 13), $line, 9);
+        }
     }
 
     private function text(float $x, float $y, string $text, float $size, bool $bold = false): void
@@ -146,6 +189,21 @@ final class PdfPreviewV2
         return $lines ?: [''];
     }
 
+    private function crop(string $text, int $length): string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', $text));
+        if (strlen($text) <= $length) {
+            return $text;
+        }
+        return rtrim(substr($text, 0, $length - 3)) . '...';
+    }
+
+    private function newPage(): void
+    {
+        $this->completedStreams[] = $this->stream;
+        $this->stream = '';
+    }
+
     private function color(string $hex, array $fallback): array
     {
         $hex = ltrim($hex, '#');
@@ -159,28 +217,58 @@ final class PdfPreviewV2
         ];
     }
 
-    private function buildPdf(): string
+    private function buildPdf(array $branding): string
     {
+        $streams = array_merge($this->completedStreams, [$this->stream]);
+        $pageCount = count($streams);
+        $border = $this->color($branding['secondaryColor'], [0.72, 0.75, 0.78]);
+        foreach ($streams as $index => &$stream) {
+            $footer = '';
+            $originalStream = $this->stream;
+            $this->stream = '';
+            $this->line(42, 52, 553, 52, 0.6, $border);
+            $this->text(42, 34, 'Erstellt mit Lehrfahrer®', 8);
+            $this->text(225, 34, (string) $branding['website'], 8);
+            $this->text(395, 34, 'Preview V2', 8);
+            $this->text(492, 34, 'Seite ' . ($index + 1) . ' von ' . $pageCount, 8);
+            $footer = $this->stream;
+            $this->stream = $originalStream;
+            $stream .= $footer;
+        }
+        unset($stream);
+
         $objects = [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            2 => '<< /Type /Pages /Kids [5 0 R] /Count 1 >>',
+            2 => '',
             3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
             4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
-            5 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
-                . '/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>',
-            6 => "<< /Length " . strlen($this->stream) . " >>\nstream\n{$this->stream}\nendstream",
         ];
+        $nextId = 5;
+        $pageIds = [];
+        foreach ($streams as $stream) {
+            $contentId = $nextId++;
+            $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n{$stream}\nendstream";
+            $pageId = $nextId++;
+            $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+                . "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {$contentId} 0 R >>";
+            $pageIds[] = $pageId;
+        }
+        $objects[2] = '<< /Type /Pages /Kids ['
+            . implode(' ', array_map(static fn (int $id): string => "{$id} 0 R", $pageIds))
+            . '] /Count ' . $pageCount . ' >>';
+
         $pdf = "%PDF-1.4\n";
         $offsets = [0];
-        foreach ($objects as $id => $object) {
+        for ($id = 1; $id < $nextId; $id++) {
+            $object = $objects[$id] ?? '';
             $offsets[$id] = strlen($pdf);
             $pdf .= "{$id} 0 obj\n{$object}\nendobj\n";
         }
         $xref = strlen($pdf);
-        $pdf .= "xref\n0 7\n0000000000 65535 f \n";
-        for ($id = 1; $id <= 6; $id++) {
+        $pdf .= "xref\n0 {$nextId}\n0000000000 65535 f \n";
+        for ($id = 1; $id < $nextId; $id++) {
             $pdf .= sprintf("%010d 00000 n \n", $offsets[$id]);
         }
-        return $pdf . "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
+        return $pdf . "trailer\n<< /Size {$nextId} /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
     }
 }
