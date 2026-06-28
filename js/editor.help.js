@@ -26,6 +26,15 @@ const HELP_DOCUMENTS = {
     title: "Git-Workflow",
     path: "docs/development-workflow.md"
   },
+  whatsNew: {
+    title: "Was ist neu?",
+    path: "CHANGELOG.md",
+    render: renderLatestChanges
+  },
+  about: {
+    title: "Über Lehrfahrer",
+    load: loadAboutLehrfahrer
+  },
   detourWizard: {
     title: "Umleitungs-Wizard Hilfe",
     path: "docs/handbuch.md",
@@ -43,6 +52,12 @@ const HELP_DOCUMENTS = {
 
 let helpDocumentRequestId = 0;
 
+async function fetchHelpText(path) {
+  const response = await fetch(path, { cache: "no-cache" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
 function extractMarkdownSection(markdown, sectionHeading) {
   const lines = String(markdown || "").split(/\r?\n/);
   const startIndex = lines.findIndex(line => line.trim() === sectionHeading);
@@ -59,6 +74,61 @@ function extractMarkdownSection(markdown, sectionHeading) {
   return lines.slice(startIndex, endIndex).join("\n").trim();
 }
 
+function renderLatestChanges(markdown) {
+  const content = String(markdown || "").trim();
+  if (!content) {
+    return "Hinweis:\nFür diese Version sind noch keine Änderungsinformationen vorhanden.";
+  }
+
+  const lines = content.split(/\r?\n/);
+  const firstEntry = lines.findIndex(line => /^##\s+/.test(line));
+  if (firstEntry === -1) {
+    return "Hinweis:\nFür diese Version sind noch keine Änderungsinformationen vorhanden.";
+  }
+
+  const nextEntry = lines.findIndex((line, index) => index > firstEntry && /^##\s+/.test(line));
+  return lines.slice(firstEntry, nextEntry === -1 ? lines.length : nextEntry).join("\n").trim();
+}
+
+async function loadOptionalCompanyName() {
+  for (const path of ["company.json", "data/company.json"]) {
+    try {
+      const company = JSON.parse(await fetchHelpText(path));
+      const name = String(company.companyName || company.name || company.company || "").trim();
+      if (name) return name;
+    } catch (err) {
+      // Unternehmensbranding ist optional.
+    }
+  }
+  return "";
+}
+
+async function loadAboutLehrfahrer() {
+  let version = document.body?.dataset?.editorVersion || "unbekannt";
+  try {
+    version = String(await fetchHelpText("VERSION")).trim() || version;
+  } catch (err) {
+    // Der im Editor hinterlegte Versionsstand bleibt als Fallback sichtbar.
+  }
+
+  const companyName = await loadOptionalCompanyName();
+  const companyLine = companyName ? `\nUnternehmen\n${companyName}\n` : "";
+  return `Lehrfahrer®
+
+Digitale Plattform zur Planung, Durchführung und Dokumentation von Streckeneinweisungen im öffentlichen Personennahverkehr.
+
+Version
+${version}
+
+Copyright
+© 2026 Frank Fudeus
+${companyLine}
+Projektseite
+https://www.lehrfahrer.de
+
+Lehrfahrer unterstützt Verkehrsunternehmen dabei, Streckeneinweisungen effizienter, nachvollziehbarer und wirtschaftlicher durchzuführen.`;
+}
+
 async function openHelpDocument(documentKey) {
   const documentConfig = HELP_DOCUMENTS[documentKey];
   if (!documentConfig) {
@@ -72,13 +142,15 @@ async function openHelpDocument(documentKey) {
   helpModal.classList.remove("hidden");
 
   try {
-    const response = await fetch(documentConfig.path, { cache: "no-cache" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const markdown = await response.text();
+    const markdown = documentConfig.load
+      ? await documentConfig.load()
+      : await fetchHelpText(documentConfig.path);
     if (requestId !== helpDocumentRequestId) return;
+
+    if (documentConfig.render) {
+      helpModalBody.textContent = documentConfig.render(markdown);
+      return;
+    }
 
     if (documentConfig.sectionHeading) {
       const section = extractMarkdownSection(markdown, documentConfig.sectionHeading);
