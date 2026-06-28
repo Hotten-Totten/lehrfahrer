@@ -83,8 +83,8 @@ final class PdfPreviewV2
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
         foreach ($stops as $stop) {
-            $stopLines = $this->wrap((string) ($stop['stop'] ?? ''), 42, 4);
-            $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 39, 4);
+            $stopLines = $this->wrap((string) ($stop['stop'] ?? ''), 35, 4);
+            $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 43, 5);
             $lineCount = max(count($stopLines), count($instructionLines), 1);
             $rowHeight = max(22, 10 + ($lineCount * 11));
 
@@ -97,14 +97,14 @@ final class PdfPreviewV2
             $rowBottom = $rowTop - $rowHeight;
             $this->rectangle(42, $rowBottom, 511, $rowHeight, [1, 1, 1], $border);
             $this->line(93, $rowBottom, 93, $rowTop, 0.5, $border);
-            $this->line(323, $rowBottom, 323, $rowTop, 0.5, $border);
+            $this->line(297, $rowBottom, 297, $rowTop, 0.5, $border);
             $textY = $rowTop - 15;
             $this->text(63, $textY, (string) ($stop['number'] ?? ''), 8);
             foreach ($stopLines as $lineIndex => $line) {
-                $this->text(103, $textY - ($lineIndex * 11), $line, 8.5);
+                $this->text(103, $textY - ($lineIndex * 11), $line, 8.5, true);
             }
             foreach ($instructionLines as $lineIndex => $line) {
-                $this->text(333, $textY - ($lineIndex * 11), $line, 8);
+                $this->text(307, $textY - ($lineIndex * 11), $line, 7.8);
             }
             $rowTop = $rowBottom;
         }
@@ -117,10 +117,10 @@ final class PdfPreviewV2
         $bottom = $top - 24;
         $this->rectangle(42, $bottom, 511, 24, $accent, $border);
         $this->line(93, $bottom, 93, $top, 0.5, $border);
-        $this->line(323, $bottom, 323, $top, 0.5, $border);
+        $this->line(297, $bottom, 297, $top, 0.5, $border);
         $this->text(61, $bottom + 8, 'Nr.', 9, true);
-        $this->text(183, $bottom + 8, 'Haltestelle', 9, true);
-        $this->text(418, $bottom + 8, 'Fahrhinweis', 9, true);
+        $this->text(171, $bottom + 8, 'Haltestelle', 9, true);
+        $this->text(406, $bottom + 8, 'Fahrhinweis', 9, true);
         $this->line(42, $bottom, 553, $bottom, 1.0, $border);
         return $bottom;
     }
