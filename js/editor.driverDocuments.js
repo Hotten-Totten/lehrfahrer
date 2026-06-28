@@ -1,5 +1,5 @@
 // Fahrerunterlagen-Pakete aus gespeicherten Linienvarianten erstellen.
-async function openDriverDocumentsDialog() {
+function getDriverDocumentsModal(title) {
   let modal = document.getElementById("driverDocumentsModal");
   if (!modal) {
     modal = document.createElement("div");
@@ -20,6 +20,12 @@ async function openDriverDocumentsDialog() {
       if (event.target === modal) modal.classList.add("hidden");
     });
   }
+  modal.querySelector(".help-modal-header h3").textContent = title;
+  return modal;
+}
+
+async function openDriverDocumentsDialog() {
+  const modal = getDriverDocumentsModal("Fahrerunterlagen erstellen");
 
   const body = modal.querySelector(".driver-documents-body");
   body.textContent = "Gespeicherte Linien werden geladen ...";
@@ -133,6 +139,61 @@ async function openDriverDocumentsDialog() {
     body.append(driverLabel, actions, list, footer);
   } catch (error) {
     body.textContent = error.message || "Fahrerunterlagen konnten nicht vorbereitet werden.";
+  }
+}
+
+async function openDriverPackagesDialog() {
+  const modal = getDriverDocumentsModal("Einweisungspakete");
+  const body = modal.querySelector(".driver-documents-body");
+  body.textContent = "Einweisungspakete werden geladen ...";
+  modal.classList.remove("hidden");
+
+  try {
+    const response = await fetch("api/list_driver_packages.php", {
+      cache: "no-store",
+      headers: withApiAuthHeaders({})
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      throw new Error(result?.error || "Einweisungspakete konnten nicht geladen werden.");
+    }
+
+    body.innerHTML = "";
+    const packages = Array.isArray(result.packages) ? result.packages : [];
+    if (!packages.length) {
+      body.textContent = "Noch keine Einweisungspakete vorhanden.";
+      return;
+    }
+
+    const list = document.createElement("div");
+    list.className = "driver-documents-packages";
+    packages.forEach(packageInfo => {
+      const card = document.createElement("div");
+      card.className = "driver-documents-package-card";
+      const text = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = packageInfo.driverName || "Unbenannt";
+      const meta = document.createElement("small");
+      const created = packageInfo.createdAt
+        ? new Date(packageInfo.createdAt).toLocaleString("de-DE")
+        : "";
+      meta.textContent = `${created} | ${Number(packageInfo.documentCount || 0)} Unterlagen`;
+      text.append(title, meta);
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.textContent = "Öffnen";
+      openButton.addEventListener("click", () => {
+        renderDriverDocumentsResult(body, {
+          package: packageInfo,
+          packagePath: packageInfo.packagePath
+        });
+      });
+      card.append(text, openButton);
+      list.appendChild(card);
+    });
+    body.appendChild(list);
+  } catch (error) {
+    body.textContent = error.message || "Einweisungspakete konnten nicht geladen werden.";
   }
 }
 

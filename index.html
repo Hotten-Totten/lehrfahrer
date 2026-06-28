@@ -34,7 +34,6 @@
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="loadLineBtn" title="Gespeicherte Linien vom Server anzeigen und in den Editor laden">Route laden / Inhalt</button>
           <button type="button" class="menu-item" data-click-target="saveLineBtn" title="Die aktuelle Route mit allen Haltestellen auf dem Server speichern">Route speichern</button>
-          <button type="button" class="menu-item" onclick="openDriverDocumentsDialog()" title="PDF-Unterlagen für ausgewählte Linien und Varianten erstellen">Fahrerunterlagen erstellen</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" data-click-target="exportBtn" title="Aktuelle Route als JSON-Datei auf diesen Computer herunterladen">JSON exportieren</button>
           <button type="button" class="menu-item" data-click-target="exportGpxBtn" title="Aktuelle Route als GPX-Datei herunterladen (z. B. für GPS-Geräte)">GPX herunterladen</button>
@@ -84,6 +83,14 @@
           <button type="button" class="menu-item" data-click-target="deleteRoutePointBtn" title="Ausgewählten Routenpunkt entfernen">Routenpunkt löschen</button>
           <hr class="menu-separator">
           <button type="button" class="menu-item" id="openFetchStopsModalBtn" title="Haltestellen-Katalog aus OpenStreetMap für einen Bereich laden oder aktualisieren">Katalog aktualisieren…</button>
+        </div>
+      </div>
+
+      <div class="menu-root">
+        <button class="menu-button" type="button">Einweisungen</button>
+        <div class="menu-dropdown">
+          <button type="button" class="menu-item" onclick="openDriverDocumentsDialog()" title="PDF-Unterlagen für ausgewählte Linien und Varianten erstellen">Fahrerunterlagen erstellen</button>
+          <button type="button" class="menu-item" onclick="openDriverPackagesDialog()" title="Gespeicherte Fahrerunterlagen-Pakete anzeigen">Einweisungspakete</button>
         </div>
       </div>
 

@@ -1387,6 +1387,32 @@ button.danger:hover {
   color: #64748b;
 }
 
+.driver-documents-packages {
+  display: grid;
+  gap: 8px;
+}
+
+.driver-documents-package-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.driver-documents-package-card strong,
+.driver-documents-package-card small {
+  display: block;
+}
+
+.driver-documents-package-card small {
+  margin-top: 3px;
+  color: #64748b;
+}
+
 .line-browser-actions {
   display: flex;
   flex-wrap: wrap;
