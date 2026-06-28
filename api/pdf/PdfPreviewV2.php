@@ -25,7 +25,7 @@ final class PdfPreviewV2
 
         $this->drawHeader($data, $branding);
         $this->drawInformationArea($data, $branding);
-        $tableBottom = $this->drawStopTable($data['stops'], $branding);
+        $tableBottom = $this->drawStopTable($this->prepareStops($project), $branding);
         $this->drawSpecialNotes((string) $data['description'], $tableBottom, $branding);
 
         return $this->buildPdf($branding);
@@ -94,23 +94,29 @@ final class PdfPreviewV2
         $rowTop = $this->drawStopTableHeader($tableTop, $border, $accent);
 
         foreach ($stops as $stop) {
-            if ($rowTop - 22 < 120) {
+            $stopLines = $this->wrap((string) ($stop['stop'] ?? ''), 42, 4);
+            $instructionLines = $this->wrap((string) ($stop['instruction'] ?? ''), 39, 4);
+            $lineCount = max(count($stopLines), count($instructionLines), 1);
+            $rowHeight = max(22, 10 + ($lineCount * 11));
+
+            if ($rowTop - $rowHeight < 120) {
                 $this->newPage();
                 $this->text(42, 808, 'Haltestellen und Fahranweisungen', 13, true);
                 $rowTop = $this->drawStopTableHeader(790, $border, $accent);
             }
 
-            $rowBottom = $rowTop - 22;
-            $this->rectangle(42, $rowBottom, 511, 22, [1, 1, 1], $border);
+            $rowBottom = $rowTop - $rowHeight;
+            $this->rectangle(42, $rowBottom, 511, $rowHeight, [1, 1, 1], $border);
             $this->line(93, $rowBottom, 93, $rowTop, 0.5, $border);
             $this->line(323, $rowBottom, 323, $rowTop, 0.5, $border);
-            $this->text(63, $rowBottom + 7, (string) ($stop['number'] ?? ''), 8);
-            $this->text(103, $rowBottom + 7, $this->crop((string) ($stop['stop'] ?? ''), 38), 8.5);
-            $instruction = trim((string) ($stop['instruction'] ?? ''));
-            if ($instruction === '-') {
-                $instruction = '';
+            $textY = $rowTop - 15;
+            $this->text(63, $textY, (string) ($stop['number'] ?? ''), 8);
+            foreach ($stopLines as $lineIndex => $line) {
+                $this->text(103, $textY - ($lineIndex * 11), $line, 8.5);
             }
-            $this->text(333, $rowBottom + 7, $this->crop($instruction, 36), 8);
+            foreach ($instructionLines as $lineIndex => $line) {
+                $this->text(333, $textY - ($lineIndex * 11), $line, 8);
+            }
             $rowTop = $rowBottom;
         }
 
@@ -193,6 +199,77 @@ final class PdfPreviewV2
             return $text;
         }
         return rtrim(substr($text, 0, $length - 3)) . '...';
+    }
+
+    private function prepareStops(array $project): array
+    {
+        $result = [];
+        foreach (is_array($project['stops'] ?? null) ? $project['stops'] : [] as $stop) {
+            if (!is_array($stop) || $this->isTechnicalStop($stop)) {
+                continue;
+            }
+            $name = trim((string) ($stop['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $result[] = [
+                'number' => count($result) + 1,
+                'stop' => $name,
+                'instruction' => $this->findDrivingInstruction($stop),
+            ];
+        }
+        return $result;
+    }
+
+    private function isTechnicalStop(array $stop): bool
+    {
+        foreach (['isGhostPoint', 'isGhost', 'ghost', 'synthetic', 'manual', 'isRoutePoint', 'isGuidePoint'] as $flag) {
+            if (!empty($stop[$flag])) {
+                return true;
+            }
+        }
+        $technical = ['ghost', 'synthetic', 'manual', 'routepoint', 'route_point', 'guidepoint', 'guide_point', 'geometry', 'passthrough', 'passthroughstop'];
+        foreach (['sourceType', 'type', 'stopType', 'kind', 'detourRole'] as $field) {
+            if (in_array(strtolower(trim((string) ($stop[$field] ?? ''))), $technical, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function findDrivingInstruction(array $stop): string
+    {
+        foreach ([
+            'nextDrivingInstruction',
+            'nextInstruction',
+            'drivingInstruction',
+            'instruction',
+            'turnInstruction',
+            'routeInstruction',
+            'drivingHint',
+            'travelHint',
+            'fahrhinweis',
+            'nextManeuver',
+            'nextManoeuvre',
+        ] as $key) {
+            $value = $stop[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+        foreach (['maneuver', 'manoeuvre', 'navigation'] as $containerKey) {
+            $container = $stop[$containerKey] ?? null;
+            if (!is_array($container)) {
+                continue;
+            }
+            foreach (['instruction', 'text', 'description', 'name'] as $key) {
+                $value = $container[$key] ?? null;
+                if (is_string($value) && trim($value) !== '') {
+                    return trim($value);
+                }
+            }
+        }
+        return '';
     }
 
     private function newPage(): void
