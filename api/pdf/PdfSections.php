@@ -20,6 +20,7 @@ final class PdfSections
         }
 
         $brandingData = ($branding ?? new PdfBranding())->toArray();
+        $layout->applyBranding($brandingData);
         $layout->drawHeaderArea([
             'logoText' => $brandingData['fallbackLogoText'],
             'title' => (string) ($data['title'] ?? 'Streckeneinweisung'),
@@ -64,19 +65,38 @@ final class PdfSections
     {
     }
 
-    public function renderStopTable(): void
+    public function renderStopTable(array $rows = [], ?PdfLayout $layout = null): void
     {
+        if ($layout !== null) {
+            $layout->drawStopTable($rows);
+        }
     }
 
-    public function renderSpecialNotes(): void
+    public function renderSpecialNotes(array $notes = [], ?PdfLayout $layout = null): void
     {
+        if ($layout !== null) {
+            $layout->drawSpecialNotes($notes);
+        }
     }
 
-    public function renderTrainingRecord(): void
+    public function renderTrainingRecord(array $fields = [], ?PdfLayout $layout = null): void
     {
+        if ($layout !== null) {
+            $layout->drawTrainingRecord($fields);
+        }
     }
 
-    public function renderFooter(): void
+    public function renderFooter(
+        string $version = '',
+        int $pageNumber = 1,
+        int $pageCount = 1,
+        ?PdfBranding $branding = null,
+        ?PdfLayout $layout = null
+    ): void
     {
+        if ($layout !== null) {
+            $brandingData = ($branding ?? new PdfBranding())->toArray();
+            $layout->drawFooter($version, $pageNumber, $pageCount, $brandingData['website']);
+        }
     }
 }

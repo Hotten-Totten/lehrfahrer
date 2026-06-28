@@ -15,6 +15,10 @@ final class PdfGenerator
         $sections = new PdfSections();
         $branding = new PdfBranding([
             'fallbackLogoText' => 'Lehrfahrer®',
+            'primaryColor' => '#3D5D7A',
+            'secondaryColor' => '#B8BEC5',
+            'accentColor' => '#ECEFF2',
+            'website' => 'www.lehrfahrer.de',
         ]);
         $data = [
             'title' => 'Streckeneinweisung',
@@ -32,7 +36,22 @@ final class PdfGenerator
 
         $sections->renderHeader($data, $branding, $layout);
         $sections->renderInfoBoxes($data, $layout, new PdfHelpers());
-        $layout->drawFooter('Preview', 1, 1);
+        $sections->renderStopTable([
+            ['number' => 1, 'stop' => 'Hauptbahnhof', 'instruction' => 'Geradeaus'],
+            ['number' => 2, 'stop' => 'Stadthalle', 'instruction' => 'Links halten'],
+            ['number' => 3, 'stop' => 'Nordring', 'instruction' => 'Rechts abbiegen'],
+        ], $layout);
+        $sections->renderSpecialNotes([
+            'Langsamfahrt im Haltestellenbereich.',
+            'Wendeschleife mit Gegenverkehr beachten.',
+        ], $layout);
+        $sections->renderTrainingRecord([
+            'Fahrer',
+            'Datum',
+            'Unterschrift Fahrer',
+            'Unterschrift Einweiser',
+        ], $layout);
+        $sections->renderFooter('Preview', 1, 1, $branding, $layout);
 
         return $this->buildPdf($layout->getStream());
     }

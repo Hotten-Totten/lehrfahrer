@@ -1,5 +1,13 @@
 # PDF 3.0 Spezifikation
 
+## Design Freeze v1.0
+
+Die PDF-3.0-Preview verwendet ab dieser Fassung den freigegebenen Aufbau mit
+zentriertem Dokumenttitel, Branding- und QR-Bereich, zwei gleichwertigen
+Informationsblöcken, Haltestellentabelle, Besonderheiten, Nachweisblock und
+durchgängiger Fußzeile. Änderungen an diesem Grundaufbau benötigen eine neue
+freigegebene Designfassung.
+
 ## 1. Ziel von PDF 3.0
 
 PDF 3.0 ist kein technischer Export, sondern ein offizielles, druckbares Ausbildungsdokument für Streckeneinweisungen.

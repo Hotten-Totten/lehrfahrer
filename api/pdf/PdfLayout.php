@@ -10,12 +10,21 @@ namespace Lehrfahrer\Pdf;
 final class PdfLayout
 {
     private string $stream = '';
+    private array $branding = [];
+
+    public function applyBranding(array $branding): void
+    {
+        $this->branding = $branding;
+    }
 
     public function drawHeaderArea(array $options = []): void
     {
         $this->drawText(48, 790, (string) ($options['logoText'] ?? ''), 17, true);
-        $this->drawText(365, 790, (string) ($options['title'] ?? ''), 16, true);
-        $this->drawLine(48, 772, 547, 772, 1.1, [0.24, 0.36, 0.48]);
+        $primary = $this->color('primaryColor', [0.24, 0.36, 0.48]);
+        $this->drawText(218, 790, (string) ($options['title'] ?? ''), 18, true);
+        $this->drawRectangle(505, 770, 42, 42, [1, 1, 1], $primary);
+        $this->drawText(518, 788, 'QR', 9, true);
+        $this->drawLine(48, 755, 547, 755, 1.1, $primary);
     }
 
     public function drawLogoBlock(array $branding = []): void
@@ -50,14 +59,16 @@ final class PdfLayout
         $height = (float) ($options['height'] ?? 170);
         $titleHeight = 28.0;
 
-        $this->drawRectangle($x, $y - $height, $width, $height, [1, 1, 1], [0.72, 0.75, 0.78]);
+        $border = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
+        $heading = $this->color('accentColor', [0.93, 0.94, 0.95]);
+        $this->drawRectangle($x, $y - $height, $width, $height, [1, 1, 1], $border);
         $this->drawRectangle(
             $x,
             $y - $titleHeight,
             $width,
             $titleHeight,
-            [0.93, 0.94, 0.95],
-            [0.72, 0.75, 0.78]
+            $heading,
+            $border
         );
         $this->drawText($x + 14, $y - 19, (string) ($options['title'] ?? 'Informationen'), 10, true);
 
@@ -111,11 +122,71 @@ final class PdfLayout
         }
     }
 
-    public function drawFooter(string $version, int $pageNumber, int $pageCount): void
+    public function drawStopTable(array $rows): void
+    {
+        $border = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
+        $heading = $this->color('accentColor', [0.93, 0.94, 0.95]);
+        $this->drawText(48, 475, 'Haltestellen und Fahranweisungen', 12, true);
+        $top = 455.0;
+        $rowHeight = 24.0;
+        $this->drawRectangle(48, $top - $rowHeight, 499, $rowHeight, $heading, $border);
+        $this->drawText(60, $top - 16, 'Nr.', 9, true);
+        $this->drawText(103, $top - 16, 'Haltestelle', 9, true);
+        $this->drawText(350, $top - 16, 'Fahrhinweis', 9, true);
+
+        foreach ($rows as $index => $row) {
+            $rowTop = $top - (($index + 1) * $rowHeight);
+            $this->drawRectangle(48, $rowTop - $rowHeight, 499, $rowHeight, [1, 1, 1], $border);
+            $this->drawText(60, $rowTop - 16, (string) ($row['number'] ?? ''), 9);
+            $this->drawText(103, $rowTop - 16, (string) ($row['stop'] ?? ''), 9);
+            $this->drawText(350, $rowTop - 16, (string) ($row['instruction'] ?? ''), 9);
+        }
+
+        $bottom = $top - ((count($rows) + 1) * $rowHeight);
+        $this->drawLine(88, $top, 88, $bottom, 0.7, $border);
+        $this->drawLine(335, $top, 335, $bottom, 0.7, $border);
+    }
+
+    public function drawSpecialNotes(array $notes): void
+    {
+        $border = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
+        $heading = $this->color('accentColor', [0.93, 0.94, 0.95]);
+        $this->drawRectangle(48, 235, 499, 92, [1, 1, 1], $border);
+        $this->drawRectangle(48, 303, 499, 24, $heading, $border);
+        $this->drawText(60, 311, 'Besonderheiten', 10, true);
+        foreach ($notes as $index => $note) {
+            $this->drawText(62, 286 - ($index * 16), '- ' . (string) $note, 9);
+        }
+    }
+
+    public function drawTrainingRecord(array $fields): void
+    {
+        $border = $this->color('secondaryColor', [0.72, 0.75, 0.78]);
+        $heading = $this->color('accentColor', [0.93, 0.94, 0.95]);
+        $this->drawRectangle(48, 78, 499, 137, [1, 1, 1], $border);
+        $this->drawRectangle(48, 191, 499, 24, $heading, $border);
+        $this->drawText(60, 199, 'Nachweis der Streckeneinweisung', 10, true);
+        $positions = [169, 145, 116, 88];
+        foreach (array_values($fields) as $index => $field) {
+            if (!isset($positions[$index])) {
+                break;
+            }
+            $this->drawText(60, $positions[$index], (string) $field, 9, true);
+            $this->drawLine(190, $positions[$index] - 3, 525, $positions[$index] - 3, 0.6, $border);
+        }
+    }
+
+    public function drawFooter(
+        string $version,
+        int $pageNumber,
+        int $pageCount,
+        string $website = ''
+    ): void
     {
         $this->drawLine(48, 52, 547, 52, 0.6, [0.65, 0.68, 0.71]);
         $this->drawText(48, 34, 'Erstellt mit Lehrfahrer®', 8);
-        $this->drawText(248, 34, $version, 8);
+        $this->drawText(205, 34, $website, 8);
+        $this->drawText(360, 34, $version, 8);
         $this->drawText(475, 34, "Seite {$pageNumber} von {$pageCount}", 8);
     }
 
@@ -153,5 +224,19 @@ final class PdfLayout
         $this->stream .= implode(' ', $fill) . " rg\n"
             . implode(' ', $stroke) . " RG\n"
             . "0.7 w\n{$x} {$y} {$width} {$height} re\nB\n";
+    }
+
+    private function color(string $key, array $fallback): array
+    {
+        $value = ltrim((string) ($this->branding[$key] ?? ''), '#');
+        if (!preg_match('/^[0-9a-fA-F]{6}$/', $value)) {
+            return $fallback;
+        }
+
+        return [
+            hexdec(substr($value, 0, 2)) / 255,
+            hexdec(substr($value, 2, 2)) / 255,
+            hexdec(substr($value, 4, 2)) / 255,
+        ];
     }
 }
