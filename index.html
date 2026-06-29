@@ -96,6 +96,15 @@
       </div>
 
       <div class="menu-root">
+        <button class="menu-button" type="button">Lehrfahrer Academy</button>
+        <div class="menu-dropdown">
+          <button type="button" class="menu-item" onclick="openAcademyNewTrainingDialog()" title="Eine neue digitale Streckeneinweisung anlegen">Neue Einweisung</button>
+          <button type="button" class="menu-item" onclick="openAcademyTrainingsDialog('running')" title="Laufende digitale Streckeneinweisungen anzeigen">Laufende Einweisungen</button>
+          <button type="button" class="menu-item" onclick="openAcademyTrainingsDialog('completed')" title="Abgeschlossene digitale Streckeneinweisungen anzeigen">Abgeschlossene Einweisungen</button>
+        </div>
+      </div>
+
+      <div class="menu-root">
         <button class="menu-button" type="button">Ansicht</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" data-click-target="showOriginalRouteBtn" title="Die ursprüngliche ungekürzte Route auf der Karte anzeigen">Original anzeigen</button>
@@ -687,6 +696,7 @@
   <script src="js/editor.api.js?v=V2.1.000"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.000"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.000"></script>
+  <script src="js/editor.academy.js?v=V2.1.000"></script>
   <script src="js/editor.help.js?v=V2.1.000"></script>
   <script src="js/editor.history.js?v=V2.1.000"></script>
   <script src="js/editor.linelogic.js?v=V2.1.000"></script>

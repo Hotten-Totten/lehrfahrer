@@ -33,6 +33,7 @@ __pycache__/
 api/_vbb_config.local.php
 api/_secret.php
 data/drivers.json
+data/trainings/*.json
 
 # Temporary files
 *.tmp
