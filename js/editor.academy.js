@@ -25,6 +25,19 @@ async function academyCreateTraining(payload) {
   return result.training || {};
 }
 
+async function academyUpdateTrainingStatus(trainingId, status) {
+  const response = await fetch("api/trainings.php", {
+    method: "POST",
+    headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "updateStatus", trainingId, status })
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "Einweisungsstatus konnte nicht aktualisiert werden.");
+  }
+  return result.training || {};
+}
+
 function getAcademyModal(title) {
   const modal = getDriverDocumentsModal(title);
   modal.querySelector(".help-modal-content").classList.add("academy-modal-content");
@@ -272,6 +285,12 @@ function createAcademyTrainingCard(training, body) {
   openBtn.textContent = "Öffnen";
   openBtn.addEventListener("click", () => renderAcademyTrainingDetail(body, training));
   actions.appendChild(openBtn);
+  appendAcademyStatusActions(actions, training, {
+    onUpdated: updated => {
+      if (updated.status === "completed") openAcademyTrainingsDialog("completed");
+      else openAcademyTrainingsDialog("running");
+    }
+  });
   card.appendChild(actions);
   return card;
 }
@@ -288,8 +307,10 @@ function renderAcademyTrainingDetail(container, training) {
   headingWrap.append(eyebrow, heading);
   const backButton = document.createElement("button");
   backButton.type = "button";
-  backButton.textContent = "Zu laufenden Einweisungen";
-  backButton.addEventListener("click", () => openAcademyTrainingsDialog("running"));
+  backButton.textContent = training.status === "completed" ? "Zu abgeschlossenen Einweisungen" : "Zu laufenden Einweisungen";
+  backButton.addEventListener("click", () => openAcademyTrainingsDialog(
+    training.status === "completed" ? "completed" : "running"
+  ));
   header.append(headingWrap, backButton);
 
   const meta = document.createElement("dl");
@@ -333,14 +354,63 @@ function renderAcademyTrainingDetail(container, training) {
     routes.appendChild(item);
   });
 
+  const statusActions = document.createElement("div");
+  statusActions.className = "driver-documents-card-actions";
+  appendAcademyStatusActions(statusActions, training, {
+    onUpdated: updated => {
+      if (updated.status === "archived") openAcademyTrainingsDialog("completed");
+      else renderAcademyTrainingDetail(container, updated);
+    }
+  });
+
   if (training.notes) {
     const notes = document.createElement("p");
     notes.className = "academy-training-note";
     notes.textContent = training.notes;
-    container.append(header, meta, notes, routesTitle, routes);
+    container.append(header, meta, statusActions, notes, routesTitle, routes);
   } else {
-    container.append(header, meta, routesTitle, routes);
+    container.append(header, meta, statusActions, routesTitle, routes);
   }
+}
+
+function appendAcademyStatusActions(container, training, options = {}) {
+  academyAvailableStatusActions(training.status).forEach(action => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = action.label;
+    button.addEventListener("click", async () => {
+      if (action.confirm && !confirm(action.confirm)) return;
+      button.disabled = true;
+      try {
+        const updated = await academyUpdateTrainingStatus(training.trainingId, action.status);
+        if (typeof options.onUpdated === "function") options.onUpdated(updated);
+      } catch (error) {
+        alert(error.message || "Status konnte nicht aktualisiert werden.");
+        button.disabled = false;
+      }
+    });
+    container.appendChild(button);
+  });
+}
+
+function academyAvailableStatusActions(status) {
+  if (status === "created") {
+    return [
+      { status: "running", label: "Als laufend markieren" },
+      { status: "completed", label: "Abschließen", confirm: "Einweisung wirklich abschließen?" }
+    ];
+  }
+  if (status === "running") {
+    return [
+      { status: "completed", label: "Abschließen", confirm: "Einweisung wirklich abschließen?" }
+    ];
+  }
+  if (status === "completed") {
+    return [
+      { status: "archived", label: "Archivieren", confirm: "Einweisung wirklich archivieren?" }
+    ];
+  }
+  return [];
 }
 
 function academyStatusLabel(status) {

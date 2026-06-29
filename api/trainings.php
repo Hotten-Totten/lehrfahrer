@@ -72,6 +72,28 @@ function trainingSave(string $directory, string $file, array $training): bool {
     return $written;
 }
 
+function trainingFileForId(string $directory, string $trainingId): string {
+    if (!preg_match('/^training_\d{6}$/', $trainingId)) return '';
+    return $directory . '/' . $trainingId . '.json';
+}
+
+function trainingLoadById(string $directory, string $trainingId): ?array {
+    $file = trainingFileForId($directory, $trainingId);
+    if ($file === '' || !is_file($file)) return null;
+    $data = json_decode((string)@file_get_contents($file), true);
+    return is_array($data) ? $data : null;
+}
+
+function trainingCanChangeStatus(string $current, string $target): bool {
+    $allowed = [
+        'created' => ['running', 'completed'],
+        'running' => ['completed'],
+        'completed' => ['archived'],
+        'archived' => [],
+    ];
+    return in_array($target, $allowed[$current] ?? [], true);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $status = trainingText($_GET['status'] ?? '', 40);
     $trainings = trainingLoadAll($trainingDir);
@@ -100,6 +122,38 @@ if (!is_array($input)) {
 }
 
 $action = trainingText($input['action'] ?? '', 40);
+if ($action === 'updateStatus') {
+    $trainingId = trainingText($input['trainingId'] ?? '', 80);
+    $targetStatus = trainingSanitizeStatus((string)($input['status'] ?? ''));
+    $training = trainingLoadById($trainingDir, $trainingId);
+    if ($training === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $currentStatus = trainingSanitizeStatus((string)($training['status'] ?? 'created'));
+    if (!trainingCanChangeStatus($currentStatus, $targetStatus)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Dieser Statuswechsel ist nicht erlaubt.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $now = date('c');
+    $training['trainingId'] = $training['trainingId'] ?? $trainingId;
+    $training['status'] = $targetStatus;
+    $training['updated'] = $now;
+    if ($targetStatus === 'completed') {
+        $training['completed'] = $now;
+    }
+    $file = trainingFileForId($trainingDir, $trainingId);
+    if ($file === '' || !trainingSave($trainingDir, $file, $training)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht aktualisiert werden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode(['ok' => true, 'training' => $training], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 if ($action !== 'create') {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'Ungültige Einweisungsaktion.'], JSON_UNESCAPED_UNICODE);
