@@ -1782,6 +1782,145 @@ button.danger:hover {
   line-height: 1.4;
 }
 
+.dashboard-modal-content {
+  width: min(1120px, calc(100vw - 32px));
+}
+
+.dashboard-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.dashboard-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.dashboard-hero h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+}
+
+.dashboard-hero p {
+  margin: 5px 0 0;
+  color: #475569;
+  font-size: 15px;
+}
+
+.dashboard-hero time {
+  color: #334155;
+  font-weight: 700;
+  text-align: right;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-stat {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-stat span {
+  font-size: 22px;
+}
+
+.dashboard-stat strong {
+  color: #0f172a;
+  font-size: 26px;
+}
+
+.dashboard-stat small {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-panel,
+.dashboard-actions {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dashboard-panel h4,
+.dashboard-actions h4 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.dashboard-training-list {
+  display: grid;
+  gap: 7px;
+}
+
+.dashboard-training-item {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: inherit;
+  text-align: left;
+}
+
+.dashboard-training-item strong,
+.dashboard-training-item span {
+  display: block;
+}
+
+.dashboard-training-item span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dashboard-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .dashboard-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-hero time {
+    text-align: left;
+  }
+
+  .dashboard-stats,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 780px) {
   .academy-form {
     grid-template-columns: 1fr;

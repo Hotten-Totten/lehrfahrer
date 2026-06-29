@@ -18,6 +18,10 @@
     <div id="menu-row">
 
       <div class="menu-root">
+        <button class="menu-button" type="button" onclick="openDashboard()">🏠 Dashboard</button>
+      </div>
+
+      <div class="menu-root">
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP direkt aus gtfs/data/gtfs/latest.zip auf dem Server laden">GTFS vom Server laden</button>
@@ -697,6 +701,7 @@
   <script src="js/editor.lineBrowser.js?v=V2.1.000"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.000"></script>
   <script src="js/editor.academy.js?v=V2.1.000"></script>
+  <script src="js/editor.dashboard.js?v=V2.1.000"></script>
   <script src="js/editor.help.js?v=V2.1.000"></script>
   <script src="js/editor.history.js?v=V2.1.000"></script>
   <script src="js/editor.linelogic.js?v=V2.1.000"></script>
