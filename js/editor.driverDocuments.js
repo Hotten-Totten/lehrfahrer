@@ -249,13 +249,17 @@ async function saveDriverAction(payload) {
 }
 
 async function openDriversDialog() {
-  const modal = getDriverDocumentsModal("Personalkartei");
+  const modal = getDriverDocumentsModal("Personalverwaltung");
   const body = modal.querySelector(".driver-documents-body");
-  body.textContent = "Fahrerliste wird geladen ...";
+  body.textContent = "Personalverwaltung wird geladen ...";
   modal.classList.remove("hidden");
 
   try {
-    let drivers = await fetchDrivers();
+    let [drivers, trainings, packages] = await Promise.all([
+      fetchDrivers(),
+      fetchPersonnelTrainings().catch(() => []),
+      fetchDriverPackages().catch(() => [])
+    ]);
     let editingId = "";
     body.innerHTML = "";
 
@@ -305,7 +309,7 @@ async function openDriversDialog() {
     formActions.className = "driver-documents-selection-actions";
     const saveButton = document.createElement("button");
     saveButton.type = "button";
-    saveButton.textContent = "Fahrer anlegen";
+    saveButton.textContent = "Person anlegen";
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.textContent = "Bearbeitung abbrechen";
@@ -316,7 +320,7 @@ async function openDriversDialog() {
     const searchInput = document.createElement("input");
     searchInput.type = "search";
     searchInput.className = "driver-management-search";
-    searchInput.placeholder = "Name oder Personalnummer suchen";
+    searchInput.placeholder = "Personalnummer, Name, Betriebshof oder Rolle suchen";
     const list = document.createElement("div");
     list.className = "driver-management-list";
 
@@ -325,7 +329,7 @@ async function openDriversDialog() {
       Object.values(fields).forEach(field => { field.value = ""; });
       Object.entries(roleInputs).forEach(([role, input]) => { input.checked = role === "Fahrer"; });
       activeInput.checked = true;
-      saveButton.textContent = "Fahrer anlegen";
+      saveButton.textContent = "Person anlegen";
       cancelButton.hidden = true;
     };
 
@@ -337,6 +341,7 @@ async function openDriversDialog() {
           driver.firstName,
           driver.lastName,
           driver.personnelNumber,
+          driver.depot,
           getPersonRoles(driver).join(" ")
         ].join(" ").toLocaleLowerCase("de-DE").includes(query))
         .forEach(driver => {
@@ -374,6 +379,12 @@ async function openDriversDialog() {
             saveButton.textContent = "Änderungen speichern";
             cancelButton.hidden = false;
           });
+          const detailButton = document.createElement("button");
+          detailButton.type = "button";
+          detailButton.textContent = "Kartei";
+          detailButton.addEventListener("click", () => {
+            renderPersonnelRecord(body, driver, trainings, packages);
+          });
           const toggleButton = document.createElement("button");
           toggleButton.type = "button";
           toggleButton.textContent = driver.active === false ? "Aktivieren" : "Deaktivieren";
@@ -391,7 +402,7 @@ async function openDriversDialog() {
             drivers = await fetchDrivers();
             renderDrivers();
           });
-          actions.append(editButton, toggleButton, deleteButton);
+          actions.append(detailButton, editButton, toggleButton, deleteButton);
           row.append(info, actions);
           list.appendChild(row);
         });
@@ -410,6 +421,8 @@ async function openDriversDialog() {
         active: activeInput.checked
       });
       drivers = await fetchDrivers();
+      trainings = await fetchPersonnelTrainings().catch(() => []);
+      packages = await fetchDriverPackages().catch(() => []);
       resetForm();
       renderDrivers();
     });
@@ -418,8 +431,154 @@ async function openDriversDialog() {
     renderDrivers();
     body.append(form, searchInput, list);
   } catch (error) {
-    body.textContent = error.message || "Fahrerliste konnte nicht geladen werden.";
+    body.textContent = error.message || "Personalverwaltung konnte nicht geladen werden.";
   }
+}
+
+async function fetchPersonnelTrainings() {
+  if (typeof academyFetchTrainings === "function") return academyFetchTrainings();
+  const response = await fetch("api/trainings.php", {
+    cache: "no-store",
+    headers: withApiAuthHeaders({})
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "Einweisungen konnten nicht geladen werden.");
+  }
+  return Array.isArray(result.trainings) ? result.trainings : [];
+}
+
+function renderPersonnelRecord(container, person, trainings, packages) {
+  container.innerHTML = "";
+  const header = document.createElement("div");
+  header.className = "driver-package-detail-header";
+  const headingWrap = document.createElement("div");
+  const eyebrow = document.createElement("small");
+  eyebrow.textContent = "Personalverwaltung";
+  const heading = document.createElement("h4");
+  heading.textContent = getDriverDisplayName(person) || "Person";
+  headingWrap.append(eyebrow, heading);
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.textContent = "Zur Personalliste";
+  backButton.addEventListener("click", openDriversDialog);
+  header.append(headingWrap, backButton);
+
+  const masterData = document.createElement("dl");
+  masterData.className = "driver-documents-package-meta";
+  [
+    ["Personalnummer", person.personnelNumber || "-"],
+    ["Vorname", person.firstName || "-"],
+    ["Nachname", person.lastName || "-"],
+    ["Rollen", getPersonRoles(person).join(", ")],
+    ["Betriebshof", person.depot || "-"],
+    ["Status", person.active === false ? "Inaktiv" : "Aktiv"],
+    ["Bemerkung", person.note || "-"]
+  ].forEach(([label, value]) => {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    masterData.append(term, description);
+  });
+
+  const trainingTitle = document.createElement("h4");
+  trainingTitle.textContent = "Einweisungen";
+  const trainingList = document.createElement("div");
+  trainingList.className = "driver-document-cards";
+  getPersonnelTrainings(person, trainings).forEach(training => {
+    const card = document.createElement("article");
+    card.className = "driver-document-card";
+    const info = document.createElement("dl");
+    [
+      ["Linie", academyRouteSummarySafe(training.routes || [])],
+      ["Status", typeof academyStatusLabel === "function" ? academyStatusLabel(training.status) : (training.status || "-")],
+      ["Erstellt", formatDriverPackageDate(training.created)],
+      ["Abgeschlossen", training.completed ? formatDriverPackageDate(training.completed) : "-"]
+    ].forEach(([label, value]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const description = document.createElement("dd");
+      description.textContent = value;
+      info.append(term, description);
+    });
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Einweisung öffnen";
+    button.addEventListener("click", () => {
+      if (typeof renderAcademyTrainingDetail === "function") renderAcademyTrainingDetail(container, training);
+    });
+    card.append(info, button);
+    trainingList.appendChild(card);
+  });
+  if (!trainingList.children.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Keine Einweisungen vorhanden.";
+    trainingList.appendChild(empty);
+  }
+
+  const documentTitle = document.createElement("h4");
+  documentTitle.textContent = "Dokumente";
+  const documentList = document.createElement("div");
+  documentList.className = "driver-document-cards";
+  getPersonnelPackages(person, packages).forEach(packageInfo => {
+    const card = document.createElement("article");
+    card.className = "driver-document-card";
+    const info = document.createElement("dl");
+    [
+      ["Paket", packageInfo.driverName || getDriverFullName(person) || "Unbenannt"],
+      ["Unterlagen", String(Number(packageInfo.documentCount || (packageInfo.documents || []).length || 0))],
+      ["Erstellt", formatDriverPackageDate(packageInfo.created)]
+    ].forEach(([label, value]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const description = document.createElement("dd");
+      description.textContent = value;
+      info.append(term, description);
+    });
+    const actions = document.createElement("div");
+    actions.className = "driver-documents-card-actions";
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.textContent = "Öffnen";
+    openButton.addEventListener("click", () => renderDriverPackageDetail(container, packageInfo));
+    const zipButton = document.createElement("button");
+    zipButton.type = "button";
+    zipButton.textContent = "Download";
+    zipButton.addEventListener("click", () => downloadDriverPackageZip(packageInfo.id, zipButton));
+    actions.append(openButton, zipButton);
+    card.append(info, actions);
+    documentList.appendChild(card);
+  });
+  if (!documentList.children.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Keine Lehrfahrer-Dokumente vorhanden.";
+    documentList.appendChild(empty);
+  }
+
+  container.append(header, masterData, trainingTitle, trainingList, documentTitle, documentList);
+}
+
+function getPersonnelTrainings(person, trainings) {
+  const personName = getDriverFullName(person).toLocaleLowerCase("de-DE");
+  return (trainings || []).filter(training => {
+    if (person.id && training.driverId === person.id) return true;
+    return personName && String(training.driverName || "").trim().toLocaleLowerCase("de-DE") === personName;
+  });
+}
+
+function getPersonnelPackages(person, packages) {
+  const personName = getDriverFullName(person).toLocaleLowerCase("de-DE");
+  return (packages || []).filter(packageInfo => {
+    if (person.id && packageInfo.driverId === person.id) return true;
+    return personName && String(packageInfo.driverName || "").trim().toLocaleLowerCase("de-DE") === personName;
+  });
+}
+
+function academyRouteSummarySafe(routes) {
+  if (typeof academyRouteSummary === "function") return academyRouteSummary(routes);
+  const names = Array.from(new Set((routes || []).map(route => route.lineName).filter(Boolean)));
+  return names.join(", ") || "-";
 }
 
 async function fetchDriverPackages() {
