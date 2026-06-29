@@ -1589,6 +1589,26 @@ button.danger:hover {
   resize: vertical;
 }
 
+.driver-management-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
+.driver-management-roles legend {
+  padding: 0 4px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.driver-management-roles label {
+  font-weight: 400;
+}
+
 .driver-management-active,
 .driver-management-form .driver-documents-selection-actions {
   align-self: end;
@@ -1620,6 +1640,22 @@ button.danger:hover {
 .driver-management-row small {
   margin-top: 3px;
   color: #64748b;
+}
+
+.driver-management-role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.driver-management-role-badges span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .driver-management-inactive {

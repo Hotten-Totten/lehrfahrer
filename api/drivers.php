@@ -20,6 +20,22 @@ function loadDrivers(string $file): array {
     return is_array($data) ? array_values(array_filter($data, 'is_array')) : [];
 }
 
+function driverRoles($value): array {
+    $allowed = ['Admin', 'Disponent', 'Einweiser', 'Fahrer'];
+    $roles = is_array($value) ? $value : [];
+    $roles = array_values(array_unique(array_filter(array_map(static function ($role): string {
+        return trim((string)$role);
+    }, $roles), static function (string $role) use ($allowed): bool {
+        return in_array($role, $allowed, true);
+    })));
+    return $roles ?: ['Fahrer'];
+}
+
+function normalizeDriver(array $driver): array {
+    $driver['roles'] = driverRoles($driver['roles'] ?? null);
+    return $driver;
+}
+
 function saveDrivers(string $directory, string $file, array $drivers): bool {
     if (!is_dir($directory) && !mkdir($directory, 0775, true)) return false;
     $json = json_encode(array_values($drivers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -37,7 +53,7 @@ if (!is_file($dataFile) && !saveDrivers($dataDir, $dataFile, [])) {
     echo json_encode(['ok' => false, 'error' => 'Fahrerliste konnte nicht angelegt werden.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-$drivers = loadDrivers($dataFile);
+$drivers = array_map('normalizeDriver', loadDrivers($dataFile));
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     usort($drivers, static function (array $a, array $b): int {
         $left = ($a['lastName'] ?? '') . ' ' . ($a['firstName'] ?? '');
@@ -60,8 +76,8 @@ foreach ($drivers as $driverIndex => $driver) {
 }
 
 if ($action === 'create' || $action === 'update') {
-    $firstName = driverText($input['firstName'] ?? '', 100);
-    $lastName = driverText($input['lastName'] ?? '', 100);
+    $firstName = driverText($input['firstName'] ?? ($input['vorname'] ?? ''), 100);
+    $lastName = driverText($input['lastName'] ?? ($input['nachname'] ?? ''), 100);
     if ($firstName === '' && $lastName === '') {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Vorname oder Nachname ist erforderlich.'], JSON_UNESCAPED_UNICODE);
@@ -82,6 +98,7 @@ if ($action === 'create' || $action === 'update') {
         'depot' => driverText($input['depot'] ?? '', 150),
         'note' => driverText($input['note'] ?? '', 1000),
         'active' => array_key_exists('active', $input) ? (bool)$input['active'] : true,
+        'roles' => driverRoles($input['roles'] ?? ($existing['roles'] ?? null)),
         'created' => $existing['created'] ?? $now,
         'updated' => $now
     ];
@@ -94,6 +111,7 @@ if ($action === 'create' || $action === 'update') {
         exit;
     }
     $drivers[$index]['active'] = !((bool)($drivers[$index]['active'] ?? true));
+    $drivers[$index]['roles'] = driverRoles($drivers[$index]['roles'] ?? null);
     $drivers[$index]['updated'] = date('c');
     $record = $drivers[$index];
 } elseif ($action === 'delete') {

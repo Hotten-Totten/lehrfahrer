@@ -1,4 +1,14 @@
 // Fahrerunterlagen-Pakete aus gespeicherten Linienvarianten erstellen.
+const PERSON_ROLES = ["Admin", "Disponent", "Einweiser", "Fahrer"];
+
+function getPersonRoles(person) {
+  return Array.isArray(person?.roles) && person.roles.length ? person.roles : ["Fahrer"];
+}
+
+function hasPersonRole(person, role) {
+  return getPersonRoles(person).includes(role);
+}
+
 function getDriverDocumentsModal(title) {
   let modal = document.getElementById("driverDocumentsModal");
   if (!modal) {
@@ -49,7 +59,7 @@ async function openDriverDocumentsDialog(options = {}) {
     guestOption.value = "";
     guestOption.textContent = "Gastfahrer / Freitext";
     driverSelect.appendChild(guestOption);
-    drivers.filter(driver => driver.active !== false).forEach(driver => {
+    drivers.filter(driver => driver.active !== false && hasPersonRole(driver, "Fahrer")).forEach(driver => {
       const option = document.createElement("option");
       option.value = driver.id;
       option.textContent = getDriverDisplayName(driver);
@@ -239,7 +249,7 @@ async function saveDriverAction(payload) {
 }
 
 async function openDriversDialog() {
-  const modal = getDriverDocumentsModal("Fahrer verwalten");
+  const modal = getDriverDocumentsModal("Personalkartei");
   const body = modal.querySelector(".driver-documents-body");
   body.textContent = "Fahrerliste wird geladen ...";
   modal.classList.remove("hidden");
@@ -268,6 +278,23 @@ async function openDriversDialog() {
       form.appendChild(label);
       fields[key] = input;
     });
+    const rolesField = document.createElement("fieldset");
+    rolesField.className = "driver-management-roles";
+    const rolesLegend = document.createElement("legend");
+    rolesLegend.textContent = "Rollen";
+    const roleInputs = {};
+    PERSON_ROLES.forEach(role => {
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = role;
+      if (role === "Fahrer") checkbox.checked = true;
+      roleInputs[role] = checkbox;
+      label.append(checkbox, document.createTextNode(` ${role}`));
+      rolesField.appendChild(label);
+    });
+    rolesField.prepend(rolesLegend);
+
     const activeLabel = document.createElement("label");
     activeLabel.className = "driver-management-active";
     const activeInput = document.createElement("input");
@@ -284,7 +311,7 @@ async function openDriversDialog() {
     cancelButton.textContent = "Bearbeitung abbrechen";
     cancelButton.hidden = true;
     formActions.append(saveButton, cancelButton);
-    form.append(activeLabel, formActions);
+    form.append(rolesField, activeLabel, formActions);
 
     const searchInput = document.createElement("input");
     searchInput.type = "search";
@@ -296,6 +323,7 @@ async function openDriversDialog() {
     const resetForm = () => {
       editingId = "";
       Object.values(fields).forEach(field => { field.value = ""; });
+      Object.entries(roleInputs).forEach(([role, input]) => { input.checked = role === "Fahrer"; });
       activeInput.checked = true;
       saveButton.textContent = "Fahrer anlegen";
       cancelButton.hidden = true;
@@ -308,7 +336,8 @@ async function openDriversDialog() {
         .filter(driver => [
           driver.firstName,
           driver.lastName,
-          driver.personnelNumber
+          driver.personnelNumber,
+          getPersonRoles(driver).join(" ")
         ].join(" ").toLocaleLowerCase("de-DE").includes(query))
         .forEach(driver => {
           const row = document.createElement("div");
@@ -323,7 +352,14 @@ async function openDriversDialog() {
             driver.active === false ? "inaktiv" : "aktiv",
             driver.note
           ].filter(Boolean).join(" | ");
-          info.append(name, meta);
+          const roles = document.createElement("div");
+          roles.className = "driver-management-role-badges";
+          getPersonRoles(driver).forEach(role => {
+            const badge = document.createElement("span");
+            badge.textContent = role;
+            roles.appendChild(badge);
+          });
+          info.append(name, roles, meta);
           const actions = document.createElement("div");
           actions.className = "driver-documents-card-actions";
           const editButton = document.createElement("button");
@@ -332,6 +368,8 @@ async function openDriversDialog() {
           editButton.addEventListener("click", () => {
             editingId = driver.id;
             Object.keys(fields).forEach(key => { fields[key].value = driver[key] || ""; });
+            const driverRoles = getPersonRoles(driver);
+            Object.entries(roleInputs).forEach(([role, input]) => { input.checked = driverRoles.includes(role); });
             activeInput.checked = driver.active !== false;
             saveButton.textContent = "Änderungen speichern";
             cancelButton.hidden = false;
@@ -368,6 +406,7 @@ async function openDriversDialog() {
         personnelNumber: fields.personnelNumber.value,
         depot: fields.depot.value,
         note: fields.note.value,
+        roles: Object.values(roleInputs).filter(input => input.checked).map(input => input.value),
         active: activeInput.checked
       });
       drivers = await fetchDrivers();

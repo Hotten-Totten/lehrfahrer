@@ -59,7 +59,7 @@ async function openAcademyNewTrainingDialog() {
     guestOption.value = "";
     guestOption.textContent = "Gastfahrer / Freitext";
     driverSelect.appendChild(guestOption);
-    drivers.filter(driver => driver.active !== false).forEach(driver => {
+    drivers.filter(driver => driver.active !== false && hasPersonRole(driver, "Fahrer")).forEach(driver => {
       const option = document.createElement("option");
       option.value = driver.id;
       option.textContent = getDriverDisplayName(driver);
@@ -81,11 +81,31 @@ async function openAcademyNewTrainingDialog() {
     });
 
     const trainerLabel = document.createElement("label");
-    trainerLabel.innerHTML = "<span>Einweiser</span>";
+    trainerLabel.innerHTML = "<span>Einweiser auswählen</span>";
+    const trainerSelect = document.createElement("select");
+    const trainerFallbackOption = document.createElement("option");
+    trainerFallbackOption.value = "";
+    trainerFallbackOption.textContent = "Freitext / nicht in Personalkartei";
+    trainerSelect.appendChild(trainerFallbackOption);
+    drivers.filter(driver => driver.active !== false && hasPersonRole(driver, "Einweiser")).forEach(driver => {
+      const option = document.createElement("option");
+      option.value = driver.id;
+      option.textContent = getDriverDisplayName(driver);
+      option.dataset.trainerName = getDriverFullName(driver);
+      trainerSelect.appendChild(option);
+    });
+    trainerLabel.appendChild(trainerSelect);
+
+    const trainerTextLabel = document.createElement("label");
+    trainerTextLabel.innerHTML = "<span>Einweiser Freitext</span>";
     const trainerInput = document.createElement("input");
     trainerInput.type = "text";
-    trainerInput.placeholder = "Name Einweiser/in";
-    trainerLabel.appendChild(trainerInput);
+    trainerInput.placeholder = "optional";
+    trainerTextLabel.appendChild(trainerInput);
+    trainerSelect.addEventListener("change", () => {
+      const option = trainerSelect.selectedOptions[0];
+      if (option?.value) trainerInput.value = option.dataset.trainerName || option.textContent || "";
+    });
 
     const notesLabel = document.createElement("label");
     notesLabel.className = "academy-notes-field";
@@ -94,7 +114,7 @@ async function openAcademyNewTrainingDialog() {
     notesInput.placeholder = "Besonderheiten dieser Einweisung";
     notesLabel.appendChild(notesInput);
 
-    form.append(driverSelectLabel, driverNameLabel, trainerLabel, notesLabel);
+    form.append(driverSelectLabel, driverNameLabel, trainerLabel, trainerTextLabel, notesLabel);
 
     const routeTools = document.createElement("div");
     routeTools.className = "driver-documents-selection-actions";
