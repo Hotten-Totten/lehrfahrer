@@ -321,8 +321,50 @@ async function openDriversDialog() {
     searchInput.type = "search";
     searchInput.className = "driver-management-search";
     searchInput.placeholder = "Personalnummer, Name, Betriebshof oder Rolle suchen";
+    const filterBar = document.createElement("div");
+    filterBar.className = "driver-management-filterbar";
+    const sortNameBtn = document.createElement("button");
+    sortNameBtn.type = "button";
+    sortNameBtn.textContent = "Name A–Z";
+    const sortNumberBtn = document.createElement("button");
+    sortNumberBtn.type = "button";
+    sortNumberBtn.textContent = "Personalnummer A–Z";
+    const roleFilter = document.createElement("select");
+    ["Alle", ...PERSON_ROLES].forEach(role => {
+      const option = document.createElement("option");
+      option.value = role === "Alle" ? "" : role;
+      option.textContent = role === "Alle" ? "Rolle: Alle" : `Rolle: ${role}`;
+      roleFilter.appendChild(option);
+    });
+    const depotFilter = document.createElement("select");
+    const allDepotOption = document.createElement("option");
+    allDepotOption.value = "";
+    allDepotOption.textContent = "Betriebshof: Alle";
+    depotFilter.appendChild(allDepotOption);
+    Array.from(new Set(drivers.map(driver => String(driver.depot || "").trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "de-DE", { sensitivity: "base" }))
+      .forEach(depot => {
+        const option = document.createElement("option");
+        option.value = depot;
+        option.textContent = `Betriebshof: ${depot}`;
+        depotFilter.appendChild(option);
+      });
+    const statusFilter = document.createElement("select");
+    [
+      ["", "Status: Alle"],
+      ["active", "Status: Aktiv"],
+      ["inactive", "Status: Inaktiv"]
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      statusFilter.appendChild(option);
+    });
+    filterBar.append(sortNameBtn, sortNumberBtn, roleFilter, depotFilter, statusFilter);
     const list = document.createElement("div");
     list.className = "driver-management-list";
+    let sortKey = "name";
+    let sortDirection = 1;
 
     const resetForm = () => {
       editingId = "";
@@ -344,6 +386,22 @@ async function openDriversDialog() {
           driver.depot,
           getPersonRoles(driver).join(" ")
         ].join(" ").toLocaleLowerCase("de-DE").includes(query))
+        .filter(driver => !roleFilter.value || hasPersonRole(driver, roleFilter.value))
+        .filter(driver => !depotFilter.value || String(driver.depot || "") === depotFilter.value)
+        .filter(driver => {
+          if (statusFilter.value === "active") return driver.active !== false;
+          if (statusFilter.value === "inactive") return driver.active === false;
+          return true;
+        })
+        .sort((left, right) => {
+          const leftValue = sortKey === "personnelNumber"
+            ? String(left.personnelNumber || "")
+            : `${left.lastName || ""} ${left.firstName || ""}`;
+          const rightValue = sortKey === "personnelNumber"
+            ? String(right.personnelNumber || "")
+            : `${right.lastName || ""} ${right.firstName || ""}`;
+          return leftValue.localeCompare(rightValue, "de-DE", { numeric: true, sensitivity: "base" }) * sortDirection;
+        })
         .forEach(driver => {
           const row = document.createElement("div");
           row.className = "driver-management-row";
@@ -428,8 +486,23 @@ async function openDriversDialog() {
     });
     cancelButton.addEventListener("click", resetForm);
     searchInput.addEventListener("input", renderDrivers);
+    roleFilter.addEventListener("change", renderDrivers);
+    depotFilter.addEventListener("change", renderDrivers);
+    statusFilter.addEventListener("change", renderDrivers);
+    sortNameBtn.addEventListener("click", () => {
+      sortDirection = sortKey === "name" ? sortDirection * -1 : 1;
+      sortKey = "name";
+      sortNameBtn.textContent = sortDirection === 1 ? "Name A–Z" : "Name Z–A";
+      renderDrivers();
+    });
+    sortNumberBtn.addEventListener("click", () => {
+      sortDirection = sortKey === "personnelNumber" ? sortDirection * -1 : 1;
+      sortKey = "personnelNumber";
+      sortNumberBtn.textContent = sortDirection === 1 ? "Personalnummer A–Z" : "Personalnummer Z–A";
+      renderDrivers();
+    });
     renderDrivers();
-    body.append(form, searchInput, list);
+    body.append(form, searchInput, filterBar, list);
   } catch (error) {
     body.textContent = error.message || "Personalverwaltung konnte nicht geladen werden.";
   }

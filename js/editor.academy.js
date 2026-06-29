@@ -38,6 +38,19 @@ async function academyUpdateTrainingStatus(trainingId, status) {
   return result.training || {};
 }
 
+async function academyCompleteTrainingRoute(trainingId, routeIndex) {
+  const response = await fetch("api/trainings.php", {
+    method: "POST",
+    headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "completeRoute", trainingId, routeIndex })
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "Linie konnte nicht abgeschlossen werden.");
+  }
+  return result.training || {};
+}
+
 function getAcademyModal(title) {
   const modal = getDriverDocumentsModal(title);
   modal.querySelector(".help-modal-content").classList.add("academy-modal-content");
@@ -333,7 +346,8 @@ function renderAcademyTrainingDetail(container, training) {
   routesTitle.textContent = "Linien";
   const routes = document.createElement("div");
   routes.className = "driver-document-cards";
-  (training.routes || []).forEach(route => {
+  const normalizedRoutes = normalizeAcademyRoutes(training.routes || []);
+  normalizedRoutes.forEach((route, routeIndex) => {
     const item = document.createElement("article");
     item.className = "driver-document-card";
     const info = document.createElement("dl");
@@ -342,7 +356,8 @@ function renderAcademyTrainingDetail(container, training) {
       ["Route", route.routeName || "-"],
       ["Richtung", route.directionName || "-"],
       ["Variante", route.variantName || "-"],
-      ["Kategorie", route.variantCategory || "Standard"]
+      ["Kategorie", route.variantCategory || "Standard"],
+      ["Status", route.routeStatus === "completed" ? `abgeschlossen am ${formatDriverPackageDate(route.completedAt)}` : "offen"]
     ].forEach(([label, value]) => {
       const term = document.createElement("dt");
       term.textContent = label;
@@ -351,8 +366,32 @@ function renderAcademyTrainingDetail(container, training) {
       info.append(term, description);
     });
     item.appendChild(info);
+    if (["created", "running"].includes(training.status) && route.routeStatus !== "completed") {
+      const completeRouteBtn = document.createElement("button");
+      completeRouteBtn.type = "button";
+      completeRouteBtn.textContent = "Linie abschließen";
+      completeRouteBtn.addEventListener("click", async () => {
+        if (!confirm("Diese Linie wirklich als abgeschlossen markieren?")) return;
+        completeRouteBtn.disabled = true;
+        try {
+          const updated = await academyCompleteTrainingRoute(training.trainingId, routeIndex);
+          renderAcademyTrainingDetail(container, updated);
+        } catch (error) {
+          alert(error.message || "Linie konnte nicht abgeschlossen werden.");
+          completeRouteBtn.disabled = false;
+        }
+      });
+      item.appendChild(completeRouteBtn);
+    }
     routes.appendChild(item);
   });
+  const allRoutesCompleted = normalizedRoutes.length > 0
+    && normalizedRoutes.every(route => route.routeStatus === "completed");
+  const routeHint = document.createElement("p");
+  routeHint.className = "academy-training-note";
+  routeHint.textContent = allRoutesCompleted && ["created", "running"].includes(training.status)
+    ? "Alle Linien abgeschlossen – Einweisung kann abgeschlossen werden."
+    : "";
 
   const statusActions = document.createElement("div");
   statusActions.className = "driver-documents-card-actions";
@@ -371,6 +410,7 @@ function renderAcademyTrainingDetail(container, training) {
   } else {
     container.append(header, meta, statusActions, routesTitle, routes);
   }
+  if (routeHint.textContent) container.appendChild(routeHint);
 }
 
 function appendAcademyStatusActions(container, training, options = {}) {
@@ -426,4 +466,12 @@ function academyStatusLabel(status) {
 function academyRouteSummary(routes) {
   const names = Array.from(new Set((routes || []).map(route => route.lineName).filter(Boolean)));
   return names.join(", ") || "-";
+}
+
+function normalizeAcademyRoutes(routes) {
+  return (routes || []).map(route => ({
+    ...route,
+    routeStatus: route.routeStatus === "completed" ? "completed" : "open",
+    completedAt: route.completedAt || ""
+  }));
 }

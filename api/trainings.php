@@ -19,6 +19,7 @@ function trainingLoadAll(string $directory): array {
     foreach (glob($directory . '/training_*.json') ?: [] as $file) {
         $data = json_decode((string)@file_get_contents($file), true);
         if (!is_array($data)) continue;
+        $data['routes'] = trainingNormalizeRoutes(is_array($data['routes'] ?? null) ? $data['routes'] : []);
         $data['file'] = basename($file);
         $trainings[] = $data;
     }
@@ -57,7 +58,20 @@ function trainingRouteItem($item): array {
         'jsonPath' => trainingText($item['jsonPath'] ?? '', 260),
         'pdfPath' => trainingText($item['pdfPath'] ?? '', 260),
         'gpxPath' => trainingText($item['gpxPath'] ?? '', 260),
+        'routeStatus' => in_array(($item['routeStatus'] ?? 'open'), ['open', 'completed'], true) ? $item['routeStatus'] : 'open',
+        'completedAt' => trainingText($item['completedAt'] ?? '', 80),
     ];
+}
+
+function trainingNormalizeRoutes(array $routes): array {
+    return array_values(array_map(static function ($route): array {
+        $item = trainingRouteItem(is_array($route) ? $route : []);
+        if (($item['routeStatus'] ?? '') !== 'completed') {
+            $item['routeStatus'] = 'open';
+            $item['completedAt'] = '';
+        }
+        return $item;
+    }, $routes));
 }
 
 function trainingSave(string $directory, string $file, array $training): bool {
@@ -81,7 +95,9 @@ function trainingLoadById(string $directory, string $trainingId): ?array {
     $file = trainingFileForId($directory, $trainingId);
     if ($file === '' || !is_file($file)) return null;
     $data = json_decode((string)@file_get_contents($file), true);
-    return is_array($data) ? $data : null;
+    if (!is_array($data)) return null;
+    $data['routes'] = trainingNormalizeRoutes(is_array($data['routes'] ?? null) ? $data['routes'] : []);
+    return $data;
 }
 
 function trainingCanChangeStatus(string $current, string $target): bool {
@@ -148,6 +164,41 @@ if ($action === 'updateStatus') {
     if ($file === '' || !trainingSave($trainingDir, $file, $training)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht aktualisiert werden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode(['ok' => true, 'training' => $training], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+if ($action === 'completeRoute') {
+    $trainingId = trainingText($input['trainingId'] ?? '', 80);
+    $routeIndex = (int)($input['routeIndex'] ?? -1);
+    $training = trainingLoadById($trainingDir, $trainingId);
+    if ($training === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (!in_array(trainingSanitizeStatus((string)($training['status'] ?? 'created')), ['created', 'running'], true)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Linien können nur in laufenden Einweisungen abgeschlossen werden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (!isset($training['routes'][$routeIndex]) || !is_array($training['routes'][$routeIndex])) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Linie in Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $now = date('c');
+    $training['trainingId'] = $training['trainingId'] ?? $trainingId;
+    $training['status'] = 'running';
+    $training['updated'] = $now;
+    $training['routes'][$routeIndex]['routeStatus'] = 'completed';
+    $training['routes'][$routeIndex]['completedAt'] = $now;
+    $file = trainingFileForId($trainingDir, $trainingId);
+    if ($file === '' || !trainingSave($trainingDir, $file, $training)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Linienstatus konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
     echo json_encode(['ok' => true, 'training' => $training], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

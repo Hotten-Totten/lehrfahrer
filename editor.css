@@ -1589,6 +1589,23 @@ button.danger:hover {
   resize: vertical;
 }
 
+.driver-management-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.driver-management-filterbar button,
+.driver-management-filterbar select {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+}
+
 .driver-management-roles {
   display: flex;
   flex-wrap: wrap;
