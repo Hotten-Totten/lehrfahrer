@@ -130,7 +130,7 @@ function runGpsMarkerAnimation(ts) {
     turnProfile = getMarkerTurnProfile();
   }
 
-  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 140);
+  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 190);
   const turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
   const maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
@@ -867,7 +867,6 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   const isLandscapeMobile = isLandscapeTouchDevice();
-  setGpsMarkerTarget(lon, lat, bearing, false);
 
   // Strict-Follow fuer Landscape: verhindert Animationsdrift,
   // wodurch der Marker sporadisch oben/aus dem Fokus landen kann.
