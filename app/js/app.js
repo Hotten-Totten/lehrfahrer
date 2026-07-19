@@ -26,6 +26,8 @@ let navTimeInterval = null;  // Timer für Zeit-Updates im HUD
 let navInputMode = 'gps';
 let simTimer = null;
 let simRouteIdx = 0;
+let screenWakeLock = null;
+let screenWakeLockRequestPending = false;
 const SIM_TICK_MS = 900;
 const SIM_DEFAULT_SPEED_KMH = 34;
 
@@ -2579,6 +2581,46 @@ function formatDriveDuration(ms) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+async function requestScreenWakeLock() {
+  if (!navActive || navPaused || document.visibilityState !== 'visible') return;
+  if (!navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') return;
+  if (screenWakeLock || screenWakeLockRequestPending) return;
+
+  screenWakeLockRequestPending = true;
+  try {
+    const wakeLock = await navigator.wakeLock.request('screen');
+    if (!navActive || navPaused || document.visibilityState !== 'visible') {
+      await wakeLock.release();
+      return;
+    }
+    screenWakeLock = wakeLock;
+    wakeLock.addEventListener('release', () => {
+      if (screenWakeLock === wakeLock) screenWakeLock = null;
+    });
+  } catch (_err) {
+    screenWakeLock = null;
+  } finally {
+    screenWakeLockRequestPending = false;
+  }
+}
+
+async function releaseScreenWakeLock() {
+  const wakeLock = screenWakeLock;
+  screenWakeLock = null;
+  if (!wakeLock || wakeLock.released) return;
+  try {
+    await wakeLock.release();
+  } catch (_err) {
+    // Wake Lock may already have been released by the browser.
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navActive && !navPaused) {
+    requestScreenWakeLock();
+  }
+});
+
 function startNavigation(options = {}) {
   const useSimulation = options && options.useSimulation === true;
 
@@ -2625,6 +2667,7 @@ function startNavigation(options = {}) {
   navBtn.textContent = '■';
   navBtn.title       = 'Navigation beenden';
   navBtn.classList.add('nav-active');
+  requestScreenWakeLock();
 
   // Display Line Information
   const lineNameEl = document.getElementById('navLineName');
@@ -2753,6 +2796,7 @@ function startNavigation(options = {}) {
 
 function stopNavigation() {
   navActive = false;
+  releaseScreenWakeLock();
   navHud.classList.add('hidden');
   document.body.classList.remove('nav-mode');
   navBtn.textContent = '▶';
@@ -3499,6 +3543,11 @@ function toggleNavPause() {
 
   navPaused = !navPaused;
   renderNavPauseUi();
+  if (navPaused) {
+    releaseScreenWakeLock();
+  } else {
+    requestScreenWakeLock();
+  }
 
   // TODO: Implement actual pause logic (disable GPS updates, freeze map, etc.)
   console.log('Navigation ' + (navPaused ? 'paused' : 'resumed'));
