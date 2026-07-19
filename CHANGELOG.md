@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.001 - 2026-07-19
+- Doppelten Marker-Aufruf entfernt
+- Balanced-Markerbewegung geglättet
+- Screen Wake Lock während aktiver Navigation ergänzt
+
 ## V2.0.224 - 2026-06-11
 - **VBB-Import: Fokus auf Linienverläufe statt Startzeiten**:
   - Neuer Suchmodus `Alle Linienverläufe (Hin + Rück), Zeiten ignorieren` (im Popup standardmäßig aktiv)
