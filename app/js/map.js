@@ -73,6 +73,12 @@ function ensureGpsAnimState() {
       currentLat: null,
       targetLon: null,
       targetLat: null,
+      finalTargetLon: null,
+      finalTargetLat: null,
+      targetBlendFromLon: null,
+      targetBlendFromLat: null,
+      targetBlendStartTs: null,
+      targetBlendActive: false,
       currentHeading: 0,
       targetHeading: 0,
       hasHeading: false,
@@ -121,6 +127,20 @@ function runGpsMarkerAnimation(ts) {
   const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
   state.lastTs = ts;
 
+  if (state.targetBlendActive) {
+    if (state.targetBlendStartTs == null) state.targetBlendStartTs = ts;
+    const blendT = Math.min(1, Math.max(0, (ts - state.targetBlendStartTs) / 64));
+    const blendEase = blendT * blendT * (3 - 2 * blendT);
+    state.targetLon = state.targetBlendFromLon
+      + (state.finalTargetLon - state.targetBlendFromLon) * blendEase;
+    state.targetLat = state.targetBlendFromLat
+      + (state.finalTargetLat - state.targetBlendFromLat) * blendEase;
+    if (blendT >= 1) {
+      state.targetBlendActive = false;
+      state.targetBlendStartTs = null;
+    }
+  }
+
   let motionProfile = 'balanced';
   let turnProfile = 'balanced';
   if (typeof getMarkerMotionProfile === 'function') {
@@ -159,12 +179,23 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false) {
   if (!marker) return;
 
   const state = ensureGpsAnimState();
-  state.targetLon = lon;
-  state.targetLat = lat;
+  const first = state.currentLon == null || state.currentLat == null;
+  state.finalTargetLon = lon;
+  state.finalTargetLat = lat;
+  if (first || immediate) {
+    state.targetLon = lon;
+    state.targetLat = lat;
+    state.targetBlendActive = false;
+    state.targetBlendStartTs = null;
+  } else {
+    state.targetBlendFromLon = state.targetLon;
+    state.targetBlendFromLat = state.targetLat;
+    state.targetBlendStartTs = null;
+    state.targetBlendActive = true;
+  }
   state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
   state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
 
-  const first = state.currentLon == null || state.currentLat == null;
   if (first || immediate) {
     state.currentLon = lon;
     state.currentLat = lat;

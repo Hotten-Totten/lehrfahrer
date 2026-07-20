@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.002 - 2026-07-20
+- Kurzer Target-Blend für neue GPS-Ziele
+- Weicherer Übergang zwischen Markerzielen
+- Keine Änderungen an Rotation, Kamera, GPS-Glättung oder Snapping
+
 ## V2.1.001 - 2026-07-19
 - Doppelten Marker-Aufruf entfernt
 - Balanced-Markerbewegung geglättet
