@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.004 - 2026-07-20
+- Startbutton in „DirektStart“ umbenannt
+- „Sofort starten“ aus dem Zusatzmenü entfernt
+- Platzhalter auf „Zum Linienstart navigieren – später“ angepasst
+
 ## V2.1.003 - 2026-07-20
 - Neues Start-Zusatzmenü in der Fahrer-App
 - „Am Linienstart starten“

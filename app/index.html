@@ -17,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.003">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.004">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.003</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.004</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -160,13 +160,12 @@
       <span id="panelTitle">Haltestellenfolge</span>
       <span id="panelMeta"></span>
       <button id="navigateToStartBtn" type="button" title="Zum Startpunkt navigieren: Zeigt Weg vom GPS-Standort zum Anfang der Route" style="padding: 4px 10px; margin-right: 4px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; display: none;">
-        📍 Start
+        DirektStart
       </button>
       <div id="lineStartMenu" class="line-start-menu hidden" role="dialog" aria-label="Linie starten">
         <button id="closeLineStartMenuBtn" class="line-start-menu-close" type="button" aria-label="Startmenü schließen">×</button>
         <button id="startAtLineStartBtn" class="line-start-menu-action" type="button">Am Linienstart starten</button>
-        <button id="startImmediatelyBtn" class="line-start-menu-action" type="button">Sofort starten</button>
-        <button class="line-start-menu-action line-start-menu-placeholder" type="button" disabled>Zum Startpunkt navigieren – später</button>
+        <button class="line-start-menu-action line-start-menu-placeholder" type="button" disabled>Zum Linienstart navigieren – später</button>
       </div>
       <button id="panelCloseBtn" type="button" title="Haltestellenliste schließen" aria-label="Haltestellenliste schließen">✕</button>
     </div>
@@ -403,9 +402,9 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.1.003"></script>
-    <script src="js/app.js?v=V2.1.003"></script>
-    <script src="js/debug-helper.js?v=V2.1.003"></script>
+    <script src="js/map.js?v=V2.1.004"></script>
+    <script src="js/app.js?v=V2.1.004"></script>
+    <script src="js/debug-helper.js?v=V2.1.004"></script>
 </body>
 </html>
 

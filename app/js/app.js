@@ -117,7 +117,6 @@ const navigateToStartBtn = document.getElementById('navigateToStartBtn');
 const lineStartMenu = document.getElementById('lineStartMenu');
 const closeLineStartMenuBtn = document.getElementById('closeLineStartMenuBtn');
 const startAtLineStartBtn = document.getElementById('startAtLineStartBtn');
-const startImmediatelyBtn = document.getElementById('startImmediatelyBtn');
 
 console.log('🔍 DOM Elements:', {
   navigateToStartBtn: !!navigateToStartBtn
@@ -1277,13 +1276,6 @@ function bindEvents() {
       startNavigation();
     });
   }
-  if (startImmediatelyBtn) {
-    startImmediatelyBtn.addEventListener('click', () => {
-      lineStartMenu.classList.add('hidden');
-      startNavigation({ startAtCurrentPosition: true });
-    });
-  }
-
   loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
   tilesFileInput.addEventListener('change', onTilesFileSelected);
 
