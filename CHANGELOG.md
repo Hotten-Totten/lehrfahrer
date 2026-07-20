@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.003 - 2026-07-20
+- Neues Start-Zusatzmenü in der Fahrer-App
+- „Am Linienstart starten“
+- „Sofort starten“
+- Schließbar über X
+- Platzhalter „Zum Startpunkt navigieren – später“
+
 ## V2.1.002 - 2026-07-20
 - Kurzer Target-Blend für neue GPS-Ziele
 - Weicherer Übergang zwischen Markerzielen
