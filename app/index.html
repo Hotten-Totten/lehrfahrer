@@ -162,6 +162,12 @@
       <button id="navigateToStartBtn" type="button" title="Zum Startpunkt navigieren: Zeigt Weg vom GPS-Standort zum Anfang der Route" style="padding: 4px 10px; margin-right: 4px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; display: none;">
         📍 Start
       </button>
+      <div id="lineStartMenu" class="line-start-menu hidden" role="dialog" aria-label="Linie starten">
+        <button id="closeLineStartMenuBtn" class="line-start-menu-close" type="button" aria-label="Startmenü schließen">×</button>
+        <button id="startAtLineStartBtn" class="line-start-menu-action" type="button">Am Linienstart starten</button>
+        <button id="startImmediatelyBtn" class="line-start-menu-action" type="button">Sofort starten</button>
+        <button class="line-start-menu-action line-start-menu-placeholder" type="button" disabled>Zum Startpunkt navigieren – später</button>
+      </div>
       <button id="panelCloseBtn" type="button" title="Haltestellenliste schließen" aria-label="Haltestellenliste schließen">✕</button>
     </div>
     <div id="stopList">

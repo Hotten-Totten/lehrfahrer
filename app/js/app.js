@@ -114,6 +114,10 @@ const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
 const navigateToStartBtn = document.getElementById('navigateToStartBtn');
+const lineStartMenu = document.getElementById('lineStartMenu');
+const closeLineStartMenuBtn = document.getElementById('closeLineStartMenuBtn');
+const startAtLineStartBtn = document.getElementById('startAtLineStartBtn');
+const startImmediatelyBtn = document.getElementById('startImmediatelyBtn');
 
 console.log('🔍 DOM Elements:', {
   navigateToStartBtn: !!navigateToStartBtn
@@ -1255,10 +1259,29 @@ function bindEvents() {
   if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
   
   if (navigateToStartBtn) {
-    navigateToStartBtn.addEventListener('click', navigateToRouteStart);
+    navigateToStartBtn.addEventListener('click', () => {
+      if (lineStartMenu) lineStartMenu.classList.toggle('hidden');
+    });
     console.log('✅ navigateToStartBtn event listener attached');
   } else {
     console.warn('❌ navigateToStartBtn not found in DOM');
+  }
+  if (closeLineStartMenuBtn) {
+    closeLineStartMenuBtn.addEventListener('click', () => {
+      lineStartMenu.classList.add('hidden');
+    });
+  }
+  if (startAtLineStartBtn) {
+    startAtLineStartBtn.addEventListener('click', () => {
+      lineStartMenu.classList.add('hidden');
+      startNavigation();
+    });
+  }
+  if (startImmediatelyBtn) {
+    startImmediatelyBtn.addEventListener('click', () => {
+      lineStartMenu.classList.add('hidden');
+      startNavigation({ startAtCurrentPosition: true });
+    });
   }
 
   loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
@@ -2623,6 +2646,7 @@ document.addEventListener('visibilitychange', () => {
 
 function startNavigation(options = {}) {
   const useSimulation = options && options.useSimulation === true;
+  const startAtCurrentPosition = options && options.startAtCurrentPosition === true;
 
   if (!currentRoute?.data?.routePoints?.length) {
     showToast('Bitte zuerst eine Linie laden.');
@@ -2634,10 +2658,13 @@ function startNavigation(options = {}) {
   navCumDists  = buildNavCumDists(pts);
   navTurns     = detectNavTurns(pts, navCumDists);
   navStopDists = buildNavStopDists(navStops, pts, navCumDists);
+  const startIdx = startAtCurrentPosition && gpsLastSmoothedPos
+    ? findNearestNavIdx(gpsLastSmoothedPos.lat, gpsLastSmoothedPos.lon, pts, 0)
+    : 0;
 
   navActive   = true;
   navFirstFix = false;
-  navNearestIdx = 0;
+  navNearestIdx = startIdx;
   navOffRouteActive = false;
   navRejoinBlend = 0;
   navProgressIdx = 0;
@@ -2658,6 +2685,7 @@ function startNavigation(options = {}) {
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
+  if (lineStartMenu) lineStartMenu.classList.add('hidden');
   document.body.classList.remove('panel-is-open');
   panel.classList.remove('panel-open');
   panel.classList.add('panel-collapsed');
