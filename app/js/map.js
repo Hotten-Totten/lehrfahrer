@@ -151,14 +151,22 @@ function runGpsMarkerAnimation(ts) {
   }
 
   const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 190);
-  const turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
-  const maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
+  let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
+  let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
   const posAlpha = 1 - Math.exp(-dt / posTau);
   state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
   state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
 
   const headingDelta = shortestDegDelta(state.currentHeading, state.targetHeading);
+  const absHeadingDelta = Math.abs(headingDelta);
+  if (absHeadingDelta > 80) {
+    turnTau *= 0.45;
+    maxTurnRate *= 1.55;
+  } else if (absHeadingDelta > 45) {
+    turnTau *= 0.65;
+    maxTurnRate *= 1.25;
+  }
   const headingAlpha = 1 - Math.exp(-dt / turnTau);
   let headingStep = headingDelta * headingAlpha;
   const maxHeadingStep = maxTurnRate * (dt / 1000);
@@ -263,13 +271,13 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   }
 
   if (absDelta > 45) {
-    smoothing = Math.max(smoothing, 0.56);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 210);
+    smoothing = Math.max(smoothing, 0.62);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 235);
     deadZone = Math.min(deadZone, 0.65);
   }
   if (absDelta > 80) {
-    smoothing = Math.max(smoothing, 0.68);
-    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 250);
+    smoothing = Math.max(smoothing, 0.75);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 285);
     deadZone = Math.min(deadZone, 0.35);
   }
 
@@ -608,7 +616,7 @@ function _renderRoute(routePoints) {
     id: 'route-shadow',
     type: 'line',
     source: 'route',
-    paint: { 'line-color': '#16324f', 'line-width': 8, 'line-opacity': 0.35, 'line-blur': 2 }
+    paint: { 'line-color': '#7a0b12', 'line-width': 11, 'line-opacity': 0.35, 'line-blur': 2 }
   });
 
   // Hauptlinie
@@ -616,7 +624,7 @@ function _renderRoute(routePoints) {
     id: 'route-line',
     type: 'line',
     source: 'route',
-    paint: { 'line-color': '#20a4ff', 'line-width': 5, 'line-opacity': 0.98 }
+    paint: { 'line-color': '#e30613', 'line-width': 7, 'line-opacity': 0.98 }
   });
 
   // Kartenausschnitt anpassen

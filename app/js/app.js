@@ -2909,12 +2909,27 @@ function buildNavCumDists(pts) {
   return d;
 }
 
-function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35) {
+function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35, lookaroundM = 20) {
   const turns = [];
   for (let i = 1; i < pts.length - 1; i++) {
-    const [la0, lo0] = navGetLatLon(pts[i - 1]);
+    let beforeIdx = i - 1;
+    let afterIdx = i + 1;
+
+    while (beforeIdx > 0 && (cumDists[i] - cumDists[beforeIdx]) < lookaroundM) {
+      beforeIdx--;
+    }
+    while (afterIdx < pts.length - 1 && (cumDists[afterIdx] - cumDists[i]) < lookaroundM) {
+      afterIdx++;
+    }
+
+    if (
+      (cumDists[i] - cumDists[beforeIdx]) < lookaroundM ||
+      (cumDists[afterIdx] - cumDists[i]) < lookaroundM
+    ) continue;
+
+    const [la0, lo0] = navGetLatLon(pts[beforeIdx]);
     const [la1, lo1] = navGetLatLon(pts[i]);
-    const [la2, lo2] = navGetLatLon(pts[i + 1]);
+    const [la2, lo2] = navGetLatLon(pts[afterIdx]);
     const bIn    = bearingDeg(la0, lo0, la1, lo1);
     const bOut   = bearingDeg(la1, lo1, la2, lo2);
     const angle  = ((bOut - bIn + 540) % 360) - 180; // positiv=rechts, negativ=links

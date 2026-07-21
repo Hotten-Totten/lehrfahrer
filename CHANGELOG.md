@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.005 - 2026-07-21
+- Manövererkennung geglättet: 20-m-Betrachtungsabstand statt direkter Nachbarpunkte
+- Pfeil und Kamera reagieren bei starken Richtungsänderungen direkter
+- Route ca. 1/3 dicker
+- Route auf Signalrot umgestellt
+- Haltestellenmarker optisch mittig auf der Route positioniert
+
 ## V2.1.004 - 2026-07-20
 - Startbutton in „DirektStart“ umbenannt
 - „Sofort starten“ aus dem Zusatzmenü entfernt
