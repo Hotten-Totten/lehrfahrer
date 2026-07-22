@@ -2725,7 +2725,7 @@ function startNavigation(options = {}) {
 
   // Initial-Anzeige: erste Abbiegung und erste Haltestelle
   if (navTurns.length) {
-    const info = getTurnInfo(navTurns[0].angle);
+    const info = getTurnInfo(navTurns[0].angle, navTurns[0].type);
     const distStr = navFormatDist(navTurns[0].distFromStart);
     setNavArrowIcon(info.iconKey);
     navDistEl.textContent  = `in ${distStr}`;
@@ -2909,6 +2909,84 @@ function buildNavCumDists(pts) {
   return d;
 }
 
+function detectNavRoundabouts(pts, cumDists) {
+  const sampleStepM = 6;
+  const anchors = [0];
+  for (let i = 1; i < pts.length - 1; i++) {
+    if ((cumDists[i] - cumDists[anchors[anchors.length - 1]]) >= sampleStepM) {
+      anchors.push(i);
+    }
+  }
+  if (anchors[anchors.length - 1] !== pts.length - 1) anchors.push(pts.length - 1);
+  if (anchors.length < 6) return [];
+
+  const headings = [];
+  for (let i = 1; i < anchors.length; i++) {
+    const [latA, lonA] = navGetLatLon(pts[anchors[i - 1]]);
+    const [latB, lonB] = navGetLatLon(pts[anchors[i]]);
+    headings.push(bearingDeg(latA, lonA, latB, lonB));
+  }
+
+  const deltas = [];
+  for (let i = 1; i < headings.length; i++) {
+    deltas.push(((headings[i] - headings[i - 1] + 540) % 360) - 180);
+  }
+
+  const ranges = [];
+  for (let start = 0; start < deltas.length; start++) {
+    if (Math.abs(deltas[start]) < 5 || Math.abs(deltas[start]) > 60) continue;
+
+    const sign = Math.sign(deltas[start]);
+    let end = start;
+    let signedTurn = 0;
+    let totalTurn = 0;
+    let meaningfulTurns = 0;
+    let weakSamples = 0;
+
+    while (end < deltas.length) {
+      const delta = deltas[end];
+      const absDelta = Math.abs(delta);
+      if (absDelta > 60 || (absDelta >= 3 && Math.sign(delta) !== sign)) break;
+      if (absDelta < 3) {
+        weakSamples++;
+        if (weakSamples > 1) break;
+      } else {
+        weakSamples = 0;
+        meaningfulTurns++;
+        signedTurn += delta;
+        totalTurn += absDelta;
+      }
+      end++;
+    }
+
+    const firstAnchor = anchors[start];
+    const lastAnchor = anchors[Math.min(anchors.length - 1, end + 1)];
+    const arcLengthM = cumDists[lastAnchor] - cumDists[firstAnchor];
+    const [startLat, startLon] = navGetLatLon(pts[firstAnchor]);
+    const [endLat, endLon] = navGetLatLon(pts[lastAnchor]);
+    const chordM = haversineM(startLat, startLon, endLat, endLon);
+    const turnDeg = Math.abs(signedTurn);
+    const estimatedRadiusM = turnDeg > 0 ? arcLengthM / (turnDeg * Math.PI / 180) : Infinity;
+    const consistency = totalTurn > 0 ? turnDeg / totalTurn : 0;
+
+    if (meaningfulTurns >= 4
+        && turnDeg >= 130 && turnDeg <= 330
+        && arcLengthM >= 20 && arcLengthM <= 130
+        && chordM / arcLengthM <= 0.9
+        && estimatedRadiusM >= 4 && estimatedRadiusM <= 35
+        && consistency >= 0.9) {
+      ranges.push({
+        startIndex: firstAnchor,
+        endIndex: lastAnchor,
+        startDist: cumDists[firstAnchor],
+        endDist: cumDists[lastAnchor]
+      });
+      start = end;
+    }
+  }
+  return ranges;
+}
+
 function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35, lookaroundM = 20) {
   const turns = [];
   for (let i = 1; i < pts.length - 1; i++) {
@@ -2945,7 +3023,23 @@ function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35, lookarou
       turns.push({ index: i, angle, distFromStart: dist });
     }
   }
-  return turns;
+  const roundabouts = detectNavRoundabouts(pts, cumDists);
+  if (!roundabouts.length) return turns;
+
+  const filteredTurns = turns.filter(turn => !roundabouts.some(roundabout =>
+    turn.distFromStart >= roundabout.startDist && turn.distFromStart <= roundabout.endDist
+  ));
+  roundabouts.forEach(roundabout => {
+    filteredTurns.push({
+      index: roundabout.startIndex,
+      angle: 0,
+      type: 'roundabout',
+      distFromStart: roundabout.startDist,
+      endDistFromStart: roundabout.endDist
+    });
+  });
+  filteredTurns.sort((a, b) => a.distFromStart - b.distFromStart);
+  return filteredTurns;
 }
 
 function buildNavStopDists(stops, pts, cumDists) {
@@ -3140,7 +3234,10 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
   };
 }
 
-function getTurnInfo(angle) {
+function getTurnInfo(angle, type = null) {
+  if (type === 'roundabout') {
+    return { iconKey: 'straight', label: 'Kreisverkehr – Ausfahrt folgen' };
+  }
   const a = angle;
   if (Math.abs(a) < 20)      return { iconKey: 'straight', label: 'Geradeaus' };
   if (a >= 20 && a < 50)     return { iconKey: 'slight-right', label: 'Leicht rechts' };
@@ -3190,7 +3287,10 @@ function resolveActiveTurn(currentDist) {
   for (let i = 0; i < navTurns.length; i++) {
     const turn = navTurns[i];
     const passBuffer = getTurnPassBufferMeters(i);
-    if (currentDist <= turn.distFromStart + passBuffer) {
+    const passDist = turn.type === 'roundabout' && Number.isFinite(turn.endDistFromStart)
+      ? turn.endDistFromStart
+      : turn.distFromStart;
+    if (currentDist <= passDist + passBuffer) {
       return { turn, idx: i };
     }
   }
@@ -3255,7 +3355,7 @@ function updateNavHud(lat, lon, forcedIdx = null) {
     if (navLabelEl) navLabelEl.textContent = 'Zur Route zurueck';
   } else if (activeTurnData) {
     const { turn } = activeTurnData;
-    const info = getTurnInfo(turn.angle);
+    const info = getTurnInfo(turn.angle, turn.type);
     const distToTurnM = turn.distFromStart - currentDist;
     setNavArrowIcon(info.iconKey);
     if (distToTurnM > NAV_TURN_NOW_WINDOW_M) {

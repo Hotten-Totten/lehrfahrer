@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.007 - 2026-07-22
+- Konservative Kreisverkehrserkennung ergänzt
+- Interne Links-/Rechts-Hinweise im Kreisverkehr unterdrückt
+- Neutrale Meldung „Kreisverkehr – Ausfahrt folgen“
+- Unsichere Geometrien bleiben unverändert
+
 ## V2.1.006 - 2026-07-22
 - Begrenzte geschwindigkeitsbasierte Vorausberechnung für den Fahrzeugmarker
 - Vorausberechnung auf maximal 1,2 Sekunden und 12 Meter begrenzt
