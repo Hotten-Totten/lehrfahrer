@@ -11,6 +11,12 @@ let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
 const BUS_HEADING_OFFSET_DEG = 0;
+const GPS_MARKER_PREDICT_MAX_MS = 1200;
+const GPS_MARKER_PREDICT_MAX_M = 12;
+const GPS_MARKER_TARGET_MIN_MS = 250;
+const GPS_MARKER_TARGET_MAX_MS = 2500;
+const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
+const GPS_MARKER_TARGET_MAX_SPEED_MPS = 55;
 let gpsAnimFrameId = null;
 let gpsAnimState = null;
 let navCameraBearing = 0;
@@ -79,6 +85,13 @@ function ensureGpsAnimState() {
       targetBlendFromLat: null,
       targetBlendStartTs: null,
       targetBlendActive: false,
+      lastNormalTargetLon: null,
+      lastNormalTargetLat: null,
+      lastNormalTargetTs: null,
+      targetReceivedTs: null,
+      predictLonPerMs: 0,
+      predictLatPerMs: 0,
+      predictMaxMs: 0,
       currentHeading: 0,
       targetHeading: 0,
       hasHeading: false,
@@ -127,18 +140,29 @@ function runGpsMarkerAnimation(ts) {
   const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
   state.lastTs = ts;
 
+  let predictedLon = state.finalTargetLon;
+  let predictedLat = state.finalTargetLat;
+  if (state.predictMaxMs > 0 && state.targetReceivedTs != null) {
+    const predictMs = Math.min(state.predictMaxMs, Math.max(0, ts - state.targetReceivedTs));
+    predictedLon += state.predictLonPerMs * predictMs;
+    predictedLat += state.predictLatPerMs * predictMs;
+  }
+
   if (state.targetBlendActive) {
     if (state.targetBlendStartTs == null) state.targetBlendStartTs = ts;
     const blendT = Math.min(1, Math.max(0, (ts - state.targetBlendStartTs) / 64));
     const blendEase = blendT * blendT * (3 - 2 * blendT);
     state.targetLon = state.targetBlendFromLon
-      + (state.finalTargetLon - state.targetBlendFromLon) * blendEase;
+      + (predictedLon - state.targetBlendFromLon) * blendEase;
     state.targetLat = state.targetBlendFromLat
-      + (state.finalTargetLat - state.targetBlendFromLat) * blendEase;
+      + (predictedLat - state.targetBlendFromLat) * blendEase;
     if (blendT >= 1) {
       state.targetBlendActive = false;
       state.targetBlendStartTs = null;
     }
+  } else {
+    state.targetLon = predictedLon;
+    state.targetLat = predictedLat;
   }
 
   let motionProfile = 'balanced';
@@ -188,6 +212,48 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false) {
 
   const state = ensureGpsAnimState();
   const first = state.currentLon == null || state.currentLat == null;
+  const targetTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+  if (!first && !immediate && state.lastNormalTargetTs != null) {
+    const targetDt = targetTs - state.lastNormalTargetTs;
+    const targetDistanceM = haversineMeters(
+      state.lastNormalTargetLat,
+      state.lastNormalTargetLon,
+      lat,
+      lon
+    );
+    if (targetDt >= GPS_MARKER_TARGET_MIN_MS
+        && targetDt <= GPS_MARKER_TARGET_MAX_MS
+        && targetDistanceM > 0.2
+        && targetDistanceM <= GPS_MARKER_TARGET_MAX_JUMP_M
+        && targetDistanceM * 1000 / targetDt <= GPS_MARKER_TARGET_MAX_SPEED_MPS) {
+      state.predictLonPerMs = (lon - state.lastNormalTargetLon) / targetDt;
+      state.predictLatPerMs = (lat - state.lastNormalTargetLat) / targetDt;
+      state.predictMaxMs = Math.min(
+        GPS_MARKER_PREDICT_MAX_MS,
+        GPS_MARKER_PREDICT_MAX_M * targetDt / targetDistanceM
+      );
+    } else {
+      state.predictLonPerMs = 0;
+      state.predictLatPerMs = 0;
+      state.predictMaxMs = 0;
+    }
+  } else {
+    state.predictLonPerMs = 0;
+    state.predictLatPerMs = 0;
+    state.predictMaxMs = 0;
+  }
+
+  if (first || immediate) {
+    state.lastNormalTargetLon = null;
+    state.lastNormalTargetLat = null;
+    state.lastNormalTargetTs = null;
+  } else {
+    state.lastNormalTargetLon = lon;
+    state.lastNormalTargetLat = lat;
+    state.lastNormalTargetTs = targetTs;
+  }
+  state.targetReceivedTs = targetTs;
   state.finalTargetLon = lon;
   state.finalTargetLat = lat;
   if (first || immediate) {

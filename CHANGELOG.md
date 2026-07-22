@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.006 - 2026-07-22
+- Begrenzte geschwindigkeitsbasierte Vorausberechnung für den Fahrzeugmarker
+- Vorausberechnung auf maximal 1,2 Sekunden und 12 Meter begrenzt
+- Periodisches Abbremsen zwischen GPS-Fixes reduziert
+- Bestehender 64-ms-Target-Blend bleibt erhalten
+
 ## V2.1.005 - 2026-07-21
 - Manövererkennung geglättet: 20-m-Betrachtungsabstand statt direkter Nachbarpunkte
 - Pfeil und Kamera reagieren bei starken Richtungsänderungen direkter

@@ -14,10 +14,10 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.005',
-  './js/app.js?v=V2.1.005',
-  './js/map.js?v=V2.1.005',
-  './js/debug-helper.js?v=V2.1.005',
+  './css/app.css?v=V2.1.006',
+  './js/app.js?v=V2.1.006',
+  './js/map.js?v=V2.1.006',
+  './js/debug-helper.js?v=V2.1.006',
 ];
 
 // ── Install ──────────────────────────────────────────────────
