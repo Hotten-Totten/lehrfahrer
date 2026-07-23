@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.008 - 2026-07-23
+- Marker und Kamera verwenden jetzt dieselbe vorausberechnete Navigationsposition
+- Sichtbares Ziehen/Nachkorrigieren reduziert
+- Zielerkennung verwendet jetzt Gesamtroutendistanz und Nähe zum letzten Routenindex
+- Vorzeitiges Linienende bei parallelen Routenteilen verhindert
+
 ## V2.1.007 - 2026-07-22
 - Konservative Kreisverkehrserkennung ergänzt
 - Interne Links-/Rechts-Hinweise im Kreisverkehr unterdrückt

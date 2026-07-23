@@ -3429,7 +3429,14 @@ function checkNavDestinationReached(currentDist, lat, lon) {
     return false;
   }
 
-  const routeRemainingM = Math.max(0, lastStopInfo.distFromStart - currentDist);
+  const routeEndDist = navCumDists[navCumDists.length - 1];
+  const lastRouteIdx = navCumDists.length - 1;
+  if (!Number.isFinite(routeEndDist) || navProgressIdx < Math.max(0, lastRouteIdx - NAV_SNAP_WINDOW)) {
+    navDestinationHitCount = 0;
+    return false;
+  }
+
+  const routeRemainingM = Math.max(0, routeEndDist - currentDist);
   const directDistanceM = haversineM(lat, lon, stopLat, stopLon);
 
   if (routeRemainingM <= 35 && directDistanceM <= 50) {

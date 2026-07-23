@@ -24,6 +24,7 @@ let navBearingReady = false;
 let navLastFix = null;
 let navLastBearingTs = 0;
 let navCameraViewState = null;
+let navCameraFollowOptions = null;
 let navTurnBoostUntil = 0;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
@@ -69,6 +70,7 @@ function resetNavBearingState() {
   navLastFix = null;
   navLastBearingTs = 0;
   navCameraViewState = null;
+  navCameraFollowOptions = null;
   navTurnBoostUntil = 0;
 }
 
@@ -201,6 +203,7 @@ function runGpsMarkerAnimation(ts) {
 
   gpsMarker.setLngLat([state.currentLon, state.currentLat]);
   applyGpsHeadingVisuals(state);
+  syncNavCameraToGpsMarkerPosition(state.currentLon, state.currentLat);
 
   gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
 }
@@ -971,6 +974,7 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
+  navCameraFollowOptions = opts;
   const isLandscapeMobile = isLandscapeTouchDevice();
 
   // Strict-Follow fuer Landscape: verhindert Animationsdrift,
@@ -1020,6 +1024,14 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   map.stop();
   map.easeTo({ ...opts, duration, easing: t => t * t * (3 - 2 * t) });
   updateStopPoiVisibility();
+}
+
+function syncNavCameraToGpsMarkerPosition(lon, lat) {
+  if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
+  map.jumpTo({
+    ...navCameraFollowOptions,
+    center: [lon, lat]
+  });
 }
 
 // ── Simulation: sofortige Kartenposition (kein Animations-Stau) ──────────────

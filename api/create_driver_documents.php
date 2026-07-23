@@ -212,7 +212,7 @@ function driverDocBuildPdf(array $data, string $driverName): string {
             'instruction' => driverDocInstruction($stop)
         ];
     }
-    $version = driverDocValue($data, 'formatVersion', 'V2.1.007');
+    $version = driverDocValue($data, 'formatVersion', 'V2.1.008');
     return lehrfahrer_build_professional_pdf([
         'version' => $version,
         'metadata' => [
