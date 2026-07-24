@@ -33,7 +33,7 @@ const SIM_DEFAULT_SPEED_KMH = 34;
 
 // GPS-Smoothing (reduziert Ruckeln bei schlechtem GPS)
 let gpsLastSmoothedPos = null;
-const GPS_SMOOTHING_ALPHA = 0.4;  // 0.3-0.5: höher = schneller Response, niedriger = glatter
+const GPS_SMOOTHING_ALPHA = 0.65;  // höher = schneller Response, niedriger = glatter
 
 const NAV_SNAP_MAX_M = 120;
 const NAV_SNAP_WINDOW = 24;
@@ -2456,6 +2456,22 @@ function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
   return sensorHeadingDeg;
 }
 
+function resolveRouteMarkerHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
+  if (!Number.isFinite(routeHeadingDeg)) return sensorHeadingDeg;
+  if (!Number.isFinite(sensorHeadingDeg)) return routeHeadingDeg;
+
+  const speedKmh = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps * 3.6 : null;
+  const delta = Math.abs(shortestDeltaDeg(routeHeadingDeg, sensorHeadingDeg));
+
+  // Die Segmenttangente bleibt die primäre Markerrichtung. Kleine
+  // Sensorabweichungen dürfen sie nur leicht unterstützen.
+  if (delta <= 25 && (speedKmh == null || speedKmh >= 3)) {
+    return (routeHeadingDeg + shortestDeltaDeg(routeHeadingDeg, sensorHeadingDeg) * 0.15 + 360) % 360;
+  }
+
+  return routeHeadingDeg;
+}
+
 // Fahrersicht-Zoom-Abschnitt ein-/ausblenden je nach gewählter Perspektive
 (function initPerspectiveToggle() {
   function toggleDriverZoom() {
@@ -2784,12 +2800,15 @@ function startNavigation(options = {}) {
       const sensorHeading = smoothHeading(heading);
       const routeHeading = navGetRouteHeadingAtIndex(pts, tracked.index);
       const navHeading = resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
+      const markerHeading = tracked.snapApplied
+        ? resolveRouteMarkerHeading(sensorHeading, tracked.routeHeading, smoothed.speed)
+        : navHeading;
 
       recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
       // Marker und Kamera immer auf denselben (gesnappten) Trackpunkt setzen,
       // damit der Pfeil nicht von der Route wegdriftet.
-      setSimulatedGPS(tracked.lon, tracked.lat, navHeading);
+      setSimulatedGPS(tracked.lon, tracked.lat, markerHeading, smoothed.speed);
       navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
@@ -3140,7 +3159,8 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
         dist2,
         lat: snapLat,
         lon: snapLon,
-        index: Math.min(pts.length - 1, i + (t >= 0.5 ? 1 : 0))
+        index: Math.min(pts.length - 1, i + (t >= 0.5 ? 1 : 0)),
+        routeHeading: bearingDeg(aLat, aLon, bLat, bLon)
       };
     }
   }
@@ -3151,6 +3171,7 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
       lat: nLat,
       lon: nLon,
       index: nearestIdx,
+      routeHeading: navGetRouteHeadingAtIndex(pts, nearestIdx),
       distanceM: haversineM(lat, lon, nLat, nLon),
       applied: false
     };
@@ -3161,6 +3182,7 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
     lat: best.lat,
     lon: best.lon,
     index: best.index,
+    routeHeading: best.routeHeading,
     distanceM,
     applied: distanceM <= NAV_SNAP_MAX_M
   };
@@ -3178,6 +3200,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
       lat: rawLat,
       lon: rawLon,
       index: navNearestIdx,
+      routeHeading: navGetRouteHeadingAtIndex(pts, navNearestIdx),
       routeState: navOffRouteActive ? 'OFF' : 'ON',
       snapDistanceM: null,
       snapApplied: false
@@ -3228,6 +3251,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
     lat: displayLat,
     lon: displayLon,
     index: reportedIdx,
+    routeHeading: snap.routeHeading,
     routeState,
     snapDistanceM: snap.distanceM,
     snapApplied: snapAppliedNow
@@ -3756,7 +3780,7 @@ function pushSimFrame(idx, speedMps) {
 
   const tracked = resolveNavTrackPoint(lat, lon, pts);
   recordNavDriveSample(lat, lon, tracked, speedMps, heading);
-  setSimulatedGPS(tracked.lon, tracked.lat, heading);
+  setSimulatedGPS(tracked.lon, tracked.lat, heading, speedMps);
   simCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), speedMps);
   updateNavHud(tracked.lat, tracked.lon, tracked.index);
 

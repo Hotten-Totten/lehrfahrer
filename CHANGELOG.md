@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.009 - 2026-07-24
+- Standpumpen des Fahrzeugmarkers reduziert
+- Stillstands-Guard für kleine GPS-Schwankungen ergänzt
+- Marker-Heading stärker an die Tangente des gesnappten Routensegments gekoppelt
+- Kurvenschwimmen des Pfeils reduziert
+- GPS_SMOOTHING_ALPHA von 0.4 auf 0.65 erhöht
+- Positionsnachlauf deutlich verkürzt
+
 ## V2.1.008 - 2026-07-23
 - Marker und Kamera verwenden jetzt dieselbe vorausberechnete Navigationsposition
 - Sichtbares Ziehen/Nachkorrigieren reduziert

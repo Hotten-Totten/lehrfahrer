@@ -208,7 +208,7 @@ function runGpsMarkerAnimation(ts) {
   gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
 }
 
-function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false) {
+function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
   const marker = ensureGpsMarkerExists([lon, lat]);
   if (!marker) return;
@@ -216,6 +216,26 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false) {
   const state = ensureGpsAnimState();
   const first = state.currentLon == null || state.currentLat == null;
   const targetTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+  if (!first && !immediate
+      && Number.isFinite(speedMps) && speedMps >= 0 && speedMps <= 0.35
+      && Number.isFinite(state.finalTargetLon) && Number.isFinite(state.finalTargetLat)
+      && haversineMeters(state.finalTargetLat, state.finalTargetLon, lat, lon) <= 1.2) {
+    state.targetLon = state.currentLon;
+    state.targetLat = state.currentLat;
+    state.finalTargetLon = state.currentLon;
+    state.finalTargetLat = state.currentLat;
+    state.targetBlendActive = false;
+    state.targetBlendStartTs = null;
+    state.lastNormalTargetLon = null;
+    state.lastNormalTargetLat = null;
+    state.lastNormalTargetTs = null;
+    state.targetReceivedTs = targetTs;
+    state.predictLonPerMs = 0;
+    state.predictLatPerMs = 0;
+    state.predictMaxMs = 0;
+    return;
+  }
 
   if (!first && !immediate && state.lastNormalTargetTs != null) {
     const targetDt = targetTs - state.lastNormalTargetTs;
@@ -908,7 +928,7 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
       // Im Nav-Modus setzt navCenterOn() den Marker ausschliesslich auf die
       // gesnappte/tracked Position, damit kein Roh-GPS-Zielflattern entsteht.
       if (!navMode) {
-        setGpsMarkerTarget(lnglat[0], lnglat[1], headingForMarker, !firstFixSeen);
+        setGpsMarkerTarget(lnglat[0], lnglat[1], headingForMarker, !firstFixSeen, pos.coords.speed);
       }
 
       if (!firstFixSeen) {
@@ -1165,7 +1185,7 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 }
 
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
-function setSimulatedGPS(lon, lat, headingDeg) {
+function setSimulatedGPS(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
-  setGpsMarkerTarget(lon, lat, headingDeg, false);
+  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps);
 }
