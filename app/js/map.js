@@ -208,7 +208,7 @@ function runGpsMarkerAnimation(ts) {
   gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
 }
 
-function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null) {
+function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null, predictPosition = true) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
   const marker = ensureGpsMarkerExists([lon, lat]);
   if (!marker) return;
@@ -237,7 +237,7 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
     return;
   }
 
-  if (!first && !immediate && state.lastNormalTargetTs != null) {
+  if (predictPosition && !first && !immediate && state.lastNormalTargetTs != null) {
     const targetDt = targetTs - state.lastNormalTargetTs;
     const targetDistanceM = haversineMeters(
       state.lastNormalTargetLat,
@@ -1187,5 +1187,5 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
 function setSimulatedGPS(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
-  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps);
+  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps, false);
 }

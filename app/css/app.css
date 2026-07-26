@@ -559,10 +559,6 @@ body.is-standalone #fullscreenBtn {
   filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
 }
 
-.gps-arrow-marker.has-heading .gps-arrow-icon {
-  animation: gpsPulse 1.35s ease-out infinite;
-}
-
 .gps-arrow-icon svg {
   width: 100%;
   height: 100%;
@@ -573,17 +569,6 @@ body.is-standalone #fullscreenBtn {
 .gps-arrow-icon .arrow-body { fill: #8f1018; stroke: #5f0a10; stroke-width: 1.8; }
 .gps-arrow-icon .arrow-core { fill: #b91d28; }
 .gps-arrow-icon .arrow-highlight { fill: rgba(219, 122, 122, 0.88); }
-
-@keyframes gpsPulse {
-  0%, 100% {
-    transform: scale(1);
-    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
-  }
-  50% {
-    transform: scale(1.05);
-    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(143, 16, 24, 0.45));
-  }
-}
 
 /* ── Haltestellen-Marker auf Karte ──────────── */
 .map-stop-poi {

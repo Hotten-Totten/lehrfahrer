@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.1.010 - 2026-07-26
+- CSS-Pulsanimation des Fahrzeugmarkers entfernt
+- Positionsprädiktion ausschließlich im Navigationsmarker-Pfad deaktiviert
+- Kurvenschwimmen des Fahrzeugmarkers reduziert
+- Positionssprünge beim Abbiegen beseitigt
+- kleines Zucken auf gerader Strecke reduziert
+- weiche Markerbewegung und 64-ms-Zielüberblendung beibehalten
+- `posTau`, Heading-, Kamera-, GPS- und Snappinglogik unverändert gelassen
+
 ## V2.1.009 - 2026-07-24
 - Standpumpen des Fahrzeugmarkers reduziert
 - Stillstands-Guard für kleine GPS-Schwankungen ergänzt
