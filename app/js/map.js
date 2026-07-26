@@ -250,12 +250,22 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
         && targetDistanceM > 0.2
         && targetDistanceM <= GPS_MARKER_TARGET_MAX_JUMP_M
         && targetDistanceM * 1000 / targetDt <= GPS_MARKER_TARGET_MAX_SPEED_MPS) {
+      const previousPredictLonPerMs = state.predictLonPerMs;
+      const previousPredictLatPerMs = state.predictLatPerMs;
       state.predictLonPerMs = (lon - state.lastNormalTargetLon) / targetDt;
       state.predictLatPerMs = (lat - state.lastNormalTargetLat) / targetDt;
+      const previousPredictSpeed = Math.hypot(previousPredictLonPerMs, previousPredictLatPerMs);
+      const predictSpeed = Math.hypot(state.predictLonPerMs, state.predictLatPerMs);
+      const directionFactor = previousPredictSpeed > 0 && predictSpeed > 0
+        ? Math.max(0, Math.min(1,
+          (previousPredictLonPerMs * state.predictLonPerMs
+            + previousPredictLatPerMs * state.predictLatPerMs)
+          / (previousPredictSpeed * predictSpeed)))
+        : 1;
       state.predictMaxMs = Math.min(
         GPS_MARKER_PREDICT_MAX_MS,
         GPS_MARKER_PREDICT_MAX_M * targetDt / targetDistanceM
-      );
+      ) * directionFactor;
     } else {
       state.predictLonPerMs = 0;
       state.predictLatPerMs = 0;
@@ -1187,5 +1197,5 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
 function setSimulatedGPS(lon, lat, headingDeg, speedMps = null) {
   if (!map) return;
-  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps, false);
+  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps);
 }

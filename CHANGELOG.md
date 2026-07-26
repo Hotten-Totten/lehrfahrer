@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.1.011 - 2026-07-26
+- flüssige Positionsvorausberechnung des Navigationsmarkers wieder aktiviert
+- volle Vorausberechnung bei gerader Fahrt wiederhergestellt
+- tangentiale Vorausberechnung bei starken Richtungswechseln gedämpft
+- bei 90-Grad-Kurven und Gegenbewegungen keine tangentiale Vorausberechnung
+- Prognosehorizont bei Zwischenwinkeln proportional begrenzt
+- weiche Zielverfolgung und 64-ms-Zielüberblendung beibehalten
+- `posTau`, Heading-, Kamera-, GPS- und Snappinglogik unverändert gelassen
+
 ## V2.1.010 - 2026-07-26
 - CSS-Pulsanimation des Fahrzeugmarkers entfernt
 - Positionsprädiktion ausschließlich im Navigationsmarker-Pfad deaktiviert
