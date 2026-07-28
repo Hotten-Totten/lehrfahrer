@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21010';
+const CACHE_APP = 'lehrfahrer-app-v21012';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // Nur kleine lokale Dateien – kein Blockieren durch große CDN-Downloads
@@ -14,10 +14,10 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.011',
-  './js/app.js?v=V2.1.011',
-  './js/map.js?v=V2.1.011',
-  './js/debug-helper.js?v=V2.1.011',
+  './css/app.css?v=V2.1.012',
+  './js/app.js?v=V2.1.012',
+  './js/map.js?v=V2.1.012',
+  './js/debug-helper.js?v=V2.1.012',
 ];
 
 // ── Install ──────────────────────────────────────────────────

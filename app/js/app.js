@@ -2453,7 +2453,8 @@ function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
     return (routeHeadingDeg + shortestDeltaDeg(routeHeadingDeg, sensorHeadingDeg) * 0.35 + 360) % 360;
   }
 
-  return sensorHeadingDeg;
+  // Eine plausible Routentangente ist nach Kurven stabiler als GPS-Heading-Rauschen.
+  return routeHeadingDeg;
 }
 
 function resolveRouteMarkerHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
@@ -2989,7 +2990,7 @@ function detectNavRoundabouts(pts, cumDists) {
     const consistency = totalTurn > 0 ? turnDeg / totalTurn : 0;
 
     if (meaningfulTurns >= 4
-        && turnDeg >= 130 && turnDeg <= 330
+        && turnDeg >= 80 && turnDeg <= 330
         && arcLengthM >= 20 && arcLengthM <= 130
         && chordM / arcLengthM <= 0.9
         && estimatedRadiusM >= 4 && estimatedRadiusM <= 35

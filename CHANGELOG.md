@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.1.012 - 2026-07-28
+- verbleibenden Positionsnachlauf des Navigationsmarkers um 5 % reduziert
+- konkurrierende Kameraanimationen entfernt
+- Kameraschritte bei hohen Geschwindigkeiten zeitbasiert begrenzt
+- Kartenruckeln bei höheren Fahrgeschwindigkeiten reduziert
+- beschleunigte und stabile Kartenausrichtung nach Kurven ergänzt
+- stabile Routentangente gegenüber kleinen GPS-Heading-Schwankungen priorisiert
+- Kreisverkehrerkennung für typische 90-Grad-Durchfahrten wiederhergestellt
+- bestehende Positionsprognose und Kurvendämpfung beibehalten
+
 ## V2.1.011 - 2026-07-26
 - flüssige Positionsvorausberechnung des Navigationsmarkers wieder aktiviert
 - volle Vorausberechnung bei gerader Fahrt wiederhergestellt

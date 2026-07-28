@@ -26,6 +26,9 @@ let navLastBearingTs = 0;
 let navCameraViewState = null;
 let navCameraFollowOptions = null;
 let navTurnBoostUntil = 0;
+let navTurnRecoveryActive = false;
+let navCameraSyncTs = 0;
+let navCameraCenter = null;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -72,6 +75,9 @@ function resetNavBearingState() {
   navCameraViewState = null;
   navCameraFollowOptions = null;
   navTurnBoostUntil = 0;
+  navTurnRecoveryActive = false;
+  navCameraSyncTs = 0;
+  navCameraCenter = null;
 }
 
 function ensureGpsAnimState() {
@@ -176,7 +182,7 @@ function runGpsMarkerAnimation(ts) {
     turnProfile = getMarkerTurnProfile();
   }
 
-  const posTau = motionProfile === 'calm' ? 260 : (motionProfile === 'direct' ? 110 : 190);
+  const posTau = motionProfile === 'calm' ? 247 : (motionProfile === 'direct' ? 104.5 : 180.5);
   let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
   let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
@@ -358,6 +364,7 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   const absDelta = Math.abs(delta);
   if (absDelta > 30) {
     navTurnBoostUntil = nowTs + 1100;
+    navTurnRecoveryActive = true;
   }
   let smoothing = (speedKmh != null && speedKmh < 5) ? 0.15 : ((speedKmh != null && speedKmh < 15) ? 0.23 : 0.34);
   let deadZone = (speedKmh != null && speedKmh < 5) ? 3.0 : ((speedKmh != null && speedKmh < 15) ? 1.6 : 0.8);
@@ -381,9 +388,11 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
   }
 
   // Nach dem Abbiegen auf die kommende Gerade zuegig, aber weich einrasten.
-  if (absDelta < 16 && (speedKmh == null || speedKmh >= 8)) {
-    smoothing = Math.max(smoothing, 0.40);
+  if (navTurnRecoveryActive && absDelta < 16 && (speedKmh == null || speedKmh >= 8)) {
+    smoothing = Math.max(smoothing, 0.72);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 220);
     deadZone = Math.min(deadZone, 0.32);
+    if (absDelta < 1.2) navTurnRecoveryActive = false;
   }
 
   if (speedKmh != null && speedKmh < 8 && absDelta > 120 && movedM < 2.5) {
@@ -1005,62 +1014,33 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null) {
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   navCameraFollowOptions = opts;
-  const isLandscapeMobile = isLandscapeTouchDevice();
-
-  // Strict-Follow fuer Landscape: verhindert Animationsdrift,
-  // wodurch der Marker sporadisch oben/aus dem Fokus landen kann.
-  if (isLandscapeMobile) {
-    map.stop();
-    map.jumpTo(opts);
-    updateStopPoiVisibility();
-    return;
-  }
-
-  const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
-  const mapBearing = normalizeDeg(map.getBearing());
-  const turnDelta = Math.abs(shortestDegDelta(mapBearing, bearing));
-
-  // Drift-Guard: Wenn der Fahrmarker nach mehreren Kurven sichtbar aus dem Fahrerfokus
-  // rutscht, sofort hart neu zentrieren statt weiter weich zu animieren.
-  let hardRecenter = false;
-  const canvas = map.getCanvas();
-  if (canvas) {
-    const w = Math.max(1, canvas.clientWidth || 0);
-    const h = Math.max(1, canvas.clientHeight || 0);
-    const projected = map.project([lon, lat]);
-    const pad = opts && opts.padding ? opts.padding : { top: 0, right: 0, bottom: 0, left: 0 };
-    const targetX = (w + (pad.left || 0) - (pad.right || 0)) * 0.5;
-    const targetY = (h + (pad.top || 0) - (pad.bottom || 0)) * 0.5;
-    const dx = Math.abs(projected.x - targetX);
-    const dy = Math.abs(projected.y - targetY);
-    hardRecenter = dx > (w * 0.14) || dy > (h * 0.18);
-  }
-
-  if (hardRecenter) {
-    map.stop();
-    map.jumpTo(opts);
-    updateStopPoiVisibility();
-    return;
-  }
-
-  let duration = 560;
-  if (turnDelta > 75) duration = 180;
-  else if (turnDelta > 45) duration = 220;
-  else if (turnDelta > 20) duration = 300;
-  else if (speedKmh != null && speedKmh < 8) duration = 360;
-  else duration = 340;
-
-  // Stauende Kamera-Animationen konsequent abbrechen, damit der Marker nie "hinterherhaengt".
-  map.stop();
-  map.easeTo({ ...opts, duration, easing: t => t * t * (3 - 2 * t) });
   updateStopPoiVisibility();
 }
 
 function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
+  const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const dt = navCameraSyncTs > 0 ? Math.min(120, Math.max(8, nowTs - navCameraSyncTs)) : 16;
+  navCameraSyncTs = nowTs;
+  const currentBearing = normalizeDeg(map.getBearing());
+  const bearingDelta = shortestDegDelta(currentBearing, navCameraFollowOptions.bearing);
+  const bearingAlpha = 1 - Math.exp(-dt / 120);
+  const maxBearingStep = 220 * dt / 1000;
+  const wantedBearingStep = bearingDelta * bearingAlpha;
+  const bearingStep = Math.sign(wantedBearingStep)
+    * Math.min(Math.abs(wantedBearingStep), maxBearingStep);
+  if (!navCameraCenter) navCameraCenter = { lon, lat };
+  const centerDistanceM = haversineMeters(navCameraCenter.lat, navCameraCenter.lon, lat, lon);
+  const maxCenterStepM = 55 * dt / 1000;
+  const centerFraction = centerDistanceM > maxCenterStepM
+    ? maxCenterStepM / centerDistanceM
+    : 1;
+  navCameraCenter.lon += (lon - navCameraCenter.lon) * centerFraction;
+  navCameraCenter.lat += (lat - navCameraCenter.lat) * centerFraction;
   map.jumpTo({
     ...navCameraFollowOptions,
-    center: [lon, lat]
+    center: [navCameraCenter.lon, navCameraCenter.lat],
+    bearing: normalizeDeg(currentBearing + bearingStep)
   });
 }
 
