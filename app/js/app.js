@@ -2427,6 +2427,24 @@ function navGetRouteHeadingAtIndex(pts, idx) {
   return bearingDeg(latA, lonA, latB, lonB);
 }
 
+function navGetStableRouteTangent(pts, idx, routeHeadingDeg) {
+  if (!Array.isArray(pts) || pts.length < 2 || !Number.isFinite(routeHeadingDeg)) return null;
+  const startIdx = Math.max(0, Math.min(pts.length - 2, Math.floor(idx)));
+  let checkedDistanceM = 0;
+
+  for (let i = startIdx; i < pts.length - 1 && checkedDistanceM < 18; i++) {
+    const [latA, lonA] = navGetLatLon(pts[i]);
+    const [latB, lonB] = navGetLatLon(pts[i + 1]);
+    const segmentDistanceM = haversineM(latA, lonA, latB, lonB);
+    if (segmentDistanceM < 0.5) continue;
+    const segmentHeading = bearingDeg(latA, lonA, latB, lonB);
+    if (Math.abs(shortestDeltaDeg(routeHeadingDeg, segmentHeading)) > 10) return null;
+    checkedDistanceM += segmentDistanceM;
+  }
+
+  return checkedDistanceM >= 10 ? routeHeadingDeg : null;
+}
+
 function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
   const hasRoute = Number.isFinite(routeHeadingDeg);
   const hasSensor = Number.isFinite(sensorHeadingDeg);
@@ -2800,17 +2818,25 @@ function startNavigation(options = {}) {
       const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
       const sensorHeading = smoothHeading(heading);
       const routeHeading = navGetRouteHeadingAtIndex(pts, tracked.index);
-      const navHeading = resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
-      const markerHeading = tracked.snapApplied
-        ? resolveRouteMarkerHeading(sensorHeading, tracked.routeHeading, smoothed.speed)
-        : navHeading;
+      const stableRouteTangent = tracked.snapApplied
+        ? navGetStableRouteTangent(pts, tracked.index, tracked.routeHeading)
+        : null;
+      const hasStableRouteTangent = Number.isFinite(stableRouteTangent);
+      const navHeading = hasStableRouteTangent
+        ? stableRouteTangent
+        : resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
+      const markerHeading = hasStableRouteTangent
+        ? stableRouteTangent
+        : (tracked.snapApplied
+          ? resolveRouteMarkerHeading(sensorHeading, tracked.routeHeading, smoothed.speed)
+          : navHeading);
 
       recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
       // Marker und Kamera immer auf denselben (gesnappten) Trackpunkt setzen,
       // damit der Pfeil nicht von der Route wegdriftet.
-      setSimulatedGPS(tracked.lon, tracked.lat, markerHeading, smoothed.speed);
-      navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed);
+      setSimulatedGPS(tracked.lon, tracked.lat, markerHeading, smoothed.speed, hasStableRouteTangent);
+      navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed, hasStableRouteTangent);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';

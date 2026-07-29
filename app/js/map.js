@@ -13,6 +13,7 @@ let pmtilesProto = null;
 const BUS_HEADING_OFFSET_DEG = 0;
 const GPS_MARKER_PREDICT_MAX_MS = 1200;
 const GPS_MARKER_PREDICT_MAX_M = 12;
+const GPS_MARKER_PREDICT_FAST_MAX_M = 31;
 const GPS_MARKER_TARGET_MIN_MS = 250;
 const GPS_MARKER_TARGET_MAX_MS = 2500;
 const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
@@ -103,6 +104,8 @@ function ensureGpsAnimState() {
       currentHeading: 0,
       targetHeading: 0,
       hasHeading: false,
+      targetHeadingStable: false,
+      currentSpeedMps: null,
       lastTs: 0
     };
   }
@@ -182,7 +185,14 @@ function runGpsMarkerAnimation(ts) {
     turnProfile = getMarkerTurnProfile();
   }
 
-  const posTau = motionProfile === 'calm' ? 247 : (motionProfile === 'direct' ? 104.5 : 180.5);
+  const basePosTau = motionProfile === 'calm' ? 247 : (motionProfile === 'direct' ? 104.5 : 180.5);
+  const speedKmh = Number.isFinite(state.currentSpeedMps) && state.currentSpeedMps >= 0
+    ? state.currentSpeedMps * 3.6
+    : null;
+  const highSpeedFactor = speedKmh != null && speedKmh > 50
+    ? 1 - Math.min(1, (speedKmh - 50) / 80) * 0.38
+    : 1;
+  const posTau = Math.max(90, basePosTau * highSpeedFactor);
   let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
   let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
@@ -199,6 +209,10 @@ function runGpsMarkerAnimation(ts) {
     turnTau *= 0.65;
     maxTurnRate *= 1.25;
   }
+  if (state.targetHeadingStable && absHeadingDelta > 1.2) {
+    turnTau *= 0.42;
+    maxTurnRate = Math.max(maxTurnRate, 420);
+  }
   const headingAlpha = 1 - Math.exp(-dt / turnTau);
   let headingStep = headingDelta * headingAlpha;
   const maxHeadingStep = maxTurnRate * (dt / 1000);
@@ -214,7 +228,7 @@ function runGpsMarkerAnimation(ts) {
   gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
 }
 
-function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null, predictPosition = true) {
+function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null, predictPosition = true, headingStable = false) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
   const marker = ensureGpsMarkerExists([lon, lat]);
   if (!marker) return;
@@ -268,9 +282,12 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
             + previousPredictLatPerMs * state.predictLatPerMs)
           / (previousPredictSpeed * predictSpeed)))
         : 1;
+      const speedPredictMaxM = Number.isFinite(speedMps) && speedMps >= 0
+        ? Math.max(GPS_MARKER_PREDICT_MAX_M, Math.min(GPS_MARKER_PREDICT_FAST_MAX_M, speedMps * 0.85))
+        : GPS_MARKER_PREDICT_MAX_M;
       state.predictMaxMs = Math.min(
         GPS_MARKER_PREDICT_MAX_MS,
-        GPS_MARKER_PREDICT_MAX_M * targetDt / targetDistanceM
+        speedPredictMaxM * targetDt / targetDistanceM
       ) * directionFactor;
     } else {
       state.predictLonPerMs = 0;
@@ -308,6 +325,8 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
   }
   state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
   state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
+  state.targetHeadingStable = headingStable === true;
+  state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
 
   if (first || immediate) {
     state.currentLon = lon;
@@ -327,7 +346,7 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
   }
 }
 
-function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
+function resolveNavBearing(lon, lat, headingDeg, speedMps = null, headingStable = false) {
   let candidate = null;
   const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const speedKmh = (speedMps != null && Number.isFinite(speedMps) && speedMps >= 0) ? speedMps * 3.6 : null;
@@ -385,6 +404,12 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null) {
     smoothing = Math.max(smoothing, 0.75);
     maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 285);
     deadZone = Math.min(deadZone, 0.35);
+  }
+
+  if (headingStable && absDelta > 0.35) {
+    smoothing = Math.max(smoothing, 0.78);
+    maxTurnRateDegPerSec = Math.max(maxTurnRateDegPerSec, 240);
+    deadZone = Math.min(deadZone, 0.28);
   }
 
   // Nach dem Abbiegen auf die kommende Gerade zuegig, aber weich einrasten.
@@ -1009,9 +1034,9 @@ window.addEventListener('orientationchange', () => {
 });
 
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
-function navCenterOn(lon, lat, headingDeg, speedMps = null) {
+function navCenterOn(lon, lat, headingDeg, speedMps = null, headingStable = false) {
   if (!map) return;
-  const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps);
+  const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps, headingStable);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   navCameraFollowOptions = opts;
   updateStopPoiVisibility();
@@ -1175,7 +1200,7 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 }
 
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
-function setSimulatedGPS(lon, lat, headingDeg, speedMps = null) {
+function setSimulatedGPS(lon, lat, headingDeg, speedMps = null, headingStable = false) {
   if (!map) return;
-  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps);
+  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps, true, headingStable);
 }

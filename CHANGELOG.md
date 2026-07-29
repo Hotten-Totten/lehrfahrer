@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.1.013 - 2026-07-29
+- geschwindigkeitsabhängige Positionsprognose bis maximal 31 Meter und 1,2 Sekunden ergänzt
+- Markerinterpolation oberhalb von 50 km/h gezielt beschleunigt
+- Positionsnachlauf bei höheren Geschwindigkeiten deutlich reduziert
+- stabile Routentangente über die vorausliegenden 10 bis 18 Meter geprüft
+- schnellere Ausrichtung von Marker und Karte erst nach bestätigtem Kurvenausgang
+- weiche Rotation innerhalb von Kurven beibehalten
+- Kreisverkehrerkennung und Ansagelogik unverändert gelassen
+
 ## V2.1.012 - 2026-07-28
 - verbleibenden Positionsnachlauf des Navigationsmarkers um 5 % reduziert
 - konkurrierende Kameraanimationen entfernt
