@@ -2429,20 +2429,28 @@ function navGetRouteHeadingAtIndex(pts, idx) {
 
 function navGetStableRouteTangent(pts, idx, routeHeadingDeg) {
   if (!Array.isArray(pts) || pts.length < 2 || !Number.isFinite(routeHeadingDeg)) return null;
-  const startIdx = Math.max(0, Math.min(pts.length - 2, Math.floor(idx)));
+  const centerIdx = Math.max(0, Math.min(pts.length - 2, Math.floor(idx)));
+  const startIdx = Math.max(0, centerIdx - 1);
   let checkedDistanceM = 0;
+  let sinSum = 0;
+  let cosSum = 0;
 
-  for (let i = startIdx; i < pts.length - 1 && checkedDistanceM < 18; i++) {
+  for (let i = startIdx; i < pts.length - 1 && checkedDistanceM < 32; i++) {
     const [latA, lonA] = navGetLatLon(pts[i]);
     const [latB, lonB] = navGetLatLon(pts[i + 1]);
     const segmentDistanceM = haversineM(latA, lonA, latB, lonB);
     if (segmentDistanceM < 0.5) continue;
     const segmentHeading = bearingDeg(latA, lonA, latB, lonB);
-    if (Math.abs(shortestDeltaDeg(routeHeadingDeg, segmentHeading)) > 10) return null;
+    const distanceWeight = Math.max(0.35, 1 - checkedDistanceM / 48);
+    const weight = Math.min(segmentDistanceM, 12) * distanceWeight;
+    sinSum += Math.sin(segmentHeading * Math.PI / 180) * weight;
+    cosSum += Math.cos(segmentHeading * Math.PI / 180) * weight;
     checkedDistanceM += segmentDistanceM;
   }
 
-  return checkedDistanceM >= 10 ? routeHeadingDeg : null;
+  if (checkedDistanceM < 12 || (sinSum === 0 && cosSum === 0)) return null;
+  const tangent = (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
+  return Math.abs(shortestDeltaDeg(routeHeadingDeg, tangent)) <= 60 ? tangent : null;
 }
 
 function resolveStableNavHeading(sensorHeadingDeg, routeHeadingDeg, speedMps) {
@@ -2980,7 +2988,7 @@ function detectNavRoundabouts(pts, cumDists) {
 
   const ranges = [];
   for (let start = 0; start < deltas.length; start++) {
-    if (Math.abs(deltas[start]) < 5 || Math.abs(deltas[start]) > 60) continue;
+    if (Math.abs(deltas[start]) < 2.5 || Math.abs(deltas[start]) > 60) continue;
 
     const sign = Math.sign(deltas[start]);
     let end = start;
@@ -2992,14 +3000,14 @@ function detectNavRoundabouts(pts, cumDists) {
     while (end < deltas.length) {
       const delta = deltas[end];
       const absDelta = Math.abs(delta);
-      if (absDelta > 60 || (absDelta >= 3 && Math.sign(delta) !== sign)) break;
-      if (absDelta < 3) {
+      if (absDelta > 60 || (absDelta >= 5 && Math.sign(delta) !== sign)) break;
+      if (absDelta < 2.5) {
         weakSamples++;
-        if (weakSamples > 1) break;
+        if (weakSamples > 3) break;
       } else {
         weakSamples = 0;
         meaningfulTurns++;
-        signedTurn += delta;
+        signedTurn += Math.sign(delta) === sign ? delta : 0;
         totalTurn += absDelta;
       }
       end++;
@@ -3015,12 +3023,21 @@ function detectNavRoundabouts(pts, cumDists) {
     const estimatedRadiusM = turnDeg > 0 ? arcLengthM / (turnDeg * Math.PI / 180) : Infinity;
     const consistency = totalTurn > 0 ? turnDeg / totalTurn : 0;
 
-    if (meaningfulTurns >= 4
+    const compactRoundabout = meaningfulTurns >= 4
         && turnDeg >= 80 && turnDeg <= 330
         && arcLengthM >= 20 && arcLengthM <= 130
         && chordM / arcLengthM <= 0.9
         && estimatedRadiusM >= 4 && estimatedRadiusM <= 35
-        && consistency >= 0.9) {
+        && consistency >= 0.9;
+    const turboRoundabout = meaningfulTurns >= 6
+        && turnDeg >= 105 && turnDeg <= 330
+        && arcLengthM >= 35 && arcLengthM <= 220
+        && chordM / arcLengthM <= 0.82
+        && estimatedRadiusM >= 7 && estimatedRadiusM <= 65
+        && consistency >= 0.78
+        && turnDeg / arcLengthM >= 0.72;
+
+    if (compactRoundabout || turboRoundabout) {
       ranges.push({
         startIndex: firstAnchor,
         endIndex: lastAnchor,

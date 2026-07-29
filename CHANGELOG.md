@@ -1,5 +1,17 @@
 # Changelog
 
+## V2.1.014 - 2026-07-29
+- vorausblickende, distanzgewichtete Routentangente über bis zu 32 Meter ergänzt
+- kurze Routensegmente als gemeinsamer Kurvenverlauf bewertet
+- Kartenrotation an die tatsächlich verstrichene Zeit gebunden
+- aufgestaute Rotationszeit nach unterdrückten Kleinständerungen verhindert
+- differenzabhängige Rotationsgeschwindigkeit für kleine, mittlere und große Winkelabweichungen ergänzt
+- schnelle Neuausrichtung nach Kurven als gleitenden Übergang umgesetzt
+- Hochgeschwindigkeitsinterpolation oberhalb von 50 km/h leicht verstärkt
+- Positionsnachlauf bei höheren Geschwindigkeiten weiter reduziert
+- zusätzliches Erkennungsprofil für längliche und unregelmäßige Turbokreisverkehre ergänzt
+- bestehende normale Kreisverkehrserkennung beibehalten
+
 ## V2.1.013 - 2026-07-29
 - geschwindigkeitsabhängige Positionsprognose bis maximal 31 Meter und 1,2 Sekunden ergänzt
 - Markerinterpolation oberhalb von 50 km/h gezielt beschleunigt

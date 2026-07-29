@@ -190,7 +190,7 @@ function runGpsMarkerAnimation(ts) {
     ? state.currentSpeedMps * 3.6
     : null;
   const highSpeedFactor = speedKmh != null && speedKmh > 50
-    ? 1 - Math.min(1, (speedKmh - 50) / 80) * 0.38
+    ? 1 - Math.min(1, (speedKmh - 50) / 80) * 0.48
     : 1;
   const posTau = Math.max(90, basePosTau * highSpeedFactor);
   let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
@@ -381,6 +381,10 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null, headingStable 
 
   const delta = shortestDegDelta(navCameraBearing, candidate);
   const absDelta = Math.abs(delta);
+  const dtSec = navLastBearingTs > 0
+    ? Math.min(0.35, Math.max(0.016, (nowTs - navLastBearingTs) / 1000))
+    : 0.1;
+  navLastBearingTs = nowTs;
   if (absDelta > 30) {
     navTurnBoostUntil = nowTs + 1100;
     navTurnRecoveryActive = true;
@@ -429,13 +433,13 @@ function resolveNavBearing(lon, lat, headingDeg, speedMps = null, headingStable 
     return navCameraBearing;
   }
 
-  const dtSec = navLastBearingTs > 0 ? Math.min(2, Math.max(0.2, (nowTs - navLastBearingTs) / 1000)) : 1;
   const maxStep = maxTurnRateDegPerSec * dtSec;
-  const wantedStep = delta * smoothing;
+  const referenceStepSec = 0.2;
+  const timeBasedSmoothing = 1 - Math.pow(1 - smoothing, dtSec / referenceStepSec);
+  const wantedStep = delta * timeBasedSmoothing;
   const step = Math.sign(wantedStep) * Math.min(Math.abs(wantedStep), maxStep);
 
   navCameraBearing = normalizeDeg(navCameraBearing + step);
-  navLastBearingTs = nowTs;
   return navCameraBearing;
 }
 
@@ -1049,8 +1053,11 @@ function syncNavCameraToGpsMarkerPosition(lon, lat) {
   navCameraSyncTs = nowTs;
   const currentBearing = normalizeDeg(map.getBearing());
   const bearingDelta = shortestDegDelta(currentBearing, navCameraFollowOptions.bearing);
-  const bearingAlpha = 1 - Math.exp(-dt / 120);
-  const maxBearingStep = 220 * dt / 1000;
+  const absBearingDelta = Math.abs(bearingDelta);
+  const bearingTau = absBearingDelta > 45 ? 150 : (absBearingDelta > 15 ? 190 : 270);
+  const bearingAlpha = 1 - Math.exp(-dt / bearingTau);
+  const maxBearingRate = absBearingDelta > 45 ? 180 : (absBearingDelta > 15 ? 130 : 80);
+  const maxBearingStep = maxBearingRate * dt / 1000;
   const wantedBearingStep = bearingDelta * bearingAlpha;
   const bearingStep = Math.sign(wantedBearingStep)
     * Math.min(Math.abs(wantedBearingStep), maxBearingStep);
