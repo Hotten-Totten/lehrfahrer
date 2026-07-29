@@ -20,6 +20,71 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Preflight checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Pruefe produktive JavaScript-Dateien ..."
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              build/*|editor/*|backup_liniendaten/*) continue ;;
+            esac
+            node --check "$file"
+          done < <(git ls-files -z -- '*.js')
+
+          echo "Pruefe produktive JSON-Dateien ..."
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              build/*|editor/*|backup_liniendaten/*|_linien/*|linien/test/*) continue ;;
+            esac
+            node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$file"
+          done < <(git ls-files -z -- '*.json')
+
+          if command -v php >/dev/null 2>&1; then
+            echo "Pruefe produktive PHP-Dateien ..."
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                api/pdf/test_preview.php|api/pdf/test_preview_v2.php|api/pdf/preview_v2.php) continue ;;
+              esac
+              php -l "$file"
+            done < <(git ls-files -z -- '*.php')
+          else
+            echo "::warning::PHP ist auf dem Runner nicht verfuegbar; PHP-Syntaxpruefung wird uebersprungen."
+          fi
+
+          echo "Pruefe Versionskonsistenz ..."
+          PROJECT_VERSION="$(tr -d '\r\n[:space:]' < VERSION)"
+          if [[ ! "$PROJECT_VERSION" =~ ^V[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Ungueltige Projektversion in VERSION: $PROJECT_VERSION" >&2
+            exit 1
+          fi
+
+          VERSION_FILES=(
+            index.html
+            app/index.html
+            app/sw.js
+            api/_professional_pdf.php
+            api/create_driver_documents.php
+            api/regenerate_pdfs.php
+            api/save_line.php
+          )
+          for file in "${VERSION_FILES[@]}"; do
+            if ! grep -Fq "$PROJECT_VERSION" "$file"; then
+              echo "Versionsabweichung: $PROJECT_VERSION fehlt in $file" >&2
+              exit 1
+            fi
+          done
+
+          CACHE_VERSION="${PROJECT_VERSION#V}"
+          CACHE_VERSION="${CACHE_VERSION//./}"
+          if ! grep -Fq "lehrfahrer-app-v${CACHE_VERSION}" app/sw.js; then
+            echo "Versionsabweichung im Service-Worker-Cache: erwartet lehrfahrer-app-v${CACHE_VERSION}" >&2
+            exit 1
+          fi
+
+          git diff --check
+
       - name: Prepare SSH client
         shell: bash
         run: |
@@ -51,34 +116,47 @@ jobs:
           TARGET="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}:./${REMOTE_PATH}"
           SSH_CMD="ssh -p ${{ secrets.STRATO_PORT }} -o UpdateHostKeys=no -o StrictHostKeyChecking=accept-new"
           RSYNC_FLAGS="-az --omit-dir-times --no-perms --no-owner --no-group"
+          RSYNC_EXCLUDES=(
+            --exclude ".git/"
+            --exclude ".github/"
+            --exclude ".vscode/"
+            --exclude "WorkingSystem/"
+            --exclude "Offlinekarten/"
+            --exclude "backup/"
+            --exclude "backup_liniendaten/"
+            --exclude "autosave/"
+            --exclude "build/"
+            --exclude "editor/"
+            --exclude "docs/"
+            --exclude "deploy/"
+            --exclude "_linien/"
+            --exclude "linien/test/"
+            --exclude "app5/"
+            --exclude "app6/"
+            --exclude "node_modules/"
+            --exclude "api/pdf/test_preview.php"
+            --exclude "api/pdf/test_preview_v2.php"
+            --exclude "api/pdf/preview_v2.php"
+            --exclude "*.bak"
+            --exclude "*.tmp"
+            --exclude "*.log"
+            --exclude "*.swp"
+            --exclude "*.orig"
+            --exclude "*.rej"
+            --exclude "*~"
+            --exclude ".DS_Store"
+            --exclude "Thumbs.db"
+          )
 
           if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
             rsync $RSYNC_FLAGS \
-              --exclude ".git/" \
-              --exclude ".github/" \
-              --exclude "WorkingSystem/" \
-              --exclude "Offlinekarten/" \
-              --exclude "backup/" \
-              --exclude "_linien/" \
-              --exclude "app5/" \
-              --exclude "app6/" \
-              --exclude "node_modules/" \
-              --exclude "*.log" \
+              "${RSYNC_EXCLUDES[@]}" \
               -e "$SSH_CMD -i ~/.ssh/id_rsa" \
               ./ "$TARGET"
           else
             export SSHPASS="${{ secrets.STRATO_PASSWORD }}"
             sshpass -e rsync $RSYNC_FLAGS \
-              --exclude ".git/" \
-              --exclude ".github/" \
-              --exclude "WorkingSystem/" \
-              --exclude "Offlinekarten/" \
-              --exclude "backup/" \
-              --exclude "_linien/" \
-              --exclude "app5/" \
-              --exclude "app6/" \
-              --exclude "node_modules/" \
-              --exclude "*.log" \
+              "${RSYNC_EXCLUDES[@]}" \
               -e "$SSH_CMD" \
               ./ "$TARGET"
           fi
