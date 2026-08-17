@@ -99,6 +99,7 @@ const refreshLinesBtn  = document.getElementById('refreshLinesBtn');
 const fullscreenBtn    = document.getElementById('fullscreenBtn');
 const settingsBtn      = document.getElementById('settingsBtn');
 const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
+const map2dToggleBtn   = document.getElementById('map2dToggleBtn');
 const startupDownloadOverlay = document.getElementById('startupDownloadOverlay');
 const startupDownloadText = document.getElementById('startupDownloadText');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -163,6 +164,7 @@ const MARKER_TURN_PROFILE_KEY = 'lehrfahrer_marker_turn_profile';
 const GHOST_STOPS_VISIBLE_KEY = 'lehrfahrer_show_ghost_stops';
 const PUNCTUALITY_ENABLED_KEY = 'lehrfahrer_show_punctuality';
 const PUNCTUALITY_DEPARTURE_TIME_KEY = 'lehrfahrer_punctuality_departure_time';
+const MAP_2D_MODE_KEY = 'lehrfahrer_map_2d_mode';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 let refreshInProgress = false;
 
@@ -178,6 +180,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.warn('IndexedDB nicht verfuegbar. Offline-Speicher ist deaktiviert:', err);
   }
   initMap();
+  initMap2DMode();
   initNavPerfDebugHud();
   bindEvents();
   detectOffline();
@@ -2321,6 +2324,39 @@ function capitalizeCity(str) {
 function getMapPerspective() {
   const checked = document.querySelector('input[name="mapPerspective"]:checked');
   return checked ? checked.value : 'driver';
+}
+
+function initMap2DMode() {
+  if (!map2dToggleBtn) return;
+
+  let enabled = false;
+  try {
+    enabled = localStorage.getItem(MAP_2D_MODE_KEY) === '1';
+  } catch {
+    enabled = false;
+  }
+
+  const applyMode = nextEnabled => {
+    enabled = !!nextEnabled;
+    map2dToggleBtn.classList.toggle('is-active', enabled);
+    map2dToggleBtn.setAttribute('aria-pressed', String(enabled));
+    map2dToggleBtn.title = enabled
+      ? '2D-Draufsicht aktiv – klicken für Fahrersicht'
+      : '2D-Draufsicht einschalten';
+    if (typeof setMap2DMode === 'function') {
+      setMap2DMode(enabled);
+    }
+  };
+
+  applyMode(enabled);
+  map2dToggleBtn.addEventListener('click', () => {
+    applyMode(!enabled);
+    try {
+      localStorage.setItem(MAP_2D_MODE_KEY, enabled ? '1' : '0');
+    } catch {
+      // Der Modus funktioniert weiterhin, auch wenn lokales Speichern blockiert ist.
+    }
+  });
 }
 
 function getCameraProfile() {

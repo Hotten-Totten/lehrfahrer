@@ -30,6 +30,7 @@ let navTurnBoostUntil = 0;
 let navTurnRecoveryActive = false;
 let navCameraSyncTs = 0;
 let navCameraCenter = null;
+let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -79,6 +80,23 @@ function resetNavBearingState() {
   navTurnRecoveryActive = false;
   navCameraSyncTs = 0;
   navCameraCenter = null;
+}
+
+function setMap2DMode(enabled) {
+  map2DModeEnabled = !!enabled;
+  if (!map) return;
+
+  const navMode = document.body.classList.contains('nav-mode');
+  const perspective = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
+  const restoredPitch = navMode && navCameraViewState && Number.isFinite(navCameraViewState.pitch)
+    ? navCameraViewState.pitch
+    : (perspective === 'driver' ? 60 : 0);
+  const pitch = map2DModeEnabled ? 0 : restoredPitch;
+
+  if (navCameraFollowOptions) {
+    navCameraFollowOptions = { ...navCameraFollowOptions, pitch };
+  }
+  map.jumpTo({ pitch });
 }
 
 function ensureGpsAnimState() {
@@ -1192,7 +1210,8 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
       }
 
       const finalZoom = navMode ? navCameraViewState.zoom : driverZoom;
-      const finalPitch = navMode ? navCameraViewState.pitch : pitch;
+      const calculatedPitch = navMode ? navCameraViewState.pitch : pitch;
+      const finalPitch = map2DModeEnabled ? 0 : calculatedPitch;
       const finalTop = navMode ? Math.round(navCameraViewState.top) : forwardTop;
       const finalBottom = navMode ? Math.round(navCameraViewState.bottom) : forwardBottom;
       return {
