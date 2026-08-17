@@ -1726,6 +1726,7 @@ function displayRoute(data) {
   // Karte
   if (data.routePoints && data.routePoints.length) {
     showRoute(data.routePoints);
+    applyTabletRoutePresentation();
   }
   showStops(visibleStops, (i, stop) => {
     flyToStop(stop);
@@ -1761,6 +1762,26 @@ function displayRoute(data) {
   } else {
     console.log('❌ No routePoints, hiding navigateToStartBtn');
     navigateToStartBtn.style.display = 'none';
+  }
+}
+
+function applyTabletRoutePresentation() {
+  if (!window.matchMedia('(orientation: landscape) and (min-width: 951px) and (max-width: 1450px)').matches) return;
+
+  const applyPaint = () => {
+    if (!map || !map.getLayer('route-shadow') || !map.getLayer('route-line')) return false;
+    map.setPaintProperty('route-shadow', 'line-color', '#3f0710');
+    map.setPaintProperty('route-shadow', 'line-width', 18);
+    map.setPaintProperty('route-shadow', 'line-opacity', 0.72);
+    map.setPaintProperty('route-shadow', 'line-blur', 1.5);
+    map.setPaintProperty('route-line', 'line-color', '#f20d20');
+    map.setPaintProperty('route-line', 'line-width', 10);
+    map.setPaintProperty('route-line', 'line-opacity', 1);
+    return true;
+  };
+
+  if (!applyPaint() && map) {
+    map.once('idle', applyPaint);
   }
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.016 - 2026-08-17
+- Tablet-Querformat auf 63 % Karte und 37 % Informationsspalte angepasst
+- rechte Informationsspalte kompakter gestaltet
+- Routenlinie auf 10 px verbreitert
+- kontrastreichen 18-px-Halo für bessere Routensichtbarkeit ergänzt
+
 ## V2.1.015 - 2026-08-17
 - neues 8,7"-Tablet-Querformat-Layout für die Fahrer-App
 - Kartenbereich links auf ca. 58 % gesetzt

@@ -1750,8 +1750,8 @@ body.nav-mode #navHud {
 @media (orientation: landscape) and (min-width: 951px) and (max-width: 1450px) {
   :root {
     --tablet-status-h: 72px;
-    --tablet-map-w: 58vw;
-    --tablet-rail-w: 42vw;
+    --tablet-map-w: 63vw;
+    --tablet-rail-w: 37vw;
   }
 
   body.nav-mode #map {
@@ -1759,7 +1759,8 @@ body.nav-mode #navHud {
     right: var(--tablet-rail-w);
     bottom: var(--safe-bottom);
     width: auto;
-    border-right: 2px solid rgba(74, 158, 255, 0.42);
+    border-right: 2px solid rgba(74, 158, 255, 0.55);
+    background: #dce4ef;
   }
 
   #navHud {
@@ -1856,8 +1857,8 @@ body.nav-mode #navHud {
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-    gap: 22px;
-    padding: 18px 22px;
+    gap: 16px;
+    padding: 16px 18px;
     background: linear-gradient(145deg, rgba(24, 45, 82, 0.98), rgba(12, 22, 43, 0.98));
     border: 2px solid rgba(74, 158, 255, 0.55);
     border-radius: 14px;
@@ -1865,9 +1866,9 @@ body.nav-mode #navHud {
   }
 
   #navArrow {
-    flex: 0 0 96px;
-    width: 96px;
-    height: 96px;
+    flex: 0 0 88px;
+    width: 88px;
+    height: 88px;
   }
 
   #navInstruction {
@@ -1878,14 +1879,14 @@ body.nav-mode #navHud {
   }
 
   #navLabel {
-    max-width: 330px;
-    font-size: 24px;
+    max-width: 285px;
+    font-size: 22px;
     line-height: 1.2;
     white-space: normal;
   }
 
   #navDist {
-    font-size: 42px;
+    font-size: 40px;
     line-height: 1;
     color: #70b6ff;
   }
@@ -1897,7 +1898,7 @@ body.nav-mode #navHud {
     width: calc(var(--tablet-rail-w) - 24px);
     max-height: none;
     display: flex;
-    gap: 9px;
+    gap: 7px;
     padding: 0 2px 8px;
     pointer-events: auto;
     scrollbar-width: thin;
@@ -1918,8 +1919,8 @@ body.nav-mode #navHud {
   }
 
   .nav-upcoming-item {
-    min-height: 64px;
-    padding: 10px 14px;
+    min-height: 58px;
+    padding: 8px 12px;
     border-width: 1px;
     border-radius: 9px;
     background: rgba(20, 35, 66, 0.94);
@@ -1933,18 +1934,18 @@ body.nav-mode #navHud {
   }
 
   .nav-upcoming-name {
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.25;
   }
 
-  .nav-upcoming-dist { font-size: 15px; }
+  .nav-upcoming-dist { font-size: 14px; }
 
   #navStopBar {
     left: var(--tablet-map-w);
     right: 0;
     min-height: 78px;
     gap: 12px;
-    padding: 25px 18px 10px;
+    padding: 25px 14px 10px;
     padding-bottom: calc(10px + var(--safe-bottom));
     background: linear-gradient(180deg, rgba(27, 49, 79, 0.98), rgba(13, 25, 45, 0.99));
     border-top: 2px solid var(--accent);
@@ -1964,12 +1965,12 @@ body.nav-mode #navHud {
   .nav-stop-dot { font-size: 14px; }
 
   #navStopName {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 750;
   }
 
   #navStopDist {
-    font-size: 20px;
+    font-size: 18px;
     color: #70b6ff;
   }
 
