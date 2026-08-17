@@ -1774,9 +1774,13 @@ function applyTabletRoutePresentation() {
     map.setPaintProperty('route-shadow', 'line-width', 18);
     map.setPaintProperty('route-shadow', 'line-opacity', 0.72);
     map.setPaintProperty('route-shadow', 'line-blur', 1.5);
+    map.setLayoutProperty('route-shadow', 'line-cap', 'round');
+    map.setLayoutProperty('route-shadow', 'line-join', 'round');
     map.setPaintProperty('route-line', 'line-color', '#f20d20');
     map.setPaintProperty('route-line', 'line-width', 10);
     map.setPaintProperty('route-line', 'line-opacity', 1);
+    map.setLayoutProperty('route-line', 'line-cap', 'round');
+    map.setLayoutProperty('route-line', 'line-join', 'round');
     return true;
   };
 

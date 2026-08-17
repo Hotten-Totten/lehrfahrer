@@ -1749,7 +1749,7 @@ body.nav-mode #navHud {
 /* 8.7-inch tablet landscape: driver-focused split view */
 @media (orientation: landscape) and (min-width: 951px) and (max-width: 1450px) {
   :root {
-    --tablet-status-h: 72px;
+    --tablet-status-h: 86px;
     --tablet-map-w: 63vw;
     --tablet-rail-w: 37vw;
   }
@@ -1759,8 +1759,9 @@ body.nav-mode #navHud {
     right: var(--tablet-rail-w);
     bottom: var(--safe-bottom);
     width: auto;
-    border-right: 2px solid rgba(74, 158, 255, 0.55);
+    border-right: 1px solid rgba(112, 182, 255, 0.62);
     background: #dce4ef;
+    box-shadow: 8px 0 24px rgba(2, 8, 18, 0.22);
   }
 
   #navHud {
@@ -1776,7 +1777,7 @@ body.nav-mode #navHud {
     right: 0;
     bottom: 0;
     width: var(--tablet-rail-w);
-    background: #080d1a;
+    background: linear-gradient(180deg, #091321 0%, #060c16 100%);
     pointer-events: none;
   }
 
@@ -1786,45 +1787,82 @@ body.nav-mode #navHud {
     left: 0;
     right: 0;
     height: var(--tablet-status-h);
-    grid-template-columns: minmax(210px, 0.9fr) minmax(300px, 1.35fr) minmax(245px, 0.85fr);
-    gap: 10px;
-    padding: 8px 12px;
+    display: block;
+    padding: 8px 10px;
     align-items: stretch;
-    border-bottom-width: 2px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    background: #07101f;
+    border-bottom: 1px solid rgba(112, 182, 255, 0.55);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
   }
 
   #navLineInfo,
   #navDestinationBox {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
     min-width: 0;
     justify-content: center;
-    gap: 1px;
-    padding: 6px 11px;
-    border-radius: 8px;
+    gap: 2px;
+    padding: 5px 10px;
+    border-radius: 7px;
+  }
+
+  #navLineInfo {
+    left: 10px;
+    width: 20%;
+    background: rgba(74, 158, 255, 0.12);
+    border-color: rgba(112, 182, 255, 0.45);
+    border-left: 4px solid #70b6ff;
+  }
+
+  #navDestinationBox {
+    left: calc(20% + 10px);
+    width: 17%;
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   #navLineName,
   #navDestinationName {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  #navLineName {
+    font-size: 21px;
+    line-height: 1.05;
+  }
+
+  #navDestinationName {
+    font-size: 14px;
+  }
+
+  #navCity {
+    font-size: 11px;
+  }
+
   #navCity,
   #navDestinationLabel,
   #navDestinationDist {
-    font-size: 11px;
+    font-size: 10px;
+    opacity: 0.72;
   }
 
   #navDestinationBox { display: flex; }
 
   #navRightBox {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    bottom: 8px;
+    width: 29%;
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 10px;
   }
 
   #navTimeSpeed {
@@ -1832,74 +1870,81 @@ body.nav-mode #navHud {
   }
 
   #navSpeed {
-    font-size: 36px;
+    font-size: 38px;
     line-height: 0.9;
     color: #70b6ff;
   }
 
   #navSpeedUnit { font-size: 11px; }
   #navTime { font-size: 12px; }
-  #navButtonsCompact { gap: 7px; }
+  #navButtonsCompact { gap: 5px; }
 
   #navButtonsCompact button {
-    width: 46px;
-    height: 46px;
-    border-radius: 9px;
-    font-size: 18px;
+    width: 40px;
+    height: 40px;
+    border-width: 1px;
+    border-radius: 8px;
+    font-size: 16px;
+    opacity: 0.78;
   }
 
   #navArrowSection {
     position: fixed;
-    top: calc(var(--safe-top) + var(--tablet-status-h) + 12px);
-    right: 12px;
-    width: calc(var(--tablet-rail-w) - 24px);
-    height: 180px;
+    top: calc(var(--safe-top) + 8px);
+    left: 38%;
+    right: auto;
+    width: 32%;
+    height: calc(var(--tablet-status-h) - 16px);
     flex-direction: row;
-    justify-content: flex-start;
+    justify-content: center;
     align-items: center;
-    gap: 16px;
-    padding: 16px 18px;
-    background: linear-gradient(145deg, rgba(24, 45, 82, 0.98), rgba(12, 22, 43, 0.98));
-    border: 2px solid rgba(74, 158, 255, 0.55);
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+    gap: 13px;
+    padding: 7px 16px;
+    background: linear-gradient(180deg, rgba(59, 92, 20, 0.9), rgba(42, 69, 12, 0.9));
+    border: 1px solid rgba(176, 220, 72, 0.42);
+    border-radius: 10px;
+    box-shadow: inset 0 0 18px rgba(176, 220, 72, 0.08);
   }
 
   #navArrow {
-    flex: 0 0 88px;
-    width: 88px;
-    height: 88px;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    color: #f5f8ed;
+    filter: none;
   }
 
   #navInstruction {
     min-width: 0;
-    align-items: flex-start;
-    text-align: left;
-    gap: 8px;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
   }
 
   #navLabel {
-    max-width: 285px;
-    font-size: 22px;
-    line-height: 1.2;
+    max-width: 250px;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.1;
     white-space: normal;
+    color: rgba(255, 255, 255, 0.88);
   }
 
   #navDist {
-    font-size: 40px;
+    font-size: 34px;
     line-height: 1;
-    color: #70b6ff;
+    color: #ffffff;
   }
 
   #navUpcomingStops {
-    top: calc(var(--safe-top) + var(--tablet-status-h) + 204px);
-    right: 12px;
-    bottom: calc(var(--safe-bottom) + 88px);
-    width: calc(var(--tablet-rail-w) - 24px);
+    top: calc(var(--safe-top) + var(--tablet-status-h) + 10px);
+    right: 10px;
+    bottom: calc(var(--safe-bottom) + 80px);
+    width: calc(var(--tablet-rail-w) - 20px);
     max-height: none;
     display: flex;
-    gap: 7px;
-    padding: 0 2px 8px;
+    gap: 4px;
+    padding: 0 0 6px;
     pointer-events: auto;
     scrollbar-width: thin;
   }
@@ -1910,51 +1955,80 @@ body.nav-mode #navHud {
     top: 0;
     z-index: 1;
     display: block;
-    padding: 7px 10px;
-    background: #080d1a;
-    color: #aebbd2;
+    padding: 8px 10px 7px;
+    background: #091321;
+    color: #8292aa;
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.9px;
   }
 
   .nav-upcoming-item {
+    position: relative;
     min-height: 58px;
-    padding: 8px 12px;
-    border-width: 1px;
-    border-radius: 9px;
-    background: rgba(20, 35, 66, 0.94);
+    padding: 8px 72px 8px 30px;
+    border: 0;
+    border-bottom: 1px solid rgba(139, 158, 187, 0.18);
+    border-radius: 5px;
+    background: rgba(18, 31, 52, 0.62);
+  }
+
+  .nav-upcoming-item::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border: 2px solid #a8b2c1;
+    border-radius: 50%;
+    background: #091321;
+    transform: translateY(-50%);
   }
 
   .nav-upcoming-item:first-of-type {
-    border-width: 2px;
-    border-color: var(--primary);
-    background: rgba(36, 76, 128, 0.92);
-    box-shadow: inset 4px 0 0 var(--primary);
+    border: 1px solid rgba(112, 182, 255, 0.72);
+    background: linear-gradient(90deg, rgba(40, 88, 145, 0.96), rgba(25, 54, 91, 0.9));
+    box-shadow: inset 4px 0 0 #70b6ff, 0 3px 10px rgba(0, 0, 0, 0.2);
+  }
+
+  .nav-upcoming-item:first-of-type::before {
+    border-color: #d58cff;
+    background: #9c35c8;
+    box-shadow: 0 0 0 4px rgba(156, 53, 200, 0.18);
   }
 
   .nav-upcoming-name {
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1.25;
   }
 
-  .nav-upcoming-dist { font-size: 14px; }
+  .nav-upcoming-dist { font-size: 13px; }
+
+  .nav-upcoming-dist {
+    position: absolute;
+    top: 50%;
+    right: 11px;
+    margin: 0;
+    transform: translateY(-50%);
+    color: #f0f4fa;
+  }
 
   #navStopBar {
     left: var(--tablet-map-w);
     right: 0;
-    min-height: 78px;
+    min-height: 70px;
     gap: 12px;
-    padding: 25px 14px 10px;
-    padding-bottom: calc(10px + var(--safe-bottom));
-    background: linear-gradient(180deg, rgba(27, 49, 79, 0.98), rgba(13, 25, 45, 0.99));
-    border-top: 2px solid var(--accent);
+    padding: 23px 14px 8px;
+    padding-bottom: calc(8px + var(--safe-bottom));
+    background: linear-gradient(180deg, #152d49, #0b192b);
+    border-top: 1px solid #ff8b52;
   }
 
   #navStopBar::before {
     content: 'NÄCHSTE HALTESTELLE';
     position: absolute;
-    top: 7px;
+    top: 6px;
     left: 42px;
     color: #ffbf91;
     font-size: 10px;
@@ -1965,12 +2039,12 @@ body.nav-mode #navHud {
   .nav-stop-dot { font-size: 14px; }
 
   #navStopName {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 750;
   }
 
   #navStopDist {
-    font-size: 18px;
+    font-size: 19px;
     color: #70b6ff;
   }
 
