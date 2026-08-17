@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.019 - 2026-08-17
+- 2D-Draufsicht um 1,35 Zoomstufen weiter herausgezoomt
+- Fahrzeug im 2D-Modus etwas unterhalb der Kartenmitte positioniert
+- mehr vorausliegende Route und kommende Abbiegungen sichtbar gemacht
+- perspektivischen Kartenmodus unverändert gelassen
+
 ## V2.1.016 - 2026-08-17
 - Tablet-Querformat auf 63 % Karte und 37 % Informationsspalte angepasst
 - rechte Informationsspalte kompakter gestaltet

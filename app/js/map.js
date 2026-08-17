@@ -91,12 +91,45 @@ function setMap2DMode(enabled) {
   const restoredPitch = navMode && navCameraViewState && Number.isFinite(navCameraViewState.pitch)
     ? navCameraViewState.pitch
     : (perspective === 'driver' ? 60 : 0);
-  const pitch = map2DModeEnabled ? 0 : restoredPitch;
+  let nextCamera = { pitch: map2DModeEnabled ? 0 : restoredPitch };
 
-  if (navCameraFollowOptions) {
-    navCameraFollowOptions = { ...navCameraFollowOptions, pitch };
+  if (navMode && navCameraFollowOptions) {
+    if (map2DModeEnabled) {
+      nextCamera = apply2DCameraFraming(navCameraFollowOptions, true);
+    } else if (navCameraViewState) {
+      nextCamera = {
+        ...navCameraFollowOptions,
+        zoom: navCameraViewState.zoom,
+        pitch: navCameraViewState.pitch,
+        padding: {
+          top: Math.round(navCameraViewState.top),
+          bottom: Math.round(navCameraViewState.bottom),
+          left: 0,
+          right: 0
+        }
+      };
+    }
+    navCameraFollowOptions = nextCamera;
   }
-  map.jumpTo({ pitch });
+  map.jumpTo(nextCamera);
+}
+
+function apply2DCameraFraming(options, navMode) {
+  const vh = Math.max(320, window.innerHeight || 0);
+  const zoomReduction = navMode ? 1.35 : 0.9;
+  const topPadding = navMode
+    ? Math.round(Math.min(300, Math.max(150, vh * 0.30)))
+    : Math.round(Math.min(150, Math.max(60, vh * 0.16)));
+  const bottomPadding = navMode
+    ? Math.round(Math.min(105, Math.max(55, vh * 0.09)))
+    : Math.round(Math.min(110, Math.max(55, vh * 0.08)));
+
+  return {
+    ...options,
+    zoom: Math.max(15.5, options.zoom - zoomReduction),
+    pitch: 0,
+    padding: { top: topPadding, bottom: bottomPadding, left: 0, right: 0 }
+  };
 }
 
 function ensureGpsAnimState() {
@@ -1211,16 +1244,16 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 
       const finalZoom = navMode ? navCameraViewState.zoom : driverZoom;
       const calculatedPitch = navMode ? navCameraViewState.pitch : pitch;
-      const finalPitch = map2DModeEnabled ? 0 : calculatedPitch;
       const finalTop = navMode ? Math.round(navCameraViewState.top) : forwardTop;
       const finalBottom = navMode ? Math.round(navCameraViewState.bottom) : forwardBottom;
-      return {
+      const cameraOptions = {
         center:  [lon, lat],
         zoom:    finalZoom,
-        pitch:   finalPitch,
+        pitch:   calculatedPitch,
         bearing: headingDeg != null ? headingDeg : 0,
         padding: { top: finalTop, bottom: finalBottom, left: 0, right: 0 }
       };
+      return map2DModeEnabled ? apply2DCameraFraming(cameraOptions, navMode) : cameraOptions;
     }
   }
 }
