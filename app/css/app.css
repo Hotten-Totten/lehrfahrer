@@ -1746,3 +1746,235 @@ body.nav-mode #navHud {
 #offlineNotAvailableModal.hidden {
   display: none;
 }
+/* 8.7-inch tablet landscape: driver-focused split view */
+@media (orientation: landscape) and (min-width: 951px) and (max-width: 1450px) {
+  :root {
+    --tablet-status-h: 72px;
+    --tablet-map-w: 58vw;
+    --tablet-rail-w: 42vw;
+  }
+
+  body.nav-mode #map {
+    top: calc(var(--safe-top) + var(--tablet-status-h));
+    right: var(--tablet-rail-w);
+    bottom: var(--safe-bottom);
+    width: auto;
+    border-right: 2px solid rgba(74, 158, 255, 0.42);
+  }
+
+  #navHud {
+    height: calc(100vh - var(--safe-top));
+    max-height: none;
+    background: transparent;
+  }
+
+  #navHud::before {
+    content: '';
+    position: fixed;
+    top: calc(var(--safe-top) + var(--tablet-status-h));
+    right: 0;
+    bottom: 0;
+    width: var(--tablet-rail-w);
+    background: #080d1a;
+    pointer-events: none;
+  }
+
+  #navTopBar {
+    position: fixed;
+    top: var(--safe-top);
+    left: 0;
+    right: 0;
+    height: var(--tablet-status-h);
+    grid-template-columns: minmax(210px, 0.9fr) minmax(300px, 1.35fr) minmax(245px, 0.85fr);
+    gap: 10px;
+    padding: 8px 12px;
+    align-items: stretch;
+    border-bottom-width: 2px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  #navLineInfo,
+  #navDestinationBox {
+    min-width: 0;
+    justify-content: center;
+    gap: 1px;
+    padding: 6px 11px;
+    border-radius: 8px;
+  }
+
+  #navLineName,
+  #navDestinationName {
+    font-size: 15px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #navCity,
+  #navDestinationLabel,
+  #navDestinationDist {
+    font-size: 11px;
+  }
+
+  #navDestinationBox { display: flex; }
+
+  #navRightBox {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  #navTimeSpeed {
+    padding-right: 3px;
+  }
+
+  #navSpeed {
+    font-size: 36px;
+    line-height: 0.9;
+    color: #70b6ff;
+  }
+
+  #navSpeedUnit { font-size: 11px; }
+  #navTime { font-size: 12px; }
+  #navButtonsCompact { gap: 7px; }
+
+  #navButtonsCompact button {
+    width: 46px;
+    height: 46px;
+    border-radius: 9px;
+    font-size: 18px;
+  }
+
+  #navArrowSection {
+    position: fixed;
+    top: calc(var(--safe-top) + var(--tablet-status-h) + 12px);
+    right: 12px;
+    width: calc(var(--tablet-rail-w) - 24px);
+    height: 180px;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 22px;
+    padding: 18px 22px;
+    background: linear-gradient(145deg, rgba(24, 45, 82, 0.98), rgba(12, 22, 43, 0.98));
+    border: 2px solid rgba(74, 158, 255, 0.55);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+  }
+
+  #navArrow {
+    flex: 0 0 96px;
+    width: 96px;
+    height: 96px;
+  }
+
+  #navInstruction {
+    min-width: 0;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+  }
+
+  #navLabel {
+    max-width: 330px;
+    font-size: 24px;
+    line-height: 1.2;
+    white-space: normal;
+  }
+
+  #navDist {
+    font-size: 42px;
+    line-height: 1;
+    color: #70b6ff;
+  }
+
+  #navUpcomingStops {
+    top: calc(var(--safe-top) + var(--tablet-status-h) + 204px);
+    right: 12px;
+    bottom: calc(var(--safe-bottom) + 88px);
+    width: calc(var(--tablet-rail-w) - 24px);
+    max-height: none;
+    display: flex;
+    gap: 9px;
+    padding: 0 2px 8px;
+    pointer-events: auto;
+    scrollbar-width: thin;
+  }
+
+  #navUpcomingStops::before {
+    content: 'KOMMENDE HALTESTELLEN';
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: block;
+    padding: 7px 10px;
+    background: #080d1a;
+    color: #aebbd2;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.9px;
+  }
+
+  .nav-upcoming-item {
+    min-height: 64px;
+    padding: 10px 14px;
+    border-width: 1px;
+    border-radius: 9px;
+    background: rgba(20, 35, 66, 0.94);
+  }
+
+  .nav-upcoming-item:first-of-type {
+    border-width: 2px;
+    border-color: var(--primary);
+    background: rgba(36, 76, 128, 0.92);
+    box-shadow: inset 4px 0 0 var(--primary);
+  }
+
+  .nav-upcoming-name {
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  .nav-upcoming-dist { font-size: 15px; }
+
+  #navStopBar {
+    left: var(--tablet-map-w);
+    right: 0;
+    min-height: 78px;
+    gap: 12px;
+    padding: 25px 18px 10px;
+    padding-bottom: calc(10px + var(--safe-bottom));
+    background: linear-gradient(180deg, rgba(27, 49, 79, 0.98), rgba(13, 25, 45, 0.99));
+    border-top: 2px solid var(--accent);
+  }
+
+  #navStopBar::before {
+    content: 'NÄCHSTE HALTESTELLE';
+    position: absolute;
+    top: 7px;
+    left: 42px;
+    color: #ffbf91;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+  }
+
+  .nav-stop-dot { font-size: 14px; }
+
+  #navStopName {
+    font-size: 20px;
+    font-weight: 750;
+  }
+
+  #navStopDist {
+    font-size: 20px;
+    color: #70b6ff;
+  }
+
+  body.nav-mode.panel-is-open #map {
+    left: 0 !important;
+    right: var(--tablet-rail-w) !important;
+  }
+}

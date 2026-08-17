@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.015 - 2026-08-17
+- neues 8,7"-Tablet-Querformat-Layout für die Fahrer-App
+- Kartenbereich links auf ca. 58 % gesetzt
+- Fahrerinformationen rechts auf ca. 42 % gesetzt
+- kompakte Statusleiste ergänzt
+- Fahranweisung, Geschwindigkeit und Haltestellen stärker hervorgehoben
+- Layout für Querformat zwischen ca. 951 und 1450 px optimiert
+
 ## V2.1.014 - 2026-07-29
 - vorausblickende, distanzgewichtete Routentangente über bis zu 32 Meter ergänzt
 - kurze Routensegmente als gemeinsamer Kurvenverlauf bewertet

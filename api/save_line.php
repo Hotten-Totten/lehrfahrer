@@ -314,7 +314,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     }
     $createdTimestamp = strtotime($savedAt);
     return lehrfahrer_build_professional_pdf([
-        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.014')),
+        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.015')),
         'metadata' => [
             'Linie' => preg_replace('/^Linie\s+/i', '', $lineName),
             'Route' => preg_replace('/^Route\s+/i', '', $routeName),
@@ -323,7 +323,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
             'Kategorie' => $variantCategory,
             'Gültigkeit' => $validityText,
             'Erstellt' => $createdTimestamp ? date('d.m.Y H:i', $createdTimestamp) : '',
-            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.014'))
+            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.015'))
         ],
         'description' => $description,
         'stops' => $professionalStops
