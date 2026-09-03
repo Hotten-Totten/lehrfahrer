@@ -152,6 +152,16 @@ function ensureGpsAnimState() {
       predictLonPerMs: 0,
       predictLatPerMs: 0,
       predictMaxMs: 0,
+      routePoints: null,
+      routeCumDists: null,
+      currentRouteProgressM: null,
+      targetRouteProgressM: null,
+      finalTargetRouteProgressM: null,
+      targetBlendFromRouteProgressM: null,
+      lastNormalRouteProgressM: null,
+      predictRouteProgressPerMs: 0,
+      confirmedOffRoute: false,
+      routeRejoinActive: false,
       currentHeading: 0,
       targetHeading: 0,
       hasHeading: false,
@@ -202,29 +212,56 @@ function runGpsMarkerAnimation(ts) {
   const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
   state.lastTs = ts;
 
-  let predictedLon = state.finalTargetLon;
-  let predictedLat = state.finalTargetLat;
-  if (state.predictMaxMs > 0 && state.targetReceivedTs != null) {
-    const predictMs = Math.min(state.predictMaxMs, Math.max(0, ts - state.targetReceivedTs));
-    predictedLon += state.predictLonPerMs * predictMs;
-    predictedLat += state.predictLatPerMs * predictMs;
-  }
+  const routeLocked = !state.confirmedOffRoute && state.routePoints && state.routeCumDists
+    && Number.isFinite(state.finalTargetRouteProgressM);
+  if (routeLocked) {
+    const routeEndM = state.routeCumDists[state.routeCumDists.length - 1];
+    const predictMs = state.predictMaxMs > 0 && state.targetReceivedTs != null
+      ? Math.min(state.predictMaxMs, Math.max(0, ts - state.targetReceivedTs))
+      : 0;
+    const predictedProgressM = Math.max(0, Math.min(
+      routeEndM,
+      state.finalTargetRouteProgressM + state.predictRouteProgressPerMs * predictMs
+    ));
 
-  if (state.targetBlendActive) {
-    if (state.targetBlendStartTs == null) state.targetBlendStartTs = ts;
-    const blendT = Math.min(1, Math.max(0, (ts - state.targetBlendStartTs) / 64));
-    const blendEase = blendT * blendT * (3 - 2 * blendT);
-    state.targetLon = state.targetBlendFromLon
-      + (predictedLon - state.targetBlendFromLon) * blendEase;
-    state.targetLat = state.targetBlendFromLat
-      + (predictedLat - state.targetBlendFromLat) * blendEase;
-    if (blendT >= 1) {
-      state.targetBlendActive = false;
-      state.targetBlendStartTs = null;
+    if (state.targetBlendActive) {
+      if (state.targetBlendStartTs == null) state.targetBlendStartTs = ts;
+      const blendT = Math.min(1, Math.max(0, (ts - state.targetBlendStartTs) / 64));
+      const blendEase = blendT * blendT * (3 - 2 * blendT);
+      state.targetRouteProgressM = state.targetBlendFromRouteProgressM
+        + (predictedProgressM - state.targetBlendFromRouteProgressM) * blendEase;
+      if (blendT >= 1) {
+        state.targetBlendActive = false;
+        state.targetBlendStartTs = null;
+      }
+    } else {
+      state.targetRouteProgressM = predictedProgressM;
     }
   } else {
-    state.targetLon = predictedLon;
-    state.targetLat = predictedLat;
+    let predictedLon = state.finalTargetLon;
+    let predictedLat = state.finalTargetLat;
+    if (state.predictMaxMs > 0 && state.targetReceivedTs != null) {
+      const predictMs = Math.min(state.predictMaxMs, Math.max(0, ts - state.targetReceivedTs));
+      predictedLon += state.predictLonPerMs * predictMs;
+      predictedLat += state.predictLatPerMs * predictMs;
+    }
+
+    if (state.targetBlendActive) {
+      if (state.targetBlendStartTs == null) state.targetBlendStartTs = ts;
+      const blendT = Math.min(1, Math.max(0, (ts - state.targetBlendStartTs) / 64));
+      const blendEase = blendT * blendT * (3 - 2 * blendT);
+      state.targetLon = state.targetBlendFromLon
+        + (predictedLon - state.targetBlendFromLon) * blendEase;
+      state.targetLat = state.targetBlendFromLat
+        + (predictedLat - state.targetBlendFromLat) * blendEase;
+      if (blendT >= 1) {
+        state.targetBlendActive = false;
+        state.targetBlendStartTs = null;
+      }
+    } else {
+      state.targetLon = predictedLon;
+      state.targetLat = predictedLat;
+    }
   }
 
   let motionProfile = 'balanced';
@@ -248,8 +285,31 @@ function runGpsMarkerAnimation(ts) {
   let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
   const posAlpha = 1 - Math.exp(-dt / posTau);
-  state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
-  state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
+  if (routeLocked) {
+    state.currentRouteProgressM += (state.targetRouteProgressM - state.currentRouteProgressM) * posAlpha;
+    const routePosition = routePositionAtProgress(
+      state.routePoints,
+      state.routeCumDists,
+      state.currentRouteProgressM
+    );
+    if (routePosition) {
+      if (state.routeRejoinActive) {
+        state.currentLon += (routePosition.lon - state.currentLon) * posAlpha;
+        state.currentLat += (routePosition.lat - state.currentLat) * posAlpha;
+        if (haversineMeters(state.currentLat, state.currentLon, routePosition.lat, routePosition.lon) <= 0.25) {
+          state.currentLon = routePosition.lon;
+          state.currentLat = routePosition.lat;
+          state.routeRejoinActive = false;
+        }
+      } else {
+        state.currentLon = routePosition.lon;
+        state.currentLat = routePosition.lat;
+      }
+    }
+  } else {
+    state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
+    state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
+  }
 
   const headingDelta = shortestDegDelta(state.currentHeading, state.targetHeading);
   const absHeadingDelta = Math.abs(headingDelta);
@@ -279,7 +339,19 @@ function runGpsMarkerAnimation(ts) {
   gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
 }
 
-function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, speedMps = null, predictPosition = true, headingStable = false) {
+function setGpsMarkerTarget(
+  lon,
+  lat,
+  headingDeg = null,
+  immediate = false,
+  speedMps = null,
+  predictPosition = true,
+  headingStable = false,
+  routePoints = null,
+  routeCumDists = null,
+  routeProgressM = null,
+  confirmedOffRoute = false
+) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
   const marker = ensureGpsMarkerExists([lon, lat]);
   if (!marker) return;
@@ -287,6 +359,155 @@ function setGpsMarkerTarget(lon, lat, headingDeg = null, immediate = false, spee
   const state = ensureGpsAnimState();
   const first = state.currentLon == null || state.currentLat == null;
   const targetTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const lockedRoutePosition = routePositionAtProgress(routePoints, routeCumDists, routeProgressM);
+
+  if (confirmedOffRoute && lockedRoutePosition) {
+    state.routePoints = routePoints;
+    state.routeCumDists = routeCumDists;
+    state.confirmedOffRoute = true;
+    state.routeRejoinActive = false;
+    state.targetLon = lon;
+    state.targetLat = lat;
+    state.finalTargetLon = lon;
+    state.finalTargetLat = lat;
+    state.targetBlendActive = false;
+    state.targetBlendStartTs = null;
+    state.targetReceivedTs = targetTs;
+    state.predictLonPerMs = 0;
+    state.predictLatPerMs = 0;
+    state.predictRouteProgressPerMs = 0;
+    state.predictMaxMs = 0;
+    state.lastNormalTargetLon = null;
+    state.lastNormalTargetLat = null;
+    state.lastNormalRouteProgressM = null;
+    state.lastNormalTargetTs = null;
+    state.finalTargetRouteProgressM = Number.isFinite(state.finalTargetRouteProgressM)
+      ? Math.max(state.finalTargetRouteProgressM, routeProgressM)
+      : routeProgressM;
+    state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
+    state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
+    state.targetHeadingStable = headingStable === true;
+    state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
+    if (gpsAnimFrameId == null) {
+      state.lastTs = 0;
+      gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
+    }
+    return;
+  }
+
+  if (lockedRoutePosition) {
+    const returningFromOffRoute = state.confirmedOffRoute;
+    const routeChanged = state.routePoints !== routePoints || state.routeCumDists !== routeCumDists;
+    const firstRouteTarget = routeChanged || !Number.isFinite(state.currentRouteProgressM);
+    const resetRouteTarget = firstRouteTarget || returningFromOffRoute;
+    const lockedProgressM = !routeChanged && Number.isFinite(state.finalTargetRouteProgressM)
+      ? Math.max(state.finalTargetRouteProgressM, routeProgressM)
+      : routeProgressM;
+
+    state.routePoints = routePoints;
+    state.routeCumDists = routeCumDists;
+    state.confirmedOffRoute = false;
+    state.routeRejoinActive = state.routeRejoinActive || returningFromOffRoute;
+    state.predictLonPerMs = 0;
+    state.predictLatPerMs = 0;
+    state.lastNormalTargetLon = null;
+    state.lastNormalTargetLat = null;
+
+    if (!resetRouteTarget && !immediate
+        && Number.isFinite(speedMps) && speedMps >= 0 && speedMps <= 0.35
+        && Math.abs(lockedProgressM - state.finalTargetRouteProgressM) <= 1.2) {
+      state.targetRouteProgressM = state.currentRouteProgressM;
+      state.finalTargetRouteProgressM = state.currentRouteProgressM;
+      state.targetBlendActive = false;
+      state.targetBlendStartTs = null;
+      state.lastNormalRouteProgressM = null;
+      state.lastNormalTargetTs = null;
+      state.targetReceivedTs = targetTs;
+      state.predictRouteProgressPerMs = 0;
+      state.predictMaxMs = 0;
+      return;
+    }
+
+    if (predictPosition && !resetRouteTarget && !immediate && state.lastNormalTargetTs != null) {
+      const targetDt = targetTs - state.lastNormalTargetTs;
+      const targetDistanceM = Math.abs(lockedProgressM - state.lastNormalRouteProgressM);
+      if (targetDt >= GPS_MARKER_TARGET_MIN_MS
+          && targetDt <= GPS_MARKER_TARGET_MAX_MS
+          && targetDistanceM > 0.2
+          && targetDistanceM <= GPS_MARKER_TARGET_MAX_JUMP_M
+          && targetDistanceM * 1000 / targetDt <= GPS_MARKER_TARGET_MAX_SPEED_MPS) {
+        const previousPredictProgressPerMs = state.predictRouteProgressPerMs;
+        state.predictRouteProgressPerMs = (lockedProgressM - state.lastNormalRouteProgressM) / targetDt;
+        const directionFactor = previousPredictProgressPerMs === 0
+          || Math.sign(previousPredictProgressPerMs) === Math.sign(state.predictRouteProgressPerMs)
+          ? 1
+          : 0;
+        const speedPredictMaxM = Number.isFinite(speedMps) && speedMps >= 0
+          ? Math.max(GPS_MARKER_PREDICT_MAX_M, Math.min(GPS_MARKER_PREDICT_FAST_MAX_M, speedMps * 0.85))
+          : GPS_MARKER_PREDICT_MAX_M;
+        state.predictMaxMs = Math.min(
+          GPS_MARKER_PREDICT_MAX_MS,
+          speedPredictMaxM * targetDt / targetDistanceM
+        ) * directionFactor;
+      } else {
+        state.predictRouteProgressPerMs = 0;
+        state.predictMaxMs = 0;
+      }
+    } else {
+      state.predictRouteProgressPerMs = 0;
+      state.predictMaxMs = 0;
+    }
+
+    if (resetRouteTarget || immediate) {
+      state.lastNormalRouteProgressM = null;
+      state.lastNormalTargetTs = null;
+    } else {
+      state.lastNormalRouteProgressM = lockedProgressM;
+      state.lastNormalTargetTs = targetTs;
+    }
+    state.targetReceivedTs = targetTs;
+    state.finalTargetRouteProgressM = lockedProgressM;
+    state.finalTargetLon = lockedRoutePosition.lon;
+    state.finalTargetLat = lockedRoutePosition.lat;
+    if (resetRouteTarget || immediate) {
+      state.currentRouteProgressM = lockedProgressM;
+      state.targetRouteProgressM = lockedProgressM;
+      state.targetBlendActive = false;
+      state.targetBlendStartTs = null;
+    } else {
+      state.targetBlendFromRouteProgressM = state.targetRouteProgressM;
+      state.targetBlendStartTs = null;
+      state.targetBlendActive = true;
+    }
+    state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
+    state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
+    state.targetHeadingStable = headingStable === true;
+    state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
+
+    if ((firstRouteTarget || immediate) && !returningFromOffRoute) {
+      state.currentLon = lockedRoutePosition.lon;
+      state.currentLat = lockedRoutePosition.lat;
+      state.currentHeading = state.hasHeading ? state.targetHeading : 0;
+      marker.setLngLat([state.currentLon, state.currentLat]);
+      applyGpsHeadingVisuals(state);
+    }
+    if (gpsAnimFrameId == null) {
+      state.lastTs = 0;
+      gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
+    }
+    return;
+  }
+
+  state.routePoints = null;
+  state.routeCumDists = null;
+  state.currentRouteProgressM = null;
+  state.targetRouteProgressM = null;
+  state.finalTargetRouteProgressM = null;
+  state.targetBlendFromRouteProgressM = null;
+  state.lastNormalRouteProgressM = null;
+  state.predictRouteProgressPerMs = 0;
+  state.confirmedOffRoute = false;
+  state.routeRejoinActive = false;
 
   if (!first && !immediate
       && Number.isFinite(speedMps) && speedMps >= 0 && speedMps <= 0.35
@@ -1097,6 +1318,42 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null, headingStable = fals
   updateStopPoiVisibility();
 }
 
+function routePositionAtProgress(routePoints, routeCumDists, progressM) {
+  if (!Array.isArray(routePoints) || routePoints.length < 2
+      || !Array.isArray(routeCumDists) || routeCumDists.length !== routePoints.length
+      || !Number.isFinite(progressM)) return null;
+
+  const routeEndM = routeCumDists[routeCumDists.length - 1];
+  if (!Number.isFinite(routeEndM)) return null;
+  const clampedProgressM = Math.max(0, Math.min(routeEndM, progressM));
+  let low = 0;
+  let high = routeCumDists.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (routeCumDists[mid] < clampedProgressM) low = mid + 1;
+    else high = mid;
+  }
+
+  const endIdx = Math.max(1, low);
+  const startIdx = endIdx - 1;
+  const startM = routeCumDists[startIdx];
+  const endM = routeCumDists[endIdx];
+  const segmentM = endM - startM;
+  const t = segmentM > 0 ? Math.max(0, Math.min(1, (clampedProgressM - startM) / segmentM)) : 0;
+  const start = routePoints[startIdx];
+  const end = routePoints[endIdx];
+  const startLat = Array.isArray(start) ? start[0] : start.lat;
+  const startLon = Array.isArray(start) ? start[1] : start.lon;
+  const endLat = Array.isArray(end) ? end[0] : end.lat;
+  const endLon = Array.isArray(end) ? end[1] : end.lon;
+  if (![startLat, startLon, endLat, endLon].every(Number.isFinite)) return null;
+
+  return {
+    lon: startLon + (endLon - startLon) * t,
+    lat: startLat + (endLat - startLat) * t
+  };
+}
+
 function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
   const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -1259,7 +1516,29 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
 }
 
 // ── Simulierten GPS-Punkt setzen (ohne echtes Geolocation) ───
-function setSimulatedGPS(lon, lat, headingDeg, speedMps = null, headingStable = false) {
+function setSimulatedGPS(
+  lon,
+  lat,
+  headingDeg,
+  speedMps = null,
+  headingStable = false,
+  routePoints = null,
+  routeCumDists = null,
+  routeProgressM = null,
+  confirmedOffRoute = false
+) {
   if (!map) return;
-  setGpsMarkerTarget(lon, lat, headingDeg, false, speedMps, true, headingStable);
+  setGpsMarkerTarget(
+    lon,
+    lat,
+    headingDeg,
+    false,
+    speedMps,
+    true,
+    headingStable,
+    routePoints,
+    routeCumDists,
+    routeProgressM,
+    confirmedOffRoute
+  );
 }

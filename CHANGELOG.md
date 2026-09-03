@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.1.020 - 2026-09-03
+- Anchor-Locked-Meterfortschritt für den Navigationsmarker eingeführt
+- Markerbewegung und Prediction vollständig an die Routengeometrie gebunden
+- freies Lon/Lat-Coasting entfernt
+- Kurvenabkürzungen und seitliche Pfeilverirrungen verhindert
+- schlechte oder abgelehnte Snaps bleiben route-locked
+- nur bestätigter Off-Route-Zustand zeigt geglättete reale Fahrzeugposition
+- weichen Rejoin zurück auf Anchor-Locked-Progress ergänzt
+- bestehende Prediction-, Kamera-, Bearing-, Kreisverkehrs-, Ansage-, GPS- und Snappinglogik unverändert gelassen
+
 ## V2.1.019 - 2026-08-17
 - 2D-Draufsicht um 1,35 Zoomstufen weiter herausgezoomt
 - Fahrzeug im 2D-Modus etwas unterhalb der Kartenmitte positioniert

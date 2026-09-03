@@ -2904,7 +2904,17 @@ function startNavigation(options = {}) {
 
       // Marker und Kamera immer auf denselben (gesnappten) Trackpunkt setzen,
       // damit der Pfeil nicht von der Route wegdriftet.
-      setSimulatedGPS(tracked.lon, tracked.lat, markerHeading, smoothed.speed, hasStableRouteTangent);
+      setSimulatedGPS(
+        tracked.lon,
+        tracked.lat,
+        markerHeading,
+        smoothed.speed,
+        hasStableRouteTangent,
+        pts,
+        navCumDists,
+        tracked.routeProgressM,
+        tracked.routeState === 'OFF'
+      );
       navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed, hasStableRouteTangent);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
@@ -3265,7 +3275,10 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
         lat: snapLat,
         lon: snapLon,
         index: Math.min(pts.length - 1, i + (t >= 0.5 ? 1 : 0)),
-        routeHeading: bearingDeg(aLat, aLon, bLat, bLon)
+        routeHeading: bearingDeg(aLat, aLon, bLat, bLon),
+        routeProgressM: Number.isFinite(navCumDists[i]) && Number.isFinite(navCumDists[i + 1])
+          ? lerpValue(navCumDists[i], navCumDists[i + 1], t)
+          : null
       };
     }
   }
@@ -3277,6 +3290,7 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
       lon: nLon,
       index: nearestIdx,
       routeHeading: navGetRouteHeadingAtIndex(pts, nearestIdx),
+      routeProgressM: Number.isFinite(navCumDists[nearestIdx]) ? navCumDists[nearestIdx] : null,
       distanceM: haversineM(lat, lon, nLat, nLon),
       applied: false
     };
@@ -3288,6 +3302,7 @@ function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW
     lon: best.lon,
     index: best.index,
     routeHeading: best.routeHeading,
+    routeProgressM: best.routeProgressM,
     distanceM,
     applied: distanceM <= NAV_SNAP_MAX_M
   };
@@ -3306,6 +3321,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
       lon: rawLon,
       index: navNearestIdx,
       routeHeading: navGetRouteHeadingAtIndex(pts, navNearestIdx),
+      routeProgressM: Number.isFinite(navCumDists[navNearestIdx]) ? navCumDists[navNearestIdx] : null,
       routeState: navOffRouteActive ? 'OFF' : 'ON',
       snapDistanceM: null,
       snapApplied: false
@@ -3346,7 +3362,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
   if (snapAppliedNow || !navOffRouteActive) {
     reportedIdx = snap.index;
     navNearestIdx = snap.index;
-    navProgressIdx = snap.index;
+    navProgressIdx = Math.max(navProgressIdx, snap.index);
   }
 
   noteNavRouteState(routeState, navRejoinBlend);
@@ -3357,6 +3373,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
     lon: displayLon,
     index: reportedIdx,
     routeHeading: snap.routeHeading,
+    routeProgressM: snap.routeProgressM,
     routeState,
     snapDistanceM: snap.distanceM,
     snapApplied: snapAppliedNow
@@ -3885,7 +3902,17 @@ function pushSimFrame(idx, speedMps) {
 
   const tracked = resolveNavTrackPoint(lat, lon, pts);
   recordNavDriveSample(lat, lon, tracked, speedMps, heading);
-  setSimulatedGPS(tracked.lon, tracked.lat, heading, speedMps);
+  setSimulatedGPS(
+    tracked.lon,
+    tracked.lat,
+    heading,
+    speedMps,
+    false,
+    pts,
+    navCumDists,
+    tracked.routeProgressM,
+    false
+  );
   simCenterOn(tracked.lon, tracked.lat, smoothHeading(heading), speedMps);
   updateNavHud(tracked.lat, tracked.lon, tracked.index);
 
