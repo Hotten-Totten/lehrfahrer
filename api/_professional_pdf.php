@@ -22,7 +22,7 @@ final class LehrfahrerProfessionalPdf {
     private array $metadata = [];
 
     public function __construct(string $version) {
-        $this->version = $version !== '' ? $version : 'V2.1.020';
+        $this->version = $version !== '' ? $version : 'V2.1.021';
         $this->newPage(false);
     }
 
@@ -232,7 +232,7 @@ final class LehrfahrerProfessionalPdf {
 }
 
 function lehrfahrer_build_professional_pdf(array $document): string {
-    $pdf = new LehrfahrerProfessionalPdf((string)($document['version'] ?? 'V2.1.020'));
+    $pdf = new LehrfahrerProfessionalPdf((string)($document['version'] ?? 'V2.1.021'));
     $pdf->header(is_array($document['metadata'] ?? null) ? $document['metadata'] : []);
     $pdf->infoBox((string)($document['description'] ?? ''));
     $pdf->table(is_array($document['stops'] ?? null) ? $document['stops'] : []);

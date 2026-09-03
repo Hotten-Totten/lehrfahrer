@@ -8,10 +8,11 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-  <link rel="stylesheet" href="editor.css?v=V2.1.020">
+  <link rel="stylesheet" href="editor.css?v=V2.1.021">
 </head>
-<body data-editor-version="V2.1.020">
+<body data-editor-version="V2.1.021">
 
   <div id="menubar">
 
@@ -197,7 +198,7 @@
 
       <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
 
-      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.020</span>
+      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.021</span>
       <span id="apiTokenStatus" class="token-status token-status-off" title="Status des lokal gespeicherten API-Tokens">API-Token: aus</span>
       <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
       <span
@@ -313,6 +314,12 @@
 
     <div id="mapWrap">
       <div id="map"></div>
+      <div id="mapLibreTestMap" class="editor-maplibre-test" aria-hidden="true"></div>
+      <div id="leafletTestLabel" class="editor-map-test-label editor-map-test-label-leaflet" aria-hidden="true">Leaflet</div>
+      <div id="mapLibreTestLabel" class="editor-maplibre-test-label" aria-hidden="true">
+        <span>MapLibre Test</span>
+        <button id="mapLibreTestCloseBtn" type="button" title="MapLibre-Testansicht schließen" aria-label="MapLibre-Testansicht schließen">×</button>
+      </div>
       <div id="selectionBox" class="selection-box hidden"></div>
     </div>
 
@@ -629,6 +636,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
 
   <script>
     (function () {
@@ -685,29 +693,30 @@
     })();
   </script>
 
-  <script src="data/haltestellen.js?v=V2.1.020"></script>
+  <script src="data/haltestellen.js?v=V2.1.021"></script>
+  <script src="js/editor.map-adapter.js?v=V2.1.021"></script>
 
-  <script src="js/editor.state.js?v=V2.1.020"></script>
-  <script src="js/editor.dom.js?v=V2.1.020"></script>
-  <script src="js/editor.debug.js?v=V2.1.020"></script>
-  <script src="js/editor.ui.js?v=V2.1.020"></script>
-  <script src="js/editor.selection.js?v=V2.1.020"></script>
-  <script src="js/editor.stops.js?v=V2.1.020"></script>
-  <script src="js/editor.route.js?v=V2.1.020"></script>
-  <script src="js/editor.routing.js?v=V2.1.020"></script>
-  <script src="js/editor.search.js?v=V2.1.020"></script>
-  <script src="js/editor.autosave.js?v=V2.1.020"></script>
-  <script src="js/editor.api.js?v=V2.1.020"></script>
-  <script src="js/editor.lineBrowser.js?v=V2.1.020"></script>
-  <script src="js/editor.driverDocuments.js?v=V2.1.020"></script>
-  <script src="js/editor.academy.js?v=V2.1.020"></script>
-  <script src="js/editor.dashboard.js?v=V2.1.020"></script>
-  <script src="js/editor.help.js?v=V2.1.020"></script>
-  <script src="js/editor.history.js?v=V2.1.020"></script>
-  <script src="js/editor.linelogic.js?v=V2.1.020"></script>
-  <script src="js/editor.main.js?v=V2.1.020"></script>
-  <script src="js/editor.events.js?v=V2.1.020"></script>
-  <script src="js/editor.fetchStops.js?v=V2.1.020"></script>
+  <script src="js/editor.state.js?v=V2.1.021"></script>
+  <script src="js/editor.dom.js?v=V2.1.021"></script>
+  <script src="js/editor.debug.js?v=V2.1.021"></script>
+  <script src="js/editor.ui.js?v=V2.1.021"></script>
+  <script src="js/editor.selection.js?v=V2.1.021"></script>
+  <script src="js/editor.stops.js?v=V2.1.021"></script>
+  <script src="js/editor.route.js?v=V2.1.021"></script>
+  <script src="js/editor.routing.js?v=V2.1.021"></script>
+  <script src="js/editor.search.js?v=V2.1.021"></script>
+  <script src="js/editor.autosave.js?v=V2.1.021"></script>
+  <script src="js/editor.api.js?v=V2.1.021"></script>
+  <script src="js/editor.lineBrowser.js?v=V2.1.021"></script>
+  <script src="js/editor.driverDocuments.js?v=V2.1.021"></script>
+  <script src="js/editor.academy.js?v=V2.1.021"></script>
+  <script src="js/editor.dashboard.js?v=V2.1.021"></script>
+  <script src="js/editor.help.js?v=V2.1.021"></script>
+  <script src="js/editor.history.js?v=V2.1.021"></script>
+  <script src="js/editor.linelogic.js?v=V2.1.021"></script>
+  <script src="js/editor.main.js?v=V2.1.021"></script>
+  <script src="js/editor.events.js?v=V2.1.021"></script>
+  <script src="js/editor.fetchStops.js?v=V2.1.021"></script>
 
 </body>
 </html>

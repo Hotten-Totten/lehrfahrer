@@ -1,5 +1,17 @@
 # Changelog
 
+## V2.1.021 - 2026-09-03
+- MapLibre/OpenFreeMap-Testpfad für den Editor vorbereitet
+- Editor-Kartenadapter ergänzt
+- Route und Preview passiv in MapLibre gespiegelt
+- Stops und RoutePoints passiv als GeoJSON gespiegelt
+- Leaflet-Viewport mit dem MapLibre-Testcontainer synchronisiert
+- Entwickler-Side-by-Side-Ansicht über `?maplibreTest=1` ergänzt
+- Side-by-Side-Ansicht auf echtes 50/50-CSS-Grid umgestellt
+- MapLibre-Testcontainer robust sichtbar gemacht
+- Leaflet/CARTO bleibt weiterhin aktive Editor-Karte
+- keine produktive Kartenumschaltung durchgeführt
+
 ## V2.1.020 - 2026-09-03
 - Anchor-Locked-Meterfortschritt für den Navigationsmarker eingeführt
 - Markerbewegung und Prediction vollständig an die Routengeometrie gebunden
