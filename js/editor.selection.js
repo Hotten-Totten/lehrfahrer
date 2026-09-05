@@ -221,11 +221,23 @@ function clearSelectionStyles() {
   });
 
   applyRoutePointIcons();
+
+  const resetTrackStyle = track => {
+    if (track && track.polyline && typeof track.polyline.setStyle === "function") {
+      track.polyline.setStyle({ color: "#aa00ff", weight: 4, dashArray: "6,6" });
+    }
+  };
+  (Array.isArray(state.specialTracks) ? state.specialTracks : []).forEach(resetTrackStyle);
+  resetTrackStyle(state.currentSpecialTrack);
 }
 
 // =========================
 // SELECTION MAIN
 // =========================
+
+function clearEditorSelectionStateOnly() {
+  state.selected = null;
+}
 
 function clearSelection() {
   state.selected = null;
@@ -313,4 +325,17 @@ function toggleRoutePointMultiSelection(point) {
       ? `${count} Routenpunkte in Mehrfachauswahl.`
       : "Mehrfachauswahl leer."
   );
+}
+
+function selectSpecialTrack(track) {
+  if (!track) return;
+  state.selected = { type: "specialTrack", ref: track };
+  clearSelectionStyles();
+  if (track.polyline && typeof track.polyline.setStyle === "function") {
+    track.polyline.setStyle({ color: "#16a34a", weight: 6, dashArray: "6,6" });
+  }
+  stopEditor.classList.add("hidden");
+  routeEditor.classList.add("hidden");
+  noSelection.classList.remove("hidden");
+  setStatus("Sondertrasse ausgewählt.");
 }

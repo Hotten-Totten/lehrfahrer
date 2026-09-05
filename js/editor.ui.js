@@ -513,12 +513,7 @@ function renderDetourReplacementStopsInactiveDuplicate() {
     main.appendChild(source);
 
     main.addEventListener("click", function () {
-      state.selected = { type: "detourReplacementStop", ref: stop };
-      if (stop.marker) {
-        map.setView([stop.lat, stop.lon], 17);
-      }
-      renderStopOrderList();
-      setStatus(`${stop.isGhostPoint ? "Durchfahrpunkt" : "Ersatzhaltestelle"} ausgewaehlt: ${stop.name}`);
+      selectDetourHelperPoint(stop, { centerMap: true });
     });
 
     const actions = document.createElement("div");

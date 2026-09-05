@@ -2,6 +2,110 @@
 // EVENTS
 // =========================
 
+function notifyMapLibreEditorSelectionChanged() {
+  const adapter = window.EditorMapAdapter;
+  if (adapter && typeof adapter.syncEditorSelection === "function") {
+    adapter.syncEditorSelection();
+  }
+}
+
+function notifyMapLibreEditorSelectionGeometryChanged(featureType, objects) {
+  const candidates = Array.isArray(objects) ? objects : [objects];
+  const selected = state.selected;
+  const selectedType = featureType === "stop"
+    ? "stop"
+    : (featureType === "routePoint" ? "route" : null);
+  const selectedIds = featureType === "stop"
+    ? state.selectedStopIds
+    : (featureType === "routePoint" ? state.selectedRoutePointIds : null);
+  const helperTypes = new Set(["detourReplacementStop", "detourManualRoutePoint"]);
+  const isSelected = candidates.some(object => {
+    if (!object || object.id == null) return false;
+    const id = String(object.id);
+    if (
+      selected &&
+      selected.ref &&
+      selected.ref.id != null &&
+      String(selected.ref.id) === id &&
+      (selectedType ? selected.type === selectedType : helperTypes.has(selected.type))
+    ) {
+      return true;
+    }
+    return selectedIds instanceof Set && Array.from(selectedIds).some(selectedId => String(selectedId) === id);
+  });
+
+  if (isSelected) notifyMapLibreEditorSelectionChanged();
+  return isSelected;
+}
+
+function getEditorSelectionSyncSignature() {
+  const selected = state.selected;
+  const normalizeIds = value => value instanceof Set
+    ? Array.from(value, id => String(id)).sort()
+    : [];
+  return JSON.stringify({
+    type: selected ? selected.type : null,
+    id: selected && selected.ref && selected.ref.id != null ? String(selected.ref.id) : null,
+    stopIds: normalizeIds(state.selectedStopIds),
+    routePointIds: normalizeIds(state.selectedRoutePointIds)
+  });
+}
+
+function withMapLibreSelectionSync(selectionFunction) {
+  return function mapLibreSelectionSynchronized(...args) {
+    const before = getEditorSelectionSyncSignature();
+    const result = selectionFunction.apply(this, args);
+    if (getEditorSelectionSyncSignature() !== before) {
+      notifyMapLibreEditorSelectionChanged();
+    }
+    return result;
+  };
+}
+
+selectStop = withMapLibreSelectionSync(selectStop);
+selectRoutePoint = withMapLibreSelectionSync(selectRoutePoint);
+selectSpecialTrack = withMapLibreSelectionSync(selectSpecialTrack);
+setDetourHelperSelectionState = withMapLibreSelectionSync(setDetourHelperSelectionState);
+clearDetourHelperSelectionState = withMapLibreSelectionSync(clearDetourHelperSelectionState);
+toggleRoutePointMultiSelection = withMapLibreSelectionSync(toggleRoutePointMultiSelection);
+clearRouteMultiSelection = withMapLibreSelectionSync(clearRouteMultiSelection);
+clearRouteSelectionIfDeleted = withMapLibreSelectionSync(clearRouteSelectionIfDeleted);
+clearEditorSelectionStateOnly = withMapLibreSelectionSync(clearEditorSelectionStateOnly);
+finishBoxSelection = withMapLibreSelectionSync(finishBoxSelection);
+clearSelection = withMapLibreSelectionSync(clearSelection);
+
+function notifyMapLibreEditorGeometryChanged() {
+  const adapter = window.EditorMapAdapter;
+  if (adapter && typeof adapter.syncEditorTestLayers === "function") {
+    adapter.syncEditorTestLayers();
+  }
+}
+
+function withMapLibreGeometrySync(renderFunction) {
+  return function mapLibreGeometrySynchronized(...args) {
+    const result = renderFunction.apply(this, args);
+    if (result && typeof result.then === "function") {
+      return result.finally(notifyMapLibreEditorGeometryChanged);
+    }
+    notifyMapLibreEditorGeometryChanged();
+    return result;
+  };
+}
+
+refreshRouteLine = withMapLibreGeometrySync(refreshRouteLine);
+renderStopOrderList = withMapLibreGeometrySync(renderStopOrderList);
+refreshDetourDraftPreview = withMapLibreGeometrySync(refreshDetourDraftPreview);
+cancelDetourDraft = withMapLibreGeometrySync(cancelDetourDraft);
+renderDetourPlannedRoutePreview = withMapLibreGeometrySync(renderDetourPlannedRoutePreview);
+removeDetourPlannedRoutePreviewLine = withMapLibreGeometrySync(removeDetourPlannedRoutePreviewLine);
+refreshDetourRemovedRoutePreview = withMapLibreGeometrySync(refreshDetourRemovedRoutePreview);
+clearDetourRemovedRoutePreview = withMapLibreGeometrySync(clearDetourRemovedRoutePreview);
+finishSpecialTrack = withMapLibreGeometrySync(finishSpecialTrack);
+addSpecialTrackPoint = withMapLibreGeometrySync(addSpecialTrackPoint);
+extendSelectedSpecialTrack = withMapLibreGeometrySync(extendSelectedSpecialTrack);
+removeLastPointFromSelectedSpecialTrack = withMapLibreGeometrySync(removeLastPointFromSelectedSpecialTrack);
+startSpecialTrackBetweenSelectedStops = withMapLibreGeometrySync(startSpecialTrackBetweenSelectedStops);
+
 // ---------- Buttons / Modals ----------
 
 if (exportAutosaveBtn) exportAutosaveBtn.addEventListener("click", exportAutosaveFile);
@@ -316,31 +420,9 @@ map.on("moveend", function () {
 
 // ---------- Map ----------
 
-map.on("click", function (e) {
-  const lat = e.latlng.lat;
-  const lon = e.latlng.lng;
+function handleEditorPointPlacement(latlng, options = {}) {
+  if (!latlng) return false;
   const mode = state.routeMode;
-
-  // =========================
-  // SONDERTRASSE
-  // =========================
-  if (mode === "specialTrack") {
-    addSpecialTrackPoint(e.latlng);
-    return;
-  }
-
-  // =========================
-  // TRASSE ERWEITERN
-  // =========================
-  if (mode === "specialTrackExtend") {
-    extendSelectedSpecialTrack(e.latlng);
-    return;
-  }
-
-  if (mode === "detourDraft") {
-    addDetourDraftPoint(e.latlng);
-    return;
-  }
 
   if (mode === "detourBuildReplacement" || (state.detourWizard && state.detourWizard.phase === "buildReplacement")) {
     if (
@@ -348,38 +430,80 @@ map.on("click", function (e) {
       (state.detourWizard.routingMode === "manual" || state.detourWizard.routingMode === "guidedStreet") &&
       state.detourWizard.manualInputMode !== "passThroughStop"
     ) {
-      addDetourManualRoutePoint(e.latlng);
-      return;
+      addDetourManualRoutePoint(latlng);
+      return true;
     }
-    addDetourReplacementFreeStop(e.latlng);
-    return;
+    addDetourReplacementFreeStop(latlng);
+    return true;
   }
 
-  if (mode === "detourSelectStops") {
+  if (mode === "specialTrack") {
+    addSpecialTrackPoint(latlng);
+    return true;
+  }
+  if (mode === "specialTrackExtend") {
+    extendSelectedSpecialTrack(latlng);
+    return true;
+  }
+  if (mode === "detourDraft") {
+    addDetourDraftPoint(latlng);
+    return true;
+  }
+  if (["detourSelectStops", "select"].includes(mode)) {
+    return false;
+  }
+
+  const placementMode = state.placementMode === "route" ? "route" : "freeStop";
+  if (placementMode === "freeStop") {
+    createFreeStop(latlng.lat, latlng.lng);
+    return true;
+  }
+  if (placementMode === "route") {
+    if (options.insertOnRouteSegment) insertRoutePointOnSegment(latlng);
+    else createManualRoutePoint(latlng.lat, latlng.lng);
+    return true;
+  }
+  return false;
+}
+
+function deleteSelectedEditorPointObject() {
+  const selected = state.selected;
+  if (!selected || !selected.ref) return false;
+  if (selected.type === "stop") {
+    deleteSelectedStop();
+    return true;
+  }
+  if (selected.type === "route") {
+    deleteSelectedRoutePoint();
+    return true;
+  }
+  if (selected.type === "detourReplacementStop") {
+    removeDetourReplacementStop(selected.ref.id);
+    return true;
+  }
+  if (selected.type === "detourManualRoutePoint") {
+    removeDetourManualRoutePoint(selected.ref.id);
+    return true;
+  }
+  if (selected.type === "specialTrack") {
+    removeLastPointFromSelectedSpecialTrack();
+    return true;
+  }
+  return false;
+}
+
+map.on("click", function (e) {
+  if (state.routeMode === "detourSelectStops") {
     setStatus("Umleitungsbereich wählen: Bitte Haltestellen in der Liste auswählen.");
     return;
   }
 
-  if (mode === "select") {
+  if (state.routeMode === "select") {
     clearSelection();
     setStatus("Auswahl aufgehoben.");
     return;
   }
-
-  // =========================
-  // NORMALE MODI
-  // =========================
-  const placementMode = state.placementMode === "route" ? "route" : "freeStop";
-
-  if (placementMode === "freeStop") {
-    createFreeStop(lat, lon);
-    return;
-  }
-
-  if (placementMode === "route") {
-    createManualRoutePoint(lat, lon);
-    return;
-  }
+  handleEditorPointPlacement(e.latlng);
 });
 // ---------- Menü ----------
 

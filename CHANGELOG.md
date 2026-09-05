@@ -1,5 +1,20 @@
 # Changelog
 
+## V2.1.022 - 2026-09-05
+- MapLibre-Testpfad funktional stark erweitert
+- Auswahl, Mehrfachauswahl sowie Hover-/HitTest ergänzt
+- Stop-, RoutePoint- und Hilfspunkt-Interaktion einschließlich Dragging und Gruppenverschieben vorbereitet
+- Einfügen und Löschen über bestehende Editorpfade angebunden
+- Kataloghaltestellen und Ersatzhalte integriert
+- Spezialstrecken und DetourDraft angebunden
+- Viewport-Ownership und korrekten MapLibre-Reload ohne Viewport-Sprung ergänzt
+- Katalogviewport engine-neutralisiert
+- Geometriesynchronisierung ereignisbasiert umgesetzt
+- Ctrl-/Meta-Mehrfachauswahl ergänzt
+- Undo/Redo, Autosave/Restore und Linienwechsel geprüft
+- Leaflet/CARTO bleibt aktive Hauptkarte; MapLibre bleibt Testpfad
+- keine Hauptkartenumschaltung durchgeführt
+
 ## V2.1.021 - 2026-09-03
 - MapLibre/OpenFreeMap-Testpfad für den Editor vorbereitet
 - Editor-Kartenadapter ergänzt

@@ -62,6 +62,25 @@ function getCatalogIconForStop(catalogStop, highlighted = false) {
 
 let catalogUpdateTimer = null;
 
+function notifyMapLibreCatalogMarkersChanged() {
+  const adapter = window.EditorMapAdapter;
+  if (adapter && typeof adapter.syncEditorCatalogMarkers === "function") {
+    adapter.syncEditorCatalogMarkers();
+  }
+}
+
+function handleCatalogStopActivation(catalogStop) {
+  if (!catalogStop) return null;
+  if (state.detourWizard && state.detourWizard.phase === "buildReplacement") {
+    return addDetourReplacementCatalogStop(catalogStop);
+  }
+  if (mode !== "catalogStop" && mode !== "freeStop") {
+    setStatus("Zum Übernehmen bitte den Modus 'Haltestelle' aktivieren.");
+    return null;
+  }
+  return addCatalogStopToLine(catalogStop);
+}
+
 // Erstellt einen Katalog-Marker inklusive Popup/Tooltip und Klickverhalten.
 function createCatalogMarker(catalogStop) {
   const marker = L.marker([catalogStop.lat, catalogStop.lon], {
@@ -88,17 +107,7 @@ function createCatalogMarker(catalogStop) {
   );
 
   marker.on("click", function () {
-    if (state.detourWizard && state.detourWizard.phase === "buildReplacement") {
-      addDetourReplacementCatalogStop(catalogStop);
-      return;
-    }
-
-    if (mode !== "catalogStop" && mode !== "freeStop") {
-      setStatus("Zum Übernehmen bitte den Modus 'Haltestelle' aktivieren.");
-      return;
-    }
-
-    addCatalogStopToLine(catalogStop);
+    handleCatalogStopActivation(catalogStop);
   });
 
   return marker;
@@ -121,29 +130,37 @@ function clearVisibleCatalogMarkers() {
   });
 
   state.visibleCatalogMarkers.clear();
+  notifyMapLibreCatalogMarkersChanged();
 }
 
 // ---------- Sichtbare Marker ----------
 
 // Aktualisiert Marker entsprechend Zoom und Kartenausschnitt.
 function updateCatalogMarkerVisibilityNow() {
-  const currentZoom = map.getZoom();
+  const viewport = window.EditorMapAdapter
+    && typeof window.EditorMapAdapter.getViewportOwnerContext === "function"
+    ? window.EditorMapAdapter.getViewportOwnerContext()
+    : null;
+  const currentZoom = viewport && Number.isFinite(viewport.catalogZoom)
+    ? viewport.catalogZoom
+    : map.getZoom();
 
   if (currentZoom < CATALOG_MIN_ZOOM) {
     clearVisibleCatalogMarkers();
     return;
   }
 
-  const bounds = map.getBounds();
+  const bounds = viewport ? null : map.getBounds();
   const visibleIds = new Set();
 
   for (const catalogStop of stopCatalog) {
     if (!isCatalogStopVisible(catalogStop)) continue;
     if (typeof catalogStop.lat !== "number" || typeof catalogStop.lon !== "number") continue;
 
-    const latlng = L.latLng(catalogStop.lat, catalogStop.lon);
-
-    if (!bounds.contains(latlng)) continue;
+    const isInsideViewport = viewport
+      ? viewport.contains(catalogStop.lat, catalogStop.lon)
+      : bounds.contains(L.latLng(catalogStop.lat, catalogStop.lon));
+    if (!isInsideViewport) continue;
 
     visibleIds.add(catalogStop.id);
 
@@ -179,6 +196,7 @@ function updateCatalogMarkerVisibilityNow() {
 
     state.visibleCatalogMarkers.delete(stopId);
   });
+  notifyMapLibreCatalogMarkersChanged();
 }
 
 // Entprellt Marker-Updates bei schnellen Kartenbewegungen.

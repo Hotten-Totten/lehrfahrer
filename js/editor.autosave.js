@@ -178,7 +178,7 @@ function clearEditorData() {
   if (typeof resetDetourWizardState === "function") {
     resetDetourWizardState();
   }
-  state.selected = null;
+  clearEditorSelectionStateOnly();
   state.routeMode = "auto";
   state.placementMode = "freeStop";
   state.routingMode = "guidedStreet";

@@ -340,7 +340,7 @@ function removeAllRoutePointMarkers() {
     state.selected &&
     state.selected.type === "route"
   ) {
-    state.selected = null;
+    clearEditorSelectionStateOnly();
   }
 }
 
@@ -459,6 +459,11 @@ function createRoutePointObject(lat, lon, silent = false, sourceType = "manual")
         entry.point.lon = entry.lon + deltaLng;
       });
 
+      notifyMapLibreEditorSelectionGeometryChanged(
+        "routePoint",
+        state.groupDragContext.points.map(entry => entry.point)
+      );
+
       state.groupDragContext = null;
 
       if (
@@ -480,6 +485,8 @@ function createRoutePointObject(lat, lon, silent = false, sourceType = "manual")
       routeLatInput.value = point.lat.toFixed(6);
       routeLonInput.value = point.lon.toFixed(6);
     }
+
+    notifyMapLibreEditorSelectionGeometryChanged("routePoint", point);
 
     refreshRouteLine();
     endRoutePointInteraction();
@@ -562,13 +569,7 @@ function deleteSelectedRoutePoint() {
 
     state.routePoints = state.routePoints.filter(point => !idsToDelete.has(point.id));
 
-    if (
-      state.selected &&
-      state.selected.type === "route" &&
-      idsToDelete.has(state.selected.ref.id)
-    ) {
-      state.selected = null;
-    }
+    clearRouteSelectionIfDeleted(idsToDelete);
 
     clearRouteMultiSelection();
     updateStats();
@@ -593,7 +594,7 @@ function deleteSelectedRoutePoint() {
   removeMarkerSafe(point.marker);
 
   state.routePoints = state.routePoints.filter(item => item.id !== point.id);
-  state.selectedRoutePointIds.delete(point.id);
+  clearRouteSelectionIfDeleted(new Set([point.id]));
 
   clearSelection();
   updateStats();
@@ -664,6 +665,7 @@ function cleanupRoutePoints(options = {}) {
 
   const originalPoints = [...state.routePoints];
   const kept = [];
+  const removedSelectionIds = new Set();
   let removedCount = 0;
 
   for (let i = 0; i < originalPoints.length; i++) {
@@ -681,15 +683,7 @@ function cleanupRoutePoints(options = {}) {
 
     if (prev && approxDistanceMeters(prev, point) < minSpacingMeters) {
       removeMarkerSafe(point.marker);
-      state.selectedRoutePointIds.delete(point.id);
-
-      if (
-        state.selected &&
-        state.selected.type === "route" &&
-        state.selected.ref.id === point.id
-      ) {
-        state.selected = null;
-      }
+      removedSelectionIds.add(point.id);
 
       removedCount++;
       continue;
@@ -700,15 +694,7 @@ function cleanupRoutePoints(options = {}) {
 
       if (deviation <= straightenToleranceMeters) {
         removeMarkerSafe(point.marker);
-        state.selectedRoutePointIds.delete(point.id);
-
-        if (
-          state.selected &&
-          state.selected.type === "route" &&
-          state.selected.ref.id === point.id
-        ) {
-          state.selected = null;
-        }
+        removedSelectionIds.add(point.id);
 
         removedCount++;
         continue;
@@ -719,6 +705,7 @@ function cleanupRoutePoints(options = {}) {
   }
 
   state.routePoints = kept;
+  if (removedSelectionIds.size) clearRouteSelectionIfDeleted(removedSelectionIds);
 
   refreshRouteLine();
   updateStats();
@@ -1016,6 +1003,12 @@ function finishSpecialTrack() {
     polyline: track.polyline
   };
 
+  if (savedTrack.polyline && typeof savedTrack.polyline.on === "function") {
+    savedTrack.polyline.on("click", function () {
+      selectSpecialTrack(savedTrack);
+    });
+  }
+
   state.specialTracks.push(savedTrack);
   state.currentSpecialTrack = null;
 
@@ -1055,6 +1048,7 @@ function addSpecialTrackPoint(latlng) {
   }
 
   mode = "specialTrackExtend";
+  state.routeMode = "specialTrackExtend";
   updateModeButtons();
   setStatus("Modus: Sondertrasse verlängern – Klick fügt hinten Punkte an.");
 }

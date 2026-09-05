@@ -281,6 +281,42 @@ function getDetourReplacementStopLabel(stop) {
   return stop && stop.isGhostPoint ? "Durchfahrpunkt" : "Ersatzhaltestelle";
 }
 
+function setDetourHelperSelectionState(detourItem) {
+  if (!detourItem) return false;
+  const isGuidePoint = detourItem.kind === "guidePoint";
+  state.selected = {
+    type: isGuidePoint ? "detourManualRoutePoint" : "detourReplacementStop",
+    ref: detourItem
+  };
+  return true;
+}
+
+function clearDetourHelperSelectionState(detourItem = null, expectedType = null) {
+  const selected = state.selected;
+  if (!selected || !["detourReplacementStop", "detourManualRoutePoint"].includes(selected.type)) {
+    return false;
+  }
+  if (expectedType && selected.type !== expectedType) return false;
+  if (detourItem && (!selected.ref || selected.ref.id !== detourItem.id)) return false;
+  state.selected = null;
+  return true;
+}
+
+function selectDetourHelperPoint(detourItem, options = {}) {
+  if (!setDetourHelperSelectionState(detourItem)) return false;
+  const isGuidePoint = detourItem.kind === "guidePoint";
+  if (detourItem.marker) {
+    detourItem.marker.setIcon(isGuidePoint
+      ? getDetourManualRoutePointIcon(detourItem, true)
+      : getDetourReplacementStopIcon(detourItem, true));
+    if (options.centerMap) map.setView([detourItem.lat, detourItem.lon], 17);
+  }
+  renderStopOrderList();
+  const label = isGuidePoint ? "Fahrwegpunkt" : getDetourReplacementStopLabel(detourItem);
+  setStatus(`${label} ausgewaehlt: ${detourItem.name}`);
+  return true;
+}
+
 function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = null, transitType = null, directionHint = null, isGhostPoint = false }) {
   if (!isDetourWizardBuildPhase()) {
     setStatus("Ersatzhaltestellen und Durchfahrpunkte koennen erst nach der Bereichsauswahl gesetzt werden.", "warn");
@@ -319,16 +355,14 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
   });
 
   marker.on("click", function () {
-    state.selected = { type: "detourReplacementStop", ref: stop };
-    marker.setIcon(getDetourReplacementStopIcon(stop, true));
-    renderStopOrderList();
-    setStatus(`${getDetourReplacementStopLabel(stop)} ausgewaehlt: ${stop.name}`);
+    selectDetourHelperPoint(stop);
   });
 
   marker.on("dragend", function () {
     const pos = marker.getLatLng();
     stop.lat = pos.lat;
     stop.lon = pos.lng;
+    notifyMapLibreEditorSelectionGeometryChanged("detourHelperPoint", stop);
     scheduleDetourPlannedRoutePreview();
     renderStopOrderList();
     setStatus(`${getDetourReplacementStopLabel(stop)} verschoben: ${stop.name}`);
@@ -336,7 +370,7 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
 
   stop.marker = marker;
   replacementStops.push(stop);
-  state.selected = { type: "detourReplacementStop", ref: stop };
+  setDetourHelperSelectionState(stop);
 
   scheduleDetourPlannedRoutePreview();
   renderStopOrderList();
@@ -405,16 +439,14 @@ function addDetourManualRoutePoint(latlng) {
   });
 
   marker.on("click", function () {
-    state.selected = { type: "detourManualRoutePoint", ref: point };
-    marker.setIcon(getDetourManualRoutePointIcon(point, true));
-    renderStopOrderList();
-    setStatus(`Fahrwegpunkt ausgewaehlt: ${point.name}`);
+    selectDetourHelperPoint(point);
   });
 
   marker.on("dragend", function () {
     const pos = marker.getLatLng();
     point.lat = pos.lat;
     point.lon = pos.lng;
+    notifyMapLibreEditorSelectionGeometryChanged("detourHelperPoint", point);
     scheduleDetourPlannedRoutePreview();
     renderStopOrderList();
     setStatus(`Fahrwegpunkt verschoben: ${point.name}`);
@@ -422,7 +454,7 @@ function addDetourManualRoutePoint(latlng) {
 
   point.marker = marker;
   manualRoutePoints.push(point);
-  state.selected = { type: "detourManualRoutePoint", ref: point };
+  setDetourHelperSelectionState(point);
 
   scheduleDetourPlannedRoutePreview();
   renderStopOrderList();
@@ -442,9 +474,7 @@ function removeDetourReplacementStop(stopId) {
     map.removeLayer(stop.marker);
   }
 
-  if (state.selected && state.selected.type === "detourReplacementStop" && state.selected.ref.id === stopId) {
-    state.selected = null;
-  }
+  clearDetourHelperSelectionState(stop, "detourReplacementStop");
 
   scheduleDetourPlannedRoutePreview();
   renderStopOrderList();
@@ -461,9 +491,7 @@ function removeDetourManualRoutePoint(pointId) {
     map.removeLayer(point.marker);
   }
 
-  if (state.selected && state.selected.type === "detourManualRoutePoint" && state.selected.ref.id === pointId) {
-    state.selected = null;
-  }
+  clearDetourHelperSelectionState(point, "detourManualRoutePoint");
 
   scheduleDetourPlannedRoutePreview();
   renderStopOrderList();
@@ -482,9 +510,7 @@ function clearDetourReplacementStops() {
 
   state.detourWizard.replacementStops = [];
 
-  if (state.selected && state.selected.type === "detourReplacementStop") {
-    state.selected = null;
-  }
+  clearDetourHelperSelectionState(null, "detourReplacementStop");
 }
 
 function clearDetourManualRoutePoints() {
@@ -499,9 +525,7 @@ function clearDetourManualRoutePoints() {
 
   state.detourWizard.manualRoutePoints = [];
 
-  if (state.selected && state.selected.type === "detourManualRoutePoint") {
-    state.selected = null;
-  }
+  clearDetourHelperSelectionState(null, "detourManualRoutePoint");
 
   clearDetourPlannedRoutePreview();
 }
@@ -562,6 +586,7 @@ function attachLineStopMarker(stop) {
     const newPos = e.target.getLatLng();
     stop.lat = newPos.lat;
     stop.lon = newPos.lng;
+    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
 
     if (state.routeMode === "auto") {
       rebuildAutoRouteFromStops();
@@ -1108,7 +1133,6 @@ async function finishDetourWizardReplacement() {
   resetDetourWizardState();
   state.selectedStopIds.clear();
   state.selectedRoutePointIds.clear();
-  state.selected = null;
   state.routeMode = "street";
 
   clearSelection();
@@ -1246,7 +1270,6 @@ function startDetourWizard() {
   resetDetourWizardState();
   state.detourWizard.phase = "selectStops";
   state.selectedStopIds.clear();
-  state.selected = null;
   state.routeMode = "detourSelectStops";
 
   clearSelection();
@@ -1278,7 +1301,7 @@ function acceptDetourStopRange() {
   state.detourWizard.replacementStops = [];
   state.detourWizard.phase = "buildReplacement";
   state.selectedStopIds.clear();
-  state.selected = null;
+  clearEditorSelectionStateOnly();
   state.routeMode = "detourBuildReplacement";
 
   renderStopOrderList();
@@ -1295,7 +1318,6 @@ function cancelDetourWizard() {
 
   resetDetourWizardState();
   state.selectedStopIds.clear();
-  state.selected = null;
   state.routeMode = "freeStop";
 
   clearSelection();
@@ -1369,6 +1391,7 @@ function addStopToLine({
     const newPos = e.target.getLatLng();
     stop.lat = newPos.lat;
     stop.lon = newPos.lng;
+    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
 
     if (state.routeMode === "auto") {
       rebuildAutoRouteFromStops();
@@ -1669,13 +1692,7 @@ function renderDetourReplacementStops() {
     main.appendChild(source);
 
     main.addEventListener("click", function () {
-      state.selected = { type: selectionType, ref: detourItem };
-      if (detourItem.marker) {
-        map.setView([detourItem.lat, detourItem.lon], 17);
-      }
-      renderStopOrderList();
-      const itemLabel = isGuidePoint ? "Fahrwegpunkt" : getDetourReplacementStopLabel(detourItem);
-      setStatus(`${itemLabel} ausgewaehlt: ${detourItem.name}`);
+      selectDetourHelperPoint(detourItem, { centerMap: true });
     });
 
     const actions = document.createElement("div");
@@ -1755,6 +1772,7 @@ function snapSelectedStopToRoute() {
   stop.lat = snap.lat;
   stop.lon = snap.lon;
   stop.marker.setLatLng([stop.lat, stop.lon]);
+  notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
 
   renderStopOrderList();
   setStatus(`Gesnappt: ${stop.name}`);
@@ -1802,6 +1820,7 @@ function insertGhostStopAtIndex(insertIndex, lat, lon, name) {
     const newPos = e.target.getLatLng();
     stop.lat = newPos.lat;
     stop.lon = newPos.lng;
+    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
 
     if (state.routeMode === "auto") {
       rebuildAutoRouteFromStops();
