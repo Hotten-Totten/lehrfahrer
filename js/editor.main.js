@@ -756,7 +756,10 @@ async function createNewLine() {
   clearSelection();
   clearRouteMultiSelection();
 
-  map.setView([51.7600, 14.3300], 13);
+  const adapter = window.EditorMapAdapter;
+  if (!adapter || !adapter.setEditorViewport(51.7600, 14.3300, 13)) {
+    map.setView([51.7600, 14.3300], 13);
+  }
 
   updateModeButtons();
   updatePreviewButtons();

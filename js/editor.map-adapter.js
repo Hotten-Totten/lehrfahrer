@@ -8,12 +8,17 @@
   const MAPLIBRE_URL_PARAMS = global.location
     ? new URLSearchParams(global.location.search)
     : new URLSearchParams();
+  const MAPLIBRE_MAIN_ENGINE_REQUESTED = MAPLIBRE_URL_PARAMS.get("mapEngine") === "maplibre";
+  const ACTIVE_ENGINE = MAPLIBRE_MAIN_ENGINE_REQUESTED ? "maplibre" : "leaflet";
   const MAPLIBRE_MIGRATION_ENABLED = MAPLIBRE_MIGRATION_DEFAULT
+    || MAPLIBRE_MAIN_ENGINE_REQUESTED
     || MAPLIBRE_URL_PARAMS.get("maplibreTest") === "1";
   const MAPLIBRE_INTERACTION_REQUESTED = MAPLIBRE_INTERACTION_DEFAULT
     || MAPLIBRE_URL_PARAMS.get("maplibreInteract") === "1";
-  const MAPLIBRE_TEST_INTERACTION_ENABLED = MAPLIBRE_MIGRATION_ENABLED
-    && MAPLIBRE_INTERACTION_REQUESTED;
+  const MAPLIBRE_TEST_INTERACTION_ENABLED = MAPLIBRE_MAIN_ENGINE_REQUESTED
+    || (MAPLIBRE_MIGRATION_ENABLED && MAPLIBRE_INTERACTION_REQUESTED);
+  const MAPLIBRE_SIDE_BY_SIDE_ENABLED = !MAPLIBRE_MAIN_ENGINE_REQUESTED
+    && MAPLIBRE_URL_PARAMS.get("maplibreTest") === "1";
   const VIEWPORT_DIFFERENCE_THRESHOLDS = Object.freeze({
     centerMeters: Object.freeze({ unobtrusiveMax: 5, noticeableMax: 20 }),
     zoom: Object.freeze({ unobtrusiveMax: 0.05, noticeableMax: 0.25 }),
@@ -159,8 +164,14 @@
   let managedContainer = null;
   let managedOverrides = null;
   let managedStyleReady = false;
+  let pendingMapLibreViewport = null;
   let editorMirroringActive = false;
-  let viewportOwnerEngine = "leaflet";
+  let viewportOwnerEngine = ACTIVE_ENGINE;
+  let mapLibreOwnerViewportHandler = null;
+  let mapLibreOwnerViewportEndHandler = null;
+  let mapLibreOwnerViewportEndSignature = null;
+  let mapLibreOwnerViewportMap = null;
+  let mapLibreOwnerViewportFrame = null;
   let leafletViewportMap = null;
   let leafletViewportHandler = null;
   let viewportSyncFrame = null;
@@ -361,13 +372,18 @@
   function initializeMapLibreMap(container, overrides) {
     if (!MAPLIBRE_MIGRATION_ENABLED) return null;
     if (managedMap) return managedMap;
+    const initialViewport = MAPLIBRE_MAIN_ENGINE_REQUESTED ? readLeafletViewport() : null;
     managedContainer = container;
     managedOverrides = Object.assign({}, overrides || {});
     managedMap = createMapLibreMap(container, managedOverrides);
     managedStyleReady = false;
     managedMap.once("load", () => {
       managedStyleReady = true;
-      syncViewportFromOwner();
+      if (pendingMapLibreViewport) {
+        applyViewportToMapLibre(pendingMapLibreViewport);
+        pendingMapLibreViewport = null;
+      } else if (initialViewport) applyViewportToMapLibre(initialViewport);
+      else syncViewportFromOwner();
       syncEditorTestLayers();
     });
     return managedMap;
@@ -376,6 +392,7 @@
   function destroyMapLibreMap() {
     stopMapLibreViewportDiagnostics();
     stopViewportDifferenceDiagnostics();
+    stopMapLibreOwnerViewportSync();
     if (managedMap && typeof managedMap.remove === "function") {
       managedMap.remove();
     }
@@ -387,8 +404,10 @@
 
   function reloadMapLibreMap(overrides) {
     if (!MAPLIBRE_MIGRATION_ENABLED || !managedContainer) return null;
+    const retainedViewport = getViewportOwnerContext();
     stopMapLibreViewportDiagnostics();
     stopViewportDifferenceDiagnostics();
+    stopMapLibreOwnerViewportSync();
     const container = managedContainer;
     const nextOverrides = Object.assign({}, managedOverrides || {}, overrides || {});
     if (managedMap && typeof managedMap.remove === "function") managedMap.remove();
@@ -396,9 +415,11 @@
     managedStyleReady = false;
     managedMap.once("load", () => {
       managedStyleReady = true;
-      syncViewportFromOwner();
+      if (retainedViewport) applyViewportToMapLibre(retainedViewport);
+      else syncViewportFromOwner();
       syncEditorTestLayers();
       resizeMapLibreMap();
+      if (viewportOwnerEngine === "maplibre") startMapLibreOwnerViewportSync();
     });
     managedOverrides = nextOverrides;
     mirroredLineSignatures.route = null;
@@ -1107,11 +1128,14 @@
     container.classList.toggle("is-active", active);
     container.setAttribute("aria-hidden", active ? "false" : "true");
     if (container.parentElement) {
-      container.parentElement.classList.toggle("maplibre-test-active", active);
+      container.parentElement.classList.toggle("maplibre-test-active", active && MAPLIBRE_SIDE_BY_SIDE_ENABLED);
+      container.parentElement.classList.toggle("maplibre-main-active", active && MAPLIBRE_MAIN_ENGINE_REQUESTED);
     }
     const label = getTestLabel();
+    const labelText = label && label.querySelector("span");
+    if (labelText) labelText.textContent = MAPLIBRE_MAIN_ENGINE_REQUESTED ? "MapLibre Hauptkarte (Test)" : "MapLibre Test";
     setLabelActive(label, active);
-    setLabelActive(getLeafletTestLabel(), active);
+    setLabelActive(getLeafletTestLabel(), active && MAPLIBRE_SIDE_BY_SIDE_ENABLED);
     return container;
   }
 
@@ -1133,6 +1157,7 @@
     if (testCloseButtonBound || !global.document) return;
     const closeButton = global.document.getElementById(TEST_CLOSE_BUTTON_ID);
     if (!closeButton) return;
+    closeButton.hidden = MAPLIBRE_MAIN_ENGINE_REQUESTED;
     closeButton.addEventListener("click", () => setDeveloperTestViewVisible(false));
     testCloseButtonBound = true;
   }
@@ -1162,7 +1187,8 @@
         logTestViewMetrics();
       });
       startEditorLineMirroring();
-      startLeafletViewportSync();
+      if (viewportOwnerEngine === "maplibre") startMapLibreOwnerViewportSync();
+      else startLeafletViewportSync();
       return instance;
     } catch (err) {
       console.error("[Editor MapLibre Test] Initialisierung fehlgeschlagen", err);
@@ -1173,12 +1199,14 @@
   }
 
   function destroyTestMap() {
+    if (MAPLIBRE_MAIN_ENGINE_REQUESTED) return null;
     const sessionSummary = createViewportSessionSummary();
     clearMapLibreTestSelection();
     stopMapLibreEditorDeleteHandling();
     stopMapLibreObjectDragging();
     stopHitTestDiagnostics();
     stopLeafletViewportSync();
+    stopMapLibreOwnerViewportSync();
     stopEditorLineMirroring();
     destroyMapLibreMap();
     const container = getTestContainer();
@@ -1192,6 +1220,7 @@
 
   function setDeveloperTestViewVisible(visible) {
     if (!MAPLIBRE_MIGRATION_ENABLED) return null;
+    if (MAPLIBRE_MAIN_ENGINE_REQUESTED && !visible) return managedMap;
     if (visible) {
       const instance = managedMap || initializeTestMap();
       setTestContainerActive(true);
@@ -1218,6 +1247,7 @@
   }
 
   function toggleDeveloperTestView() {
+    if (MAPLIBRE_MAIN_ENGINE_REQUESTED) return managedMap;
     return setDeveloperTestViewVisible(!getMapLibreMap());
   }
 
@@ -1896,10 +1926,8 @@
       selectSpecialTrack(object);
       return true;
     }
-    if (hit.featureType === "detourHelperPoint"
-      && object.marker
-      && typeof object.marker.fire === "function") {
-      object.marker.fire("click");
+    if (hit.featureType === "detourHelperPoint" && typeof selectDetourHelperPoint === "function") {
+      selectDetourHelperPoint(object);
       return true;
     }
     return false;
@@ -1971,7 +1999,7 @@
       return false;
     }
     mapLibreEditorDeleteKeyHandler = event => {
-      if (!mapLibreEditorInteractionFocused || event.key !== "Delete") return;
+      if ((!MAPLIBRE_MAIN_ENGINE_REQUESTED && !mapLibreEditorInteractionFocused) || event.key !== "Delete") return;
       const activeElement = global.document.activeElement;
       if (activeElement && (
         activeElement.isContentEditable
@@ -2041,8 +2069,13 @@
     const lngLat = mapLibrePointerLngLat(event) || drag.lastLngLat;
     mapLibreObjectDragState = null;
     if (drag.moved && lngLat) {
-      drag.marker.setLatLng([lngLat.lat, lngLat.lng]);
-      drag.marker.fire("dragend", { originalEvent: event, mapLibreTest: true });
+      if (drag.hit.featureType === "stop" && typeof moveLineStopTo === "function") {
+        moveLineStopTo(drag.object, lngLat);
+      } else if (drag.hit.featureType === "routePoint" && typeof finishRoutePointMove === "function") {
+        finishRoutePointMove(drag.object, lngLat);
+      } else if (drag.hit.featureType === "detourHelperPoint" && typeof moveDetourHelperPointTo === "function") {
+        moveDetourHelperPointTo(drag.object, lngLat);
+      }
       syncDraggedEditorObjectLayers(drag.hit.featureType);
     }
     if (drag.dragPanWasEnabled && managedMap && managedMap.dragPan) managedMap.dragPan.enable();
@@ -2069,7 +2102,7 @@
 
     mapLibreObjectDragMouseDownHandler = event => {
       if (event.button !== 0 || mapLibreObjectDragState) return;
-      if (event.ctrlKey || event.metaKey) return;
+      if (event.ctrlKey || event.metaKey || event.shiftKey) return;
       const target = event.target;
       if (target && typeof target.closest === "function" && target.closest(`#${TEST_LABEL_ID}`)) return;
       const rect = container.getBoundingClientRect();
@@ -2080,8 +2113,7 @@
       const hit = hitTestEditorObject([event.clientX - rect.left, event.clientY - rect.top]);
       if (!isMapLibreDraggablePointHit(hit)) return;
       const object = resolveEditorSelectionReference(hit);
-      const marker = object && object.marker;
-      if (!marker || typeof marker.setLatLng !== "function" || typeof marker.fire !== "function") return;
+      if (!object) return;
 
       applyMapLibreEditorSelection(hit, event);
       const startLngLat = mapLibrePointerLngLat(event);
@@ -2094,7 +2126,6 @@
       mapLibreObjectDragState = {
         hit,
         object,
-        marker,
         startClientX: event.clientX,
         startClientY: event.clientY,
         lastLngLat: startLngLat,
@@ -2125,10 +2156,13 @@
       if (!drag.moved && !moved) return;
       if (!drag.moved) {
         drag.moved = true;
-        drag.marker.fire("dragstart", { originalEvent: event, mapLibreTest: true });
+        if (drag.hit.featureType === "routePoint" && typeof beginRoutePointMove === "function") {
+          beginRoutePointMove(drag.object, { lat: drag.object.lat, lng: drag.object.lon });
+        }
       }
-      drag.marker.setLatLng([lngLat.lat, lngLat.lng]);
-      drag.marker.fire("drag", { originalEvent: event, mapLibreTest: true });
+      if (drag.hit.featureType === "routePoint" && typeof previewRoutePointMove === "function") {
+        previewRoutePointMove(drag.object, lngLat);
+      }
       applyEditorSelectionDragPreview(drag.hit, [lngLat.lng, lngLat.lat]);
       clearEditorHoverHighlight();
       event.preventDefault();
@@ -2222,6 +2256,7 @@
         const rect = container.getBoundingClientRect();
         const inside = event.clientX >= rect.left && event.clientX <= rect.right
           && event.clientY >= rect.top && event.clientY <= rect.bottom;
+        mapLibreEditorInteractionFocused = inside;
         if (!inside) return;
         const point = [event.clientX - rect.left, event.clientY - rect.top];
         const hit = hitTestEditorObject(point);
@@ -2423,6 +2458,15 @@
     return null;
   }
 
+  function getDetourDraftEditorPoints(editorState) {
+    const draft = editorState && editorState.detourDraft;
+    if (!draft || !Array.isArray(editorState.routePoints)) return [];
+    const start = editorState.routePoints.find(point => point && point.id === draft.startRoutePointId);
+    const end = editorState.routePoints.find(point => point && point.id === draft.endRoutePointId);
+    if (!start || !end) return [];
+    return [start, ...(Array.isArray(draft.points) ? draft.points : []), end];
+  }
+
   function syncSupplementalLine(kind, lines) {
     const data = createLineCollectionGeoJson(lines);
     const signature = JSON.stringify(data);
@@ -2447,7 +2491,15 @@
     const editorState = getEditorState();
     if (!editorState) return false;
     ["detourDraft", "detourPlanned", "detourRemoved"].forEach(kind => {
-      const points = getLeafletPolylineEditorPoints(getDetourPreviewPolyline(kind, editorState));
+      let points = [];
+      if (kind === "detourDraft") points = getDetourDraftEditorPoints(editorState);
+      else if (kind === "detourPlanned" && typeof getDetourPlannedRoutePreviewPoints === "function") {
+        points = getDetourPlannedRoutePreviewPoints();
+      } else if (kind === "detourRemoved" && typeof getDetourRemovedRoutePreviewPoints === "function") {
+        points = getDetourRemovedRoutePreviewPoints();
+      } else {
+        points = getLeafletPolylineEditorPoints(getDetourPreviewPolyline(kind, editorState));
+      }
       syncSupplementalLine(kind, points.length ? [{ id: kind, points }] : []);
     });
     return true;
@@ -2600,21 +2652,19 @@
   }
 
   function getVisibleEditorCatalogStops() {
-    const editorState = getEditorState();
-    if (!editorState || !(editorState.visibleCatalogMarkers instanceof Map)) return [];
     const viewport = getViewportOwnerContext();
-    const visible = [];
-    editorState.visibleCatalogMarkers.forEach((marker, id) => {
-      const catalogStop = resolveCatalogStopReference(id);
-      if (!catalogStop) return;
-      let position = null;
-      if (marker && typeof marker.getLatLng === "function") position = marker.getLatLng();
-      const lat = position && Number.isFinite(position.lat) ? position.lat : catalogStop.lat;
-      const lon = position && Number.isFinite(position.lng) ? position.lng : catalogStop.lon;
-      if (viewport && !viewport.contains(lat, lon)) return;
-      visible.push(Object.assign({}, catalogStop, { lat, lon }));
+    return getEditorStopCatalog().filter(catalogStop => {
+      if (!catalogStop) return false;
+      const lat = catalogStop.lat;
+      const lon = catalogStop.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+      try {
+        if (typeof isCatalogStopVisible === "function" && !isCatalogStopVisible(catalogStop)) return false;
+      } catch (_err) {
+        // Der Katalogdatensatz bleibt nutzbar, wenn der optionale UI-Filter noch nicht initialisiert ist.
+      }
+      return !viewport || viewport.contains(lat, lon);
     });
-    return visible;
   }
 
   function setCatalogStopsLayer(catalogStops) {
@@ -2670,6 +2720,13 @@
   }
 
   function getMirroredStopVisual(stop) {
+    try {
+      if (typeof isDetourCutStop === "function" && isDetourCutStop(stop)) {
+        return { color: "#6b7280", strokeColor: "#b91c1c", radius: 13 };
+      }
+    } catch (_err) {
+      // Standarddarstellung bleibt aktiv, solange der Umleitungsstatus noch nicht initialisiert ist.
+    }
     if (stop && stop.isGhostPoint) {
       return { color: "#64748b", strokeColor: "#334155", radius: 9 };
     }
@@ -2954,6 +3011,159 @@
     return viewportOwnerEngine;
   }
 
+  function getActiveMapEngine() {
+    return ACTIVE_ENGINE;
+  }
+
+  function getActiveMap() {
+    return ACTIVE_ENGINE === "maplibre" ? managedMap : getLeafletMap();
+  }
+
+  function usesLeafletOverlays() {
+    return ACTIVE_ENGINE === "leaflet";
+  }
+
+  function createEditorPointOverlay(latlng, options, addToMap = true) {
+    const leafletMap = getLeafletMap();
+    if (!usesLeafletOverlays() || !leafletMap || !global.L || typeof global.L.marker !== "function") return null;
+    const marker = global.L.marker(latlng, options || {});
+    return addToMap ? marker.addTo(leafletMap) : marker;
+  }
+
+  function createEditorLineOverlay(points, options) {
+    const leafletMap = getLeafletMap();
+    if (!usesLeafletOverlays() || !leafletMap || !global.L || typeof global.L.polyline !== "function") return null;
+    return global.L.polyline(points, options || {}).addTo(leafletMap);
+  }
+
+  function createEditorLayerGroupOverlay() {
+    const leafletMap = getLeafletMap();
+    if (!usesLeafletOverlays() || !leafletMap || !global.L || typeof global.L.layerGroup !== "function") return null;
+    return global.L.layerGroup().addTo(leafletMap);
+  }
+
+  function createEditorCircleOverlay(latlng, options, layerGroup) {
+    if (!usesLeafletOverlays() || !global.L || typeof global.L.circleMarker !== "function") return null;
+    const overlay = global.L.circleMarker(latlng, options || {});
+    if (layerGroup && typeof overlay.addTo === "function") overlay.addTo(layerGroup);
+    return overlay;
+  }
+
+  function removeEditorOverlay(overlay) {
+    if (!overlay) return false;
+    const leafletMap = getLeafletMap();
+    if (leafletMap && typeof leafletMap.hasLayer === "function" && leafletMap.hasLayer(overlay)) {
+      leafletMap.removeLayer(overlay);
+    }
+    return true;
+  }
+
+  function hasEditorOverlay(overlay) {
+    const leafletMap = getLeafletMap();
+    return !!(overlay && leafletMap && typeof leafletMap.hasLayer === "function" && leafletMap.hasLayer(overlay));
+  }
+
+  function setEditorPanEnabled(enabled) {
+    const activeMap = getActiveMap();
+    const dragging = activeMap && activeMap.dragging ? activeMap.dragging : activeMap && activeMap.dragPan;
+    if (!dragging) return false;
+    if (enabled && typeof dragging.enable === "function") dragging.enable();
+    if (!enabled && typeof dragging.disable === "function") dragging.disable();
+    return true;
+  }
+
+  function prepareEditorBoxSelectionGesture() {
+    if (ACTIVE_ENGINE === "maplibre") suppressNextMapLibreClick = true;
+    return setEditorPanEnabled(false);
+  }
+
+  function getEditorCenter() {
+    const viewport = getViewportOwnerContext();
+    return viewport && Number.isFinite(viewport.lat) && Number.isFinite(viewport.lon)
+      ? Object.freeze({ lat: viewport.lat, lon: viewport.lon, lng: viewport.lon })
+      : null;
+  }
+
+  function getEditorZoom() {
+    const viewport = getViewportOwnerContext();
+    return viewport && Number.isFinite(viewport.catalogZoom) ? viewport.catalogZoom : null;
+  }
+
+  function getEditorBounds() {
+    const viewport = getViewportOwnerContext();
+    if (!viewport) return null;
+    return Object.freeze({
+      west: viewport.west,
+      east: viewport.east,
+      south: viewport.south,
+      north: viewport.north,
+      contains: viewport.contains
+    });
+  }
+
+  function projectEditorCoordinate(point) {
+    const coordinates = toMapLibreLngLat(point);
+    if (!coordinates) return null;
+    if (ACTIVE_ENGINE === "maplibre" && managedMap && typeof managedMap.project === "function") {
+      const projected = managedMap.project(coordinates);
+      return projected ? Object.freeze({ x: projected.x, y: projected.y }) : null;
+    }
+    const leafletMap = getLeafletMap();
+    if (!leafletMap || typeof leafletMap.latLngToContainerPoint !== "function") return null;
+    const projected = leafletMap.latLngToContainerPoint([coordinates[1], coordinates[0]]);
+    return projected ? Object.freeze({ x: projected.x, y: projected.y }) : null;
+  }
+
+  function unprojectEditorPoint(point) {
+    const x = Array.isArray(point) ? Number(point[0]) : Number(point && point.x);
+    const y = Array.isArray(point) ? Number(point[1]) : Number(point && point.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (ACTIVE_ENGINE === "maplibre" && managedMap && typeof managedMap.unproject === "function") {
+      const lngLat = managedMap.unproject([x, y]);
+      return lngLat ? Object.freeze({ lat: lngLat.lat, lon: lngLat.lng, lng: lngLat.lng }) : null;
+    }
+    const leafletMap = getLeafletMap();
+    if (!leafletMap || typeof leafletMap.containerPointToLatLng !== "function") return null;
+    const latLng = leafletMap.containerPointToLatLng([x, y]);
+    return latLng ? Object.freeze({ lat: latLng.lat, lon: latLng.lng, lng: latLng.lng }) : null;
+  }
+
+  function panEditorViewportBy(offset, options) {
+    const x = Array.isArray(offset) ? Number(offset[0]) : Number(offset && offset.x);
+    const y = Array.isArray(offset) ? Number(offset[1]) : Number(offset && offset.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const activeMap = getActiveMap();
+    if (!activeMap || typeof activeMap.panBy !== "function") return false;
+    activeMap.panBy([x, y], options || {});
+    return true;
+  }
+
+  function setEditorZoom(leafletZoom) {
+    if (!Number.isFinite(leafletZoom)) return false;
+    if (ACTIVE_ENGINE === "maplibre") {
+      if (!managedMap || typeof managedMap.zoomTo !== "function") return false;
+      managedMap.zoomTo(leafletZoomToMapLibre(leafletZoom), { duration: 0 });
+      return true;
+    }
+    const leafletMap = getLeafletMap();
+    if (!leafletMap || typeof leafletMap.setZoom !== "function") return false;
+    leafletMap.setZoom(leafletZoom);
+    return true;
+  }
+
+  function resizeEditorMap() {
+    if (ACTIVE_ENGINE === "maplibre") return resizeMapLibreMap();
+    const leafletMap = getLeafletMap();
+    if (!leafletMap || typeof leafletMap.invalidateSize !== "function") return false;
+    leafletMap.invalidateSize(false);
+    return true;
+  }
+
+  function refreshEditorMapFeatures() {
+    if (MAPLIBRE_MIGRATION_ENABLED) syncEditorTestLayers();
+    return true;
+  }
+
   function getViewportOwnerContext() {
     const ownerMap = viewportOwnerEngine === "maplibre" ? managedMap : getLeafletMap();
     if (!ownerMap) return null;
@@ -2989,9 +3199,117 @@
   }
 
   function syncViewportFromOwner() {
-    if (viewportOwnerEngine !== "leaflet") return false;
+    if (viewportOwnerEngine === "maplibre") return syncMapLibreOwnerViewport();
     if (!leafletViewportMap) leafletViewportMap = getLeafletMap();
     return syncLeafletViewport();
+  }
+
+  function applyViewportToMapLibre(viewport) {
+    if (!managedMap || !viewport || !Number.isFinite(viewport.lat) || !Number.isFinite(viewport.lon)) return false;
+    const options = { center: [viewport.lon, viewport.lat] };
+    if (Number.isFinite(viewport.zoom)) options.zoom = viewport.zoom;
+    if (Number.isFinite(viewport.bearing)) options.bearing = viewport.bearing;
+    if (Number.isFinite(viewport.pitch)) options.pitch = viewport.pitch;
+    managedMap.jumpTo(options);
+    return true;
+  }
+
+  function mapLibreZoomToLeaflet(mapLibreZoom) {
+    return Number.isFinite(mapLibreZoom)
+      ? mapLibreZoom - LEAFLET_TO_MAPLIBRE_ZOOM_OFFSET
+      : null;
+  }
+
+  function syncMapLibreOwnerViewport() {
+    mapLibreOwnerViewportFrame = null;
+    if (viewportOwnerEngine !== "maplibre" || !managedMap) return false;
+    const leafletMap = getLeafletMap();
+    const viewport = readMapLibreViewport();
+    const zoom = viewport && mapLibreZoomToLeaflet(viewport.zoom);
+    if (!leafletMap || !viewport || !Number.isFinite(viewport.lat) || !Number.isFinite(viewport.lon) || !Number.isFinite(zoom)) {
+      return false;
+    }
+    leafletMap.setView([viewport.lat, viewport.lon], zoom, { animate: false });
+    return true;
+  }
+
+  function scheduleMapLibreOwnerViewportSync() {
+    if (mapLibreOwnerViewportFrame != null) return;
+    mapLibreOwnerViewportFrame = global.requestAnimationFrame(syncMapLibreOwnerViewport);
+  }
+
+  function startMapLibreOwnerViewportSync() {
+    if (viewportOwnerEngine !== "maplibre" || !managedMap || mapLibreOwnerViewportHandler) return false;
+    mapLibreOwnerViewportMap = managedMap;
+    mapLibreOwnerViewportHandler = () => {
+      if (getLeafletMap()) scheduleMapLibreOwnerViewportSync();
+      scheduleViewportDifferenceDiagnostic();
+    };
+    mapLibreOwnerViewportEndHandler = () => {
+      const viewport = getViewportOwnerContext();
+      const signature = viewport
+        ? [viewport.lat, viewport.lon, viewport.zoom, viewport.bearing, viewport.pitch].join("|")
+        : "";
+      if (signature === mapLibreOwnerViewportEndSignature) return;
+      mapLibreOwnerViewportEndSignature = signature;
+      if (global.document && typeof global.CustomEvent === "function") {
+        global.document.dispatchEvent(new global.CustomEvent("editor:viewportchange", {
+          detail: { engine: "maplibre", viewport }
+        }));
+      }
+    };
+    mapLibreOwnerViewportMap.on("move", mapLibreOwnerViewportHandler);
+    mapLibreOwnerViewportMap.on("zoom", mapLibreOwnerViewportHandler);
+    mapLibreOwnerViewportMap.on("moveend", mapLibreOwnerViewportEndHandler);
+    mapLibreOwnerViewportMap.on("zoomend", mapLibreOwnerViewportEndHandler);
+    if (managedStyleReady) syncMapLibreOwnerViewport();
+    return true;
+  }
+
+  function stopMapLibreOwnerViewportSync() {
+    if (mapLibreOwnerViewportMap && mapLibreOwnerViewportHandler) {
+      mapLibreOwnerViewportMap.off("move", mapLibreOwnerViewportHandler);
+      mapLibreOwnerViewportMap.off("zoom", mapLibreOwnerViewportHandler);
+    }
+    if (mapLibreOwnerViewportMap && mapLibreOwnerViewportEndHandler) {
+      mapLibreOwnerViewportMap.off("moveend", mapLibreOwnerViewportEndHandler);
+      mapLibreOwnerViewportMap.off("zoomend", mapLibreOwnerViewportEndHandler);
+    }
+    if (mapLibreOwnerViewportFrame != null && typeof global.cancelAnimationFrame === "function") {
+      global.cancelAnimationFrame(mapLibreOwnerViewportFrame);
+    }
+    mapLibreOwnerViewportMap = null;
+    mapLibreOwnerViewportHandler = null;
+    mapLibreOwnerViewportEndHandler = null;
+    mapLibreOwnerViewportEndSignature = null;
+    mapLibreOwnerViewportFrame = null;
+    return true;
+  }
+
+  function setEditorViewport(lat, lon, leafletZoom) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    if (ACTIVE_ENGINE === "maplibre") {
+      const options = { center: [lon, lat] };
+      const zoom = leafletZoomToMapLibre(leafletZoom);
+      if (Number.isFinite(zoom)) options.zoom = zoom;
+      if (!managedMap) {
+        pendingMapLibreViewport = Object.freeze({
+          lat,
+          lon,
+          zoom: options.zoom,
+          bearing: 0,
+          pitch: 0
+        });
+        return true;
+      }
+      managedMap.jumpTo(options);
+      scheduleMapLibreOwnerViewportSync();
+      return true;
+    }
+    const leafletMap = getLeafletMap();
+    if (!leafletMap) return false;
+    leafletMap.setView([lat, lon], leafletZoom);
+    return true;
   }
 
   function leafletZoomToMapLibre(leafletZoom) {
@@ -3057,8 +3375,10 @@
   }
 
   global.EditorMapAdapter = Object.freeze({
-    activeEngine: "leaflet",
+    activeEngine: ACTIVE_ENGINE,
     preparedEngine: "maplibre",
+    mainEngineRequested: MAPLIBRE_MAIN_ENGINE_REQUESTED,
+    sideBySideEnabled: MAPLIBRE_SIDE_BY_SIDE_ENABLED,
     migrationEnabled: MAPLIBRE_MIGRATION_ENABLED,
     interactionRequested: MAPLIBRE_INTERACTION_REQUESTED,
     testInteractionEnabled: MAPLIBRE_TEST_INTERACTION_ENABLED,
@@ -3080,9 +3400,34 @@
     startMapLibreViewportDiagnostics,
     stopMapLibreViewportDiagnostics,
     readLeafletViewport,
+    getActiveMapEngine,
+    getActiveMap,
+    usesLeafletOverlays,
+    createEditorPointOverlay,
+    createEditorLineOverlay,
+    createEditorLayerGroupOverlay,
+    createEditorCircleOverlay,
+    removeEditorOverlay,
+    hasEditorOverlay,
+    setEditorPanEnabled,
+    prepareEditorBoxSelectionGesture,
+    getEditorCenter,
+    getEditorZoom,
+    getEditorBounds,
+    projectEditorCoordinate,
+    unprojectEditorPoint,
+    panEditorViewportBy,
+    setEditorZoom,
+    resizeEditorMap,
+    refreshEditorMapFeatures,
     getViewportOwnerEngine,
     getViewportOwnerContext,
     syncViewportFromOwner,
+    setEditorViewport,
+    mapLibreZoomToLeaflet,
+    syncMapLibreOwnerViewport,
+    startMapLibreOwnerViewportSync,
+    stopMapLibreOwnerViewportSync,
     centerDistanceMeters,
     shortestAngleDifferenceDegrees,
     calculateViewportDifferences,

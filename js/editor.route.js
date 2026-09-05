@@ -2,10 +2,29 @@
 // ROUTE GEOMETRY HELPERS
 // =========================
 
+function createRoutePointOverlay(latlng, options) {
+  const adapter = window.EditorMapAdapter;
+  return adapter && typeof adapter.createEditorPointOverlay === "function"
+    ? adapter.createEditorPointOverlay(latlng, options)
+    : L.marker(latlng, options).addTo(map);
+}
+
+function createRouteLineOverlay(points, options) {
+  const adapter = window.EditorMapAdapter;
+  return adapter && typeof adapter.createEditorLineOverlay === "function"
+    ? adapter.createEditorLineOverlay(points, options)
+    : L.polyline(points, options).addTo(map);
+}
+
+function removeRouteOverlay(overlay) {
+  const adapter = window.EditorMapAdapter;
+  if (adapter && typeof adapter.removeEditorOverlay === "function") return adapter.removeEditorOverlay(overlay);
+  if (overlay && map.hasLayer(overlay)) map.removeLayer(overlay);
+  return true;
+}
+
 function removeMarkerSafe(marker) {
-  if (marker && map.hasLayer(marker)) {
-    map.removeLayer(marker);
-  }
+  removeRouteOverlay(marker);
 }
 
 function approxDistanceMeters(a, b) {
@@ -153,15 +172,27 @@ function findClosestSegment(latlng) {
   let closest = null;
   let minDist = Infinity;
 
-  const p = map.latLngToContainerPoint(latlng);
+  const mapAdapter = window.EditorMapAdapter;
+  const project = value => (
+    mapAdapter && typeof mapAdapter.projectEditorCoordinate === "function"
+      ? mapAdapter.projectEditorCoordinate(value)
+      : map.latLngToContainerPoint(value)
+  );
+  const unproject = value => (
+    mapAdapter && typeof mapAdapter.unprojectEditorPoint === "function"
+      ? mapAdapter.unprojectEditorPoint(value)
+      : map.containerPointToLatLng(value)
+  );
+  const p = project(latlng);
+  if (!p) return null;
 
   for (let i = 0; i < state.routePoints.length - 1; i++) {
-    const a = map.latLngToContainerPoint([
+    const a = project([
       state.routePoints[i].lat,
       state.routePoints[i].lon
     ]);
 
-    const b = map.latLngToContainerPoint([
+    const b = project([
       state.routePoints[i + 1].lat,
       state.routePoints[i + 1].lon
     ]);
@@ -184,7 +215,7 @@ function findClosestSegment(latlng) {
       minDist = dist;
       closest = {
         index: i,
-        latlng: map.containerPointToLatLng([projX, projY])
+        latlng: unproject([projX, projY])
       };
     }
   }
@@ -286,33 +317,33 @@ function buildRoutingAnchorsFromCurrentRoute(options = {}) {
 
 function refreshRouteLine() {
   if (routeLine) {
-    map.removeLayer(routeLine);
+    removeRouteOverlay(routeLine);
     routeLine = null;
   }
 
   if (simplifiedPreviewLine) {
-    map.removeLayer(simplifiedPreviewLine);
+    removeRouteOverlay(simplifiedPreviewLine);
     simplifiedPreviewLine = null;
   }
 
   if (state.routePoints.length >= 2) {
     const originalCoords = state.routePoints.map(point => [point.lat, point.lon]);
 
-    routeLine = L.polyline(originalCoords, {
+    routeLine = createRouteLineOverlay(originalCoords, {
       color: lineColorInput.value,
       weight: state.previewMode === "original" ? 5 : 3,
       opacity: state.previewMode === "original" ? 1 : 0.35
-    }).addTo(map);
+    });
   }
 
   if (state.previewMode === "simplified" && state.simplifiedRoutePoints.length >= 2) {
     const simplifiedCoords = state.simplifiedRoutePoints.map(point => [point.lat, point.lon]);
 
-    simplifiedPreviewLine = L.polyline(simplifiedCoords, {
+    simplifiedPreviewLine = createRouteLineOverlay(simplifiedCoords, {
       color: lineColorInput.value,
       weight: 6,
       opacity: 1
-    }).addTo(map);
+    });
   }
 
   if (typeof updatePreviewButtons === "function") {
@@ -320,6 +351,7 @@ function refreshRouteLine() {
 }
   updateStats();
   updateRouteStats();
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 }
 
 // =========================
@@ -328,9 +360,7 @@ function refreshRouteLine() {
 
 function removeAllRoutePointMarkers() {
   state.routePoints.forEach(point => {
-    if (point.marker && map.hasLayer(point.marker)) {
-      removeMarkerSafe(point.marker);
-    }
+    removeMarkerSafe(point.marker);
   });
 
   state.routePoints = [];
@@ -342,6 +372,77 @@ function removeAllRoutePointMarkers() {
   ) {
     clearEditorSelectionStateOnly();
   }
+}
+
+function beginRoutePointMove(point, startPos) {
+  beginRoutePointInteraction();
+  if (!point || !startPos) return false;
+  if (state.selectedRoutePointIds.has(point.id) && state.selectedRoutePointIds.size > 1) {
+    const selectedPoints = state.routePoints.filter(p => state.selectedRoutePointIds.has(p.id));
+    state.groupDragContext = {
+      draggedId: point.id,
+      startLat: startPos.lat,
+      startLng: startPos.lng,
+      points: selectedPoints.map(p => ({ id: p.id, point: p, lat: p.lat, lon: p.lon }))
+    };
+  } else {
+    state.groupDragContext = null;
+  }
+  return true;
+}
+
+function previewRoutePointMove(point, currentPos) {
+  if (!point || !currentPos || !state.groupDragContext || state.groupDragContext.draggedId !== point.id) return false;
+  const deltaLat = currentPos.lat - state.groupDragContext.startLat;
+  const deltaLng = currentPos.lng - state.groupDragContext.startLng;
+  state.groupDragContext.points.forEach(entry => {
+    if (entry.id === point.id) return;
+    const newLat = entry.lat + deltaLat;
+    const newLng = entry.lon + deltaLng;
+    entry.point.lat = newLat;
+    entry.point.lon = newLng;
+    if (entry.point.marker) entry.point.marker.setLatLng([newLat, newLng]);
+  });
+  refreshRouteLine();
+  return true;
+}
+
+function finishRoutePointMove(point, newPos, silent = false) {
+  if (!point || !newPos || !Number.isFinite(newPos.lat) || !Number.isFinite(newPos.lng)) return false;
+  point.lat = newPos.lat;
+  point.lon = newPos.lng;
+  if (point.marker && typeof point.marker.setLatLng === "function") {
+    point.marker.setLatLng([newPos.lat, newPos.lng]);
+  }
+  if (state.groupDragContext && state.groupDragContext.draggedId === point.id) {
+    const deltaLat = newPos.lat - state.groupDragContext.startLat;
+    const deltaLng = newPos.lng - state.groupDragContext.startLng;
+    state.groupDragContext.points.forEach(entry => {
+      if (entry.id === point.id) return;
+      entry.point.lat = entry.lat + deltaLat;
+      entry.point.lon = entry.lon + deltaLng;
+      if (entry.point.marker) entry.point.marker.setLatLng([entry.point.lat, entry.point.lon]);
+    });
+    notifyMapLibreEditorSelectionGeometryChanged("routePoint", state.groupDragContext.points.map(entry => entry.point));
+    state.groupDragContext = null;
+    if (state.selected && state.selected.type === "route" && state.selected.ref.id === point.id) {
+      routeLatInput.value = point.lat.toFixed(6);
+      routeLonInput.value = point.lon.toFixed(6);
+    }
+    refreshRouteLine();
+    endRoutePointInteraction();
+    setStatus(`${state.selectedRoutePointIds.size} Routenpunkte gemeinsam verschoben.`);
+    return true;
+  }
+  if (state.selected && state.selected.type === "route" && state.selected.ref.id === point.id) {
+    routeLatInput.value = point.lat.toFixed(6);
+    routeLonInput.value = point.lon.toFixed(6);
+  }
+  notifyMapLibreEditorSelectionGeometryChanged("routePoint", point);
+  refreshRouteLine();
+  endRoutePointInteraction();
+  if (!silent) setStatus(`Routenpunkt verschoben: ${point.id}`);
+  return true;
 }
 
 function createRoutePointObject(lat, lon, silent = false, sourceType = "manual") {
@@ -361,10 +462,15 @@ function createRoutePointObject(lat, lon, silent = false, sourceType = "manual")
 
   const safeRouteIcon = ICONS.route || createDivIcon("#f97316", "#7c2d12", 12);
 
-  const marker = L.marker([point.lat, point.lon], {
+  const marker = createRoutePointOverlay([point.lat, point.lon], {
     draggable: true,
     icon: safeRouteIcon
-  }).addTo(map);
+  });
+
+  if (!marker) {
+    state.routePoints.push(point);
+    return point;
+  }
 
   marker.on("mousedown", function (e) {
     if (e.originalEvent) {
@@ -392,108 +498,15 @@ function createRoutePointObject(lat, lon, silent = false, sourceType = "manual")
   });
 
   marker.on("dragstart", function (e) {
-    beginRoutePointInteraction();
-
-    const draggedId = point.id;
-
-    if (state.selectedRoutePointIds.has(draggedId) && state.selectedRoutePointIds.size > 1) {
-      const startPos = e.target.getLatLng();
-      const selectedPoints = state.routePoints.filter(
-        p => p.marker && state.selectedRoutePointIds.has(p.id)
-      );
-
-      state.groupDragContext = {
-        draggedId,
-        startLat: startPos.lat,
-        startLng: startPos.lng,
-        points: selectedPoints.map(p => ({
-          id: p.id,
-          point: p,
-          lat: p.lat,
-          lon: p.lon
-        }))
-      };
-    } else {
-      state.groupDragContext = null;
-    }
+    beginRoutePointMove(point, e.target.getLatLng());
   });
 
   marker.on("drag", function (e) {
-    if (!state.groupDragContext) return;
-    if (state.groupDragContext.draggedId !== point.id) return;
-
-    const currentPos = e.target.getLatLng();
-    const deltaLat = currentPos.lat - state.groupDragContext.startLat;
-    const deltaLng = currentPos.lng - state.groupDragContext.startLng;
-
-    state.groupDragContext.points.forEach(entry => {
-      if (entry.id === point.id) return;
-
-      const newLat = entry.lat + deltaLat;
-      const newLng = entry.lon + deltaLng;
-
-      entry.point.lat = newLat;
-      entry.point.lon = newLng;
-
-      if (entry.point.marker) {
-        entry.point.marker.setLatLng([newLat, newLng]);
-      }
-    });
-
-    refreshRouteLine();
+    previewRoutePointMove(point, e.target.getLatLng());
   });
 
   marker.on("dragend", function (e) {
-    const newPos = e.target.getLatLng();
-    point.lat = newPos.lat;
-    point.lon = newPos.lng;
-
-    if (state.groupDragContext && state.groupDragContext.draggedId === point.id) {
-      const deltaLat = newPos.lat - state.groupDragContext.startLat;
-      const deltaLng = newPos.lng - state.groupDragContext.startLng;
-
-      state.groupDragContext.points.forEach(entry => {
-        if (entry.id === point.id) return;
-
-        entry.point.lat = entry.lat + deltaLat;
-        entry.point.lon = entry.lon + deltaLng;
-      });
-
-      notifyMapLibreEditorSelectionGeometryChanged(
-        "routePoint",
-        state.groupDragContext.points.map(entry => entry.point)
-      );
-
-      state.groupDragContext = null;
-
-      if (
-        state.selected &&
-        state.selected.type === "route" &&
-        state.selected.ref.id === point.id
-      ) {
-        routeLatInput.value = point.lat.toFixed(6);
-        routeLonInput.value = point.lon.toFixed(6);
-      }
-
-      refreshRouteLine();
-      endRoutePointInteraction();
-      setStatus(`${state.selectedRoutePointIds.size} Routenpunkte gemeinsam verschoben.`);
-      return;
-    }
-
-    if (state.selected && state.selected.type === "route" && state.selected.ref.id === point.id) {
-      routeLatInput.value = point.lat.toFixed(6);
-      routeLonInput.value = point.lon.toFixed(6);
-    }
-
-    notifyMapLibreEditorSelectionGeometryChanged("routePoint", point);
-
-    refreshRouteLine();
-    endRoutePointInteraction();
-
-    if (!silent) {
-      setStatus(`Routenpunkt verschoben: ${point.id}`);
-    }
+    finishRoutePointMove(point, e.target.getLatLng(), silent);
   });
 
   point.marker = marker;
@@ -562,9 +575,7 @@ function deleteSelectedRoutePoint() {
     const idsToDelete = new Set(state.selectedRoutePointIds);
 
     state.routePoints.forEach(point => {
-  if (idsToDelete.has(point.id) && point.marker && map.hasLayer(point.marker)) {
-    removeMarkerSafe(point.marker);
-  }
+  if (idsToDelete.has(point.id)) removeMarkerSafe(point.marker);
 });
 
     state.routePoints = state.routePoints.filter(point => !idsToDelete.has(point.id));
@@ -1029,15 +1040,14 @@ function addSpecialTrackPoint(latlng) {
 
   track.points.push([latlng.lat, latlng.lng]);
 
-  if (track.polyline && map.hasLayer(track.polyline)) {
-    map.removeLayer(track.polyline);
-  }
+  removeRouteOverlay(track.polyline);
 
-  track.polyline = L.polyline(track.points, {
+  track.polyline = createRouteLineOverlay(track.points, {
     color: "#aa00ff",
     weight: 4,
     dashArray: "6,6"
-  }).addTo(map);
+  });
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 
   setStatus("Sondertrasse Punkt hinzugefügt");
 }
@@ -1072,19 +1082,18 @@ function extendSelectedSpecialTrack(latlng) {
 
   track.points.push([latlng.lat, latlng.lng]);
 
-  if (track.polyline && map.hasLayer(track.polyline)) {
-    map.removeLayer(track.polyline);
-  }
+  removeRouteOverlay(track.polyline);
 
-  track.polyline = L.polyline(track.points, {
+  track.polyline = createRouteLineOverlay(track.points, {
     color: "#ff00ff",
     weight: 6,
     dashArray: "6,6"
-  }).addTo(map);
+  });
 
-  track.polyline.on("click", function () {
+  if (track.polyline) track.polyline.on("click", function () {
     selectSpecialTrack(track);
   });
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 
   debug("Sondertrasse verlängert", {
     trackId: track.id,
@@ -1113,9 +1122,7 @@ function removeLastPointFromSelectedSpecialTrack() {
 
   track.points.pop();
 
-  if (track.polyline && map.hasLayer(track.polyline)) {
-    map.removeLayer(track.polyline);
-  }
+  removeRouteOverlay(track.polyline);
 
   if (track.points.length < 2) {
     state.specialTracks = state.specialTracks.filter(t => t.id !== track.id);
@@ -1124,15 +1131,16 @@ function removeLastPointFromSelectedSpecialTrack() {
     return;
   }
 
-  track.polyline = L.polyline(track.points, {
+  track.polyline = createRouteLineOverlay(track.points, {
     color: "#ff00ff",
     weight: 6,
     dashArray: "6,6"
-  }).addTo(map);
+  });
 
-  track.polyline.on("click", function () {
+  if (track.polyline) track.polyline.on("click", function () {
     selectSpecialTrack(track);
   });
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 
   setStatus("Letzter Sondertrassenpunkt gelöscht.");
 }

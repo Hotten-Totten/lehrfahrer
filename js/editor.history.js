@@ -158,11 +158,11 @@ function applyHistorySnapshot(snapshot) {
         : [];
 
       const polyline = points.length
-        ? L.polyline(points, {
+        ? createRouteLineOverlay(points, {
             color: "#aa00ff",
             weight: 4,
             dashArray: "6,6"
-          }).addTo(map)
+          })
         : null;
 
       state.specialTracks.push({
@@ -183,11 +183,11 @@ function applyHistorySnapshot(snapshot) {
         id: snapshot.currentSpecialTrack.id,
         points: currentPoints,
         polyline: currentPoints.length
-          ? L.polyline(currentPoints, {
+          ? createRouteLineOverlay(currentPoints, {
               color: "#aa00ff",
               weight: 4,
               dashArray: "6,6"
-            }).addTo(map)
+            })
           : null
       };
     } else {

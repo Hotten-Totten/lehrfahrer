@@ -399,23 +399,51 @@ document.addEventListener("keydown", e => {
   }
 });
 
-// ---------- Kartenbewegung / Katalogmarker ----------
+mapWrapElement.addEventListener("pointerdown", event => {
+  if (state.routeMode !== "select" || !event.shiftKey || event.button !== 0) return;
+  beginBoxSelection(event);
+  event.preventDefault();
+}, true);
 
-let lastCatalogZoom = map.getZoom();
-
-map.on("zoomend", function () {
-  const currentZoom = map.getZoom();
-
-  if (currentZoom !== lastCatalogZoom) {
-    lastCatalogZoom = currentZoom;
-    updateCatalogMarkerVisibility();
-  }
+document.addEventListener("pointermove", event => {
+  if (state.boxSelection.active) updateBoxSelection(event);
 });
 
-map.on("moveend", function () {
-  if (map.getZoom() >= CATALOG_MIN_ZOOM) {
-    updateCatalogMarkerVisibility();
-  }
+document.addEventListener("pointerup", () => {
+  if (state.boxSelection.active) finishBoxSelection();
+});
+
+// ---------- Kartenbewegung / Katalogmarker ----------
+
+function getActiveEditorZoom() {
+  const adapter = window.EditorMapAdapter;
+  const zoom = adapter && typeof adapter.getEditorZoom === "function"
+    ? adapter.getEditorZoom()
+    : (map ? map.getZoom() : null);
+  return Number.isFinite(zoom) ? zoom : 13;
+}
+
+let lastCatalogZoom = getActiveEditorZoom();
+
+if (!window.EditorMapAdapter || window.EditorMapAdapter.activeEngine !== "maplibre") {
+  map.on("zoomend", function () {
+    const currentZoom = getActiveEditorZoom();
+    if (currentZoom !== lastCatalogZoom) {
+      lastCatalogZoom = currentZoom;
+      updateCatalogMarkerVisibility();
+    }
+  });
+
+  map.on("moveend", function () {
+    if (getActiveEditorZoom() >= CATALOG_MIN_ZOOM) updateCatalogMarkerVisibility();
+  });
+}
+
+document.addEventListener("editor:viewportchange", function (event) {
+  if (!event.detail || event.detail.engine !== "maplibre") return;
+  const currentZoom = getActiveEditorZoom();
+  if (currentZoom !== lastCatalogZoom) lastCatalogZoom = currentZoom;
+  if (currentZoom >= CATALOG_MIN_ZOOM) updateCatalogMarkerVisibility();
 });
 
 // ---------- Map ----------
@@ -492,7 +520,7 @@ function deleteSelectedEditorPointObject() {
   return false;
 }
 
-map.on("click", function (e) {
+if (map) map.on("click", function (e) {
   if (state.routeMode === "detourSelectStops") {
     setStatus("Umleitungsbereich wählen: Bitte Haltestellen in der Liste auswählen.");
     return;

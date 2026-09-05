@@ -1,5 +1,15 @@
 # Changelog
 
+## V2.1.023 - 2026-09-05
+- Engine-selektiven Kartenstart ergänzt
+- MapLibre-Hauptbetrieb ohne Leaflet-Map, CARTO-Layer, MarkerCluster oder Leaflet-Overlays umgesetzt
+- aktiven Viewport vollständig MapLibre-basiert entkoppelt
+- Stops, RoutePoints und Hilfspunkte einschließlich Dragging, Gruppenverschieben und Box-Auswahl geprüft
+- Spezialstrecken, DetourDraft sowie Suche und Katalog im MapLibre-Hauptbetrieb angebunden
+- Undo/Redo, Autosave/Restore, Reload und Linienwechsel geprüft
+- Leaflet als unveränderten Fallback beibehalten
+- keine notwendige Leaflet-Laufzeitabhängigkeit im MapLibre-Hauptbetrieb
+
 ## V2.1.022 - 2026-09-05
 - MapLibre-Testpfad funktional stark erweitert
 - Auswahl, Mehrfachauswahl sowie Hover-/HitTest ergänzt

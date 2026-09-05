@@ -79,7 +79,8 @@ function beginBoxSelection(pointerEvent) {
   state.boxSelection.start = start;
   state.boxSelection.end = start;
 
-  map.dragging.disable();
+  const adapter = window.EditorMapAdapter;
+  if ((!adapter || !adapter.prepareEditorBoxSelectionGesture()) && map) map.dragging.disable();
   document.body.style.userSelect = "none";
   document.body.style.webkitUserSelect = "none";
 
@@ -109,7 +110,8 @@ function finishBoxSelection() {
   state.boxSelection.active = false;
   hideSelectionBox();
 
-  map.dragging.enable();
+  const adapter = window.EditorMapAdapter;
+  if ((!adapter || !adapter.setEditorPanEnabled(true)) && map) map.dragging.enable();
   document.body.style.userSelect = "";
   document.body.style.webkitUserSelect = "";
 
@@ -129,13 +131,24 @@ function finishBoxSelection() {
   clearRouteMultiSelection();
 
   state.routePoints.forEach(point => {
-    const p = map.latLngToContainerPoint([point.lat, point.lon]);
+    const adapter = window.EditorMapAdapter;
+    const p = adapter && typeof adapter.projectEditorCoordinate === "function"
+      ? adapter.projectEditorCoordinate(point)
+      : map.latLngToContainerPoint([point.lat, point.lon]);
+    if (!p) return;
+    const activeMapContainer = adapter?.getActiveMap?.()?.getContainer?.();
+    const mapRect = activeMapContainer?.getBoundingClientRect?.();
+    const wrapRect = mapWrapElement.getBoundingClientRect();
+    const offsetX = mapRect ? mapRect.left - wrapRect.left : 0;
+    const offsetY = mapRect ? mapRect.top - wrapRect.top : 0;
+    const projectedX = p.x + offsetX;
+    const projectedY = p.y + offsetY;
 
     const inside =
-      p.x >= bounds.left &&
-      p.x <= bounds.right &&
-      p.y >= bounds.top &&
-      p.y <= bounds.bottom;
+      projectedX >= bounds.left &&
+      projectedX <= bounds.right &&
+      projectedY >= bounds.top &&
+      projectedY <= bounds.bottom;
 
     if (inside) {
       state.selectedRoutePointIds.add(point.id);
@@ -166,7 +179,8 @@ function cancelBoxSelection() {
   state.boxSelection.start = null;
   state.boxSelection.end = null;
 
-  map.dragging.enable();
+  const adapter = window.EditorMapAdapter;
+  if ((!adapter || !adapter.setEditorPanEnabled(true)) && map) map.dragging.enable();
   document.body.style.userSelect = "";
   document.body.style.webkitUserSelect = "";
 
@@ -254,7 +268,7 @@ function selectStop(stop) {
   };
 
   clearSelectionStyles();
-  stop.marker.setIcon(getLineStopIcon(stop, true));
+  if (stop.marker) stop.marker.setIcon(getLineStopIcon(stop, true));
 
   noSelection.classList.add("hidden");
   routeEditor.classList.add("hidden");

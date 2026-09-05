@@ -2,34 +2,40 @@
 // MAP
 // =========================
 
-const map = L.map("map", {
-  boxZoom: false,
-  doubleClickZoom: false,
-  zoomAnimation: false,
-  fadeAnimation: false,
-  markerZoomAnimation: false
-}).setView([51.7600, 14.3300], 13);
+const activeEditorMapEngine = window.EditorMapAdapter?.activeEngine === "maplibre"
+  ? "maplibre"
+  : "leaflet";
 
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  maxZoom: 20,
-  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-  subdomains: "abcd",
-  keepBuffer: 8,
-  updateWhenZooming: false,
-  updateWhenIdle: true
-}).addTo(map);
+const map = activeEditorMapEngine === "leaflet"
+  ? L.map("map", {
+      boxZoom: false,
+      doubleClickZoom: false,
+      zoomAnimation: false,
+      fadeAnimation: false,
+      markerZoomAnimation: false
+    }).setView([51.7600, 14.3300], 13)
+  : null;
+
+if (map) {
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    subdomains: "abcd",
+    keepBuffer: 8,
+    updateWhenZooming: false,
+    updateWhenIdle: true
+  }).addTo(map);
+}
 
 // Cluster nur aktivieren, wenn Plugin wirklich geladen ist
-const catalogCluster = typeof L.markerClusterGroup === "function"
+const catalogCluster = map && typeof L.markerClusterGroup === "function"
   ? L.markerClusterGroup({
       chunkedLoading: true,
       disableClusteringAtZoom: 16
     })
   : null;
 
-if (catalogCluster) {
-  map.addLayer(catalogCluster);
-}
+if (catalogCluster) map.addLayer(catalogCluster);
 
 // =========================
 // GLOBALS / STATE

@@ -274,9 +274,7 @@ function findDetourDraftSegment() {
 }
 
 function removeDetourDraftPreview() {
-  if (state.detourDraft && state.detourDraft.polyline && map.hasLayer(state.detourDraft.polyline)) {
-    map.removeLayer(state.detourDraft.polyline);
-  }
+  if (state.detourDraft) removeRouteOverlay(state.detourDraft.polyline);
 }
 
 function startDetourDraftFromSelectedRoutePoints() {
@@ -352,11 +350,12 @@ function refreshDetourDraftPreview() {
     [segment.endPoint.lat, segment.endPoint.lon]
   ];
 
-  draft.polyline = L.polyline(previewPoints, {
+  draft.polyline = createRouteLineOverlay(previewPoints, {
     color: "#f59e0b",
     weight: 5,
     dashArray: "8,6"
-  }).addTo(map);
+  });
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 }
 
 function buildDetourDraftConfirmMessage(startIndex, endIndex, insertedCount, affectedStops) {
@@ -418,9 +417,7 @@ async function finishDetourDraft() {
 
   const removed = state.routePoints.splice(segment.startIndex + 1, segment.endIndex - segment.startIndex - 1);
   removed.forEach(point => {
-    if (point.marker && map.hasLayer(point.marker)) {
-      map.removeLayer(point.marker);
-    }
+    removeMarkerSafe(point.marker);
   });
 
   let insertIndex = segment.startIndex + 1;
@@ -531,7 +528,7 @@ async function rerouteSelectedSegment() {
 
     const removed = state.routePoints.splice(startIndex + 1, endIndex - startIndex - 1);
     removed.forEach(p => {
-      if (p.marker) map.removeLayer(p.marker);
+      removeMarkerSafe(p.marker);
     });
 
     let insertIndex = startIndex + 1;
@@ -819,7 +816,7 @@ async function rerouteInsertedStop(insertedStopIndex, options = {}) {
   // Alte Routenpunkte zwischen fromIdx und toIdx (exklusiv) entfernen
   const removed = state.routePoints.splice(fromIdx + 1, toIdx - fromIdx - 1);
   removed.forEach(p => {
-    if (p.marker) map.removeLayer(p.marker);
+    removeMarkerSafe(p.marker);
   });
 
   // Innere Punkte einfügen (ohne ersten und letzten, die sind bereits vorhanden)

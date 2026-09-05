@@ -83,10 +83,17 @@ function handleCatalogStopActivation(catalogStop) {
 
 // Erstellt einen Katalog-Marker inklusive Popup/Tooltip und Klickverhalten.
 function createCatalogMarker(catalogStop) {
-  const marker = L.marker([catalogStop.lat, catalogStop.lon], {
+  const adapter = window.EditorMapAdapter;
+  const marker = adapter && typeof adapter.createEditorPointOverlay === "function"
+    ? adapter.createEditorPointOverlay([catalogStop.lat, catalogStop.lon], {
+        icon: getCatalogIconForStop(catalogStop, false),
+        title: catalogStop.name || "Haltestelle"
+      }, false)
+    : L.marker([catalogStop.lat, catalogStop.lon], {
     icon: getCatalogIconForStop(catalogStop, false),
     title: catalogStop.name || "Haltestelle"
   });
+  if (!marker) return null;
 
   marker.bindPopup(
     "<b>" + (catalogStop.name || "Unbenannte Haltestelle") + "</b><br>" +
@@ -143,14 +150,14 @@ function updateCatalogMarkerVisibilityNow() {
     : null;
   const currentZoom = viewport && Number.isFinite(viewport.catalogZoom)
     ? viewport.catalogZoom
-    : map.getZoom();
+    : (map ? map.getZoom() : 13);
 
   if (currentZoom < CATALOG_MIN_ZOOM) {
     clearVisibleCatalogMarkers();
     return;
   }
 
-  const bounds = viewport ? null : map.getBounds();
+  const bounds = viewport ? null : (map ? map.getBounds() : null);
   const visibleIds = new Set();
 
   for (const catalogStop of stopCatalog) {
@@ -159,7 +166,7 @@ function updateCatalogMarkerVisibilityNow() {
 
     const isInsideViewport = viewport
       ? viewport.contains(catalogStop.lat, catalogStop.lon)
-      : bounds.contains(L.latLng(catalogStop.lat, catalogStop.lon));
+      : !!bounds && bounds.contains(L.latLng(catalogStop.lat, catalogStop.lon));
     if (!isInsideViewport) continue;
 
     visibleIds.add(catalogStop.id);
@@ -168,9 +175,9 @@ function updateCatalogMarkerVisibilityNow() {
       const marker = createCatalogMarker(catalogStop);
       state.visibleCatalogMarkers.set(catalogStop.id, marker);
 
-      if (catalogCluster) {
+      if (marker && catalogCluster) {
         catalogCluster.addLayer(marker);
-      } else {
+      } else if (marker) {
         marker.addTo(map);
       }
     }
@@ -186,11 +193,9 @@ function updateCatalogMarkerVisibilityNow() {
 
   toRemove.forEach(stopId => {
     const marker = state.visibleCatalogMarkers.get(stopId);
-    if (!marker) return;
-
-    if (catalogCluster) {
+    if (marker && catalogCluster) {
       catalogCluster.removeLayer(marker);
-    } else if (map.hasLayer(marker)) {
+    } else if (marker && map.hasLayer(marker)) {
       map.removeLayer(marker);
     }
 
@@ -271,7 +276,10 @@ function highlightCatalogMarker(catalogStop) {
 
 // Springt zur Haltestelle auf der Karte und öffnet Popup wenn verfügbar.
 function jumpToCatalogStop(catalogStop) {
-  map.setView([catalogStop.lat, catalogStop.lon], 18);
+  const adapter = window.EditorMapAdapter;
+  if (!adapter || !adapter.setEditorViewport(catalogStop.lat, catalogStop.lon, 18)) {
+    map.setView([catalogStop.lat, catalogStop.lon], 18);
+  }
 
   setTimeout(() => {
     updateCatalogMarkerVisibilityNow();

@@ -2,12 +2,42 @@
 // STOP HELPERS
 // =========================
 
+function createStopPointOverlay(latlng, options) {
+  const adapter = window.EditorMapAdapter;
+  return adapter && typeof adapter.createEditorPointOverlay === "function"
+    ? adapter.createEditorPointOverlay(latlng, options)
+    : L.marker(latlng, options).addTo(map);
+}
+
+function createStopLineOverlay(points, options) {
+  const adapter = window.EditorMapAdapter;
+  return adapter && typeof adapter.createEditorLineOverlay === "function"
+    ? adapter.createEditorLineOverlay(points, options)
+    : L.polyline(points, options).addTo(map);
+}
+
+function removeStopOverlay(overlay) {
+  const adapter = window.EditorMapAdapter;
+  if (adapter && typeof adapter.removeEditorOverlay === "function") return adapter.removeEditorOverlay(overlay);
+  if (overlay && map.hasLayer(overlay)) map.removeLayer(overlay);
+  return true;
+}
+
+function hasStopOverlay(overlay) {
+  const adapter = window.EditorMapAdapter;
+  return adapter && typeof adapter.hasEditorOverlay === "function"
+    ? adapter.hasEditorOverlay(overlay)
+    : !!(overlay && map.hasLayer(overlay));
+}
+
 let detourReplacementStopIdCounter = 1;
 let detourManualRoutePointIdCounter = 1;
 let detourPlannedRoutePreviewLine = null;
+let detourPlannedRoutePreviewPoints = [];
 let detourPlannedRoutePreviewTimer = null;
 let detourPlannedRoutePreviewRequestId = 0;
 let detourRemovedRoutePreviewLine = null;
+let detourRemovedRoutePreviewPoints = [];
 let detourCutStopPreviewLayer = null;
 
 function updateStopMarkerTooltip(stop) {
@@ -24,7 +54,19 @@ function updateStopMarkerTooltip(stop) {
 function findClosestPointOnRoute(lat, lon) {
   if (!state.routePoints || state.routePoints.length < 2) return null;
 
-  const clickPoint = map.latLngToContainerPoint([lat, lon]);
+  const mapAdapter = window.EditorMapAdapter;
+  const project = value => (
+    mapAdapter && typeof mapAdapter.projectEditorCoordinate === "function"
+      ? mapAdapter.projectEditorCoordinate(value)
+      : map.latLngToContainerPoint(value)
+  );
+  const unproject = value => (
+    mapAdapter && typeof mapAdapter.unprojectEditorPoint === "function"
+      ? mapAdapter.unprojectEditorPoint(value)
+      : map.containerPointToLatLng(value)
+  );
+  const clickPoint = project([lat, lon]);
+  if (!clickPoint) return null;
 
   let best = null;
   let bestDistance = Infinity;
@@ -33,8 +75,9 @@ function findClosestPointOnRoute(lat, lon) {
     const a = state.routePoints[i];
     const b = state.routePoints[i + 1];
 
-    const aPt = map.latLngToContainerPoint([a.lat, a.lon]);
-    const bPt = map.latLngToContainerPoint([b.lat, b.lon]);
+    const aPt = project([a.lat, a.lon]);
+    const bPt = project([b.lat, b.lon]);
+    if (!aPt || !bPt) continue;
 
     const dx = bPt.x - aPt.x;
     const dy = bPt.y - aPt.y;
@@ -51,7 +94,8 @@ function findClosestPointOnRoute(lat, lon) {
 
     if (dist < bestDistance) {
       bestDistance = dist;
-      const latlng = map.containerPointToLatLng([projX, projY]);
+      const latlng = unproject([projX, projY]);
+      if (!latlng) continue;
 
       best = {
         lat: latlng.lat,
@@ -309,11 +353,50 @@ function selectDetourHelperPoint(detourItem, options = {}) {
     detourItem.marker.setIcon(isGuidePoint
       ? getDetourManualRoutePointIcon(detourItem, true)
       : getDetourReplacementStopIcon(detourItem, true));
-    if (options.centerMap) map.setView([detourItem.lat, detourItem.lon], 17);
+    if (options.centerMap) {
+      const adapter = window.EditorMapAdapter;
+      if (!adapter || !adapter.setEditorViewport(detourItem.lat, detourItem.lon, 17)) {
+        map.setView([detourItem.lat, detourItem.lon], 17);
+      }
+    }
   }
   renderStopOrderList();
   const label = isGuidePoint ? "Fahrwegpunkt" : getDetourReplacementStopLabel(detourItem);
   setStatus(`${label} ausgewaehlt: ${detourItem.name}`);
+  return true;
+}
+
+function moveDetourHelperPointTo(detourItem, latlng) {
+  if (!detourItem || !latlng || !Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) return false;
+  detourItem.lat = latlng.lat;
+  detourItem.lon = latlng.lng;
+  if (detourItem.marker && typeof detourItem.marker.setLatLng === "function") {
+    detourItem.marker.setLatLng([latlng.lat, latlng.lng]);
+  }
+  notifyMapLibreEditorSelectionGeometryChanged("detourHelperPoint", detourItem);
+  scheduleDetourPlannedRoutePreview();
+  renderStopOrderList();
+  const label = detourItem.kind === "guidePoint" ? "Fahrwegpunkt" : getDetourReplacementStopLabel(detourItem);
+  setStatus(`${label} verschoben: ${detourItem.name}`);
+  return true;
+}
+
+function moveLineStopTo(stop, latlng, statusText = null) {
+  if (!stop || !latlng || !Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) return false;
+  stop.lat = latlng.lat;
+  stop.lon = latlng.lng;
+  if (stop.marker && typeof stop.marker.setLatLng === "function") {
+    stop.marker.setLatLng([latlng.lat, latlng.lng]);
+  }
+  notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
+  if (state.routeMode === "auto") {
+    rebuildAutoRouteFromStops();
+  } else {
+    refreshRouteLine();
+    renderStopOrderList();
+    setStatus(statusText || `Haltestelle verschoben: ${stop.name}`);
+  }
+  updateStats();
   return true;
 }
 
@@ -342,30 +425,25 @@ function createDetourReplacementStop({ name, lat, lon, sourceType, catalogId = n
     marker: null
   };
 
-  const marker = L.marker([lat, lon], {
+  const marker = createStopPointOverlay([lat, lon], {
     draggable: true,
     icon: getDetourReplacementStopIcon(stop, false)
-  }).addTo(map);
+  });
 
-  marker.bindTooltip(stop.name, {
+  if (marker) marker.bindTooltip(stop.name, {
     permanent: true,
     direction: "top",
     offset: [0, -10],
     className: "detour-replacement-tooltip"
   });
 
-  marker.on("click", function () {
+  if (marker) marker.on("click", function () {
     selectDetourHelperPoint(stop);
   });
 
-  marker.on("dragend", function () {
+  if (marker) marker.on("dragend", function () {
     const pos = marker.getLatLng();
-    stop.lat = pos.lat;
-    stop.lon = pos.lng;
-    notifyMapLibreEditorSelectionGeometryChanged("detourHelperPoint", stop);
-    scheduleDetourPlannedRoutePreview();
-    renderStopOrderList();
-    setStatus(`${getDetourReplacementStopLabel(stop)} verschoben: ${stop.name}`);
+    moveDetourHelperPointTo(stop, pos);
   });
 
   stop.marker = marker;
@@ -426,30 +504,25 @@ function addDetourManualRoutePoint(latlng) {
     marker: null
   };
 
-  const marker = L.marker([point.lat, point.lon], {
+  const marker = createStopPointOverlay([point.lat, point.lon], {
     draggable: true,
     icon: getDetourManualRoutePointIcon(point, false)
-  }).addTo(map);
+  });
 
-  marker.bindTooltip(point.name, {
+  if (marker) marker.bindTooltip(point.name, {
     permanent: true,
     direction: "top",
     offset: [0, -10],
     className: "detour-manual-route-tooltip"
   });
 
-  marker.on("click", function () {
+  if (marker) marker.on("click", function () {
     selectDetourHelperPoint(point);
   });
 
-  marker.on("dragend", function () {
+  if (marker) marker.on("dragend", function () {
     const pos = marker.getLatLng();
-    point.lat = pos.lat;
-    point.lon = pos.lng;
-    notifyMapLibreEditorSelectionGeometryChanged("detourHelperPoint", point);
-    scheduleDetourPlannedRoutePreview();
-    renderStopOrderList();
-    setStatus(`Fahrwegpunkt verschoben: ${point.name}`);
+    moveDetourHelperPointTo(point, pos);
   });
 
   point.marker = marker;
@@ -470,9 +543,7 @@ function removeDetourReplacementStop(stopId) {
   if (index === -1) return;
 
   const [stop] = replacementStops.splice(index, 1);
-  if (stop.marker) {
-    map.removeLayer(stop.marker);
-  }
+  removeStopOverlay(stop.marker);
 
   clearDetourHelperSelectionState(stop, "detourReplacementStop");
 
@@ -487,9 +558,7 @@ function removeDetourManualRoutePoint(pointId) {
   if (index === -1) return;
 
   const [point] = manualRoutePoints.splice(index, 1);
-  if (point.marker) {
-    map.removeLayer(point.marker);
-  }
+  removeStopOverlay(point.marker);
 
   clearDetourHelperSelectionState(point, "detourManualRoutePoint");
 
@@ -502,10 +571,8 @@ function clearDetourReplacementStops() {
   if (!state.detourWizard || !Array.isArray(state.detourWizard.replacementStops)) return;
 
   state.detourWizard.replacementStops.forEach(stop => {
-    if (stop.marker) {
-      map.removeLayer(stop.marker);
-      stop.marker = null;
-    }
+    removeStopOverlay(stop.marker);
+    stop.marker = null;
   });
 
   state.detourWizard.replacementStops = [];
@@ -517,10 +584,8 @@ function clearDetourManualRoutePoints() {
   if (!state.detourWizard || !Array.isArray(state.detourWizard.manualRoutePoints)) return;
 
   state.detourWizard.manualRoutePoints.forEach(point => {
-    if (point.marker) {
-      map.removeLayer(point.marker);
-      point.marker = null;
-    }
+    removeStopOverlay(point.marker);
+    point.marker = null;
   });
 
   state.detourWizard.manualRoutePoints = [];
@@ -566,10 +631,16 @@ function applyDetourReplacementMetadata(stop, detourId, originalStops) {
 }
 
 function attachLineStopMarker(stop) {
-  const marker = L.marker([stop.lat, stop.lon], {
+  const marker = createStopPointOverlay([stop.lat, stop.lon], {
     draggable: true,
     icon: getLineStopIcon(stop, false)
-  }).addTo(map);
+  });
+
+  if (!marker) {
+    stop.marker = null;
+    window.EditorMapAdapter?.refreshEditorMapFeatures?.();
+    return null;
+  }
 
   marker.bindTooltip(stop.name, {
     permanent: true,
@@ -584,17 +655,7 @@ function attachLineStopMarker(stop) {
 
   marker.on("dragend", function (e) {
     const newPos = e.target.getLatLng();
-    stop.lat = newPos.lat;
-    stop.lon = newPos.lng;
-    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
-
-    if (state.routeMode === "auto") {
-      rebuildAutoRouteFromStops();
-    } else {
-      refreshRouteLine();
-      renderStopOrderList();
-      setStatus(`Haltestelle verschoben: ${stop.name}`);
-    }
+    moveLineStopTo(stop, newPos);
   });
 
   stop.marker = marker;
@@ -764,10 +825,9 @@ function invalidateDetourPlannedRoutePreviewRequest() {
 }
 
 function removeDetourPlannedRoutePreviewLine() {
-  if (detourPlannedRoutePreviewLine && map.hasLayer(detourPlannedRoutePreviewLine)) {
-    map.removeLayer(detourPlannedRoutePreviewLine);
-  }
+  removeStopOverlay(detourPlannedRoutePreviewLine);
   detourPlannedRoutePreviewLine = null;
+  detourPlannedRoutePreviewPoints = [];
 }
 
 function clearDetourPlannedRoutePreview() {
@@ -776,14 +836,11 @@ function clearDetourPlannedRoutePreview() {
 }
 
 function clearDetourRemovedRoutePreview() {
-  if (detourRemovedRoutePreviewLine && map.hasLayer(detourRemovedRoutePreviewLine)) {
-    map.removeLayer(detourRemovedRoutePreviewLine);
-  }
+  removeStopOverlay(detourRemovedRoutePreviewLine);
   detourRemovedRoutePreviewLine = null;
+  detourRemovedRoutePreviewPoints = [];
 
-  if (detourCutStopPreviewLayer && map.hasLayer(detourCutStopPreviewLayer)) {
-    map.removeLayer(detourCutStopPreviewLayer);
-  }
+  removeStopOverlay(detourCutStopPreviewLayer);
   detourCutStopPreviewLayer = null;
 }
 
@@ -795,9 +852,10 @@ function refreshDetourRemovedRoutePreview() {
   const cutEndIndex = state.detourWizard.cutEndIndex;
   if (!Number.isInteger(cutStartIndex) || !Number.isInteger(cutEndIndex)) return;
 
-  detourCutStopPreviewLayer = L.layerGroup().addTo(map);
-  state.stops.slice(cutStartIndex, cutEndIndex + 1).forEach(stop => {
-    L.circleMarker([stop.lat, stop.lon], {
+  const adapter = window.EditorMapAdapter;
+  detourCutStopPreviewLayer = adapter?.createEditorLayerGroupOverlay?.() || null;
+  if (detourCutStopPreviewLayer) state.stops.slice(cutStartIndex, cutEndIndex + 1).forEach(stop => {
+    adapter.createEditorCircleOverlay([stop.lat, stop.lon], {
       radius: 13,
       color: "#b91c1c",
       weight: 3,
@@ -805,7 +863,7 @@ function refreshDetourRemovedRoutePreview() {
       fillColor: "#6b7280",
       fillOpacity: 0.12,
       interactive: false
-    }).addTo(detourCutStopPreviewLayer);
+    }, detourCutStopPreviewLayer);
   });
 
   const beforeStop = state.stops[cutStartIndex - 1];
@@ -819,7 +877,8 @@ function refreshDetourRemovedRoutePreview() {
   if (beforeRouteIndex >= 0 && afterRouteIndex > beforeRouteIndex) {
     const cutRoutePoints = state.routePoints.slice(beforeRouteIndex, afterRouteIndex + 1);
     if (cutRoutePoints.length >= 2) {
-      detourRemovedRoutePreviewLine = L.polyline(
+      detourRemovedRoutePreviewPoints = cutRoutePoints.map(point => ({ lat: point.lat, lon: point.lon }));
+      detourRemovedRoutePreviewLine = createStopLineOverlay(
         cutRoutePoints.map(point => [point.lat, point.lon]),
         {
           color: "#6b7280",
@@ -830,11 +889,11 @@ function refreshDetourRemovedRoutePreview() {
           lineJoin: "round",
           interactive: false
         }
-      ).addTo(map);
+      );
     }
   }
 
-  if (detourPlannedRoutePreviewLine && map.hasLayer(detourPlannedRoutePreviewLine)) {
+  if (hasStopOverlay(detourPlannedRoutePreviewLine)) {
     detourPlannedRoutePreviewLine.bringToFront();
   }
 }
@@ -862,6 +921,7 @@ function getDetourPlannedRouteAnchors() {
 function renderDetourPlannedRoutePreview(routeCoords) {
   const previewCoords = normalizeRoutingSegmentCoords(routeCoords)
     .map(coord => [coord[1], coord[0]]);
+  detourPlannedRoutePreviewPoints = previewCoords.map(coord => ({ lat: coord[0], lon: coord[1] }));
 
   if (previewCoords.length < 2) {
     removeDetourPlannedRoutePreviewLine();
@@ -869,7 +929,7 @@ function renderDetourPlannedRoutePreview(routeCoords) {
   }
 
   if (!detourPlannedRoutePreviewLine) {
-    detourPlannedRoutePreviewLine = L.polyline(previewCoords, {
+    detourPlannedRoutePreviewLine = createStopLineOverlay(previewCoords, {
       color: "#2563eb",
       weight: 6,
       opacity: 0.9,
@@ -877,13 +937,23 @@ function renderDetourPlannedRoutePreview(routeCoords) {
       lineCap: "round",
       lineJoin: "round",
       interactive: false
-    }).addTo(map);
-    detourPlannedRoutePreviewLine.bringToFront();
+    });
+    if (detourPlannedRoutePreviewLine) detourPlannedRoutePreviewLine.bringToFront();
+    window.EditorMapAdapter?.refreshEditorMapFeatures?.();
     return;
   }
 
   detourPlannedRoutePreviewLine.setLatLngs(previewCoords);
   detourPlannedRoutePreviewLine.bringToFront();
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
+}
+
+function getDetourPlannedRoutePreviewPoints() {
+  return detourPlannedRoutePreviewPoints;
+}
+
+function getDetourRemovedRoutePreviewPoints() {
+  return detourRemovedRoutePreviewPoints;
 }
 
 async function refreshDetourPlannedRoutePreviewAsync(requestId) {
@@ -1100,9 +1170,7 @@ async function finishDetourWizardReplacement() {
   );
 
   removedRoutePoints.forEach(point => {
-    if (point.marker && map.hasLayer(point.marker)) {
-      map.removeLayer(point.marker);
-    }
+    removeStopOverlay(point.marker);
   });
 
   const innerCoords = routedCoords.slice(1, -1);
@@ -1371,36 +1439,25 @@ function addStopToLine({
     marker: null
   };
 
-  const marker = L.marker([lat, lon], {
+  const marker = createStopPointOverlay([lat, lon], {
     draggable: true,
     icon: getLineStopIcon(stop, false)
-  }).addTo(map);
+  });
 
-  marker.bindTooltip(stop.name, {
+  if (marker) marker.bindTooltip(stop.name, {
     permanent: true,
     direction: "top",
     offset: [0, -10]
   });
 
-  marker.on("click", function () {
+  if (marker) marker.on("click", function () {
   selectStop(stop);
   renderStopOrderList();
 });
 
-  marker.on("dragend", function (e) {
+  if (marker) marker.on("dragend", function (e) {
     const newPos = e.target.getLatLng();
-    stop.lat = newPos.lat;
-    stop.lon = newPos.lng;
-    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
-
-    if (state.routeMode === "auto") {
-      rebuildAutoRouteFromStops();
-    } else {
-      setStatus("Haltestelle verschoben.");
-    }
-
-    renderStopOrderList();
-    updateStats();
+    moveLineStopTo(stop, newPos, "Haltestelle verschoben.");
   });
 
   stop.marker = marker;
@@ -1418,6 +1475,7 @@ function addStopToLine({
   selectStop(stop);
   renderStopOrderList();
   updateStats();
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 
   return stop;
 }
@@ -1612,7 +1670,7 @@ function renderStopOrderList() {
     delBtn.onclick = () => {
       const stopToDelete = state.stops[index];
 
-      if (stopToDelete.marker) map.removeLayer(stopToDelete.marker);
+      removeStopOverlay(stopToDelete.marker);
 
       state.stops.splice(index, 1);
 
@@ -1752,7 +1810,7 @@ function deleteSelectedStop() {
 
   const stop = state.selected.ref;
 
-  if (stop.marker) map.removeLayer(stop.marker);
+  removeStopOverlay(stop.marker);
 
   state.stops = state.stops.filter(s => s.id !== stop.id);
 
@@ -1771,7 +1829,7 @@ function snapSelectedStopToRoute() {
 
   stop.lat = snap.lat;
   stop.lon = snap.lon;
-  stop.marker.setLatLng([stop.lat, stop.lon]);
+  if (stop.marker) stop.marker.setLatLng([stop.lat, stop.lon]);
   notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
 
   renderStopOrderList();
@@ -1800,40 +1858,30 @@ function insertGhostStopAtIndex(insertIndex, lat, lon, name) {
     marker: null
   };
 
-  const marker = L.marker([lat, lon], {
+  const marker = createStopPointOverlay([lat, lon], {
     draggable: true,
     icon: getLineStopIcon(stop, false)
-  }).addTo(map);
+  });
 
-  marker.bindTooltip(stop.name, {
+  if (marker) marker.bindTooltip(stop.name, {
     permanent: true,
     direction: "top",
     offset: [0, -10]
   });
 
-  marker.on("click", function () {
+  if (marker) marker.on("click", function () {
     selectStop(stop);
     renderStopOrderList();
   });
 
-  marker.on("dragend", function (e) {
+  if (marker) marker.on("dragend", function (e) {
     const newPos = e.target.getLatLng();
-    stop.lat = newPos.lat;
-    stop.lon = newPos.lng;
-    notifyMapLibreEditorSelectionGeometryChanged("stop", stop);
-
-    if (state.routeMode === "auto") {
-      rebuildAutoRouteFromStops();
-    } else {
-      setStatus("Ghostpunkt verschoben.");
-    }
-
-    renderStopOrderList();
-    updateStats();
+    moveLineStopTo(stop, newPos, "Ghostpunkt verschoben.");
   });
 
   stop.marker = marker;
   state.stops.splice(insertIndex, 0, stop);
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
   return stop;
 }
 

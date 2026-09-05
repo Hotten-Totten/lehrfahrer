@@ -131,35 +131,35 @@ function clearEditorData() {
   // Alle Stop-Marker von der Karte entfernen
   if (Array.isArray(state.stops)) {
     state.stops.forEach(stop => {
-      if (stop.marker) map.removeLayer(stop.marker);
+      removeStopOverlay(stop.marker);
     });
   }
 
   // Alle Sondertrassen-Polylines aus dem State entfernen
   if (Array.isArray(state.specialTracks)) {
     state.specialTracks.forEach(track => {
-      if (track && track.polyline) map.removeLayer(track.polyline);
+      if (track) removeRouteOverlay(track.polyline);
     });
   }
 
   // Aktive (noch nicht gespeicherte) Sondertrasse entfernen
   if (state.currentSpecialTrack && state.currentSpecialTrack.polyline) {
-    map.removeLayer(state.currentSpecialTrack.polyline);
+    removeRouteOverlay(state.currentSpecialTrack.polyline);
   }
 
   if (state.detourDraft && state.detourDraft.polyline) {
-    map.removeLayer(state.detourDraft.polyline);
+    removeRouteOverlay(state.detourDraft.polyline);
   }
 
   // Sicherheitsnetz: alle verbleibenden Polylines mit Sondertrassen-Farben von der Karte räumen
-  map.eachLayer(function (layer) {
-    if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
-      const opts = layer.options || {};
-      if (opts.color === "#aa00ff" || opts.color === "#ff00ff") {
-        map.removeLayer(layer);
+  if (!window.EditorMapAdapter || window.EditorMapAdapter.usesLeafletOverlays()) {
+    map.eachLayer(function (layer) {
+      if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+        const opts = layer.options || {};
+        if (opts.color === "#aa00ff" || opts.color === "#ff00ff") map.removeLayer(layer);
       }
-    }
-  });
+    });
+  }
 
   if (typeof removeAllGuidePointMarkers === "function") {
     removeAllGuidePointMarkers();
@@ -205,12 +205,12 @@ function clearEditorData() {
   }
 
   if (routeLine) {
-    map.removeLayer(routeLine);
+    removeRouteOverlay(routeLine);
     routeLine = null;
   }
 
   if (simplifiedPreviewLine) {
-    map.removeLayer(simplifiedPreviewLine);
+    removeRouteOverlay(simplifiedPreviewLine);
     simplifiedPreviewLine = null;
   }
 
@@ -350,11 +350,11 @@ function loadAutosave() {
         : [];
 
       const polyline = points.length
-        ? L.polyline(points, {
+        ? createRouteLineOverlay(points, {
             color: "#aa00ff",
             weight: 4,
             dashArray: "6,6"
-          }).addTo(map)
+          })
         : null;
 
       const track = {
@@ -387,11 +387,11 @@ function loadAutosave() {
         toStopName: data.currentSpecialTrack.toStopName || null,
         points: currentPoints,
         polyline: currentPoints.length
-          ? L.polyline(currentPoints, {
+          ? createRouteLineOverlay(currentPoints, {
               color: "#aa00ff",
               weight: 4,
               dashArray: "6,6"
-            }).addTo(map)
+            })
           : null
       };
     } else {

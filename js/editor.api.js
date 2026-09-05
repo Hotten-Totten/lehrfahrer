@@ -83,12 +83,18 @@ function getMapBoundsData() {
 // Erfasst die aktuelle Kartenansicht (Zentrum und Zoom-Level)
 // Wird beim Export gespeichert, um die Ansicht später wiederherzustellen
 function getMapViewData() {
-  const center = map.getCenter();
+  const adapter = window.EditorMapAdapter;
+  const center = adapter && typeof adapter.getEditorCenter === "function"
+    ? adapter.getEditorCenter()
+    : map.getCenter();
+  const zoom = adapter && typeof adapter.getEditorZoom === "function"
+    ? adapter.getEditorZoom()
+    : map.getZoom();
 
   return {
     centerLat: Number(center.lat.toFixed(6)),
-    centerLon: Number(center.lng.toFixed(6)),
-    zoom: map.getZoom()
+    centerLon: Number((center.lon ?? center.lng).toFixed(6)),
+    zoom
   };
 }
 

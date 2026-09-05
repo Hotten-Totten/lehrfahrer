@@ -421,7 +421,10 @@ function renderStopOrderListInactiveDuplicate() {
 
     main.addEventListener("click", function () {
       selectStop(stop);
-      map.setView([stop.lat, stop.lon], 17);
+      const adapter = window.EditorMapAdapter;
+      if (!adapter || !adapter.setEditorViewport(stop.lat, stop.lon, 17)) {
+        map.setView([stop.lat, stop.lon], 17);
+      }
     });
 
     const actions = document.createElement("div");
