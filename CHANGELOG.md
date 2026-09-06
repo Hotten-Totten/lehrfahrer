@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.026 - 2026-09-06
+- Linien-, Varianten-, Routen- und Haltestellendaten als vollständigen atomaren IndexedDB-Snapshot persistent gemacht
+- Offline-Fallback für Stadt-, Linien-, Routen- und Variantenauswahl ergänzt
+- bestehende Auswahl und Routendarstellung bei WLAN-Verlust erhalten
+- Offline-Neustart aus IndexedDB ermöglicht
+- funktionierenden lokalen Stand bei fehlgeschlagener Online-Aktualisierung durch Rollback geschützt
+- PMTiles-Offline-Karte unverändert beibehalten
+
 ## V2.1.025 - 2026-09-06
 - Offline-PMTiles-Unterstützung der Fahrer-App korrigiert und für den Tablet-Test vorbereitet
 - PMTiles-Protokoll direkt registriert und lokale OPFS-PMTiles-Karte eingebunden

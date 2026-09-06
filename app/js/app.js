@@ -115,6 +115,7 @@ const tilesFileInput   = document.getElementById('tilesFileInput');
 const removeLocalTilesBtn = document.getElementById('removeLocalTilesBtn');
 const storagePersistenceStatus = document.getElementById('storagePersistenceStatus');
 const requestStoragePersistenceBtn = document.getElementById('requestStoragePersistenceBtn');
+const lineDataStatus   = document.getElementById('lineDataStatus');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
 const navigateToStartBtn = document.getElementById('navigateToStartBtn');
 const lineStartMenu = document.getElementById('lineStartMenu');
@@ -188,25 +189,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   initNavPerfDebugHud();
   bindEvents();
   detectOffline();
-  await loadCities();
-  
-  console.log('📦 Fetching lines catalog...');
-  // Lade Linien-Katalog
-  await fetchAndCacheLinesCatalog();
-  
-  console.log('⏳ Starting background auto-download...');
-  // Auto-Download aller Linien im Hintergrund (nicht blockierend),
-  // aber pro Session/Version nur einmal.
-  if (shouldRunStartupAutoDownload()) {
-    autoDownloadAllLines()
-      .then(() => markStartupAutoDownloadDone())
-      .catch(err => {
-        clearStartupAutoDownloadGuard();
-        console.warn('Auto-download background error:', err);
-      });
-  } else {
-    console.log('⏭️ Startup auto-download skipped (already run in this session/version)');
-  }
+  await initializePersistentLineData();
 });
 
 function startupDownloadGuardKey() {
@@ -588,30 +571,7 @@ function dbPutLinesCatalog(catalog) {
     const tx = requireDB().transaction('linesCatalog', 'readwrite');
     const req = tx.objectStore('linesCatalog').clear();
     req.onsuccess = () => {
-      catalog.forEach(line => {
-        tx.objectStore('linesCatalog').put({ 
-          id: line.id, 
-          city: line.city,
-          lineFolder: line.lineFolder,
-          categoryFolder: line.categoryFolder || null,
-          fileName: line.fileName,
-          file: line.file,
-          jsonPath: line.jsonPath || null,
-          gpxPath: line.gpxPath || null,
-          fileBase: line.fileBase,
-          lineName: line.lineName,
-          routeName: line.routeName,
-          directionName: line.directionName || '',
-          variantName: line.variantName || '',
-          variantCategory: line.variantCategory || 'Standard',
-          description: line.description || '',
-          validFrom: line.validFrom || '',
-          validUntil: line.validUntil || '',
-          hasPdf: !!line.hasPdf,
-          pdfFile: line.pdfFile || null,
-          updatedAt: Number(line.updatedAt) || 0
-        });
-      });
+      catalog.forEach(line => tx.objectStore('linesCatalog').put({ ...line }));
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -656,6 +616,36 @@ function dbGetLineData(id) {
     const req = tx.objectStore('linesData').get(id);
     req.onsuccess = () => resolve(req.result?.data ?? null);
     req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAllLineDataRecords() {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      resolve([]);
+      return;
+    }
+    const tx = requireDB().transaction('linesData', 'readonly');
+    const req = tx.objectStore('linesData').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbReplaceLineSnapshot(catalog, lineRecords) {
+  return new Promise((resolve, reject) => {
+    const tx = requireDB().transaction(['linesCatalog', 'linesData'], 'readwrite');
+    const catalogStore = tx.objectStore('linesCatalog');
+    const dataStore = tx.objectStore('linesData');
+
+    catalogStore.clear();
+    dataStore.clear();
+    catalog.forEach(line => catalogStore.put({ ...line }));
+    lineRecords.forEach(record => dataStore.put({ ...record }));
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Lokaler Linienspeicher wurde nicht aktualisiert.'));
   });
 }
 
@@ -756,54 +746,151 @@ async function fetchAndCacheLinePdf(line, dbId) {
 }
 
 // ── Lines Katalog laden und aktualisieren ──────────────────
-async function fetchAndCacheLinesCatalog() {
-  try {
-    console.log('📦 Fetching lines catalog from API...');
-    const response = await fetch(`${API_BASE}/list_lines.php`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    
-    const result = await response.json();
-    console.log('📦 API Response:', result);
-    
-    if (!result.ok || !result.lines) {
-      console.warn('⚠️ API response invalid:', result);
-      availableLinesCatalog = [];
-      return [];
-    }
-    
-    // ⚠️ WICHTIG: API kann Duplicates zurückgeben (neues + altes Format gescannt)
-    // Deduplizieren nach ID: Behalte nur das erste Vorkommen
-    const seenIds = new Set();
-    const uniqueLines = result.lines.filter(line => {
-      if (seenIds.has(line.id)) {
-        console.log(`  ⚠️ Duplicate ID filtered out: ${line.id}`);
-        return false;
-      }
-      seenIds.add(line.id);
-      return true;
-    });
-    
-    console.log(`📋 Deduplication: ${result.lines.length} → ${uniqueLines.length} unique lines`);
-    
-    // In IndexedDB speichern, falls verfuegbar.
-    if (db) {
-      await dbPutLinesCatalog(uniqueLines);
-    } else {
-      console.warn('Linienkatalog nur im Speicher verfuegbar: IndexedDB ist deaktiviert.');
-    }
-    availableLinesCatalog = uniqueLines;
-    console.log(`✓ Cached ${uniqueLines.length} lines to IndexedDB`);
-    
-    // Version speichern
-    const catalogVersion = new Date().getTime();
-    localStorage.setItem(STORAGE_KEY_LINES_CATALOG, catalogVersion);
-    
-    return uniqueLines;
-  } catch (err) {
-    console.error('❌ Error fetching lines catalog:', err);
-    availableLinesCatalog = [];
-    return [];
+function deduplicateLinesCatalog(lines) {
+  const seenIds = new Set();
+  return lines.filter(line => {
+    const id = String(line?.id || '').trim();
+    if (!id || seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
+}
+
+function lineStorageIdCandidates(line) {
+  const fileBase = String(line.fileBase || line.file || '').replace(/\.json$/i, '').trim();
+  const current = buildLineStorageId({ ...line, fileBase });
+  const padded = `${line.city}_${line.lineFolder || ''}_${line.categoryFolder || ''}_${fileBase}`.replace(/\//g, '_');
+  const legacyFile = `${line.city}${line.lineFolder ? '_' + line.lineFolder : ''}${line.categoryFolder ? '_' + line.categoryFolder : ''}_${line.file || `${fileBase}.json`}`.replace(/\//g, '_');
+  return Array.from(new Set([current, padded, legacyFile]));
+}
+
+function findStoredLineRecord(recordsById, line) {
+  for (const id of lineStorageIdCandidates(line)) {
+    const record = recordsById.get(id);
+    if (record?.data) return record;
   }
+  return null;
+}
+
+function renderLineDataStatus(state, count = 0) {
+  if (!lineDataStatus) return;
+  if (state === 'online') lineDataStatus.textContent = `Online-Daten aktuell · ${count} Linien`;
+  else if (state === 'offline') lineDataStatus.textContent = `Offline-Liniendaten verfügbar · ${count} Linien`;
+  else if (state === 'updating') lineDataStatus.textContent = 'Liniendaten werden online aktualisiert …';
+  else lineDataStatus.textContent = 'Keine Offline-Liniendaten vorhanden';
+}
+
+async function fetchLinesCatalogFromServer() {
+  const response = await fetch(`${API_BASE}/list_lines.php?_ts=${Date.now()}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Linienkatalog HTTP ${response.status}`);
+  const result = await response.json();
+  if (!result?.ok || !Array.isArray(result.lines) || result.lines.length === 0) {
+    throw new Error('Linienkatalog ist leer oder ungültig.');
+  }
+  return deduplicateLinesCatalog(result.lines);
+}
+
+async function fetchLineRecordFromServer(line) {
+  const fileBase = String(line.fileBase || line.file || '').replace(/\.json$/i, '').trim();
+  let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
+  if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
+  if (line.categoryFolder) url += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
+
+  const response = await fetch(`${url}&_ts=${Date.now()}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${line.id}: HTTP ${response.status}`);
+  const result = await response.json();
+  if (!result?.ok || !result.line || typeof result.line !== 'object') {
+    throw new Error(`${line.id}: Routendaten fehlen.`);
+  }
+
+  return {
+    id: buildLineStorageId(line),
+    data: result.line,
+    sourceUpdatedAt: Number(line.updatedAt) || 0,
+    savedAt: Date.now()
+  };
+}
+
+function renderCatalogPreservingSelection(catalog) {
+  const selectedCity = String(citySelect?.value || '').trim();
+  const selectedLine = lineSelect?.value || '';
+  availableLinesCatalog = catalog;
+  renderCitiesFromCatalog(catalog, selectedCity);
+  if (citySelect.value) renderLinesFromCatalog(citySelect.value, selectedLine);
+}
+
+async function refreshPersistentLineData() {
+  renderLineDataStatus('updating');
+  try {
+    return await performPersistentLineDataRefresh();
+  } catch (err) {
+    renderLineDataStatus(availableLinesCatalog.length ? 'offline' : 'none', availableLinesCatalog.length);
+    throw err;
+  }
+}
+
+async function performPersistentLineDataRefresh() {
+  if (!db) throw new Error('IndexedDB ist nicht verfügbar.');
+
+  const serverCatalog = await fetchLinesCatalogFromServer();
+  const storedRecords = await dbGetAllLineDataRecords();
+  const recordsById = new Map(storedRecords.map(record => [record.id, record]));
+  const nextRecords = [];
+
+  showStartupDownloadOverlay(serverCatalog.length);
+  try {
+    for (let index = 0; index < serverCatalog.length; index++) {
+      const line = serverCatalog[index];
+      updateStartupDownloadOverlay(index + 1, serverCatalog.length, line.lineName || line.id);
+      const stored = findStoredLineRecord(recordsById, line);
+      const serverUpdatedAt = Number(line.updatedAt) || 0;
+      const storedUpdatedAt = Number(stored?.sourceUpdatedAt) || 0;
+      const canReuse = stored && (!serverUpdatedAt || storedUpdatedAt === serverUpdatedAt);
+
+      if (canReuse) {
+        nextRecords.push({
+          ...stored,
+          id: buildLineStorageId(line),
+          sourceUpdatedAt: serverUpdatedAt
+        });
+      } else {
+        nextRecords.push(await fetchLineRecordFromServer(line));
+      }
+    }
+
+    await dbReplaceLineSnapshot(serverCatalog, nextRecords);
+  } finally {
+    hideStartupDownloadOverlay();
+  }
+
+  localStorage.setItem(STORAGE_KEY_LINES_CATALOG, String(Date.now()));
+  renderCatalogPreservingSelection(serverCatalog);
+  renderLineDataStatus('online', serverCatalog.length);
+  requestPersistentStorage(true).catch(() => {});
+  return serverCatalog;
+}
+
+async function initializePersistentLineData() {
+  const cachedCatalog = await dbGetLinesCatalog();
+  const cachedRecords = await dbGetAllLineDataRecords();
+  if (cachedCatalog.length) {
+    renderCatalogPreservingSelection(cachedCatalog);
+    renderLineDataStatus('offline', cachedRecords.length);
+  } else {
+    renderCitiesFromCatalog([]);
+    renderLineDataStatus('none');
+  }
+
+  try {
+    await refreshPersistentLineData();
+  } catch (err) {
+    console.warn('Online-Aktualisierung der Liniendaten fehlgeschlagen; lokaler Stand bleibt aktiv:', err);
+    renderLineDataStatus(cachedCatalog.length ? 'offline' : 'none', cachedRecords.length);
+  }
+}
+
+async function fetchAndCacheLinesCatalog() {
+  return refreshPersistentLineData();
 }
 
 // ── Prüfe auf neue Linien ──────────────────────────────────
@@ -1231,7 +1318,8 @@ function detectOffline() {
   async function checkOnline() {
     const timeout = createTimeoutSignal(4000);
     try {
-      await fetch('../api/list_cities.php', { method: 'HEAD', cache: 'no-store', signal: timeout.signal });
+      const response = await fetch('../api/list_cities.php', { method: 'HEAD', cache: 'no-store', signal: timeout.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       offlineBadge.classList.add('hidden');
     } catch {
       offlineBadge.classList.remove('hidden');
@@ -1240,7 +1328,10 @@ function detectOffline() {
     }
   }
   window.addEventListener('online',  checkOnline);
-  window.addEventListener('offline', () => offlineBadge.classList.remove('hidden'));
+  window.addEventListener('offline', () => {
+    offlineBadge.classList.remove('hidden');
+    renderLineDataStatus(availableLinesCatalog.length ? 'offline' : 'none', availableLinesCatalog.length);
+  });
   checkOnline();
 }
 
@@ -1414,41 +1505,33 @@ async function toggleFullscreenMode() {
 }
 
 // ── Städte laden ─────────────────────────────────────────────
-async function loadCities() {
-  try {
-    const res  = await fetch(`${API_BASE}/list_cities.php`, { cache: 'no-store' });
-    const json = await res.json();
-    let cities = json.ok && Array.isArray(json.cities) ? json.cities : [];
+function renderCitiesFromCatalog(catalog, preferredCity = '') {
+  const cities = Array.from(new Set(
+    catalog.map(line => String(line.city || '').trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
 
-    // Fallback: Der Linienkatalog ist die verlässlichste Quelle, falls eine
-    // ältere list_cities.php Kategorienordner noch nicht erkennt.
-    if (!cities.length) {
-      const catalogRes = await fetch(`${API_BASE}/list_lines.php?_ts=${Date.now()}`, { cache: 'no-store' });
-      const catalogJson = await catalogRes.json();
-      if (catalogJson.ok && Array.isArray(catalogJson.lines)) {
-        cities = Array.from(new Set(catalogJson.lines.map(line => String(line.city || '').trim()).filter(Boolean)));
-      }
-    }
-    if (!cities.length) {
-      citySelect.innerHTML = '<option value="">Keine Orte vorhanden</option>';
-      return;
-    }
+  citySelect.innerHTML = cities.length
+    ? '<option value="">Stadt …</option>'
+    : '<option value="">Keine Orte vorhanden</option>';
 
-    cities.sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).forEach(city => {
-      const opt = document.createElement('option');
-      opt.value       = city;
-      opt.textContent = capitalizeCity(city);
-      citySelect.appendChild(opt);
-    });
+  cities.forEach(city => {
+    const opt = document.createElement('option');
+    opt.value = city;
+    opt.textContent = capitalizeCity(city);
+    citySelect.appendChild(opt);
+  });
 
-    // Einzige Stadt automatisch vorwählen
-    if (cities.length === 1) {
-      citySelect.value = cities[0];
-      await loadLines(cities[0]);
-    }
-  } catch (err) {
-    console.warn('Städte laden fehlgeschlagen:', err);
+  if (preferredCity && cities.includes(preferredCity)) citySelect.value = preferredCity;
+  else if (cities.length === 1) citySelect.value = cities[0];
+
+  if (!citySelect.value) {
+    lineSelect.innerHTML = '<option value="">Linie …</option>';
+    lineSelect.disabled = true;
   }
+}
+
+async function loadCities() {
+  renderCatalogPreservingSelection(availableLinesCatalog || []);
 }
 
 async function onCityChange() {
@@ -1461,43 +1544,46 @@ async function onCityChange() {
 
 // ── Linien laden ─────────────────────────────────────────────
 async function loadLines(city) {
-  try {
-    const res  = await fetch(`${API_BASE}/list_lines.php?city=${encodeURIComponent(city)}&_ts=${Date.now()}`, { cache: 'no-store' });
-    const json = await res.json();
-    if (!json.ok || !json.lines.length) {
-      lineSelect.innerHTML = '<option value="">Keine Linien vorhanden</option>';
-      return;
-    }
+  renderLinesFromCatalog(city);
+}
 
-    lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
-    json.lines.forEach(line => {
-      const opt      = document.createElement('option');
-      opt.value      = JSON.stringify({
-        city: line.city || city,
-        file: line.file || '',
-        fileBase: line.fileBase || String(line.file || '').replace(/\.json$/i, '') || line.id,
-        lineFolder: line.lineFolder || null,
-        categoryFolder: line.categoryFolder || null,
-        jsonPath: line.jsonPath || null
-      });
-      opt.textContent = [
-        line.lineName || line.id,
-        getAppVariantCategory(line),
-        line.routeName || '',
-        getAppVariantName(line)
-      ].filter(Boolean).join(' | ');
-      const description = getAppLineDescription(null, line);
-      if (description) {
-        opt.textContent = `${opt.textContent} · ${description}`;
-        opt.title = `Bemerkung: ${description}`;
-      }
-      lineSelect.appendChild(opt);
-    });
-
-    lineSelect.disabled = false;
-  } catch (err) {
-    console.warn('Linien laden fehlgeschlagen:', err);
+function renderLinesFromCatalog(city, preferredValue = '') {
+  const lines = (availableLinesCatalog || []).filter(line => String(line.city || '').trim() === city);
+  if (!lines.length) {
+    lineSelect.innerHTML = '<option value="">Keine Linien vorhanden</option>';
+    lineSelect.disabled = true;
+    return;
   }
+
+  lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
+  lines.forEach(line => {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({
+      city: line.city || city,
+      file: line.file || '',
+      fileBase: line.fileBase || String(line.file || '').replace(/\.json$/i, '') || line.id,
+      lineFolder: line.lineFolder || null,
+      categoryFolder: line.categoryFolder || null,
+      jsonPath: line.jsonPath || null
+    });
+    opt.textContent = [
+      line.lineName || line.id,
+      getAppVariantCategory(line),
+      line.routeName || '',
+      getAppVariantName(line)
+    ].filter(Boolean).join(' | ');
+    const description = getAppLineDescription(null, line);
+    if (description) {
+      opt.textContent = `${opt.textContent} · ${description}`;
+      opt.title = `Bemerkung: ${description}`;
+    }
+    lineSelect.appendChild(opt);
+  });
+
+  if (preferredValue && Array.from(lineSelect.options).some(opt => opt.value === preferredValue)) {
+    lineSelect.value = preferredValue;
+  }
+  lineSelect.disabled = false;
 }
 
 async function onLineChange() {
@@ -1521,8 +1607,12 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
   
   try {
     // 1. Checke neue linesData store (gedownloadete Linien)
-    const lineId = `${city}_${lineFolder || ''}_${categoryFolder || ''}_${cleanFileBase}`.replace(/\//g, '_');
-    const lineData = await dbGetLineData(lineId);
+    const lineRef = { city, lineFolder, categoryFolder, fileBase: cleanFileBase, file: fileName };
+    let lineData = null;
+    for (const lineId of lineStorageIdCandidates(lineRef)) {
+      lineData = await dbGetLineData(lineId);
+      if (lineData) break;
+    }
     if (lineData) {
       data = lineData;
       console.log('✓ Linie aus Download-Cache geladen');
@@ -3056,7 +3146,7 @@ function stopNavigation() {
       .catch(err => console.warn('Auto-save Route fehlgeschlagen:', err));
     
     // Speichere auch in neuer linesData store
-    const lineId = `${currentRoute.city}_${currentRoute.lineFolder || ''}_${currentRoute.categoryFolder || ''}_${currentRoute.fileBase}`.replace(/\//g, '_');
+    const lineId = buildLineStorageId(currentRoute);
     dbPutLineData(lineId, currentRoute.data)
       .catch(err => console.warn('Auto-save linesData fehlgeschlagen:', err));
   }

@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21025';
+const CACHE_APP = 'lehrfahrer-app-v21026';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
@@ -14,10 +14,10 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.025',
-  './js/app.js?v=V2.1.025',
-  './js/map.js?v=V2.1.025',
-  './js/debug-helper.js?v=V2.1.025',
+  './css/app.css?v=V2.1.026',
+  './js/app.js?v=V2.1.026',
+  './js/map.js?v=V2.1.026',
+  './js/debug-helper.js?v=V2.1.026',
   'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css',
   'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js',
   'https://unpkg.com/pmtiles@3/dist/pmtiles.js',
