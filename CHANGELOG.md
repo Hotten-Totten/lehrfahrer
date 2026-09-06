@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.024 - 2026-09-06
+- MapLibre als Standard-Hauptkarte des Editors aktiviert
+- Leaflet/CARTO als expliziten Fallback über `?mapEngine=leaflet` beibehalten
+- Karten-Engines selektiv initialisiert und Leaflet-Laufzeitabhängigkeit im MapLibre-Modus vermieden
+- Cluster, Labels und funktionale Tooltips im MapLibre-Modus ergänzt
+- Kernworkflow sowie Fallback und Rückwechsel ohne Datenverlust getestet
+
 ## V2.1.023 - 2026-09-05
 - Engine-selektiven Kartenstart ergänzt
 - MapLibre-Hauptbetrieb ohne Leaflet-Map, CARTO-Layer, MarkerCluster oder Leaflet-Overlays umgesetzt

@@ -242,6 +242,7 @@ function clearSearchResults() {
 
 // Hebt einen sichtbaren Marker temporär visuell hervor.
 function highlightCatalogMarker(catalogStop) {
+  const adapter = window.EditorMapAdapter;
   if (
     state.highlightedCatalogMarkerId &&
     state.visibleCatalogMarkers.has(state.highlightedCatalogMarkerId)
@@ -255,10 +256,9 @@ function highlightCatalogMarker(catalogStop) {
   }
 
   const marker = state.visibleCatalogMarkers.get(catalogStop.id);
-  if (!marker) return;
-
-  marker.setIcon(getCatalogIconForStop(catalogStop, true));
+  if (marker) marker.setIcon(getCatalogIconForStop(catalogStop, true));
   state.highlightedCatalogMarkerId = catalogStop.id;
+  if (adapter && adapter.activeEngine === "maplibre") notifyMapLibreCatalogMarkersChanged();
 
   setTimeout(() => {
     if (
@@ -270,6 +270,7 @@ function highlightCatalogMarker(catalogStop) {
         currentMarker.setIcon(getCatalogIconForStop(catalogStop, false));
       }
       state.highlightedCatalogMarkerId = null;
+      if (adapter && adapter.activeEngine === "maplibre") notifyMapLibreCatalogMarkersChanged();
     }
   }, 4000);
 }

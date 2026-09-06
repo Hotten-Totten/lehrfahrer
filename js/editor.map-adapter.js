@@ -1,5 +1,4 @@
-// MapLibre-Grundlage fuer die schrittweise Editor-Migration.
-// Der Schalter bleibt aus; Leaflet bleibt der aktive Renderer.
+// Zentrale Karten-Engine fuer den Editor mit Leaflet als explizitem Fallback.
 (function exposeEditorMapAdapter(global) {
   "use strict";
 
@@ -8,17 +7,21 @@
   const MAPLIBRE_URL_PARAMS = global.location
     ? new URLSearchParams(global.location.search)
     : new URLSearchParams();
-  const MAPLIBRE_MAIN_ENGINE_REQUESTED = MAPLIBRE_URL_PARAMS.get("mapEngine") === "maplibre";
-  const ACTIVE_ENGINE = MAPLIBRE_MAIN_ENGINE_REQUESTED ? "maplibre" : "leaflet";
+  const REQUESTED_ENGINE = MAPLIBRE_URL_PARAMS.get("mapEngine");
+  const MAPLIBRE_DEVELOPER_TEST_ENABLED = MAPLIBRE_URL_PARAMS.get("maplibreTest") === "1";
+  const MAPLIBRE_SIDE_BY_SIDE_ENABLED = MAPLIBRE_DEVELOPER_TEST_ENABLED
+    && REQUESTED_ENGINE !== "maplibre";
+  const ACTIVE_ENGINE = REQUESTED_ENGINE === "leaflet" || MAPLIBRE_SIDE_BY_SIDE_ENABLED
+    ? "leaflet"
+    : "maplibre";
+  const MAPLIBRE_MAIN_ENGINE_REQUESTED = ACTIVE_ENGINE === "maplibre";
   const MAPLIBRE_MIGRATION_ENABLED = MAPLIBRE_MIGRATION_DEFAULT
     || MAPLIBRE_MAIN_ENGINE_REQUESTED
-    || MAPLIBRE_URL_PARAMS.get("maplibreTest") === "1";
+    || MAPLIBRE_DEVELOPER_TEST_ENABLED;
   const MAPLIBRE_INTERACTION_REQUESTED = MAPLIBRE_INTERACTION_DEFAULT
     || MAPLIBRE_URL_PARAMS.get("maplibreInteract") === "1";
   const MAPLIBRE_TEST_INTERACTION_ENABLED = MAPLIBRE_MAIN_ENGINE_REQUESTED
     || (MAPLIBRE_MIGRATION_ENABLED && MAPLIBRE_INTERACTION_REQUESTED);
-  const MAPLIBRE_SIDE_BY_SIDE_ENABLED = !MAPLIBRE_MAIN_ENGINE_REQUESTED
-    && MAPLIBRE_URL_PARAMS.get("maplibreTest") === "1";
   const VIEWPORT_DIFFERENCE_THRESHOLDS = Object.freeze({
     centerMeters: Object.freeze({ unobtrusiveMax: 5, noticeableMax: 20 }),
     zoom: Object.freeze({ unobtrusiveMax: 0.05, noticeableMax: 0.25 }),
@@ -115,12 +118,17 @@
   });
   const STOP_SOURCE_ID = "editor-stops-source";
   const STOP_LAYER_ID = "editor-stops-circle";
+  const STOP_LABEL_LAYER_ID = "editor-stops-label";
   const CATALOG_STOP_SOURCE_ID = "editor-catalog-stops-source";
   const CATALOG_STOP_LAYER_ID = "editor-catalog-stops-circle";
+  const CATALOG_CLUSTER_LAYER_ID = "editor-catalog-stops-cluster";
+  const CATALOG_CLUSTER_COUNT_LAYER_ID = "editor-catalog-stops-cluster-count";
+  const CATALOG_STOP_LABEL_LAYER_ID = "editor-catalog-stops-label";
   const ROUTE_POINT_SOURCE_ID = "editor-route-points-source";
   const ROUTE_POINT_LAYER_ID = "editor-route-points-circle";
   const DETOUR_HELPER_SOURCE_ID = "editor-detour-helper-points-source";
   const DETOUR_HELPER_LAYER_ID = "editor-detour-helper-points-circle";
+  const DETOUR_HELPER_LABEL_LAYER_ID = "editor-detour-helper-points-label";
   const HOVER_SOURCE_ID = "editor-hover-highlight-source";
   const HOVER_LAYER_ID = "editor-hover-highlight-circle";
   const HOVER_LINE_LAYER_ID = "editor-hover-highlight-line";
@@ -137,10 +145,15 @@
     LINE_DEFINITIONS.preview.layerId,
     LINE_DEFINITIONS.detourDraft.layerId,
     LINE_DEFINITIONS.detourPlanned.layerId,
+    CATALOG_CLUSTER_LAYER_ID,
     CATALOG_STOP_LAYER_ID,
+    CATALOG_CLUSTER_COUNT_LAYER_ID,
+    CATALOG_STOP_LABEL_LAYER_ID,
     ROUTE_POINT_LAYER_ID,
     STOP_LAYER_ID,
+    STOP_LABEL_LAYER_ID,
     DETOUR_HELPER_LAYER_ID,
+    DETOUR_HELPER_LABEL_LAYER_ID,
     EDITOR_SELECTION_LINE_LAYER_ID,
     EDITOR_SELECTION_LAYER_ID,
     TEST_SELECTION_LINE_LAYER_ID,
@@ -152,6 +165,7 @@
     Object.freeze({ layerId: DETOUR_HELPER_LAYER_ID, featureType: "detourHelperPoint", geometryKind: "point" }),
     Object.freeze({ layerId: STOP_LAYER_ID, featureType: "stop", geometryKind: "point" }),
     Object.freeze({ layerId: ROUTE_POINT_LAYER_ID, featureType: "routePoint", geometryKind: "point" }),
+    Object.freeze({ layerId: CATALOG_CLUSTER_LAYER_ID, featureType: "catalogCluster", geometryKind: "point" }),
     Object.freeze({ layerId: CATALOG_STOP_LAYER_ID, featureType: "catalogStop", geometryKind: "point" }),
     Object.freeze({ layerId: LINE_DEFINITIONS.detourPlanned.layerId, featureType: "detourPlanned", geometryKind: "line" }),
     Object.freeze({ layerId: LINE_DEFINITIONS.detourDraft.layerId, featureType: "detourDraft", geometryKind: "line" }),
@@ -187,6 +201,8 @@
   let suppressNextMapLibreClick = false;
   let mapLibreEditorInteractionFocused = false;
   let mapLibreEditorDeleteKeyHandler = null;
+  let mapLibreFeatureTooltip = null;
+  let mapLibreFeatureTooltipSignature = null;
   let mapLibreViewportHandler = null;
   let mapLibreViewportFrame = null;
   let mapLibreViewportMap = null;
@@ -393,6 +409,7 @@
     stopMapLibreViewportDiagnostics();
     stopViewportDifferenceDiagnostics();
     stopMapLibreOwnerViewportSync();
+    closeMapLibreFeatureTooltip();
     if (managedMap && typeof managedMap.remove === "function") {
       managedMap.remove();
     }
@@ -481,6 +498,7 @@
   }
 
   function updateMapLibreInteractionStatus(visible) {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     const status = getOrCreateInteractionStatus();
     if (!status) return false;
     status.textContent = MAPLIBRE_TEST_INTERACTION_ENABLED
@@ -555,6 +573,7 @@
   }
 
   function updateMapLibreViewportDiagnostic(reason) {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_TEST_INTERACTION_ENABLED) return false;
     const diagnostic = getOrCreateViewportDiagnostic();
     if (!diagnostic) return false;
@@ -565,6 +584,7 @@
   }
 
   function scheduleMapLibreViewportDiagnostic(reason) {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_TEST_INTERACTION_ENABLED || !managedMap) return false;
     if (reason) pendingViewportDiagnosticReason = reason;
     if (mapLibreViewportFrame != null) return true;
@@ -576,6 +596,7 @@
   }
 
   function startMapLibreViewportDiagnostics() {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_TEST_INTERACTION_ENABLED || !managedMap || typeof managedMap.on !== "function") {
       return false;
     }
@@ -1052,6 +1073,7 @@
   }
 
   function updateViewportDifferenceDiagnostic() {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_MIGRATION_ENABLED) return false;
     const diagnostic = getOrCreateViewportDifferenceDiagnostic();
     if (!diagnostic) return false;
@@ -1062,6 +1084,7 @@
   }
 
   function scheduleViewportDifferenceDiagnostic() {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_MIGRATION_ENABLED || !managedMap) return false;
     if (viewportDifferenceFrame != null) return true;
     viewportDifferenceFrame = global.requestAnimationFrame(() => {
@@ -1072,6 +1095,7 @@
   }
 
   function startViewportDifferenceDiagnostics() {
+    if (!MAPLIBRE_DEVELOPER_TEST_ENABLED) return false;
     if (!MAPLIBRE_MIGRATION_ENABLED || !managedMap || typeof managedMap.on !== "function") return false;
     const diagnostic = getOrCreateViewportDifferenceDiagnostic();
     if (!diagnostic) return false;
@@ -1133,8 +1157,8 @@
     }
     const label = getTestLabel();
     const labelText = label && label.querySelector("span");
-    if (labelText) labelText.textContent = MAPLIBRE_MAIN_ENGINE_REQUESTED ? "MapLibre Hauptkarte (Test)" : "MapLibre Test";
-    setLabelActive(label, active);
+    if (labelText) labelText.textContent = MAPLIBRE_MAIN_ENGINE_REQUESTED ? "MapLibre" : "MapLibre Test";
+    setLabelActive(label, active && MAPLIBRE_DEVELOPER_TEST_ENABLED);
     setLabelActive(getLeafletTestLabel(), active && MAPLIBRE_SIDE_BY_SIDE_ENABLED);
     return container;
   }
@@ -1164,27 +1188,31 @@
 
   function initializeTestMap(overrides) {
     if (!MAPLIBRE_MIGRATION_ENABLED) return null;
-    hideViewportSessionSummary(false);
-    lastViewportSessionSummary = null;
+    if (MAPLIBRE_DEVELOPER_TEST_ENABLED) {
+      hideViewportSessionSummary(false);
+      lastViewportSessionSummary = null;
+    }
     const container = setTestContainerActive(true);
     if (!container) throw new Error("MapLibre-Testcontainer wurde nicht gefunden.");
     try {
       const instance = initializeMapLibreMap(container, overrides);
       applyMapLibreTestInteractionState();
-      startMapLibreViewportDiagnostics();
-      startViewportDifferenceDiagnostics();
+      if (MAPLIBRE_DEVELOPER_TEST_ENABLED) {
+        startMapLibreViewportDiagnostics();
+        startViewportDifferenceDiagnostics();
+      }
       if (instance && typeof instance.on === "function") {
         instance.on("error", event => {
           console.error("[Editor MapLibre Test] MapLibre-/Style-Fehler", event.error || event);
         });
       }
-      bindTestViewControls();
+      if (MAPLIBRE_DEVELOPER_TEST_ENABLED) bindTestViewControls();
       startHitTestDiagnostics();
       startMapLibreObjectDragging();
       startMapLibreEditorDeleteHandling();
       global.requestAnimationFrame(() => {
         resizeMapLibreMap();
-        logTestViewMetrics();
+        if (MAPLIBRE_DEVELOPER_TEST_ENABLED) logTestViewMetrics();
       });
       startEditorLineMirroring();
       if (viewportOwnerEngine === "maplibre") startMapLibreOwnerViewportSync();
@@ -1379,7 +1407,11 @@
       layerId: hit.layer.id,
       layerType: hit.layer.type || "circle",
       featureType: definition.featureType,
-      id: properties.id == null ? null : String(properties.id),
+      id: properties.id != null
+        ? String(properties.id)
+        : (definition.featureType === "catalogCluster" && properties.cluster_id != null
+            ? String(properties.cluster_id)
+            : null),
       helperKind: definition.featureType === "detourHelperPoint" && properties.kind != null
         ? String(properties.kind)
         : null,
@@ -1805,6 +1837,80 @@
     });
   }
 
+  function closeMapLibreFeatureTooltip() {
+    if (mapLibreFeatureTooltip && typeof mapLibreFeatureTooltip.remove === "function") {
+      mapLibreFeatureTooltip.remove();
+    }
+    mapLibreFeatureTooltip = null;
+    mapLibreFeatureTooltipSignature = null;
+  }
+
+  function getMapLibreTooltipContent(hit) {
+    if (!hit || !["stop", "catalogStop", "detourHelperPoint"].includes(hit.featureType)) return null;
+    const object = resolveEditorSelectionReference(hit);
+    if (!object) return null;
+    const lines = [];
+    const name = object.name || (hit.featureType === "catalogStop" ? "Haltestelle" : "Kartenobjekt");
+    lines.push(String(name));
+    if (hit.featureType === "catalogStop") {
+      lines.push(`ID: ${object.id || "-"}`);
+      lines.push(`Typ: ${object.type || "unbekannt"}`);
+    } else if (hit.featureType === "detourHelperPoint") {
+      const kindLabel = object.kind === "guidePoint"
+        ? "Fahrwegpunkt"
+        : (object.isGhostPoint ? "Durchfahrpunkt" : "Ersatzhalt");
+      lines.push(kindLabel);
+    }
+    return lines;
+  }
+
+  function updateMapLibreFeatureTooltip(hit) {
+    const lines = getMapLibreTooltipContent(hit);
+    const coordinates = hit && Array.isArray(hit.coordinates) ? hit.coordinates : null;
+    if (!lines || !coordinates || !managedMap || !global.maplibregl || typeof global.maplibregl.Popup !== "function") {
+      closeMapLibreFeatureTooltip();
+      return false;
+    }
+    const signature = `${hit.featureType}|${hit.id}|${coordinates[0]}|${coordinates[1]}`;
+    if (mapLibreFeatureTooltip && signature === mapLibreFeatureTooltipSignature) return true;
+    if (!mapLibreFeatureTooltip) {
+      mapLibreFeatureTooltip = new global.maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 12,
+        className: "editor-maplibre-feature-tooltip"
+      });
+    }
+    const content = global.document.createElement("div");
+    content.className = "editor-maplibre-feature-tooltip-content";
+    lines.forEach((line, index) => {
+      const row = global.document.createElement(index === 0 ? "strong" : "span");
+      row.textContent = line;
+      content.appendChild(row);
+    });
+    mapLibreFeatureTooltip.setLngLat(coordinates).setDOMContent(content).addTo(managedMap);
+    mapLibreFeatureTooltipSignature = signature;
+    return true;
+  }
+
+  function expandMapLibreCatalogCluster(hit) {
+    if (!hit || hit.featureType !== "catalogCluster" || !managedMap || !Array.isArray(hit.coordinates)) return false;
+    const source = managedMap.getSource(CATALOG_STOP_SOURCE_ID);
+    const clusterId = Number(hit.id);
+    if (!source || !Number.isFinite(clusterId) || typeof source.getClusterExpansionZoom !== "function") return false;
+    try {
+      const expansionZoom = source.getClusterExpansionZoom(clusterId);
+      Promise.resolve(expansionZoom).then(zoom => {
+        if (!managedMap || !Number.isFinite(zoom)) return;
+        managedMap.easeTo({ center: hit.coordinates, zoom: Math.min(zoom, 18) });
+      }).catch(error => console.error("[Editor MapLibre] Clusterauflösung fehlgeschlagen", error));
+      return true;
+    } catch (error) {
+      console.error("[Editor MapLibre] Clusterauflösung fehlgeschlagen", error);
+      return false;
+    }
+  }
+
   function formatResolvedEditorObject(object) {
     if (!object) return "Objekt · nicht gefunden";
     const name = object.name || "-";
@@ -1939,6 +2045,7 @@
 
   function createEditorObjectAtMapLibrePoint(hit, event) {
     if (!MAPLIBRE_TEST_INTERACTION_ENABLED || isMapLibreDraggablePointHit(hit)) return false;
+    if (hit && hit.featureType === "catalogCluster") return expandMapLibreCatalogCluster(hit);
     if (hit && hit.featureType === "catalogStop") {
       const editorState = getEditorState();
       const catalogStop = resolveCatalogStopReference(hit);
@@ -2202,15 +2309,18 @@
   function startHitTestDiagnostics() {
     if (!MAPLIBRE_MIGRATION_ENABLED || !managedMap || !global.document) return false;
     const container = getTestContainer();
-    const diagnostic = getOrCreateHitTestDiagnostic();
-    const clickDiagnostic = getOrCreateClickDiagnostic();
-    if (!container || !diagnostic || !clickDiagnostic) return false;
-    diagnostic.classList.add("is-active");
-    diagnostic.setAttribute("aria-hidden", "false");
-    clickDiagnostic.classList.add("is-active");
-    clickDiagnostic.setAttribute("aria-hidden", "false");
-    updateHitTestDiagnostic(null);
-    updateClickDiagnostic(null);
+    if (!container) return false;
+    if (MAPLIBRE_DEVELOPER_TEST_ENABLED) {
+      const diagnostic = getOrCreateHitTestDiagnostic();
+      const clickDiagnostic = getOrCreateClickDiagnostic();
+      if (!diagnostic || !clickDiagnostic) return false;
+      diagnostic.classList.add("is-active");
+      diagnostic.setAttribute("aria-hidden", "false");
+      clickDiagnostic.classList.add("is-active");
+      clickDiagnostic.setAttribute("aria-hidden", "false");
+      updateHitTestDiagnostic(null);
+      updateClickDiagnostic(null);
+    }
 
     if (!hitTestDiagnosticMoveHandler) {
       hitTestDiagnosticMoveHandler = event => {
@@ -2236,8 +2346,9 @@
           const point = pendingHitTestPoint;
           pendingHitTestPoint = null;
           const hit = point ? hitTestEditorObject(point) : null;
-          updateHitTestDiagnostic(hit);
+          if (MAPLIBRE_DEVELOPER_TEST_ENABLED) updateHitTestDiagnostic(hit);
           setEditorHoverHighlight(hit);
+          updateMapLibreFeatureTooltip(hit);
         });
       };
       global.document.addEventListener("mousemove", hitTestDiagnosticMoveHandler, true);
@@ -2260,7 +2371,7 @@
         if (!inside) return;
         const point = [event.clientX - rect.left, event.clientY - rect.top];
         const hit = hitTestEditorObject(point);
-        updateClickDiagnostic(hit);
+        if (MAPLIBRE_DEVELOPER_TEST_ENABLED) updateClickDiagnostic(hit);
         setMapLibreTestSelection(hit);
         applyMapLibreEditorSelection(hit, event);
         createEditorObjectAtMapLibrePoint(hit, event);
@@ -2285,6 +2396,7 @@
     hitTestDiagnosticFrame = null;
     pendingHitTestPoint = null;
     clearEditorHoverHighlight();
+    closeMapLibreFeatureTooltip();
     const diagnostic = global.document
       ? global.document.getElementById(HIT_TEST_DIAGNOSTIC_ID)
       : null;
@@ -2629,6 +2741,10 @@
   }
 
   function createCatalogStopsGeoJson(catalogStops) {
+    const editorState = getEditorState();
+    const highlightedId = editorState && editorState.highlightedCatalogMarkerId != null
+      ? String(editorState.highlightedCatalogMarkerId)
+      : null;
     const features = Array.isArray(catalogStops)
       ? catalogStops.map(catalogStop => {
           const coordinates = toMapLibreLngLat(catalogStop);
@@ -2641,6 +2757,7 @@
               name: catalogStop.name == null ? "" : String(catalogStop.name),
               catalogType: catalogStop.type == null ? "" : String(catalogStop.type),
               direction: catalogStop.directionHint || catalogStop.direction || "",
+              highlighted: highlightedId === String(catalogStop.id),
               color: visual.color,
               strokeColor: visual.strokeColor
             },
@@ -2676,19 +2793,78 @@
       if (source && typeof source.setData === "function") {
         source.setData(desiredCatalogStopsData);
       } else {
-        managedMap.addSource(CATALOG_STOP_SOURCE_ID, { type: "geojson", data: desiredCatalogStopsData });
+        managedMap.addSource(CATALOG_STOP_SOURCE_ID, {
+          type: "geojson",
+          data: desiredCatalogStopsData,
+          cluster: true,
+          clusterMaxZoom: 16,
+          clusterRadius: 46
+        });
+      }
+      if (!managedMap.getLayer(CATALOG_CLUSTER_LAYER_ID)) {
+        managedMap.addLayer({
+          id: CATALOG_CLUSTER_LAYER_ID,
+          type: "circle",
+          source: CATALOG_STOP_SOURCE_ID,
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-radius": ["step", ["get", "point_count"], 16, 10, 20, 40, 25],
+            "circle-color": ["step", ["get", "point_count"], "#8b5cf6", 10, "#7c3aed", 40, "#5b21b6"],
+            "circle-opacity": 0.9,
+            "circle-stroke-width": 3,
+            "circle-stroke-color": "#ffffff"
+          }
+        });
       }
       if (!managedMap.getLayer(CATALOG_STOP_LAYER_ID)) {
         managedMap.addLayer({
           id: CATALOG_STOP_LAYER_ID,
           type: "circle",
           source: CATALOG_STOP_SOURCE_ID,
+          filter: ["!", ["has", "point_count"]],
           paint: {
-            "circle-radius": 7,
+            "circle-radius": ["case", ["boolean", ["get", "highlighted"], false], 11, 7],
             "circle-color": ["coalesce", ["get", "color"], "#7c3aed"],
             "circle-opacity": 0.82,
-            "circle-stroke-width": 2,
-            "circle-stroke-color": ["coalesce", ["get", "strokeColor"], "#5b21b6"]
+            "circle-stroke-width": ["case", ["boolean", ["get", "highlighted"], false], 4, 2],
+            "circle-stroke-color": ["case", ["boolean", ["get", "highlighted"], false], "#facc15", ["coalesce", ["get", "strokeColor"], "#5b21b6"]]
+          }
+        });
+      }
+      if (!managedMap.getLayer(CATALOG_CLUSTER_COUNT_LAYER_ID)) {
+        managedMap.addLayer({
+          id: CATALOG_CLUSTER_COUNT_LAYER_ID,
+          type: "symbol",
+          source: CATALOG_STOP_SOURCE_ID,
+          filter: ["has", "point_count"],
+          layout: {
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": 12
+          },
+          paint: { "text-color": "#ffffff" }
+        });
+      }
+      if (!managedMap.getLayer(CATALOG_STOP_LABEL_LAYER_ID)) {
+        managedMap.addLayer({
+          id: CATALOG_STOP_LABEL_LAYER_ID,
+          type: "symbol",
+          source: CATALOG_STOP_SOURCE_ID,
+          minzoom: 16,
+          filter: ["!", ["has", "point_count"]],
+          layout: {
+            "text-field": ["get", "name"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": 11,
+            "text-anchor": "top",
+            "text-offset": [0, 1.1],
+            "text-optional": true,
+            "text-padding": 3
+          },
+          paint: {
+            "text-color": "#312e81",
+            "text-halo-color": "rgba(255,255,255,0.95)",
+            "text-halo-width": 1.5
           }
         });
       }
@@ -2770,6 +2946,28 @@
             "circle-color": ["coalesce", ["get", "color"], "#3b82f6"],
             "circle-stroke-width": 2,
             "circle-stroke-color": ["coalesce", ["get", "strokeColor"], "#1d4ed8"]
+          }
+        });
+      }
+      if (!managedMap.getLayer(STOP_LABEL_LAYER_ID)) {
+        managedMap.addLayer({
+          id: STOP_LABEL_LAYER_ID,
+          type: "symbol",
+          source: STOP_SOURCE_ID,
+          minzoom: 13,
+          layout: {
+            "text-field": ["get", "name"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 17, 13],
+            "text-anchor": "top",
+            "text-offset": [0, 1.25],
+            "text-optional": true,
+            "text-padding": 4
+          },
+          paint: {
+            "text-color": "#172554",
+            "text-halo-color": "rgba(255,255,255,0.96)",
+            "text-halo-width": 1.6
           }
         });
       }
@@ -2953,6 +3151,28 @@
               "passThroughStop", "#334155",
               "#6d28d9"
             ]
+          }
+        });
+      }
+      if (!managedMap.getLayer(DETOUR_HELPER_LABEL_LAYER_ID)) {
+        managedMap.addLayer({
+          id: DETOUR_HELPER_LABEL_LAYER_ID,
+          type: "symbol",
+          source: DETOUR_HELPER_SOURCE_ID,
+          minzoom: 14,
+          layout: {
+            "text-field": ["get", "name"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": 11,
+            "text-anchor": "top",
+            "text-offset": [0, 1.3],
+            "text-optional": true,
+            "text-padding": 4
+          },
+          paint: {
+            "text-color": "#312e81",
+            "text-halo-color": "rgba(255,255,255,0.96)",
+            "text-halo-width": 1.5
           }
         });
       }
