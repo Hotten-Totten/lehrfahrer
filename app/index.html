@@ -17,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.024">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.025">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.024</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.025</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -183,18 +183,22 @@
       <div class="settings-section">
         <h3>Offline-Karten</h3>
         <p>
-          Die Karte (OpenFreeMap) wird automatisch gecacht sobald du sie mit WLAN ansiehst.
-          Fahre deine Strecke einmal zuhause mit WLAN nach – danach läuft die Karte
-          komplett ohne Internet, nur GPS wird benötigt.
+          Eine installierte PMTiles-Datei wird bevorzugt als Offline-Karte verwendet.
+          Ohne installierte Offline-Karte dient OpenFreeMap bei Internetverbindung als Fallback.
         </p>
-        <p>
-          Für größere Regionen ohne jede Vorschau: PMTiles-Datei laden (optional).
-        </p>
-        <div id="tileStatus" class="status-box">Karte: OpenFreeMap (online)</div>
-        <button id="loadLocalTilesBtn" title="Lokale PMTiles-Datei vom Gerät laden (optional, für vollständigen Offline-Betrieb ohne Vorcaching)">
-          📂 PMTiles-Datei laden (optional)
+        <div id="tileStatus" class="status-box">Kartenquelle wird geprüft …</div>
+        <div id="offlineMapInstallStatus" class="status-box">Keine Offline-Karte installiert</div>
+        <div id="storagePersistenceStatus" class="status-box">Speicherschutz wird geprüft …</div>
+        <button id="requestStoragePersistenceBtn" type="button" class="hidden">
+          Speicher dauerhaft schützen
+        </button>
+        <button id="loadLocalTilesBtn" title="Lokale PMTiles-Datei dauerhaft auf diesem Gerät speichern">
+          Offline-Karte installieren
         </button>
         <input type="file" id="tilesFileInput" accept=".pmtiles">
+        <button id="removeLocalTilesBtn" type="button" disabled>
+          Offline-Karte entfernen
+        </button>
       </div>
 
       <div class="settings-section">
@@ -403,9 +407,9 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.1.024"></script>
-    <script src="js/app.js?v=V2.1.024"></script>
-    <script src="js/debug-helper.js?v=V2.1.024"></script>
+    <script src="js/map.js?v=V2.1.025"></script>
+    <script src="js/app.js?v=V2.1.025"></script>
+    <script src="js/debug-helper.js?v=V2.1.025"></script>
 </body>
 </html>
 

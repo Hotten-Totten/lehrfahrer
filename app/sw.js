@@ -6,18 +6,24 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21024';
+const CACHE_APP = 'lehrfahrer-app-v21025';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
-// Nur kleine lokale Dateien – kein Blockieren durch große CDN-Downloads
+// App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.024',
-  './js/app.js?v=V2.1.024',
-  './js/map.js?v=V2.1.024',
-  './js/debug-helper.js?v=V2.1.024',
+  './css/app.css?v=V2.1.025',
+  './js/app.js?v=V2.1.025',
+  './js/map.js?v=V2.1.025',
+  './js/debug-helper.js?v=V2.1.025',
+  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css',
+  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js',
+  'https://unpkg.com/pmtiles@3/dist/pmtiles.js',
+  './glyphs/Noto%20Sans%20Bold/0-255.pbf',
+  './glyphs/Noto%20Sans%20Bold/256-511.pbf',
+  './glyphs/Noto%20Sans%20Bold/8192-8447.pbf',
 ];
 
 // ── Install ──────────────────────────────────────────────────
@@ -54,6 +60,10 @@ self.addEventListener('fetch', event => {
 
   // OpenFreeMap-Kacheln: Cache-first (nach erstem Laden offline verfügbar)
   if (url.hostname === 'tiles.openfreemap.org') {
+    if (url.searchParams.get('lf-online-check') === '1') {
+      event.respondWith(networkOnlyMapCheck(event.request));
+      return;
+    }
     event.respondWith(cacheFirstTile(event.request));
     return;
   }
@@ -114,6 +124,14 @@ async function cacheFirstTile(request) {
 }
 
 // ── Nachricht von der App – Route manuell cachen ─────────────
+async function networkOnlyMapCheck(request) {
+  try {
+    return await fetch(request, { cache: 'no-store' });
+  } catch {
+    return new Response('', { status: 503 });
+  }
+}
+
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

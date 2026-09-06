@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.1.025 - 2026-09-06
+- Offline-PMTiles-Unterstützung der Fahrer-App korrigiert und für den Tablet-Test vorbereitet
+- PMTiles-Protokoll direkt registriert und lokale OPFS-PMTiles-Karte eingebunden
+- lokalen Glyph-Bereich 8192–8447 ergänzt
+- Offline-Reload ohne OpenFreeMap-Abhängigkeit ermöglicht
+- Route und Haltestellen offline sichtbar gehalten
+- bestehenden Offline-Karten-Import über die Einstellungen beibehalten
+- keine Änderungen an Routing, GPS oder Pfeildarstellung
+
 ## V2.1.024 - 2026-09-06
 - MapLibre als Standard-Hauptkarte des Editors aktiviert
 - Leaflet/CARTO als expliziten Fallback über `?mapEngine=leaflet` beibehalten

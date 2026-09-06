@@ -11,7 +11,6 @@ const STORAGE_KEY_DISMISSED_UPDATE = 'lehrfahrer-dismissed-lines-update';
 let db          = null;
 let currentRoute = null;
 let gpsActive   = false;
-let pmtilesUrl  = null; // gesetzt wenn lokale PMTiles-Datei geladen wurde
 let gpsFirstFixTimer = null;
 let availableLinesCatalog = []; // Linien vom API
 
@@ -113,6 +112,9 @@ const stopList         = document.getElementById('stopList');
 const tileStatus       = document.getElementById('tileStatus');
 const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
+const removeLocalTilesBtn = document.getElementById('removeLocalTilesBtn');
+const storagePersistenceStatus = document.getElementById('storagePersistenceStatus');
+const requestStoragePersistenceBtn = document.getElementById('requestStoragePersistenceBtn');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
 const navigateToStartBtn = document.getElementById('navigateToStartBtn');
 const lineStartMenu = document.getElementById('lineStartMenu');
@@ -166,6 +168,7 @@ const PUNCTUALITY_ENABLED_KEY = 'lehrfahrer_show_punctuality';
 const PUNCTUALITY_DEPARTURE_TIME_KEY = 'lehrfahrer_punctuality_departure_time';
 const MAP_2D_MODE_KEY = 'lehrfahrer_map_2d_mode';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
+const STORAGE_PERSIST_ATTEMPTED_KEY = 'lf_storage_persist_attempted';
 let refreshInProgress = false;
 
 // ── Start ────────────────────────────────────────────────────
@@ -179,7 +182,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     db = null;
     console.warn('IndexedDB nicht verfuegbar. Offline-Speicher ist deaktiviert:', err);
   }
-  initMap();
+  await initMap();
+  await refreshStoragePersistenceStatus();
   initMap2DMode();
   initNavPerfDebugHud();
   bindEvents();
@@ -1279,8 +1283,20 @@ function bindEvents() {
       startNavigation();
     });
   }
-  loadLocalTilesBtn.addEventListener('click', () => tilesFileInput.click());
+  loadLocalTilesBtn.addEventListener('click', () => {
+    tilesFileInput.value = '';
+    tilesFileInput.click();
+  });
   tilesFileInput.addEventListener('change', onTilesFileSelected);
+  if (removeLocalTilesBtn) {
+    removeLocalTilesBtn.addEventListener('click', async () => {
+      if (!confirm('Offline-Karte wirklich von diesem Gerät entfernen?')) return;
+      await removeInstalledOfflineMap();
+    });
+  }
+  if (requestStoragePersistenceBtn) {
+    requestStoragePersistenceBtn.addEventListener('click', () => requestPersistentStorage(false));
+  }
 
   navBtn.addEventListener('click', () => {
     if (navActive) stopNavigation();
@@ -2210,31 +2226,77 @@ function armGpsFirstFixTimer(scopeLabel) {
 }
 
 // ── PMTiles-Datei laden ──────────────────────────────────────
-function onTilesFileSelected() {
+async function onTilesFileSelected() {
   const file = tilesFileInput.files[0];
   if (!file) return;
+  const installed = await installOfflineMapFile(file);
+  if (installed) await requestPersistentStorage(true);
+}
 
-  // OPFS (Origin Private File System) – moderne Browser
-  if (navigator.storage && navigator.storage.getDirectory) {
-    navigator.storage.getDirectory().then(async root => {
-      const fileHandle = await root.getFileHandle('region.pmtiles', { create: true });
-      const writable   = await fileHandle.createWritable();
-      await writable.write(file);
-      await writable.close();
+function renderStoragePersistenceStatus(state) {
+  if (storagePersistenceStatus) {
+    if (state === 'protected') {
+      storagePersistenceStatus.textContent = 'Speicher dauerhaft geschützt';
+    } else if (state === 'unsupported') {
+      storagePersistenceStatus.textContent = 'Persistenz wird vom Browser nicht unterstützt';
+    } else if (state === 'requesting') {
+      storagePersistenceStatus.textContent = 'Dauerhafter Speicherschutz wird angefragt …';
+    } else {
+      storagePersistenceStatus.textContent = 'Speicher nicht dauerhaft geschützt · Browser kann Offline-Daten bei Speicherdruck entfernen';
+    }
+  }
+  if (requestStoragePersistenceBtn) {
+    const canRequest = state === 'unprotected';
+    requestStoragePersistenceBtn.classList.toggle('hidden', !canRequest);
+    requestStoragePersistenceBtn.disabled = state === 'requesting';
+  }
+}
 
-      pmtilesUrl = 'opfs://region.pmtiles';
-      tileStatus.textContent = `Karte: Offline (${file.name})`;
-      switchToPMTiles(pmtilesUrl);
-    }).catch(err => {
-      // Fallback: Object-URL (nur für aktuelle Session)
-      pmtilesUrl = URL.createObjectURL(file);
-  tileStatus.textContent = `Karte: Lokal geladen (${file.name}) – wird nach Neustart zurückgesetzt`;
-      switchToPMTiles(pmtilesUrl);
-    });
-  } else {
-    pmtilesUrl = URL.createObjectURL(file);
-    tileStatus.textContent = `Karte: Lokal geladen (${file.name})`;
-    switchToPMTiles(pmtilesUrl);
+async function refreshStoragePersistenceStatus() {
+  if (!navigator.storage || typeof navigator.storage.persisted !== 'function') {
+    renderStoragePersistenceStatus('unsupported');
+    return { supported: false, persisted: false };
+  }
+  try {
+    const persisted = await navigator.storage.persisted();
+    if (persisted) {
+      renderStoragePersistenceStatus('protected');
+      return { supported: true, persisted: true };
+    }
+    if (typeof navigator.storage.persist !== 'function') {
+      renderStoragePersistenceStatus('unsupported');
+      return { supported: false, persisted: false };
+    }
+    renderStoragePersistenceStatus('unprotected');
+    return { supported: true, persisted: false };
+  } catch (err) {
+    console.warn('Persistenzstatus konnte nicht gelesen werden:', err);
+    renderStoragePersistenceStatus('unsupported');
+    return { supported: false, persisted: false };
+  }
+}
+
+async function requestPersistentStorage(automatic) {
+  const current = await refreshStoragePersistenceStatus();
+  if (!current.supported || current.persisted) return current.persisted;
+  if (automatic) {
+    try {
+      if (sessionStorage.getItem(STORAGE_PERSIST_ATTEMPTED_KEY) === '1') return false;
+      sessionStorage.setItem(STORAGE_PERSIST_ATTEMPTED_KEY, '1');
+    } catch {
+      // Ohne Session-Speicher bleibt der Versuch an den erfolgreichen Import gebunden.
+    }
+  }
+
+  renderStoragePersistenceStatus('requesting');
+  try {
+    const granted = await navigator.storage.persist();
+    renderStoragePersistenceStatus(granted ? 'protected' : 'unprotected');
+    return !!granted;
+  } catch (err) {
+    console.warn('Dauerhafter Speicherschutz wurde nicht gewährt:', err);
+    renderStoragePersistenceStatus('unprotected');
+    return false;
   }
 }
 

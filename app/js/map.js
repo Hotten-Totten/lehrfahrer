@@ -10,6 +10,9 @@ let stopMarkerMeta = [];
 let gpsMarker    = null;
 let gpsWatchId   = null;
 let pmtilesProto = null;
+let activeMapSource = { kind: 'none', label: '' };
+let mapSourceErrorHandled = false;
+let offlineMapInstalled = false;
 const BUS_HEADING_OFFSET_DEG = 0;
 const GPS_MARKER_PREDICT_MAX_MS = 1200;
 const GPS_MARKER_PREDICT_MAX_M = 12;
@@ -34,6 +37,8 @@ let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
+const OFFLINE_MAP_MANIFEST_KEY = 'lehrfahrer_offline_pmtiles_manifest';
+const LEGACY_OFFLINE_MAP_FILE = 'region.pmtiles';
 
 function normalizeDeg(deg) {
   return (deg % 360 + 360) % 360;
@@ -844,7 +849,7 @@ function buildRasterStyle() {
 function buildPMTilesStyle(pmtilesUrl) {
   return {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    glyphs: `${new URL('./glyphs/', window.location.href).href}{fontstack}/{range}.pbf`,
     sources: {
       openmaptiles: {
         type: 'vector',
@@ -900,7 +905,7 @@ function buildPMTilesStyle(pmtilesUrl) {
           'symbol-placement': 'line',
           'text-field': ['coalesce', ['get', 'name:de'], ['get', 'name']],
           'text-font': ['Noto Sans Bold'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 
+          'text-size': ['interpolate', ['linear'], ['zoom'],
             12, 8,
             14, 11,
             16, 14,
@@ -928,20 +933,190 @@ function buildPMTilesStyle(pmtilesUrl) {
   };
 }
 
-// ── Karte initialisieren ─────────────────────────────────────
-function initMap() {
-  // PMTiles-Protokoll registrieren (sobald Bibliothek geladen)
-  if (window.pmtiles) {
-    pmtilesProto = new pmtiles.Protocol();
-    maplibregl.addProtocol('pmtiles', (params, callback) => {
-      pmtilesProto.tile(params, callback);
-      return { cancel: () => {} };
-    });
+function buildEmptyMapStyle() {
+  return {
+    version: 8,
+    sources: {},
+    layers: [
+      { id: 'background', type: 'background', paint: { 'background-color': '#edf1f7' } }
+    ]
+  };
+}
+
+function setMapSourceState(kind, label = '') {
+  activeMapSource = { kind, label };
+  const status = document.getElementById('tileStatus');
+  if (status) {
+    if (kind === 'local') status.textContent = `Karte: Offline-Karte aktiv${label ? ` (${label})` : ''}`;
+    else if (kind === 'online') status.textContent = 'Karte: Online-Karte aktiv (OpenFreeMap)';
+    else status.textContent = label || 'Karte: Keine Karte verfügbar – Keine Offline-Karte installiert';
   }
+  window.dispatchEvent(new CustomEvent('map-sourcechange', { detail: { ...activeMapSource } }));
+}
+
+function ensurePMTilesProtocol() {
+  if (pmtilesProto) return pmtilesProto;
+  if (!window.pmtiles || typeof window.pmtiles.Protocol !== 'function') return null;
+  pmtilesProto = new window.pmtiles.Protocol({ metadata: true });
+  maplibregl.addProtocol('pmtiles', pmtilesProto.tile);
+  return pmtilesProto;
+}
+
+function formatOfflineMapSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readOfflineMapManifest() {
+  try {
+    const value = JSON.parse(localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY) || 'null');
+    return value && typeof value.storageName === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function setOfflineMapInstallState(state, metadata = null, detail = '') {
+  const status = document.getElementById('offlineMapInstallStatus');
+  const installButton = document.getElementById('loadLocalTilesBtn');
+  const removeButton = document.getElementById('removeLocalTilesBtn');
+  const fileDetails = metadata
+    ? [metadata.displayName, formatOfflineMapSize(metadata.size)].filter(Boolean).join(' · ')
+    : '';
+  if (status) {
+    if (state === 'installing') status.textContent = `Offline-Karte wird installiert${fileDetails ? ` · ${fileDetails}` : ''}`;
+    else if (state === 'ready') status.textContent = `Offline-Karte bereit${fileDetails ? ` · ${fileDetails}` : ''}`;
+    else if (state === 'error') status.textContent = `Fehler beim Kartenimport${detail ? ` · ${detail}` : ''}`;
+    else if (state === 'remove-error') status.textContent = detail || 'Offline-Karte konnte nicht entfernt werden';
+    else status.textContent = 'Keine Offline-Karte installiert';
+  }
+  if (state === 'ready') offlineMapInstalled = true;
+  else if (state === 'none') offlineMapInstalled = false;
+  if (installButton) installButton.disabled = state === 'installing';
+  if (removeButton) removeButton.disabled = state === 'installing' || !offlineMapInstalled;
+}
+
+async function createLocalPMTilesSource(file, metadata = null) {
+  const protocol = ensurePMTilesProtocol();
+  if (
+    !protocol || !file || typeof window.pmtiles.FileSource !== 'function' ||
+    typeof window.pmtiles.PMTiles !== 'function'
+  ) {
+    throw new Error('PMTiles-Unterstützung ist nicht verfügbar.');
+  }
+  const source = new window.pmtiles.FileSource(file);
+  const archive = new window.pmtiles.PMTiles(source);
+  await archive.getHeader();
+  await archive.getMetadata();
+  protocol.add(archive);
+  const mapMetadata = {
+    storageName: metadata && metadata.storageName ? metadata.storageName : file.name,
+    displayName: metadata && metadata.displayName ? metadata.displayName : file.name,
+    size: Number.isFinite(metadata && metadata.size) ? metadata.size : file.size
+  };
+  return {
+    kind: 'local',
+    label: mapMetadata.displayName,
+    url: source.getKey(),
+    style: buildPMTilesStyle(source.getKey()),
+    metadata: mapMetadata
+  };
+}
+
+async function readStoredPMTilesSource() {
+  if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
+    setOfflineMapInstallState('none');
+    return null;
+  }
+  const manifest = readOfflineMapManifest();
+  const metadata = manifest || {
+    storageName: LEGACY_OFFLINE_MAP_FILE,
+    displayName: LEGACY_OFFLINE_MAP_FILE,
+    size: null
+  };
+  try {
+    const root = await navigator.storage.getDirectory();
+    const fileHandle = await root.getFileHandle(metadata.storageName);
+    const file = await fileHandle.getFile();
+    if (!file.size) throw new Error('Die gespeicherte Datei ist leer.');
+    const source = await createLocalPMTilesSource(file, { ...metadata, size: file.size });
+    setOfflineMapInstallState('ready', source.metadata);
+    return source;
+  } catch (err) {
+    if (err && err.name === 'NotFoundError' && !manifest) {
+      setOfflineMapInstallState('none');
+      return null;
+    }
+    console.warn('Offline-Karte konnte nicht gelesen werden:', err);
+    setOfflineMapInstallState('error', metadata, 'Gespeicherte Datei ist nicht lesbar');
+    return null;
+  }
+}
+
+async function onlineMapAvailable() {
+  if (navigator.onLine === false) return false;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 3500) : null;
+  try {
+    const response = await fetch('https://tiles.openfreemap.org/planet?lf-online-check=1', {
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function resolveInitialMapSource() {
+  const localSource = await readStoredPMTilesSource();
+  if (localSource) return localSource;
+  if (await onlineMapAvailable()) {
+    return { kind: 'online', label: 'OpenFreeMap', style: buildRasterStyle() };
+  }
+  return {
+    kind: 'none',
+    label: 'Karte: Keine Karte verfügbar – Keine Offline-Karte installiert',
+    style: buildEmptyMapStyle()
+  };
+}
+
+function handleMapSourceError(event) {
+  const message = event && event.error ? event.error.message : String(event || 'Unbekannt');
+  const sourceId = event && event.sourceId ? event.sourceId : '';
+  const isActiveBaseSource = (activeMapSource.kind === 'online' && sourceId === 'ofm') ||
+    (activeMapSource.kind === 'local' && sourceId === 'openmaptiles');
+  if (isActiveBaseSource && mapSourceErrorHandled) return;
+  if (!isActiveBaseSource) {
+    console.warn('[MapLibre]', message);
+    return;
+  }
+  mapSourceErrorHandled = true;
+  console.warn('[MapLibre Kartenquelle]', message);
+  if (activeMapSource.kind === 'online') {
+    setMapSourceState('none');
+  } else {
+    setMapSourceState('none', 'Karte: Keine Karte verfügbar – Offline-Karte konnte nicht gelesen werden');
+  }
+}
+
+// ── Karte initialisieren ─────────────────────────────────────
+async function initMap() {
+  if (!window.maplibregl || typeof window.maplibregl.Map !== 'function') {
+    setMapSourceState('none', 'Karte: Keine Karte verfügbar – Kartenmodul ist offline nicht installiert');
+    return null;
+  }
+  ensurePMTilesProtocol();
+  const source = await resolveInitialMapSource();
+  mapSourceErrorHandled = false;
+  setMapSourceState(source.kind, source.label);
 
   map = new maplibregl.Map({
     container: 'map',
-    style: buildRasterStyle(),
+    style: source.style,
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     maxZoom: 22,
@@ -955,8 +1130,7 @@ function initMap() {
   );
 
   map.on('error', e => {
-    console.error('[MapLibre]', e.error?.message || e);
-    showToast('Karten-Fehler: ' + (e.error?.message || 'Unbekannt'));
+    handleMapSourceError(e);
   });
 
   map.on('zoomend', updateStopPoiVisibility);
@@ -970,7 +1144,164 @@ function switchToPMTiles(pmtilesUrl) {
   if (!map) return;
   clearRoute();
   clearStops();
+  mapSourceErrorHandled = false;
   map.setStyle(buildPMTilesStyle(pmtilesUrl));
+}
+
+function createOfflineMapStorageName() {
+  const suffix = window.crypto && typeof window.crypto.randomUUID === 'function'
+    ? window.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `region-${suffix}.pmtiles`;
+}
+
+async function removeOPFSFileIfPresent(root, storageName) {
+  if (!root || !storageName) return;
+  try {
+    await root.removeEntry(storageName);
+  } catch (err) {
+    if (!err || err.name !== 'NotFoundError') throw err;
+  }
+}
+
+function activateLocalPMTilesSource(source) {
+  if (!source) return false;
+  setMapSourceState('local', source.label);
+  switchToPMTiles(source.url);
+  return true;
+}
+
+async function installOfflineMapFile(file) {
+  if (!file) return false;
+  const metadata = { displayName: file.name || 'Offline-Karte.pmtiles', size: file.size };
+  if (!/\.pmtiles$/i.test(metadata.displayName)) {
+    setOfflineMapInstallState('error', metadata, 'Bitte eine .pmtiles-Datei auswählen');
+    return false;
+  }
+  if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
+    setOfflineMapInstallState('error', metadata, 'Dauerhafter Gerätespeicher ist nicht verfügbar');
+    return false;
+  }
+
+  setOfflineMapInstallState('installing', metadata);
+  const previousManifest = readOfflineMapManifest();
+  const previousStorageName = previousManifest
+    ? previousManifest.storageName
+    : (offlineMapInstalled ? LEGACY_OFFLINE_MAP_FILE : null);
+  const storageName = createOfflineMapStorageName();
+  let previousManifestText = null;
+  let root = null;
+  let writable = null;
+  let manifestUpdated = false;
+  let importPhase = 'storage';
+
+  try {
+    previousManifestText = localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY);
+    if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+      const estimate = await navigator.storage.estimate();
+      const available = Number(estimate.quota) - Number(estimate.usage);
+      if (Number.isFinite(available) && file.size > available) {
+        const quotaError = new Error('Nicht genügend freier Speicher für diese Offline-Karte');
+        quotaError.name = 'QuotaExceededError';
+        throw quotaError;
+      }
+    }
+
+    root = await navigator.storage.getDirectory();
+    const fileHandle = await root.getFileHandle(storageName, { create: true });
+    writable = await fileHandle.createWritable();
+    await writable.write(file);
+    await writable.close();
+    writable = null;
+
+    const storedFile = await fileHandle.getFile();
+    if (storedFile.size !== file.size || !storedFile.size) {
+      throw new Error('Die Datei wurde nicht vollständig gespeichert.');
+    }
+
+    importPhase = 'validation';
+    const installedMetadata = { ...metadata, storageName, size: storedFile.size };
+    const source = await createLocalPMTilesSource(storedFile, installedMetadata);
+    importPhase = 'activation';
+    localStorage.setItem(OFFLINE_MAP_MANIFEST_KEY, JSON.stringify(installedMetadata));
+    manifestUpdated = true;
+    activateLocalPMTilesSource(source);
+    setOfflineMapInstallState('ready', installedMetadata);
+
+    if (previousStorageName && previousStorageName !== storageName) {
+      try {
+        await removeOPFSFileIfPresent(root, previousStorageName);
+      } catch (cleanupError) {
+        console.warn('Vorherige Offline-Karte konnte nicht aufgeräumt werden:', cleanupError);
+      }
+    }
+    return true;
+  } catch (err) {
+    if (writable && typeof writable.abort === 'function') {
+      try {
+        await writable.abort();
+      } catch {
+        // Die nicht aktivierte Staging-Datei wird anschließend separat entfernt.
+      }
+    }
+    if (manifestUpdated) {
+      if (previousManifestText == null) localStorage.removeItem(OFFLINE_MAP_MANIFEST_KEY);
+      else localStorage.setItem(OFFLINE_MAP_MANIFEST_KEY, previousManifestText);
+    }
+    if (root) {
+      try {
+        await removeOPFSFileIfPresent(root, storageName);
+      } catch (cleanupError) {
+        console.warn('Unvollständige Offline-Karte konnte nicht entfernt werden:', cleanupError);
+      }
+    }
+    const detail = err && err.name === 'QuotaExceededError'
+      ? 'Nicht genügend freier Speicher'
+      : (importPhase === 'validation'
+          ? 'Datei ist beschädigt oder nicht lesbar'
+          : 'Datei konnte nicht vollständig gespeichert werden');
+    console.warn('Fehler beim Kartenimport:', err);
+    setOfflineMapInstallState('error', metadata, detail);
+    return false;
+  }
+}
+
+async function switchToMapFallback() {
+  const source = await onlineMapAvailable()
+    ? { kind: 'online', label: 'OpenFreeMap', style: buildRasterStyle() }
+    : {
+        kind: 'none',
+        label: 'Karte: Keine Karte verfügbar – Keine Offline-Karte installiert',
+        style: buildEmptyMapStyle()
+      };
+  mapSourceErrorHandled = false;
+  setMapSourceState(source.kind, source.label);
+  if (map) {
+    clearRoute();
+    clearStops();
+    map.setStyle(source.style);
+  }
+  return source.kind;
+}
+
+async function removeInstalledOfflineMap() {
+  const manifest = readOfflineMapManifest();
+  const storageName = manifest ? manifest.storageName : LEGACY_OFFLINE_MAP_FILE;
+  try {
+    if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
+      throw new Error('Dauerhafter Gerätespeicher ist nicht verfügbar.');
+    }
+    const root = await navigator.storage.getDirectory();
+    await removeOPFSFileIfPresent(root, storageName);
+    localStorage.removeItem(OFFLINE_MAP_MANIFEST_KEY);
+    setOfflineMapInstallState('none');
+    await switchToMapFallback();
+    return true;
+  } catch (err) {
+    console.warn('Offline-Karte konnte nicht entfernt werden:', err);
+    setOfflineMapInstallState('remove-error', manifest, 'Offline-Karte konnte nicht entfernt werden');
+    return false;
+  }
 }
 
 // ── Route anzeigen ───────────────────────────────────────────
