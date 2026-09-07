@@ -943,6 +943,18 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   border: 1px solid rgba(74, 158, 255, 0.3);
   border-radius: 8px;
   overflow: visible;
+  appearance: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#navLineInfo:focus-visible {
+  outline: 3px solid rgba(112, 182, 255, 0.9);
+  outline-offset: 2px;
 }
 
 #navLineName {
@@ -962,6 +974,29 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
+}
+
+#navCity:empty {
+  display: none;
+}
+
+#navRouteRemark {
+  position: fixed;
+  top: calc(var(--safe-top) + var(--nav-hud-h) + 10px);
+  left: 12px;
+  z-index: 503;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(180px, 28vh);
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(112, 182, 255, 0.68);
+  border-radius: 9px;
+  background: rgba(7, 16, 31, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 /* Destination Box (in compact mode hidden, info is merged into line tile) */
@@ -987,7 +1022,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 #navDestinationName {
   font-weight: 700;
   color: #ffffff;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.35;
   white-space: normal;
   word-break: break-word;
@@ -1038,7 +1073,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 }
 
 #navLabel {
-  font-size: 14px;
+  font-size: clamp(16px, 2vw, 20px);
   color: var(--text);
   font-weight: 600;
   white-space: nowrap;
@@ -1073,7 +1108,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 #navTime {
   grid-area: time;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
   font-family: 'Courier New', monospace;
@@ -1089,7 +1124,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 #navSpeedUnit {
   grid-area: unit;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   text-transform: uppercase;
   font-weight: 600;
@@ -1189,7 +1224,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 .nav-upcoming-type {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -1199,7 +1234,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 .nav-upcoming-name {
   display: block;
-  font-size: 13px;
+  font-size: 15px;
   color: #ffffff;
   font-weight: 600;
   white-space: normal;
@@ -1210,7 +1245,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 .nav-upcoming-dist {
   display: block;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--primary);
   font-weight: 700;
   margin-top: 1px;
@@ -1239,7 +1274,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 #navStopName {
   flex: 1;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1247,7 +1282,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 }
 
 #navStopDist {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--primary);
   font-weight: 600;
   white-space: nowrap;
@@ -1887,12 +1922,13 @@ body.nav-mode #navHud {
   }
 
   #navLineName {
-    font-size: 21px;
+    font-size: clamp(16px, 1.65vw, 21px);
     line-height: 1.05;
+    font-variant-numeric: tabular-nums;
   }
 
   #navDestinationName {
-    font-size: 14px;
+    font-size: clamp(17px, 1.55vw, 20px);
   }
 
   #navCity {
@@ -1907,6 +1943,14 @@ body.nav-mode #navHud {
   }
 
   #navDestinationBox { display: flex; }
+
+  #navRouteRemark {
+    top: calc(var(--safe-top) + var(--tablet-status-h) + 8px);
+    left: 10px;
+    width: min(390px, calc(var(--tablet-map-w) - 20px));
+    max-height: min(180px, 28vh);
+    font-size: 17px;
+  }
 
   #navRightBox {
     position: absolute;
@@ -1930,8 +1974,8 @@ body.nav-mode #navHud {
     color: #70b6ff;
   }
 
-  #navSpeedUnit { font-size: 11px; }
-  #navTime { font-size: 12px; }
+  #navSpeedUnit { font-size: 15px; }
+  #navTime { font-size: 15px; }
   #navButtonsCompact { gap: 5px; }
 
   #navButtonsCompact button {
@@ -1978,9 +2022,9 @@ body.nav-mode #navHud {
 
   #navLabel {
     max-width: 250px;
-    font-size: 13px;
+    font-size: clamp(18px, 1.65vw, 21px);
     font-weight: 650;
-    line-height: 1.1;
+    line-height: 1.05;
     white-space: normal;
     color: rgba(255, 255, 255, 0.88);
   }
@@ -2013,14 +2057,14 @@ body.nav-mode #navHud {
     padding: 8px 10px 7px;
     background: #091321;
     color: #8292aa;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 0.9px;
   }
 
   .nav-upcoming-item {
     position: relative;
-    min-height: 58px;
+    min-height: 62px;
     padding: 8px 72px 8px 30px;
     border: 0;
     border-bottom: 1px solid rgba(139, 158, 187, 0.18);
@@ -2054,11 +2098,15 @@ body.nav-mode #navHud {
   }
 
   .nav-upcoming-name {
-    font-size: 15px;
+    font-size: 17px;
     line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .nav-upcoming-dist { font-size: 13px; }
+  .nav-upcoming-type { font-size: 12px; }
+  .nav-upcoming-dist { font-size: 16px; }
 
   .nav-upcoming-dist {
     position: absolute;
@@ -2086,7 +2134,7 @@ body.nav-mode #navHud {
     top: 6px;
     left: 42px;
     color: #ffbf91;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.8px;
   }
@@ -2094,12 +2142,12 @@ body.nav-mode #navHud {
   .nav-stop-dot { font-size: 14px; }
 
   #navStopName {
-    font-size: 19px;
+    font-size: 21px;
     font-weight: 750;
   }
 
   #navStopDist {
-    font-size: 19px;
+    font-size: 21px;
     color: #70b6ff;
   }
 

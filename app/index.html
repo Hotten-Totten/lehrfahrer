@@ -17,7 +17,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.027">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.028">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.027</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.028</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -104,10 +104,10 @@
     <!-- Top Row: Line Info | Destination | Centered Arrow | Time/Speed/Buttons -->
     <div id="navTopBar">
       <!-- Left: Line Information -->
-      <div id="navLineInfo">
-        <div id="navLineName">Linie –</div>
-        <div id="navCity">Stadt</div>
-      </div>
+      <button id="navLineInfo" type="button" aria-expanded="false" aria-controls="navRouteRemark" title="Bemerkung ein-/ausblenden">
+        <span id="navLineName">Linie –</span>
+        <span id="navCity">Stadt</span>
+      </button>
       
       <!-- Left-Center: Destination -->
       <div id="navDestinationBox">
@@ -139,6 +139,8 @@
         </div>
       </div>
     </div>
+
+    <div id="navRouteRemark" class="hidden" role="status" aria-live="polite"></div>
     
     <!-- Right Sidebar: Upcoming Stops (vertical list) -->
     <div id="navUpcomingStops" aria-label="Nächste Haltestellen"></div>
@@ -412,9 +414,9 @@
     </div>
   </div>
 
-    <script src="js/map.js?v=V2.1.027"></script>
-    <script src="js/app.js?v=V2.1.027"></script>
-    <script src="js/debug-helper.js?v=V2.1.027"></script>
+    <script src="js/map.js?v=V2.1.028"></script>
+    <script src="js/app.js?v=V2.1.028"></script>
+    <script src="js/debug-helper.js?v=V2.1.028"></script>
 </body>
 </html>
 

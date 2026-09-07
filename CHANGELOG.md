@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.028 - 2026-09-07
+- Linien-/Routenanzeige oben links kompakt als „Linie XXX / Route XXX“ mit dreistelligen Nummern dargestellt
+- gespeicherte Bemerkung per Klick oder Tap ein- und ausblendbar gemacht; neutralen Leerhinweis ergänzt
+- Zielanzeige und zentrale Fahranweisung für schnelle Erfassbarkeit vergrößert
+- KM/H, Fahrzeit sowie kommende und nächste Haltestellen besser lesbar dargestellt
+- Ellipsis und Tablet-Layout bei unveränderter Kartenbreite geprüft
+- Navigation und Telematik unverändert beibehalten
+
 ## V2.1.027 - 2026-09-07
 - Turbokreisel-Erkennung auf „Kreisverkehr folgen“ innerhalb des Kreisels korrigiert und bestehende Ausfahrtslogik danach beibehalten
 - „Kommende Haltestellen“ direkt beim Navigationsstart gefüllt; spätere GPS-Aktualisierung unverändert beibehalten

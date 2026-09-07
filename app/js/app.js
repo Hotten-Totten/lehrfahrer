@@ -142,6 +142,8 @@ const navPauseCompactBtn = document.getElementById('navPauseCompactBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
 const navDestinationNameEl = document.getElementById('navDestinationName');
 const navDestinationDistEl = document.getElementById('navDestinationDist');
+const navLineInfoEl = document.getElementById('navLineInfo');
+const navRouteRemarkEl = document.getElementById('navRouteRemark');
 
 // Navigation Menu Overlay
 const navMenuOverlay   = document.getElementById('navMenuOverlay');
@@ -1399,6 +1401,8 @@ function bindEvents() {
       stopNavigation();
     });
   }
+
+  bindTapAction(navLineInfoEl, toggleNavRouteRemark);
 
   // Navigation Menu Button
   if (navMenuBtn) {
@@ -2826,21 +2830,55 @@ function smoothGPSPosition(lat, lon, speed) {
 }
 
 function buildCompactLineLabel() {
-  if (!currentRoute) return 'Linie ?';
+  if (!currentRoute) return 'Linie ??? / Route ???';
 
   const src = currentRoute.fileBase || '';
   const lineMatch = src.match(/[Ll]inie[_\s-]*(\d+)/);
   const routeMatch = src.match(/[Rr]oute[_\s-]*(\d+)/);
+  const lineData = currentRoute.data || {};
 
-  let lineId = lineMatch?.[1] || (src.replace(/\D/g, '') || currentRoute.lineFolder?.replace(/\D/g, '') || '?');
-  if (routeMatch?.[1]) {
-    lineId += `/${routeMatch[1].padStart(2, '0')}`;
+  const formatNumber = values => {
+    for (const value of values) {
+      const match = String(value || '').match(/\d+/);
+      if (match) return match[0].padStart(3, '0');
+    }
+    return '???';
+  };
+
+  const lineNumber = formatNumber([
+    lineData.lineName,
+    lineData.line?.lineName,
+    currentRoute.lineFolder,
+    lineMatch?.[1]
+  ]);
+  const routeNumber = formatNumber([
+    lineData.routeName,
+    lineData.line?.routeName,
+    routeMatch?.[1]
+  ]);
+
+  return `Linie ${lineNumber} / Route ${routeNumber}`;
+}
+
+function closeNavRouteRemark() {
+  if (navRouteRemarkEl) navRouteRemarkEl.classList.add('hidden');
+  if (navLineInfoEl) navLineInfoEl.setAttribute('aria-expanded', 'false');
+}
+
+function toggleNavRouteRemark() {
+  if (!navLineInfoEl || !navRouteRemarkEl || !navActive || !currentRoute) return;
+
+  const willOpen = navRouteRemarkEl.classList.contains('hidden');
+  if (!willOpen) {
+    closeNavRouteRemark();
+    return;
   }
 
-  const stops = getVisibleStops(currentRoute.data?.stops || []);
-  const lastStop = stops.length ? (stops[stops.length - 1].name || 'Ziel') : 'Ziel';
-
-  return `Linie ${lineId} ${lastStop}`;
+  const catalogLine = findCatalogLineBySelection(currentRoute);
+  const description = getAppLineDescription(currentRoute.data, catalogLine);
+  navRouteRemarkEl.textContent = description || 'Keine Bemerkung vorhanden';
+  navRouteRemarkEl.classList.remove('hidden');
+  navLineInfoEl.setAttribute('aria-expanded', 'true');
 }
 
 function formatDriveDuration(ms) {
@@ -2930,6 +2968,7 @@ function startNavigation(options = {}) {
   resetNavPerfStats(navInputMode);
   startNavDriveLogSession('nav-start');
   renderNavPauseUi();
+  closeNavRouteRemark();
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
@@ -3095,6 +3134,7 @@ function startNavigation(options = {}) {
 function stopNavigation() {
   navActive = false;
   releaseScreenWakeLock();
+  closeNavRouteRemark();
   navHud.classList.add('hidden');
   document.body.classList.remove('nav-mode');
   navBtn.textContent = '▶';
