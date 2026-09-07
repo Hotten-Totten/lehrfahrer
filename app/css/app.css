@@ -602,6 +602,29 @@ body.nav-mode #map2dToggleBtn {
 .gps-arrow-icon .arrow-core { fill: #b91d28; }
 .gps-arrow-icon .arrow-highlight { fill: rgba(219, 122, 122, 0.88); }
 
+/* In der 2D-Navigation bleibt derselbe Markeranker erhalten; nur das Symbol wechselt. */
+body.nav-mode.map-2d-mode .gps-arrow-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: none;
+}
+
+body.nav-mode.map-2d-mode .gps-arrow-icon svg {
+  display: none;
+}
+
+body.nav-mode.map-2d-mode .gps-arrow-icon::before {
+  content: '';
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: #2478e5;
+  box-shadow: 0 0 0 3px rgba(36, 120, 229, 0.34), 0 4px 12px rgba(0, 0, 0, 0.48);
+}
+
 /* ── Haltestellen-Marker auf Karte ──────────── */
 .map-stop-poi {
   position: relative;

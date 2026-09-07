@@ -89,6 +89,7 @@ function resetNavBearingState() {
 
 function setMap2DMode(enabled) {
   map2DModeEnabled = !!enabled;
+  document.body.classList.toggle('map-2d-mode', map2DModeEnabled);
   if (!map) return;
 
   const navMode = document.body.classList.contains('nav-mode');
@@ -121,12 +122,12 @@ function setMap2DMode(enabled) {
 
 function apply2DCameraFraming(options, navMode) {
   const vh = Math.max(320, window.innerHeight || 0);
-  const zoomReduction = navMode ? 1.35 : 0.9;
+  const zoomReduction = navMode ? 1.75 : 0.9;
   const topPadding = navMode
-    ? Math.round(Math.min(300, Math.max(150, vh * 0.30)))
+    ? Math.round(Math.min(380, Math.max(180, vh * 0.42)))
     : Math.round(Math.min(150, Math.max(60, vh * 0.16)));
   const bottomPadding = navMode
-    ? Math.round(Math.min(105, Math.max(55, vh * 0.09)))
+    ? Math.round(Math.min(80, Math.max(45, vh * 0.07)))
     : Math.round(Math.min(110, Math.max(55, vh * 0.08)));
 
   return {

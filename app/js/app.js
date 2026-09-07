@@ -2995,6 +2995,7 @@ function startNavigation(options = {}) {
     navStopNameEl.textContent = navStopDists[0].stop.name;
     navStopDistEl.textContent = navFormatDist(navStopDists[0].distFromStart);
   }
+  renderUpcomingStops(Number.isFinite(navCumDists[startIdx]) ? navCumDists[startIdx] : 0);
 
   stopNavSimulation();
   
@@ -3265,11 +3266,87 @@ function detectNavRoundabouts(pts, cumDists) {
         startIndex: firstAnchor,
         endIndex: lastAnchor,
         startDist: cumDists[firstAnchor],
-        endDist: cumDists[lastAnchor]
+        endDist: cumDists[lastAnchor],
+        type: turboRoundabout && !compactRoundabout ? 'turbo-roundabout' : 'roundabout'
       });
       start = end;
     }
   }
+
+  // Längliche Turbokreisel können durch Spurführungen kurze Geraden und
+  // kleine Gegenbögen enthalten. Dieses zweite, bewusst enge Profil bewertet
+  // deshalb die Gesamtkrümmung, ohne normale Einzelkurven zu erfassen.
+  for (let start = 0; start < deltas.length; start++) {
+    const firstDelta = deltas[start];
+    if (Math.abs(firstDelta) < 2.5 || Math.abs(firstDelta) > 45) continue;
+
+    const dominantSign = Math.sign(firstDelta);
+    let netTurn = 0;
+    let totalTurn = 0;
+    let dominantTurn = 0;
+    let oppositeTurn = 0;
+    let dominantSamples = 0;
+    let lastDominant = start;
+    let best = null;
+
+    for (let end = start; end < deltas.length; end++) {
+      const delta = deltas[end];
+      const absDelta = Math.abs(delta);
+      const scanAnchor = anchors[Math.min(anchors.length - 1, end + 1)];
+      if ((cumDists[scanAnchor] - cumDists[anchors[start]]) > 260 || absDelta > 60) break;
+
+      if (absDelta >= 2.5) {
+        if (Math.sign(delta) === dominantSign) {
+          dominantTurn += absDelta;
+          dominantSamples++;
+          lastDominant = end;
+        } else {
+          if (absDelta > 18 || oppositeTurn + absDelta > 30) break;
+          oppositeTurn += absDelta;
+        }
+        netTurn += delta;
+        totalTurn += absDelta;
+      }
+
+      if (lastDominant !== end || dominantSamples < 6) continue;
+
+      const firstAnchor = anchors[start];
+      const lastAnchor = anchors[Math.min(anchors.length - 1, lastDominant + 1)];
+      const arcLengthM = cumDists[lastAnchor] - cumDists[firstAnchor];
+      const turnDeg = Math.abs(netTurn);
+      if (arcLengthM < 40 || turnDeg < 105) continue;
+
+      const [startLat, startLon] = navGetLatLon(pts[firstAnchor]);
+      const [endLat, endLon] = navGetLatLon(pts[lastAnchor]);
+      const chordM = haversineM(startLat, startLon, endLat, endLon);
+      const estimatedRadiusM = arcLengthM / (turnDeg * Math.PI / 180);
+      const consistency = totalTurn > 0 ? turnDeg / totalTurn : 0;
+      const candidate = arcLengthM <= 240
+          && chordM / arcLengthM <= 0.88
+          && estimatedRadiusM >= 7 && estimatedRadiusM <= 80
+          && consistency >= 0.62
+          && dominantTurn / arcLengthM >= 0.72;
+
+      if (candidate) {
+        best = {
+          startIndex: firstAnchor,
+          endIndex: lastAnchor,
+          startDist: cumDists[firstAnchor],
+          endDist: cumDists[lastAnchor],
+          type: 'turbo-roundabout'
+        };
+      }
+    }
+
+    if (best && !ranges.some(range =>
+      best.startDist <= range.endDist && best.endDist >= range.startDist
+    )) {
+      ranges.push(best);
+      while (start < deltas.length && anchors[start] < best.endIndex) start++;
+    }
+  }
+
+  ranges.sort((a, b) => a.startDist - b.startDist);
   return ranges;
 }
 
@@ -3319,7 +3396,7 @@ function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35, lookarou
     filteredTurns.push({
       index: roundabout.startIndex,
       angle: 0,
-      type: 'roundabout',
+      type: roundabout.type || 'roundabout',
       distFromStart: roundabout.startDist,
       endDistFromStart: roundabout.endDist
     });
@@ -3533,6 +3610,9 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
 }
 
 function getTurnInfo(angle, type = null) {
+  if (type === 'turbo-roundabout') {
+    return { iconKey: 'straight', label: 'Kreisverkehr folgen' };
+  }
   if (type === 'roundabout') {
     return { iconKey: 'straight', label: 'Kreisverkehr – Ausfahrt folgen' };
   }
@@ -3585,7 +3665,8 @@ function resolveActiveTurn(currentDist) {
   for (let i = 0; i < navTurns.length; i++) {
     const turn = navTurns[i];
     const passBuffer = getTurnPassBufferMeters(i);
-    const passDist = turn.type === 'roundabout' && Number.isFinite(turn.endDistFromStart)
+    const passDist = (turn.type === 'roundabout' || turn.type === 'turbo-roundabout')
+        && Number.isFinite(turn.endDistFromStart)
       ? turn.endDistFromStart
       : turn.distFromStart;
     if (currentDist <= passDist + passBuffer) {

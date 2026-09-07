@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.027 - 2026-09-07
+- Turbokreisel-Erkennung auf „Kreisverkehr folgen“ innerhalb des Kreisels korrigiert und bestehende Ausfahrtslogik danach beibehalten
+- „Kommende Haltestellen“ direkt beim Navigationsstart gefüllt; spätere GPS-Aktualisierung unverändert beibehalten
+- 2D-Navigation mit rundem Positionspunkt, tieferem Kartenanker und moderat erweitertem Vorausblick auf etwa 100–150 m angepasst
+- 3D-Ansicht sowie Telematik, GPS, Anchor-Lock und Prediction unverändert beibehalten
+- Offline-Karten- und Offline-Liniendaten durch die Komfortanpassungen nicht verändert
+
 ## V2.1.026 - 2026-09-06
 - Linien-, Varianten-, Routen- und Haltestellendaten als vollständigen atomaren IndexedDB-Snapshot persistent gemacht
 - Offline-Fallback für Stadt-, Linien-, Routen- und Variantenauswahl ergänzt
