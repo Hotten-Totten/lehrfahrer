@@ -991,6 +991,10 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   line-height: 1.35;
 }
 
+#navRouteRemark.hidden {
+  display: none !important;
+}
+
 #navDestinationRow {
   display: flex;
   align-items: baseline;

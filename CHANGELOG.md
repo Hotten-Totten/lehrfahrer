@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.031 - 2026-09-08
+- Bemerkungsfeld beim Start vollstaendig ausgeblendet, ohne leeren Balken oder reservierten Leerraum
+- vorhandenen Toggle-Handler fuer zuverlaessiges wiederholtes Oeffnen und vollstaendiges Schliessen per Tap beibehalten
+- Navigation und Telematik unveraendert beibehalten
+
 ## V2.1.030 - 2026-09-08
 - 2D/3D-Anzeige unten links in die Karte verschoben und aktive Ansicht unmittelbar angezeigt
 - Linie, Route und Ziel in einem gemeinsamen, etwa 30 Prozent breiten Infoblock zusammengeführt
