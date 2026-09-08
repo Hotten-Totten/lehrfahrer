@@ -3386,6 +3386,88 @@ function detectNavRoundabouts(pts, cumDists) {
     }
   }
 
+  // Reale Turbokreisel-Spurfuehrungen koennen einen ausgepraegten Gegenbogen
+  // enthalten. Dafuer nur stark gekruemmte, kompakte Mehrsegment-Fenster
+  // zulassen; normale Einzel- und S-Kurven erreichen diese Kombination nicht.
+  for (let start = 0; start < deltas.length; start++) {
+    const firstDelta = deltas[start];
+    if (Math.abs(firstDelta) < 2.5 || Math.abs(firstDelta) > 105) continue;
+
+    let positiveTurn = 0;
+    let negativeTurn = 0;
+    let meaningfulSamples = 0;
+    let signChanges = 0;
+    let lastSign = 0;
+    let weakSamples = 0;
+    let best = null;
+
+    for (let end = start; end < deltas.length; end++) {
+      const delta = deltas[end];
+      const absDelta = Math.abs(delta);
+      const scanAnchor = anchors[Math.min(anchors.length - 1, end + 1)];
+      const scannedLengthM = cumDists[scanAnchor] - cumDists[anchors[start]];
+      if (scannedLengthM > 260 || absDelta > 110) break;
+
+      if (absDelta < 2.5) {
+        weakSamples++;
+        if (weakSamples > (best ? 4 : 7)) break;
+        continue;
+      }
+
+      weakSamples = 0;
+      meaningfulSamples++;
+      const sign = Math.sign(delta);
+      if (lastSign && sign !== lastSign) signChanges++;
+      lastSign = sign;
+      if (delta > 0) positiveTurn += delta;
+      else negativeTurn += -delta;
+
+      if (meaningfulSamples < 8) continue;
+
+      const firstAnchor = anchors[start];
+      const lastAnchor = scanAnchor;
+      const arcLengthM = cumDists[lastAnchor] - cumDists[firstAnchor];
+      if (arcLengthM < 60 || arcLengthM > 240) continue;
+
+      const totalTurn = positiveTurn + negativeTurn;
+      const netTurn = Math.abs(positiveTurn - negativeTurn);
+      const dominantTurn = Math.max(positiveTurn, negativeTurn);
+      const oppositeTurn = Math.min(positiveTurn, negativeTurn);
+      if (totalTurn < 180 || totalTurn > 620 || dominantTurn < 145 || oppositeTurn < 35) continue;
+
+      const [startLat, startLon] = navGetLatLon(pts[firstAnchor]);
+      const [endLat, endLon] = navGetLatLon(pts[lastAnchor]);
+      const chordM = haversineM(startLat, startLon, endLat, endLon);
+      const chordRatio = chordM / arcLengthM;
+      const estimatedRadiusM = arcLengthM / (totalTurn * Math.PI / 180);
+      const curvatureDensity = totalTurn / arcLengthM;
+      const consistency = netTurn / totalTurn;
+      const stronglyDominant = netTurn >= 95 && consistency >= 0.34;
+      const tightlySegmented = signChanges >= 3 && totalTurn >= 240 && chordRatio <= 0.68;
+      const candidate = chordRatio <= 0.72
+          && estimatedRadiusM >= 5 && estimatedRadiusM <= 70
+          && curvatureDensity >= 0.9
+          && (stronglyDominant || tightlySegmented);
+
+      if (candidate) {
+        best = {
+          startIndex: firstAnchor,
+          endIndex: lastAnchor,
+          startDist: cumDists[firstAnchor],
+          endDist: cumDists[lastAnchor],
+          type: 'turbo-roundabout'
+        };
+      }
+    }
+
+    if (best && !ranges.some(range =>
+      best.startDist <= range.endDist && best.endDist >= range.startDist
+    )) {
+      ranges.push(best);
+      while (start < deltas.length && anchors[start] < best.endIndex) start++;
+    }
+  }
+
   ranges.sort((a, b) => a.startDist - b.startDist);
   return ranges;
 }

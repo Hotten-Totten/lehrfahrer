@@ -122,12 +122,12 @@ function setMap2DMode(enabled) {
 
 function apply2DCameraFraming(options, navMode) {
   const vh = Math.max(320, window.innerHeight || 0);
-  const zoomReduction = navMode ? 1.75 : 0.9;
+  const zoomReduction = navMode ? 2.1 : 0.9;
   const topPadding = navMode
-    ? Math.round(Math.min(380, Math.max(180, vh * 0.42)))
+    ? Math.round(Math.min(410, Math.max(195, vh * 0.47)))
     : Math.round(Math.min(150, Math.max(60, vh * 0.16)));
   const bottomPadding = navMode
-    ? Math.round(Math.min(80, Math.max(45, vh * 0.07)))
+    ? Math.round(Math.min(70, Math.max(40, vh * 0.055)))
     : Math.round(Math.min(110, Math.max(55, vh * 0.08)));
 
   return {

@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.029 - 2026-09-08
+- Turbokreisel-Erkennung um reale Segmentwinkel und ausgeprägte Gegenbögen erweitert
+- innerhalb erkannter Turbokreisel „Kreisverkehr folgen“ angezeigt und nachfolgende Ausfahrts-/Manöverlogik beibehalten
+- statische 2D-Vorausschau um weitere 0,35 Zoomstufen erweitert und Positionsanker etwa 26 px tiefer gesetzt
+- Sicht auf etwa 150–200 m voraus verbessert
+- 3D-Ansicht sowie GPS, Anchor-Lock, Prediction und Telematik unverändert beibehalten
+
 ## V2.1.028 - 2026-09-07
 - Linien-/Routenanzeige oben links kompakt als „Linie XXX / Route XXX“ mit dreistelligen Nummern dargestellt
 - gespeicherte Bemerkung per Klick oder Tap ein- und ausblendbar gemacht; neutralen Leerhinweis ergänzt
