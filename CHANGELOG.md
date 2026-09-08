@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.030 - 2026-09-08
+- 2D/3D-Anzeige unten links in die Karte verschoben und aktive Ansicht unmittelbar angezeigt
+- Linie, Route und Ziel in einem gemeinsamen, etwa 30 Prozent breiten Infoblock zusammengeführt
+- Bemerkungsfenster per Tap zuverlässig wiederholt ein- und ausblendbar gemacht
+- separates Zielfeld entfernt und Manöverfeld auf etwa 39 Prozent verbreitert
+- Bereich „Kommende Haltestellen“ bei weiterhin vier sichtbaren Einträgen besser lesbar dargestellt
+- Kartenbreite sowie Navigation und Telematik unverändert beibehalten
+
 ## V2.1.029 - 2026-09-08
 - Turbokreisel-Erkennung um reale Segmentwinkel und ausgeprägte Gegenbögen erweitert
 - innerhalb erkannter Turbokreisel „Kreisverkehr folgen“ angezeigt und nachfolgende Ausfahrts-/Manöverlogik beibehalten

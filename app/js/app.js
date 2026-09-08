@@ -1402,7 +1402,7 @@ function bindEvents() {
     });
   }
 
-  bindTapAction(navLineInfoEl, toggleNavRouteRemark);
+  if (navLineInfoEl) navLineInfoEl.addEventListener('click', toggleNavRouteRemark);
 
   // Navigation Menu Button
   if (navMenuBtn) {
@@ -2494,11 +2494,12 @@ function initMap2DMode() {
 
   const applyMode = nextEnabled => {
     enabled = !!nextEnabled;
+    const modeLabel = enabled ? '2D' : '3D';
     map2dToggleBtn.classList.toggle('is-active', enabled);
     map2dToggleBtn.setAttribute('aria-pressed', String(enabled));
-    map2dToggleBtn.title = enabled
-      ? '2D-Draufsicht aktiv – klicken für Fahrersicht'
-      : '2D-Draufsicht einschalten';
+    map2dToggleBtn.textContent = modeLabel;
+    map2dToggleBtn.title = `Aktive Kartenansicht: ${modeLabel}`;
+    map2dToggleBtn.setAttribute('aria-label', `Aktive Kartenansicht: ${modeLabel}; Ansicht wechseln`);
     if (typeof setMap2DMode === 'function') {
       setMap2DMode(enabled);
     }
@@ -2986,18 +2987,12 @@ function startNavigation(options = {}) {
 
   // Display Line Information
   const lineNameEl = document.getElementById('navLineName');
-  const cityNameEl = document.getElementById('navCity');
   console.log('🚌 Nav Start - currentRoute:', { city: currentRoute.city, fileBase: currentRoute.fileBase, lineFolder: currentRoute.lineFolder });
   
   if (lineNameEl) {
     lineNameEl.textContent = buildCompactLineLabel();
     console.log('📍 Line set to:', lineNameEl.textContent);
   }
-  if (cityNameEl) {
-    cityNameEl.textContent = '';
-    console.log('🏙️ City set to:', cityNameEl.textContent);
-  }
-
   // Display Destination (last stop)
   if (navDestinationNameEl && navStops.length) {
     const lastStop = navStops[navStops.length - 1];
