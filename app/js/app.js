@@ -7,6 +7,8 @@ const DB_NAME  = 'lehrfahrer-offline';
 const DB_VER   = 3;
 const STORAGE_KEY_LINES_CATALOG = 'lehrfahrer-lines-catalog-version';
 const STORAGE_KEY_DISMISSED_UPDATE = 'lehrfahrer-dismissed-lines-update';
+const ACTIVE_DRIVE_STORAGE_KEY = 'lehrfahrer-active-drive';
+const ACTIVE_DRIVE_STATE_VERSION = 1;
 
 let db          = null;
 let currentRoute = null;
@@ -173,6 +175,7 @@ const MAP_2D_MODE_KEY = 'lehrfahrer_map_2d_mode';
 const STARTUP_DOWNLOAD_GUARD_PREFIX = 'lf_startup_download_done_';
 const STORAGE_PERSIST_ATTEMPTED_KEY = 'lf_storage_persist_attempted';
 let refreshInProgress = false;
+let lastActiveDrivePersistAt = 0;
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -766,6 +769,140 @@ function lineStorageIdCandidates(line) {
   return Array.from(new Set([current, padded, legacyFile]));
 }
 
+function readActiveDriveState() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_DRIVE_STORAGE_KEY);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    return state?.active === true && state?.selection?.fileBase ? state : null;
+  } catch (err) {
+    console.warn('Gespeicherte Lehrfahrt konnte nicht gelesen werden:', err);
+    return null;
+  }
+}
+
+function buildActiveDriveState() {
+  if (!navActive || !currentRoute?.data) return null;
+
+  const data = currentRoute.data;
+  const visibleStops = getVisibleStops(data.stops || []);
+  const currentDist = Number.isFinite(navCumDists[navProgressIdx])
+    ? navCumDists[navProgressIdx]
+    : 0;
+  const nextStopInfo = navStopDists.find(item => item?.stop && item.distFromStart > currentDist + 10) || null;
+  const destination = visibleStops.length ? visibleStops[visibleStops.length - 1] : null;
+
+  return {
+    version: ACTIVE_DRIVE_STATE_VERSION,
+    active: true,
+    savedAt: Date.now(),
+    selection: {
+      city: currentRoute.city || '',
+      operation: data.operation || data.operator || data.betrieb || currentRoute.city || '',
+      file: currentRoute.file || '',
+      fileBase: currentRoute.fileBase || '',
+      lineFolder: currentRoute.lineFolder || null,
+      categoryFolder: currentRoute.categoryFolder || null,
+      jsonPath: currentRoute.jsonPath || null,
+      routeKey: currentRoute.key || null,
+      lineStorageId: buildLineStorageId(currentRoute)
+    },
+    route: {
+      id: data.id || null,
+      lineName: data.lineName || null,
+      routeName: data.routeName || null,
+      variantName: getAppVariantName(data),
+      variantCategory: getAppVariantCategory(data),
+      destinationName: destination?.name || data.directionName || null,
+      destinationStopId: destination?.id || destination?.catalogId || null,
+      stopIds: visibleStops.map(stop => stop.id || stop.catalogId).filter(Boolean)
+    },
+    navigation: {
+      inputMode: navInputMode,
+      paused: !!navPaused,
+      routeProgressIndex: Math.max(0, navProgressIdx || 0),
+      routeProgressMeters: currentDist,
+      nextStopId: nextStopInfo?.stop?.id || nextStopInfo?.stop?.catalogId || null,
+      elapsedMs: navStartTime ? Math.max(0, Date.now() - navStartTime) : 0,
+      scheduleAnchorMs: Number.isFinite(navScheduleAnchorMs) ? navScheduleAnchorMs : null
+    }
+  };
+}
+
+function persistActiveDriveState(force = false) {
+  if (!navActive) return;
+  const now = Date.now();
+  if (!force && now - lastActiveDrivePersistAt < 2000) return;
+
+  const state = buildActiveDriveState();
+  if (!state) return;
+  try {
+    localStorage.setItem(ACTIVE_DRIVE_STORAGE_KEY, JSON.stringify(state));
+    lastActiveDrivePersistAt = now;
+  } catch (err) {
+    console.warn('Lehrfahrtzustand konnte nicht gespeichert werden:', err);
+  }
+}
+
+function clearActiveDriveState() {
+  try {
+    localStorage.removeItem(ACTIVE_DRIVE_STORAGE_KEY);
+    lastActiveDrivePersistAt = 0;
+  } catch (err) {
+    console.warn('Lehrfahrtzustand konnte nicht geloescht werden:', err);
+  }
+}
+
+function applyActiveDriveSelection(state) {
+  const selection = state?.selection;
+  if (!selection?.city || !citySelect || !lineSelect) return;
+  if (Array.from(citySelect.options).some(option => option.value === selection.city)) {
+    citySelect.value = selection.city;
+    renderLinesFromCatalog(selection.city);
+  }
+
+  const matchingOption = Array.from(lineSelect.options).find(option => {
+    if (!option.value) return false;
+    try {
+      const ref = JSON.parse(option.value);
+      return lineStorageIdCandidates(ref).includes(selection.lineStorageId);
+    } catch {
+      return false;
+    }
+  });
+  if (matchingOption) lineSelect.value = matchingOption.value;
+}
+
+async function restoreActiveDriveState() {
+  const state = readActiveDriveState();
+  if (!state) return false;
+
+  applyActiveDriveSelection(state);
+  const selection = state.selection;
+  const loadedRoute = await loadAndShowRoute(
+    selection.city,
+    selection.fileBase,
+    selection.lineFolder,
+    selection.categoryFolder,
+    selection.jsonPath,
+    selection.file
+  );
+
+  if (!loadedRoute) {
+    showToast('Gespeicherte Lehrfahrt ist lokal nicht verfuegbar. Bitte Linie/Route auswaehlen; der gespeicherte Zustand bleibt erhalten.', 9000);
+    return false;
+  }
+
+  startNavigation({ resumeState: state });
+  if (navActive) {
+    showToast('Laufende Lehrfahrt wiederaufgenommen.', 3500);
+    return true;
+  }
+
+  showToast('Gespeicherte Lehrfahrt geladen. Navigation kann nach GPS-Freigabe fortgesetzt werden.', 7000);
+  return false;
+}
+
 function findStoredLineRecord(recordsById, line) {
   for (const id of lineStorageIdCandidates(line)) {
     const record = recordsById.get(id);
@@ -882,6 +1019,8 @@ async function initializePersistentLineData() {
     renderCitiesFromCatalog([]);
     renderLineDataStatus('none');
   }
+
+  await restoreActiveDriveState();
 
   try {
     await refreshPersistentLineData();
@@ -1392,13 +1531,13 @@ function bindEvents() {
   }
 
   navBtn.addEventListener('click', () => {
-    if (navActive) stopNavigation();
+    if (navActive) requestManualEndActiveDrive();
     else startNavigation();
   });
 
   if (navEndBtn) {
     bindTapAction(navEndBtn, () => {
-      stopNavigation();
+      requestManualEndActiveDrive();
     });
   }
 
@@ -1441,9 +1580,17 @@ function bindEvents() {
   // Cancel Button
   if (navCancelBtn) {
     navCancelBtn.addEventListener('click', () => {
-      hideNavMenu();
+      requestManualEndActiveDrive();
     });
   }
+}
+
+function requestManualEndActiveDrive() {
+  if (!navActive) return;
+  if (!confirm('Lehrfahrt wirklich beenden? Der gespeicherte Fortschritt wird geloescht.')) return;
+  stopNavigation();
+  clearActiveDriveState();
+  showToast('Lehrfahrt beendet.', 2500);
 }
 
 function bindTapAction(el, action) {
@@ -1708,7 +1855,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
       categoryFolder
     });
     stopList.innerHTML = '<p class="hint">Route nicht verfuegbar - online nicht gefunden und offline nicht gespeichert.</p>';
-    return;
+    return null;
   }
 
   const stopCount = Array.isArray(data.stops) ? data.stops.length : 0;
@@ -1724,9 +1871,10 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
     });
   }
 
-  currentRoute = { city, fileBase: cleanFileBase, lineFolder, categoryFolder, jsonPath, key, data };
+  currentRoute = { city, file: fileName, fileBase: cleanFileBase, lineFolder, categoryFolder, jsonPath, key, data };
 
   displayRoute(data);
+  return currentRoute;
 }
 
 function getSelectedLineRef() {
@@ -2926,14 +3074,22 @@ async function releaseScreenWakeLock() {
 }
 
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && navActive) {
+    persistActiveDriveState(true);
+  }
   if (document.visibilityState === 'visible' && navActive && !navPaused) {
     requestScreenWakeLock();
   }
 });
 
+window.addEventListener('pagehide', () => {
+  persistActiveDriveState(true);
+});
+
 function startNavigation(options = {}) {
   const useSimulation = options && options.useSimulation === true;
   const startAtCurrentPosition = options && options.startAtCurrentPosition === true;
+  const restoredNavigation = options?.resumeState?.navigation || null;
 
   if (!currentRoute?.data?.routePoints?.length) {
     showToast('Bitte zuerst eine Linie laden.');
@@ -2945,26 +3101,33 @@ function startNavigation(options = {}) {
   navCumDists  = buildNavCumDists(pts);
   navTurns     = detectNavTurns(pts, navCumDists);
   navStopDists = buildNavStopDists(navStops, pts, navCumDists);
-  const startIdx = startAtCurrentPosition && gpsLastSmoothedPos
-    ? findNearestNavIdx(gpsLastSmoothedPos.lat, gpsLastSmoothedPos.lon, pts, 0)
-    : 0;
+  const restoredProgressIdx = Number(restoredNavigation?.routeProgressIndex);
+  const startIdx = Number.isFinite(restoredProgressIdx)
+    ? Math.max(0, Math.min(pts.length - 1, Math.floor(restoredProgressIdx)))
+    : (startAtCurrentPosition && gpsLastSmoothedPos
+      ? findNearestNavIdx(gpsLastSmoothedPos.lat, gpsLastSmoothedPos.lon, pts, 0)
+      : 0);
 
   navActive   = true;
   navFirstFix = false;
   navNearestIdx = startIdx;
   navOffRouteActive = false;
   navRejoinBlend = 0;
-  navProgressIdx = 0;
+  navProgressIdx = restoredNavigation ? startIdx : 0;
   navDestinationHitCount = 0;
-  navStartTime = Date.now();
-  navScheduleAnchorMs = getPunctualityEnabled() ? resolveManualScheduleAnchorMs() : null;
+  const restoredElapsedMs = Number(restoredNavigation?.elapsedMs);
+  navStartTime = Date.now() - (Number.isFinite(restoredElapsedMs) ? Math.max(0, restoredElapsedMs) : 0);
+  const restoredScheduleAnchorMs = restoredNavigation?.scheduleAnchorMs;
+  navScheduleAnchorMs = Number.isFinite(restoredScheduleAnchorMs)
+    ? restoredScheduleAnchorMs
+    : (getPunctualityEnabled() ? resolveManualScheduleAnchorMs() : null);
   currentNavLine = {
     ...currentRoute.data,
     points: currentRoute.data.routePoints || [],
     stops: navStops
   };
   navInputMode = useSimulation ? 'sim' : 'gps';
-  navPaused = false;
+  navPaused = restoredNavigation?.paused === true;
   navPauseInputBlockedUntil = Date.now() + 900;
   resetNavPerfStats(navInputMode);
   startNavDriveLogSession('nav-start');
@@ -2981,7 +3144,7 @@ function startNavigation(options = {}) {
     setTimeout(() => refreshMapViewport(), 0);
   }
   navBtn.textContent = '■';
-  navBtn.title       = 'Navigation beenden';
+  navBtn.title       = 'Lehrfahrt beenden';
   navBtn.classList.add('nav-active');
   requestScreenWakeLock();
 
@@ -3030,6 +3193,18 @@ function startNavigation(options = {}) {
     navStopDistEl.textContent = navFormatDist(navStopDists[0].distFromStart);
   }
   renderUpcomingStops(Number.isFinite(navCumDists[startIdx]) ? navCumDists[startIdx] : 0);
+
+  if (restoredNavigation && startIdx > 0) {
+    const [restoredLat, restoredLon] = navGetLatLon(pts[startIdx]);
+    updateNavHud(restoredLat, restoredLon, startIdx);
+  }
+
+  if (db && currentRoute.key) {
+    dbPut(currentRoute.key, currentRoute.data).catch(err => console.warn('Aktive Route konnte nicht offline gespeichert werden:', err));
+    dbPutLineData(buildLineStorageId(currentRoute), currentRoute.data)
+      .catch(err => console.warn('Aktive Linie konnte nicht offline gespeichert werden:', err));
+  }
+  persistActiveDriveState(true);
 
   stopNavSimulation();
   
@@ -3127,6 +3302,7 @@ function startNavigation(options = {}) {
 }
 
 function stopNavigation() {
+  persistActiveDriveState(true);
   navActive = false;
   releaseScreenWakeLock();
   closeNavRouteRemark();
@@ -3302,7 +3478,7 @@ function detectNavRoundabouts(pts, cumDists) {
         endIndex: lastAnchor,
         startDist: cumDists[firstAnchor],
         endDist: cumDists[lastAnchor],
-        type: turboRoundabout && !compactRoundabout ? 'turbo-roundabout' : 'roundabout'
+        type: 'roundabout'
       });
       start = end;
     }
@@ -3368,7 +3544,7 @@ function detectNavRoundabouts(pts, cumDists) {
           endIndex: lastAnchor,
           startDist: cumDists[firstAnchor],
           endDist: cumDists[lastAnchor],
-          type: 'turbo-roundabout'
+          type: 'roundabout'
         };
       }
     }
@@ -3450,7 +3626,7 @@ function detectNavRoundabouts(pts, cumDists) {
           endIndex: lastAnchor,
           startDist: cumDists[firstAnchor],
           endDist: cumDists[lastAnchor],
-          type: 'turbo-roundabout'
+          type: 'roundabout'
         };
       }
     }
@@ -3727,11 +3903,8 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
 }
 
 function getTurnInfo(angle, type = null) {
-  if (type === 'turbo-roundabout') {
-    return { iconKey: 'straight', label: 'Kreisverkehr folgen' };
-  }
   if (type === 'roundabout') {
-    return { iconKey: 'straight', label: 'Kreisverkehr – Ausfahrt folgen' };
+    return { iconKey: 'straight', label: 'Kreisverkehr folgen' };
   }
   const a = angle;
   if (Math.abs(a) < 20)      return { iconKey: 'straight', label: 'Geradeaus' };
@@ -3782,7 +3955,7 @@ function resolveActiveTurn(currentDist) {
   for (let i = 0; i < navTurns.length; i++) {
     const turn = navTurns[i];
     const passBuffer = getTurnPassBufferMeters(i);
-    const passDist = (turn.type === 'roundabout' || turn.type === 'turbo-roundabout')
+    const passDist = turn.type === 'roundabout'
         && Number.isFinite(turn.endDistFromStart)
       ? turn.endDistFromStart
       : turn.distFromStart;
@@ -3837,6 +4010,7 @@ function updateNavHud(lat, lon, forcedIdx = null) {
   navNearestIdx = stableIdx;
   navProgressIdx = stableIdx;
   const currentDist = navCumDists[stableIdx];
+  persistActiveDriveState();
 
   // Aktive Abbiegung erst wechseln, wenn aktuelle Kurve sicher passiert wurde.
   // Bei engen Doppelkurven wird der Wechsel trotzdem früh genug freigegeben.
@@ -4181,6 +4355,7 @@ function toggleNavPause() {
 
   navPaused = !navPaused;
   renderNavPauseUi();
+  persistActiveDriveState(true);
   if (navPaused) {
     releaseScreenWakeLock();
   } else {

@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.032 - 2026-09-11
+- Turbokreisel auf die normale Kreisverkehrroutine vereinheitlicht; innerhalb des Kreisels „Kreisverkehr folgen“ und danach das bestehende Folgemanöver verwendet
+- laufende Lehrfahrt mit Betrieb/Stadt, Linie, Route/Variante, Ziel-/Stop-IDs, Fortschritt, Pause und Fahrtdauer persistent gespeichert
+- automatische Wiederaufnahme nach App-/PWA-Neustart einschließlich Offline-Fall ergänzt; Löschen nur über bewusstes „Lehrfahrt beenden“
+- GPS, Anchor-Lock, Prediction, Routing und Telematik unverändert beibehalten
+
 ## V2.1.031 - 2026-09-08
 - Bemerkungsfeld beim Start vollstaendig ausgeblendet, ohne leeren Balken oder reservierten Leerraum
 - vorhandenen Toggle-Handler fuer zuverlaessiges wiederholtes Oeffnen und vollstaendiges Schliessen per Tap beibehalten
