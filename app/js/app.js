@@ -42,14 +42,20 @@ const NAV_TURN_DEFAULT_PASS_BUFFER_M = 38;
 const NAV_TURN_CLOSE_GAP_M = 90;
 const NAV_TURN_MIN_PASS_BUFFER_M = 8;
 const NAV_TURN_NOW_WINDOW_M = 10;
-// Cottbus-Feintuning: robuster gegen Innenstadt-GPS-Drift,
-// aber weiterhin klarer OFF->REJOIN->ON Verlauf.
-const NAV_OFF_ROUTE_ENTER_M = 145;
-const NAV_REJOIN_START_M = 78;
+const NAV_OFF_ROUTE_ENTER_M = 50;
+const NAV_REJOIN_START_M = 25;
+const NAV_OFF_ROUTE_ENTER_FIXES = 3;
+const NAV_REJOIN_FIXES = 3;
+const NAV_OFF_ROUTE_MAX_ACCURACY_M = 50;
 const NAV_REJOIN_BLEND_STEP = 0.20;
 const NAV_REJOIN_LOOKAHEAD_M = 800;
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
+let navOffRouteEnterFixCount = 0;
+let navRejoinFixCount = 0;
+let navLastRouteDistanceM = null;
+let navOffRouteAlertTimer = null;
+let navOffRouteCompactVisible = false;
 const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 
 // Navigation Menu
@@ -142,6 +148,7 @@ const navEndBtn     = document.getElementById('navEndBtn');
 const navMenuBtn    = document.getElementById('navMenuBtn');
 const navPauseCompactBtn = document.getElementById('navPauseCompactBtn');
 const navUpcomingStopsEl = document.getElementById('navUpcomingStops');
+const navOffRouteAlertEl = document.getElementById('navOffRouteAlert');
 const navDestinationNameEl = document.getElementById('navDestinationName');
 const navDestinationDistEl = document.getElementById('navDestinationDist');
 const navLineInfoEl = document.getElementById('navLineInfo');
@@ -824,7 +831,9 @@ function buildActiveDriveState() {
       routeProgressMeters: currentDist,
       nextStopId: nextStopInfo?.stop?.id || nextStopInfo?.stop?.catalogId || null,
       elapsedMs: navStartTime ? Math.max(0, Date.now() - navStartTime) : 0,
-      scheduleAnchorMs: Number.isFinite(navScheduleAnchorMs) ? navScheduleAnchorMs : null
+      scheduleAnchorMs: Number.isFinite(navScheduleAnchorMs) ? navScheduleAnchorMs : null,
+      offRouteActive: navOffRouteActive,
+      offRouteDistanceM: Number.isFinite(navLastRouteDistanceM) ? navLastRouteDistanceM : null
     }
   };
 }
@@ -3086,6 +3095,131 @@ window.addEventListener('pagehide', () => {
   persistActiveDriveState(true);
 });
 
+function hideNavOffRouteAlert() {
+  if (navOffRouteAlertTimer) {
+    clearTimeout(navOffRouteAlertTimer);
+    navOffRouteAlertTimer = null;
+  }
+  if (!navOffRouteAlertEl) return;
+  navOffRouteAlertEl.classList.remove('is-active');
+  navOffRouteAlertEl.classList.add('hidden');
+}
+
+function showNavOffRouteAlert() {
+  if (!navOffRouteAlertEl) {
+    navOffRouteCompactVisible = true;
+    return;
+  }
+  hideNavOffRouteAlert();
+  navOffRouteAlertEl.classList.remove('hidden');
+  void navOffRouteAlertEl.offsetWidth;
+  navOffRouteAlertEl.classList.add('is-active');
+  navOffRouteAlertTimer = setTimeout(() => {
+    navOffRouteAlertTimer = null;
+    navOffRouteAlertEl.classList.remove('is-active');
+    navOffRouteAlertEl.classList.add('hidden');
+    if (navOffRouteActive) {
+      navOffRouteCompactVisible = true;
+      document.body.classList.add('nav-off-route-compact');
+      const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
+      renderUpcomingStops(currentDist);
+    }
+  }, 5000);
+}
+
+function playNavOffRouteWarning() {
+  const soundEnabled = document.getElementById('navSoundEnabled');
+  if (soundEnabled && !soundEnabled.checked) return;
+
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.setValueAtTime(620, now + 0.18);
+    oscillator.frequency.setValueAtTime(880, now + 0.36);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+    gain.gain.setValueAtTime(0.16, now + 0.48);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.68);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.7);
+    oscillator.onended = () => context.close().catch(() => {});
+    context.resume().catch(() => {});
+  } catch (err) {
+    console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+  }
+}
+
+function syncNavOffRouteUi(showEntryAlert = false) {
+  if (navOffRouteActive && showEntryAlert) {
+    navOffRouteCompactVisible = false;
+    playNavOffRouteWarning();
+    showNavOffRouteAlert();
+  } else if (!navOffRouteActive) {
+    navOffRouteCompactVisible = false;
+    hideNavOffRouteAlert();
+  }
+  document.body.classList.toggle('nav-off-route', navOffRouteActive);
+  document.body.classList.toggle('nav-off-route-compact', navOffRouteActive && navOffRouteCompactVisible);
+
+  const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
+  renderUpcomingStops(currentDist);
+}
+
+function setConfirmedNavOffRoute(active, announce = false) {
+  if (navOffRouteActive === active) return;
+  navOffRouteActive = active;
+  navRejoinBlend = 0;
+  navOffRouteEnterFixCount = 0;
+  navRejoinFixCount = 0;
+  syncNavOffRouteUi(active && announce);
+  persistActiveDriveState(true);
+}
+
+function updateNavOffRouteState(distanceM, accuracyM = null) {
+  if (!Number.isFinite(distanceM)) return navOffRouteActive;
+  navLastRouteDistanceM = distanceM;
+
+  const hasAccuracy = Number.isFinite(accuracyM) && accuracyM >= 0;
+  if (hasAccuracy && accuracyM > NAV_OFF_ROUTE_MAX_ACCURACY_M) {
+    navOffRouteEnterFixCount = 0;
+    navRejoinFixCount = 0;
+    return navOffRouteActive;
+  }
+
+  if (!navOffRouteActive) {
+    navRejoinFixCount = 0;
+    const accuracyMarginM = hasAccuracy ? Math.min(20, accuracyM * 0.5) : 0;
+    if (distanceM >= NAV_OFF_ROUTE_ENTER_M + accuracyMarginM) {
+      navOffRouteEnterFixCount += 1;
+      if (navOffRouteEnterFixCount >= NAV_OFF_ROUTE_ENTER_FIXES) {
+        setConfirmedNavOffRoute(true, true);
+      }
+    } else {
+      navOffRouteEnterFixCount = 0;
+    }
+  } else {
+    navOffRouteEnterFixCount = 0;
+    if (distanceM <= NAV_REJOIN_START_M) {
+      navRejoinFixCount += 1;
+      if (navRejoinFixCount >= NAV_REJOIN_FIXES) {
+        setConfirmedNavOffRoute(false);
+      }
+    } else {
+      navRejoinFixCount = 0;
+    }
+  }
+
+  return navOffRouteActive;
+}
+
 function startNavigation(options = {}) {
   const useSimulation = options && options.useSimulation === true;
   const startAtCurrentPosition = options && options.startAtCurrentPosition === true;
@@ -3111,8 +3245,14 @@ function startNavigation(options = {}) {
   navActive   = true;
   navFirstFix = false;
   navNearestIdx = startIdx;
-  navOffRouteActive = false;
+  navOffRouteActive = restoredNavigation?.offRouteActive === true;
   navRejoinBlend = 0;
+  navOffRouteEnterFixCount = 0;
+  navRejoinFixCount = 0;
+  navLastRouteDistanceM = Number.isFinite(restoredNavigation?.offRouteDistanceM)
+    ? restoredNavigation.offRouteDistanceM
+    : null;
+  navOffRouteCompactVisible = navOffRouteActive;
   navProgressIdx = restoredNavigation ? startIdx : 0;
   navDestinationHitCount = 0;
   const restoredElapsedMs = Number(restoredNavigation?.elapsedMs);
@@ -3136,6 +3276,9 @@ function startNavigation(options = {}) {
 
   navHud.classList.remove('hidden');
   document.body.classList.add('nav-mode');
+  document.body.classList.toggle('nav-off-route', navOffRouteActive);
+  document.body.classList.toggle('nav-off-route-compact', navOffRouteActive);
+  hideNavOffRouteAlert();
   if (lineStartMenu) lineStartMenu.classList.add('hidden');
   document.body.classList.remove('panel-is-open');
   panel.classList.remove('panel-open');
@@ -3238,7 +3381,7 @@ function startNavigation(options = {}) {
     pos => {
       if (navPaused) return;
 
-      const { latitude: lat, longitude: lon, speed, heading } = pos.coords;
+      const { latitude: lat, longitude: lon, speed, heading, accuracy } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
 
@@ -3246,7 +3389,7 @@ function startNavigation(options = {}) {
       const smoothed = smoothGPSPosition(lat, lon, speed);
 
       const pts = currentRoute.data.routePoints;
-      const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts);
+      const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts, accuracy);
       const sensorHeading = smoothHeading(heading);
       const routeHeading = navGetRouteHeadingAtIndex(pts, tracked.index);
       const stableRouteTangent = tracked.snapApplied
@@ -3323,6 +3466,13 @@ function stopNavigation() {
   navNearestIdx = 0;
   navOffRouteActive = false;
   navRejoinBlend = 0;
+  navOffRouteEnterFixCount = 0;
+  navRejoinFixCount = 0;
+  navLastRouteDistanceM = null;
+  navOffRouteCompactVisible = false;
+  document.body.classList.remove('nav-off-route');
+  document.body.classList.remove('nav-off-route-compact');
+  hideNavOffRouteAlert();
   navProgressIdx = 0;
   navDestinationHitCount = 0;
   navStartTime = 0;
@@ -3834,7 +3984,7 @@ function lerpValue(a, b, t) {
   return a + (b - a) * t;
 }
 
-function resolveNavTrackPoint(rawLat, rawLon, pts) {
+function resolveNavTrackPoint(rawLat, rawLon, pts, accuracyM = null) {
   const snap = snapGpsToRoute(rawLat, rawLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
@@ -3850,10 +4000,7 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
     };
   }
 
-  if (snap.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
-    navOffRouteActive = true;
-    navRejoinBlend = 0;
-  }
+  updateNavOffRouteState(snap.distanceM, accuracyM);
 
   let displayLat = rawLat;
   let displayLon = rawLon;
@@ -3865,13 +4012,6 @@ function resolveNavTrackPoint(rawLat, rawLon, pts) {
       displayLon = snap.lon;
       snapAppliedNow = true;
     }
-  } else if (snap.applied && snap.distanceM <= NAV_REJOIN_START_M) {
-    // Beim Rejoin direkt wieder auf die Route klemmen, statt seitlich einzublenden.
-    navOffRouteActive = false;
-    navRejoinBlend = 0;
-    displayLat = snap.lat;
-    displayLon = snap.lon;
-    snapAppliedNow = true;
   } else {
     navRejoinBlend = 0;
   }
@@ -4118,8 +4258,76 @@ function checkNavDestinationReached(currentDist, lat, lon) {
   return navDestinationHitCount >= 3;
 }
 
+function resolveConfiguredDispatchPhone() {
+  const data = currentRoute?.data || {};
+  // Optionaler Integrationspunkt: keine feste Nummer; nur vorhandene Routenkonfiguration verwenden.
+  const candidates = [
+    data.dispatchPhone,
+    data.dispatch?.phone,
+    data.controlCenter?.phone,
+    data.leitstellePhone,
+    data.leitstelle?.phone,
+    data.contact?.phone
+  ];
+  return candidates.map(value => String(value || '').trim()).find(Boolean) || '';
+}
+
+function callConfiguredDispatch() {
+  const phone = resolveConfiguredDispatchPhone();
+  const dialable = phone.replace(/[^+\d]/g, '');
+  if (!dialable) {
+    showToast('Keine Leitstellen-Telefonnummer konfiguriert.', 5000);
+    return;
+  }
+  window.location.href = `tel:${dialable}`;
+}
+
+function createNavOffRoutePanel() {
+  const panel = document.createElement('section');
+  panel.className = 'nav-off-route-panel';
+  panel.setAttribute('role', 'alert');
+  panel.setAttribute('aria-live', 'assertive');
+
+  const title = document.createElement('strong');
+  title.className = 'nav-off-route-title';
+  title.textContent = 'ROUTE VERLASSEN';
+
+  const actions = document.createElement('div');
+  actions.className = 'nav-off-route-actions';
+
+  const returnBtn = document.createElement('button');
+  returnBtn.type = 'button';
+  returnBtn.textContent = 'Zur Route zurück';
+  returnBtn.addEventListener('click', () => {
+    showToast('Originalroute bleibt sichtbar. Bitte selbstständig zur Route zurückfahren.', 5000);
+  });
+
+  const detourBtn = document.createElement('button');
+  detourBtn.type = 'button';
+  detourBtn.textContent = 'Umleitung suchen';
+  detourBtn.addEventListener('click', () => {
+    showToast('Bus-Umleitung wird in der nächsten Entwicklungsstufe ergänzt.', 6000);
+  });
+
+  const callBtn = document.createElement('button');
+  callBtn.type = 'button';
+  callBtn.textContent = 'Leitstelle anrufen';
+  callBtn.addEventListener('click', callConfiguredDispatch);
+
+  actions.append(returnBtn, detourBtn, callBtn);
+  panel.append(title, actions);
+  return panel;
+}
+
 function renderUpcomingStops(currentDist) {
   if (!navUpcomingStopsEl) return;
+
+  if (navOffRouteActive && navOffRouteCompactVisible) {
+    if (!navUpcomingStopsEl.querySelector('.nav-off-route-panel')) {
+      navUpcomingStopsEl.replaceChildren(createNavOffRoutePanel());
+    }
+    return;
+  }
 
   const currentMeters = Number.isFinite(currentDist) ? currentDist : 0;
   const upcoming = (navStopDists || [])

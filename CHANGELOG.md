@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.033 - 2026-09-11
+- stabilisierte Off-Route-Erkennung ab etwa 50 m mit drei genauen GPS-Fixes und Genauigkeitspuffer ergänzt
+- einmaligen Warnton, fünf Sekunden pulsierende Großwarnung und anschließende dauerhafte Warnung bei den kommenden Haltestellen umgesetzt
+- OFF-Route-Darstellung auf echter GPS-Position bei weiterhin sichtbarer Originalroute sowie die Fahreroptionen „Zur Route zurück“, „Umleitung suchen“ und „Leitstelle anrufen“ ergänzt
+- Umleitung bewusst als Platzhalter und Leitstellenanruf ohne feste Nummer strukturell konfigurierbar gehalten
+- stabile Rückkehr nach drei Fixes bis 25 m mit weichem Übergang in den bestehenden Route-Lock umgesetzt; OFF-Route-Zustand in die laufende Lehrfahrtpersistenz aufgenommen
+- normale Navigation, Routing und Telematik unverändert beibehalten
+
 ## V2.1.032 - 2026-09-11
 - Turbokreisel auf die normale Kreisverkehrroutine vereinheitlicht; innerhalb des Kreisels „Kreisverkehr folgen“ und danach das bestehende Folgemanöver verwendet
 - laufende Lehrfahrt mit Betrieb/Stadt, Linie, Route/Variante, Ziel-/Stop-IDs, Fortschritt, Pause und Fahrtdauer persistent gespeichert

@@ -1238,6 +1238,96 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   margin-top: 1px;
 }
 
+#navOffRouteAlert {
+  position: fixed;
+  top: 24vh;
+  left: 50%;
+  z-index: 900;
+  width: min(82vw, 720px);
+  transform: translateX(-50%);
+  padding: 24px 28px;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  background: #b5121b;
+  box-shadow: 0 0 0 8px rgba(181, 18, 27, 0.35), 0 18px 50px rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: clamp(34px, 6vw, 72px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+}
+
+#navOffRouteAlert.hidden {
+  display: none !important;
+}
+
+#navOffRouteAlert.is-active {
+  animation: nav-off-route-pump 0.82s ease-in-out infinite;
+}
+
+@keyframes nav-off-route-pump {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.075);
+    filter: brightness(1.22);
+  }
+}
+
+body.nav-off-route-compact #navUpcomingStops {
+  display: flex;
+  pointer-events: auto;
+}
+
+.nav-off-route-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 3px solid #ff5964;
+  border-radius: 12px;
+  background: rgba(92, 5, 12, 0.96);
+  box-shadow: 0 0 22px rgba(255, 43, 57, 0.5);
+  color: #fff;
+  pointer-events: auto;
+}
+
+.nav-off-route-title {
+  font-size: clamp(18px, 2.4vw, 26px);
+  line-height: 1.05;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.nav-off-route-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-off-route-actions button {
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 9px;
+  background: #fff;
+  color: #650810;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.15;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.nav-off-route-actions button:active {
+  transform: scale(0.98);
+  background: #ffd9dc;
+}
+
 /* ── Bottom: Current Stop ── */
 #navStopBar {
   position: fixed;
@@ -2036,6 +2126,12 @@ body.nav-mode #navHud {
     font-size: 15px;
     font-weight: 800;
     letter-spacing: 0.9px;
+  }
+
+  body.nav-off-route-compact #navUpcomingStops::before {
+    content: 'OFF-ROUTE';
+    background: #650810;
+    color: #fff;
   }
 
   .nav-upcoming-item {
