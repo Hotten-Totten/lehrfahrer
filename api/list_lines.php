@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 $baseDir = dirname(__DIR__);
 $linienBaseDir = $baseDir . '/linien';
+$citySettingsFile = $baseDir . '/data/city_settings.json';
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -281,6 +282,21 @@ foreach ($cities as $city) {
         ];
     }
 }
+
+$citySettings = [];
+if (is_file($citySettingsFile)) {
+    $decodedCitySettings = json_decode((string)@file_get_contents($citySettingsFile), true);
+    if (is_array($decodedCitySettings)) {
+        $citySettings = $decodedCitySettings;
+    }
+}
+
+foreach ($lines as &$line) {
+    $cityKey = strtolower(trim((string)($line['city'] ?? '')));
+    $setting = $citySettings[$cityKey] ?? [];
+    $line['dispatchPhone'] = is_array($setting) ? trim((string)($setting['dispatchPhone'] ?? '')) : '';
+}
+unset($line);
 
 usort($lines, function ($a, $b) {
     $cityCompare = strcmp($a['city'] ?? '', $b['city'] ?? '');

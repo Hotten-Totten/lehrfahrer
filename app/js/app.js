@@ -4259,24 +4259,20 @@ function checkNavDestinationReached(currentDist, lat, lon) {
 }
 
 function resolveConfiguredDispatchPhone() {
-  const data = currentRoute?.data || {};
-  // Optionaler Integrationspunkt: keine feste Nummer; nur vorhandene Routenkonfiguration verwenden.
-  const candidates = [
-    data.dispatchPhone,
-    data.dispatch?.phone,
-    data.controlCenter?.phone,
-    data.leitstellePhone,
-    data.leitstelle?.phone,
-    data.contact?.phone
-  ];
-  return candidates.map(value => String(value || '').trim()).find(Boolean) || '';
+  const city = String(currentRoute?.city || citySelect?.value || '').trim();
+  if (!city) return '';
+  const cityLine = (availableLinesCatalog || []).find(line => (
+    String(line?.city || '').trim() === city && String(line?.dispatchPhone || '').trim()
+  ));
+  return String(cityLine?.dispatchPhone || '').trim();
 }
 
 function callConfiguredDispatch() {
   const phone = resolveConfiguredDispatchPhone();
-  const dialable = phone.replace(/[^+\d]/g, '');
+  const digits = phone.replace(/\D/g, '');
+  const dialable = phone.startsWith('+') ? `+${digits}` : digits;
   if (!dialable) {
-    showToast('Keine Leitstellen-Telefonnummer konfiguriert.', 5000);
+    showToast('Keine Leitstellennummer hinterlegt.', 5000);
     return;
   }
   window.location.href = `tel:${dialable}`;
@@ -4311,7 +4307,8 @@ function createNavOffRoutePanel() {
 
   const callBtn = document.createElement('button');
   callBtn.type = 'button';
-  callBtn.textContent = 'Leitstelle anrufen';
+  const dispatchPhone = resolveConfiguredDispatchPhone();
+  callBtn.textContent = dispatchPhone ? `Leitstelle anrufen · ${dispatchPhone}` : 'Leitstelle anrufen';
   callBtn.addEventListener('click', callConfiguredDispatch);
 
   actions.append(returnBtn, detourBtn, callBtn);

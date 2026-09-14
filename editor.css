@@ -355,6 +355,26 @@ button.detour-phase-build {
   min-width: 140px;
 }
 
+.top-group.city-dispatch-phone-group {
+  flex: 0 1 360px;
+  min-width: 280px;
+}
+
+.city-dispatch-phone-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.city-dispatch-phone-controls input {
+  flex: 1 1 auto;
+}
+
+#cityDispatchPhoneStatus {
+  min-height: 1em;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .top-group.description-group {
   flex: 1 1 100%;
   width: 100%;

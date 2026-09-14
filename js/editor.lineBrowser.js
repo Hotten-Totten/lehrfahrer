@@ -403,6 +403,7 @@ function renderLineBrowser(lines) {
           closeLineBrowser();
           if (citySelect && line.city) {
             citySelect.value = line.city;
+            if (typeof loadCityDispatchPhoneSetting === "function") loadCityDispatchPhoneSetting();
           }
           await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null, line.city || null, line.categoryFolder || null);
         });

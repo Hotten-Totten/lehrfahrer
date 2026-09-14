@@ -6,6 +6,9 @@
 
 // Kopfbereich / Linien-Metadaten
 const citySelect = document.getElementById("citySelect");
+const cityDispatchPhoneInput = document.getElementById("cityDispatchPhone");
+const saveCityDispatchPhoneBtn = document.getElementById("saveCityDispatchPhoneBtn");
+const cityDispatchPhoneStatus = document.getElementById("cityDispatchPhoneStatus");
 const newCityInput = document.getElementById("newCityInput");
 const createCityBtn = document.getElementById("createCityBtn");
 const lineNameInput = document.getElementById("lineName");

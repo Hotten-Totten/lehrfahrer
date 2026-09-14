@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.034 - 2026-09-14
+- Leitstellen-/Notfalltelefonnummer je Stadt oder Betrieb im Editor administrativ pflegbar und API-Token-geschützt persistent gespeichert
+- Anzeigeformat der optionalen Telefonnummer beibehalten und technisch bereinigten `tel:`-Aufruf im bestehenden Off-Route-Bereich ergänzt
+- Übernahme über den bestehenden Linienkatalog einschließlich Offline-Verfügbarkeit im IndexedDB-Cache umgesetzt
+- verständlichen Hinweis bei fehlender Nummer ergänzt; Off-Route-Erkennung und Navigation unverändert beibehalten
+
 ## V2.1.033 - 2026-09-11
 - stabilisierte Off-Route-Erkennung ab etwa 50 m mit drei genauen GPS-Fixes und Genauigkeitspuffer ergänzt
 - einmaligen Warnton, fünf Sekunden pulsierende Großwarnung und anschließende dauerhafte Warnung bei den kommenden Haltestellen umgesetzt

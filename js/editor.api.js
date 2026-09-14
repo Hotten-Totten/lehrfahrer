@@ -365,7 +365,10 @@ async function saveLineToServer() {
   const target = await showSaveConfirmDialog({ data: initialData, city: initialCity });
   if (!target) return;
 
-  if (citySelect && target.city) citySelect.value = target.city;
+  if (citySelect && target.city) {
+    citySelect.value = target.city;
+    if (typeof loadCityDispatchPhoneSetting === "function") loadCityDispatchPhoneSetting();
+  }
   if (lineNameInput) lineNameInput.value = target.lineSuffix;
   if (routeNameInput) routeNameInput.value = target.routeSuffix;
   setVariantName(target.variantName, target.routeSuffix ? "Route " + target.routeSuffix : "", target.directionName);

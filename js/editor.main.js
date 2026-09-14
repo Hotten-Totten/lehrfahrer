@@ -577,6 +577,65 @@ async function loadCitiesFromServer(selectCity = "") {
       citySelect.value = selectCity;
     }
   }
+
+  await loadCityDispatchPhoneSetting();
+}
+
+async function loadCityDispatchPhoneSetting() {
+  if (!cityDispatchPhoneInput || !saveCityDispatchPhoneBtn) return;
+
+  const city = String(citySelect?.value || "").trim();
+  cityDispatchPhoneInput.value = "";
+  cityDispatchPhoneInput.disabled = !city;
+  saveCityDispatchPhoneBtn.disabled = !city;
+  if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = city ? "Wird geladen …" : "Bitte zuerst einen Ort wählen.";
+  if (!city) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/city_settings.php?city=${encodeURIComponent(city)}`, {
+      cache: "no-store"
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Leitstellennummer konnte nicht geladen werden.");
+    }
+    cityDispatchPhoneInput.value = String(result.dispatchPhone || "");
+    if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = result.dispatchPhone ? "Für diesen Ort hinterlegt." : "Für diesen Ort ist keine Nummer hinterlegt.";
+  } catch (error) {
+    if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = error.message || "Leitstellennummer konnte nicht geladen werden.";
+  }
+}
+
+async function saveCityDispatchPhoneSetting() {
+  const city = String(citySelect?.value || "").trim();
+  if (!city || !cityDispatchPhoneInput || !saveCityDispatchPhoneBtn) return;
+
+  saveCityDispatchPhoneBtn.disabled = true;
+  if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = "Wird gespeichert …";
+  try {
+    const response = await fetch(`${API_BASE}/city_settings.php`, {
+      method: "POST",
+      headers: withApiAuthHeaders({
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify({
+        city,
+        dispatchPhone: cityDispatchPhoneInput.value
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Leitstellennummer konnte nicht gespeichert werden.");
+    }
+    cityDispatchPhoneInput.value = String(result.dispatchPhone || "");
+    if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = result.dispatchPhone ? "Gespeichert." : "Keine Nummer hinterlegt.";
+    setStatus(`Leitstellennummer für ${prettifyCityName(city)} gespeichert.`);
+  } catch (error) {
+    if (cityDispatchPhoneStatus) cityDispatchPhoneStatus.textContent = error.message || "Speichern fehlgeschlagen.";
+    setStatus(error.message || "Leitstellennummer konnte nicht gespeichert werden.");
+  } finally {
+    saveCityDispatchPhoneBtn.disabled = false;
+  }
 }
 
 async function createCityViaPrompt() {
@@ -858,6 +917,9 @@ updateStats();
 renderStopOrderList();
 updateHistoryButtons();
 loadCitiesFromServer();
+
+if (citySelect) citySelect.addEventListener("change", loadCityDispatchPhoneSetting);
+if (saveCityDispatchPhoneBtn) saveCityDispatchPhoneBtn.addEventListener("click", saveCityDispatchPhoneSetting);
 
 startAutosaveLoop();
 setStatus("Editor bereit.");
