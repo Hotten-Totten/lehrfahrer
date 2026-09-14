@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.035 - 2026-09-14
+- Leitstellennummer im bestehenden Off-Route-Bereich als reine Information „Leitstelle: <Telefonnummer>“ dargestellt
+- bisherigen Anrufbutton einschließlich `tel:`-Aufruf und Wähldialog entfernt; Hinweis bei fehlender Nummer beibehalten
+- Admin-/Disponenten-Konfiguration sowie Offline-Persistenz über IndexedDB unverändert beibehalten
+- Off-Route-Erkennung, Navigation und Telematik unverändert beibehalten
+
 ## V2.1.034 - 2026-09-14
 - Leitstellen-/Notfalltelefonnummer je Stadt oder Betrieb im Editor administrativ pflegbar und API-Token-geschützt persistent gespeichert
 - Anzeigeformat der optionalen Telefonnummer beibehalten und technisch bereinigten `tel:`-Aufruf im bestehenden Off-Route-Bereich ergänzt

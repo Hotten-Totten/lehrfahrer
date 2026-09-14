@@ -4267,17 +4267,6 @@ function resolveConfiguredDispatchPhone() {
   return String(cityLine?.dispatchPhone || '').trim();
 }
 
-function callConfiguredDispatch() {
-  const phone = resolveConfiguredDispatchPhone();
-  const digits = phone.replace(/\D/g, '');
-  const dialable = phone.startsWith('+') ? `+${digits}` : digits;
-  if (!dialable) {
-    showToast('Keine Leitstellennummer hinterlegt.', 5000);
-    return;
-  }
-  window.location.href = `tel:${dialable}`;
-}
-
 function createNavOffRoutePanel() {
   const panel = document.createElement('section');
   panel.className = 'nav-off-route-panel';
@@ -4305,13 +4294,12 @@ function createNavOffRoutePanel() {
     showToast('Bus-Umleitung wird in der nächsten Entwicklungsstufe ergänzt.', 6000);
   });
 
-  const callBtn = document.createElement('button');
-  callBtn.type = 'button';
+  const dispatchInfo = document.createElement('div');
+  dispatchInfo.className = 'nav-off-route-dispatch';
   const dispatchPhone = resolveConfiguredDispatchPhone();
-  callBtn.textContent = dispatchPhone ? `Leitstelle anrufen · ${dispatchPhone}` : 'Leitstelle anrufen';
-  callBtn.addEventListener('click', callConfiguredDispatch);
+  dispatchInfo.textContent = dispatchPhone ? `Leitstelle: ${dispatchPhone}` : 'Keine Leitstellennummer hinterlegt';
 
-  actions.append(returnBtn, detourBtn, callBtn);
+  actions.append(returnBtn, detourBtn, dispatchInfo);
   panel.append(title, actions);
   return panel;
 }

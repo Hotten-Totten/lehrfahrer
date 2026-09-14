@@ -1328,6 +1328,16 @@ body.nav-off-route-compact #navUpcomingStops {
   background: #ffd9dc;
 }
 
+.nav-off-route-dispatch {
+  padding: 4px 2px 1px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 /* ── Bottom: Current Stop ── */
 #navStopBar {
   position: fixed;
