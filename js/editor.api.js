@@ -181,6 +181,7 @@ function buildExportData() {
   const hasFreeStops = state.stops.some(stop => stop.sourceType === "free");
   const bounds = getMapBoundsData();
   const mapView = getMapViewData();
+  const operational = getOperationalRouteFields();
 
 const stops = state.stops.map((stop, index) => ({
   id: stop.id,
@@ -256,6 +257,7 @@ const stops = state.stops.map((stop, index) => ({
     validUntil,
     variantName,
     variantCategory,
+    ...operational,
     categoryFolder,
     color: lineColorInput.value,
     routeMode: state.routeMode,
@@ -288,6 +290,7 @@ const stops = state.stops.map((stop, index) => ({
       validUntil,
       variantName,
       variantCategory,
+      ...operational,
       categoryFolder,
       startStopName: startStop ? startStop.name : "",
       endStopName: endStop ? endStop.name : "",
@@ -2118,6 +2121,7 @@ function loadLineFromData(data) {
   setVariantCategory(lineBlock.variantCategory ?? data.variantCategory ?? "Standard");
   setLineDescription(lineBlock.description ?? data.description ?? "");
   setLineValidity(lineBlock.validFrom ?? data.validFrom ?? "", lineBlock.validUntil ?? data.validUntil ?? "");
+  setOperationalRouteFields(data);
   lineColorInput.value = lineBlock.color || "#d32f2f";
 
   state.routeMode = lineBlock.routeMode || data.routeMode || "auto";

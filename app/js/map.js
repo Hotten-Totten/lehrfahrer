@@ -21,7 +21,6 @@ const GPS_MARKER_TARGET_MIN_MS = 250;
 const GPS_MARKER_TARGET_MAX_MS = 2500;
 const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
 const GPS_MARKER_TARGET_MAX_SPEED_MPS = 55;
-const OFF_ROUTE_MARKER_TAU_MS = 360;
 const OFF_ROUTE_OVERVIEW_ZOOM = 16.2;
 let gpsAnimFrameId = null;
 let gpsAnimState = null;
@@ -37,6 +36,7 @@ let navCameraSyncTs = 0;
 let navCameraCenter = null;
 let navOffRouteCameraActive = false;
 let navCameraModeTransition = null;
+let navOffRouteManualCamera = false;
 let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
@@ -91,6 +91,7 @@ function resetNavBearingState() {
   navCameraCenter = null;
   navOffRouteCameraActive = false;
   navCameraModeTransition = null;
+  navOffRouteManualCamera = false;
 }
 
 function setMap2DMode(enabled) {
@@ -173,6 +174,11 @@ function ensureGpsAnimState() {
       lastNormalRouteProgressM: null,
       predictRouteProgressPerMs: 0,
       confirmedOffRoute: false,
+      routeLockReleased: false,
+      freeFixFromLon: null,
+      freeFixFromLat: null,
+      freeFixStartTs: null,
+      freeFixDurationMs: 0,
       routeRejoinActive: false,
       currentHeading: 0,
       targetHeading: 0,
@@ -224,7 +230,7 @@ function runGpsMarkerAnimation(ts) {
   const dt = state.lastTs > 0 ? Math.min(120, Math.max(8, ts - state.lastTs)) : 16;
   state.lastTs = ts;
 
-  const routeLocked = !state.confirmedOffRoute && state.routePoints && state.routeCumDists
+  const routeLocked = !state.routeLockReleased && state.routePoints && state.routeCumDists
     && Number.isFinite(state.finalTargetRouteProgressM);
   if (routeLocked) {
     const routeEndM = state.routeCumDists[state.routeCumDists.length - 1];
@@ -292,9 +298,7 @@ function runGpsMarkerAnimation(ts) {
   const highSpeedFactor = speedKmh != null && speedKmh > 50
     ? 1 - Math.min(1, (speedKmh - 50) / 80) * 0.48
     : 1;
-  const posTau = state.confirmedOffRoute
-    ? OFF_ROUTE_MARKER_TAU_MS
-    : Math.max(90, basePosTau * highSpeedFactor);
+  const posTau = Math.max(90, basePosTau * highSpeedFactor);
   let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
   let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
@@ -320,6 +324,17 @@ function runGpsMarkerAnimation(ts) {
         state.currentLat = routePosition.lat;
       }
     }
+  } else if (state.routeLockReleased && state.freeFixStartTs != null) {
+    const fixProgress = Math.min(1, Math.max(
+      0,
+      (ts - state.freeFixStartTs) / Math.max(1, state.freeFixDurationMs)
+    ));
+    const fixEase = fixProgress * fixProgress * (3 - 2 * fixProgress);
+    state.currentLon = state.freeFixFromLon
+      + (state.finalTargetLon - state.freeFixFromLon) * fixEase;
+    state.currentLat = state.freeFixFromLat
+      + (state.finalTargetLat - state.freeFixFromLat) * fixEase;
+    if (fixProgress >= 1) state.freeFixStartTs = null;
   } else {
     state.currentLon += (state.targetLon - state.currentLon) * posAlpha;
     state.currentLat += (state.targetLat - state.currentLat) * posAlpha;
@@ -364,7 +379,8 @@ function setGpsMarkerTarget(
   routePoints = null,
   routeCumDists = null,
   routeProgressM = null,
-  confirmedOffRoute = false
+  confirmedOffRoute = false,
+  releaseRouteLock = false
 ) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
   const marker = ensureGpsMarkerExists([lon, lat]);
@@ -373,13 +389,15 @@ function setGpsMarkerTarget(
   const state = ensureGpsAnimState();
   const first = state.currentLon == null || state.currentLat == null;
   const targetTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const previousTargetTs = state.targetReceivedTs;
   const lockedRoutePosition = routePositionAtProgress(routePoints, routeCumDists, routeProgressM);
 
-  if (confirmedOffRoute) {
-    const enteringOffRoute = !state.confirmedOffRoute;
+  if (releaseRouteLock) {
+    const enteringConfirmedOffRoute = confirmedOffRoute && !state.confirmedOffRoute;
     state.routePoints = routePoints;
     state.routeCumDists = routeCumDists;
-    state.confirmedOffRoute = true;
+    state.confirmedOffRoute = confirmedOffRoute;
+    state.routeLockReleased = true;
     state.routeRejoinActive = false;
     state.targetLon = lon;
     state.targetLat = lat;
@@ -405,14 +423,21 @@ function setGpsMarkerTarget(
     state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
     state.targetHeadingStable = headingStable === true;
     state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
-    if (enteringOffRoute) {
+    if (enteringConfirmedOffRoute) {
       // Route-Lock exakt beim bestaetigten Zustandswechsel loesen. Danach
       // interpoliert die Animation ausschliesslich zwischen echten GPS-Fixes.
       state.currentLon = lon;
       state.currentLat = lat;
+      state.freeFixStartTs = null;
       state.currentHeading = state.hasHeading ? state.targetHeading : state.currentHeading;
       marker.setLngLat([lon, lat]);
       applyGpsHeadingVisuals(state);
+    } else {
+      state.freeFixFromLon = state.currentLon;
+      state.freeFixFromLat = state.currentLat;
+      state.freeFixStartTs = targetTs;
+      const fixIntervalMs = previousTargetTs != null ? targetTs - previousTargetTs : 560;
+      state.freeFixDurationMs = Math.min(700, Math.max(280, fixIntervalMs * 0.72));
     }
     if (gpsAnimFrameId == null) {
       state.lastTs = 0;
@@ -422,10 +447,10 @@ function setGpsMarkerTarget(
   }
 
   if (lockedRoutePosition) {
-    const returningFromOffRoute = state.confirmedOffRoute;
+    const returningFromFreeGps = state.routeLockReleased;
     const routeChanged = state.routePoints !== routePoints || state.routeCumDists !== routeCumDists;
     const firstRouteTarget = routeChanged || !Number.isFinite(state.currentRouteProgressM);
-    const resetRouteTarget = firstRouteTarget || returningFromOffRoute;
+    const resetRouteTarget = firstRouteTarget || returningFromFreeGps;
     const lockedProgressM = !routeChanged && Number.isFinite(state.finalTargetRouteProgressM)
       ? Math.max(state.finalTargetRouteProgressM, routeProgressM)
       : routeProgressM;
@@ -433,7 +458,9 @@ function setGpsMarkerTarget(
     state.routePoints = routePoints;
     state.routeCumDists = routeCumDists;
     state.confirmedOffRoute = false;
-    state.routeRejoinActive = state.routeRejoinActive || returningFromOffRoute;
+    state.routeLockReleased = false;
+    state.freeFixStartTs = null;
+    state.routeRejoinActive = state.routeRejoinActive || returningFromFreeGps;
     state.predictLonPerMs = 0;
     state.predictLatPerMs = 0;
     state.lastNormalTargetLon = null;
@@ -510,7 +537,7 @@ function setGpsMarkerTarget(
     state.targetHeadingStable = headingStable === true;
     state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
 
-    if ((firstRouteTarget || immediate) && !returningFromOffRoute) {
+    if ((firstRouteTarget || immediate) && !returningFromFreeGps) {
       state.currentLon = lockedRoutePosition.lon;
       state.currentLat = lockedRoutePosition.lat;
       state.currentHeading = state.hasHeading ? state.targetHeading : 0;
@@ -533,6 +560,8 @@ function setGpsMarkerTarget(
   state.lastNormalRouteProgressM = null;
   state.predictRouteProgressPerMs = 0;
   state.confirmedOffRoute = false;
+  state.routeLockReleased = false;
+  state.freeFixStartTs = null;
   state.routeRejoinActive = false;
 
   if (!first && !immediate
@@ -1155,7 +1184,21 @@ async function initMap() {
   });
 
   map.on('zoomend', updateStopPoiVisibility);
-  map.on('moveend', updateStopPoiVisibility);
+  map.on('moveend', () => {
+    updateStopPoiVisibility();
+    if (navOffRouteManualCamera) {
+      const center = map.getCenter();
+      navCameraCenter = { lon: center.lng, lat: center.lat };
+    }
+  });
+  const respectOffRouteMapGesture = event => {
+    if (!event.originalEvent || !document.body.classList.contains('nav-off-route')) return;
+    navOffRouteManualCamera = true;
+    navCameraModeTransition = null;
+  };
+  map.on('dragstart', respectOffRouteMapGesture);
+  map.on('zoomstart', respectOffRouteMapGesture);
+  map.on('rotatestart', respectOffRouteMapGesture);
 
   return map;
 }
@@ -1668,6 +1711,7 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null, headingStable = fals
   if (offRouteActive !== navOffRouteCameraActive) {
     const padding = map.getPadding();
     navOffRouteCameraActive = offRouteActive;
+    navOffRouteManualCamera = false;
     navCameraModeTransition = {
       startTs: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
       durationMs: offRouteActive ? 650 : 1100,
@@ -1725,6 +1769,11 @@ function routePositionAtProgress(routePoints, routeCumDists, progressM) {
 
 function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
+  if (document.body.classList.contains('nav-off-route') && navOffRouteManualCamera) {
+    const manualCenter = map.getCenter();
+    navCameraCenter = { lon: manualCenter.lng, lat: manualCenter.lat };
+    return;
+  }
   const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const dt = navCameraSyncTs > 0 ? Math.min(120, Math.max(8, nowTs - navCameraSyncTs)) : 16;
   navCameraSyncTs = nowTs;
@@ -1928,7 +1977,8 @@ function setSimulatedGPS(
   routePoints = null,
   routeCumDists = null,
   routeProgressM = null,
-  confirmedOffRoute = false
+  confirmedOffRoute = false,
+  releaseRouteLock = false
 ) {
   if (!map) return;
   setGpsMarkerTarget(
@@ -1942,6 +1992,7 @@ function setSimulatedGPS(
     routePoints,
     routeCumDists,
     routeProgressM,
-    confirmedOffRoute
+    confirmedOffRoute,
+    releaseRouteLock
   );
 }

@@ -49,6 +49,7 @@ const NAV_REJOIN_FIXES = 3;
 const NAV_OFF_ROUTE_MAX_ACCURACY_M = 50;
 const NAV_REJOIN_BLEND_STEP = 0.20;
 const NAV_REJOIN_LOOKAHEAD_M = 800;
+const BUS_REROUTE_VALHALLA_URL = 'https://valhalla1.openstreetmap.de';
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
 let navOffRouteEnterFixCount = 0;
@@ -57,6 +58,11 @@ let navLastRouteDistanceM = null;
 let navOffRouteAlertTimer = null;
 let navOffRouteCompactVisible = false;
 let navWarningAudioContext = null;
+let navWarningFallbackAudio = null;
+let navWarningFallbackUnlocked = false;
+let navLastRawGpsPos = null;
+let navPendingBusRerouteRequest = null;
+let pendingOperationalJourneyPlan = null;
 const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 
 // Navigation Menu
@@ -767,6 +773,154 @@ function deduplicateLinesCatalog(lines) {
     seenIds.add(id);
     return true;
   });
+}
+
+const OPERATIONAL_ROUTE_TYPES = Object.freeze(['line', 'pullout', 'pullin', 'transfer']);
+const OPERATIONAL_START_REGION_M = 500;
+const OPERATIONAL_PRE_ROUTE_MIN_DISTANCE_M = 250;
+
+function normalizeOperationalRouteType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return OPERATIONAL_ROUTE_TYPES.includes(normalized) ? normalized : 'line';
+}
+
+function normalizeOperationalCoordinate(value) {
+  if (!value) return null;
+  const lat = Number(Array.isArray(value) ? value[0] : value.lat);
+  const lon = Number(Array.isArray(value) ? value[1] : value.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function getRouteEndpoint(route, start = true) {
+  const data = route?.data || route || {};
+  const explicit = normalizeOperationalCoordinate(data[start ? 'startCoordinate' : 'endCoordinate'] || data.line?.[start ? 'startCoordinate' : 'endCoordinate']);
+  if (explicit) return explicit;
+  const points = data.routePoints || data.route?.original || [];
+  if (!Array.isArray(points) || !points.length) return null;
+  return normalizeOperationalCoordinate(points[start ? 0 : points.length - 1]);
+}
+
+function getOperationalRouteIdentifiers(route) {
+  const data = route?.data || route || {};
+  const storageId = route?.city && (route?.fileBase || route?.file) ? buildLineStorageId(route) : '';
+  return new Set([
+    route?.id, data.id, data.line?.id, route?.key, route?.fileBase,
+    route?.jsonPath, storageId
+  ].map(value => String(value || '').trim()).filter(Boolean));
+}
+
+function getRelatedRouteIds(route) {
+  const data = route?.data || route || {};
+  const raw = data.relatedRouteIds ?? data.line?.relatedRouteIds ?? [];
+  return (Array.isArray(raw) ? raw : String(raw).split(/[;,\n]/))
+    .map(value => String(value || '').trim()).filter(Boolean);
+}
+
+function operationalDistanceM(a, b) {
+  const p1 = normalizeOperationalCoordinate(a);
+  const p2 = normalizeOperationalCoordinate(b);
+  if (!p1 || !p2) return Infinity;
+  const r = 6371000;
+  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+  const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+  const lat1 = p1.lat * Math.PI / 180;
+  const lat2 = p2.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return r * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function getOperationalLineKey(route) {
+  const data = route?.data || route || {};
+  return String(data.lineName || data.line?.lineName || '').trim().toLowerCase();
+}
+
+function findOperationalRouteToStart({ targetRoute, operationalRoutes = [], currentPosition = null } = {}) {
+  const targetIds = getOperationalRouteIdentifiers(targetRoute);
+  const inboundRoutes = operationalRoutes.filter(route => ['pullout', 'transfer'].includes(
+    normalizeOperationalRouteType(route?.routeType ?? route?.data?.routeType ?? route?.data?.line?.routeType)
+  ));
+  const exact = inboundRoutes.find(route => getRelatedRouteIds(route).some(id => targetIds.has(id)));
+  if (exact) return { status: 'fixed-route', route: exact, matchReason: 'related-route-id', generatedFallbackRequired: false };
+
+  const targetStart = getRouteEndpoint(targetRoute, true);
+  const targetLineKey = getOperationalLineKey(targetRoute);
+  const regional = inboundRoutes
+    .map(route => {
+      const sameLine = !!targetLineKey && getOperationalLineKey(route) === targetLineKey;
+      return { route, sameLine, distance: operationalDistanceM(getRouteEndpoint(route, false), targetStart) };
+    })
+    .filter(candidate => candidate.sameLine && candidate.distance <= OPERATIONAL_START_REGION_M)
+    .sort((a, b) => a.distance - b.distance)[0];
+  if (regional) return { status: 'fixed-route', route: regional.route, matchReason: 'line-and-start-region', generatedFallbackRequired: false };
+
+  return {
+    status: 'generated-fallback-required',
+    route: null,
+    matchReason: 'no-fixed-operational-route',
+    generatedFallbackRequired: true,
+    request: { currentPosition: normalizeOperationalCoordinate(currentPosition), destination: targetStart, vehicleConstraints: null }
+  };
+}
+
+function findOperationalRouteFromEnd({ targetRoute, operationalRoutes = [] } = {}) {
+  const targetIds = getOperationalRouteIdentifiers(targetRoute);
+  const pullins = operationalRoutes.filter(route => normalizeOperationalRouteType(route?.routeType ?? route?.data?.routeType ?? route?.data?.line?.routeType) === 'pullin');
+  const exact = pullins.find(route => getRelatedRouteIds(route).some(id => targetIds.has(id)));
+  if (exact) return { status: 'fixed-route', route: exact, matchReason: 'related-route-id', generatedFallbackRequired: false };
+  const targetLineKey = getOperationalLineKey(targetRoute);
+  const targetEnd = getRouteEndpoint(targetRoute, false);
+  const regional = pullins
+    .map(route => ({ route, sameLine: !!targetLineKey && getOperationalLineKey(route) === targetLineKey, distance: operationalDistanceM(getRouteEndpoint(route, true), targetEnd) }))
+    .filter(candidate => candidate.sameLine && candidate.distance <= OPERATIONAL_START_REGION_M)
+    .sort((a, b) => a.distance - b.distance)[0];
+  return regional
+    ? { status: 'fixed-route', route: regional.route, matchReason: 'line-and-end-region', generatedFallbackRequired: false }
+    : { status: 'generated-fallback-required', route: null, matchReason: 'no-fixed-operational-route', generatedFallbackRequired: true };
+}
+
+function findOperationalTransfer({ targetRoute, operationalRoutes = [] } = {}) {
+  const targetIds = getOperationalRouteIdentifiers(targetRoute);
+  const transfers = operationalRoutes.filter(route => normalizeOperationalRouteType(route?.routeType ?? route?.data?.routeType ?? route?.data?.line?.routeType) === 'transfer');
+  const exact = transfers.find(route => getRelatedRouteIds(route).some(id => targetIds.has(id)));
+  return exact
+    ? { status: 'fixed-route', route: exact, matchReason: 'related-route-id', generatedFallbackRequired: false }
+    : { status: 'generated-fallback-required', route: null, matchReason: 'no-fixed-operational-route', generatedFallbackRequired: true };
+}
+
+function buildOperationalJourneyPlan({ lineRoute, pullout = null, pullin = null, transfer = null } = {}) {
+  return {
+    status: 'prepared',
+    automaticTransition: false,
+    segments: [pullout || transfer, lineRoute, pullin].filter(Boolean).map(route => {
+      const routeType = normalizeOperationalRouteType(route?.routeType ?? route?.data?.routeType ?? route?.data?.line?.routeType);
+      return {
+        type: routeType,
+        routeType,
+        routeId: [...getOperationalRouteIdentifiers(route)][0] || null,
+        route
+      };
+    })
+  };
+}
+
+function buildGeneratedOperationalRoute({ currentPosition, destination, vehicleConstraints } = {}) {
+  return {
+    status: 'interface-only',
+    generated: false,
+    currentPosition: normalizeOperationalCoordinate(currentPosition),
+    destination: normalizeOperationalCoordinate(destination),
+    vehicleConstraints: vehicleConstraints || null
+  };
+}
+
+function prepareOperationalJourneyForCurrentRoute(currentPosition) {
+  if (!currentRoute || normalizeOperationalRouteType(currentRoute.data?.routeType ?? currentRoute.data?.line?.routeType) !== 'line') return null;
+  const start = getRouteEndpoint(currentRoute, true);
+  if (!start || operationalDistanceM(currentPosition, start) <= OPERATIONAL_PRE_ROUTE_MIN_DISTANCE_M) return null;
+  const selection = findOperationalRouteToStart({ targetRoute: currentRoute, operationalRoutes: availableLinesCatalog, currentPosition });
+  pendingOperationalJourneyPlan = buildOperationalJourneyPlan({ lineRoute: currentRoute, pullout: selection.route });
+  pendingOperationalJourneyPlan.preRouteSelection = selection;
+  return pendingOperationalJourneyPlan;
 }
 
 function lineStorageIdCandidates(line) {
@@ -1709,7 +1863,9 @@ async function loadLines(city) {
 }
 
 function renderLinesFromCatalog(city, preferredValue = '') {
-  const lines = (availableLinesCatalog || []).filter(line => String(line.city || '').trim() === city);
+  const lines = (availableLinesCatalog || []).filter(line => (
+    String(line.city || '').trim() === city && normalizeOperationalRouteType(line.routeType) === 'line'
+  ));
   if (!lines.length) {
     lineSelect.innerHTML = '<option value="">Keine Linien vorhanden</option>';
     lineSelect.disabled = true;
@@ -1881,9 +2037,12 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
     });
   }
 
+  data.routeType = normalizeOperationalRouteType(data.routeType ?? data.line?.routeType);
+  if (data.line && typeof data.line === 'object') data.line.routeType = data.routeType;
   currentRoute = { city, file: fileName, fileBase: cleanFileBase, lineFolder, categoryFolder, jsonPath, key, data };
 
   displayRoute(data);
+  prepareOperationalJourneyForCurrentRoute(navLastRawGpsPos || gpsLastSmoothedPos);
   return currentRoute;
 }
 
@@ -2346,7 +2505,11 @@ async function displayAvailableLines() {
     }
 
     availableLinesContainer.innerHTML = '';
-    for (const line of allLines) {
+    const passengerLines = allLines.filter(line => {
+      const catalogLine = (availableLinesCatalog || []).find(item => buildLineStorageId(item) === line.id);
+      return normalizeOperationalRouteType(line?.data?.routeType ?? line?.data?.line?.routeType ?? catalogLine?.routeType) === 'line';
+    });
+    for (const line of passengerLines) {
       const catalogLine = (availableLinesCatalog || []).find(item => buildLineStorageId(item) === line.id) || null;
       const lineData = line.data || {};
       const lineName = lineData.lineName || lineData?.line?.lineName || catalogLine?.lineName || line.id;
@@ -2941,6 +3104,8 @@ async function navigateToRouteStart() {
           ? { lat: routeStart[0], lon: routeStart[1] }
           : { lat: routeStart.lat, lon: routeStart.lon };
 
+        prepareOperationalJourneyForCurrentRoute(currentPos);
+
         console.log('📍 Current position:', currentPos);
         console.log('📍 Route start:', startPt);
 
@@ -3128,60 +3293,152 @@ function showNavOffRouteAlert() {
   }, 5000);
 }
 
+function createNavWarningWavDataUri() {
+  const sampleRate = 12000;
+  const durationSec = 0.78;
+  const sampleCount = Math.floor(sampleRate * durationSec);
+  const buffer = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(buffer);
+  const writeAscii = (offset, value) => {
+    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+  };
+  writeAscii(0, 'RIFF');
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, 'data');
+  view.setUint32(40, sampleCount * 2, true);
+
+  for (let i = 0; i < sampleCount; i++) {
+    const time = i / sampleRate;
+    const frequency = time < 0.20 ? 920 : (time < 0.40 ? 660 : 920);
+    const attack = Math.min(1, time / 0.025);
+    const release = Math.min(1, (durationSec - time) / 0.12);
+    const envelope = Math.max(0, Math.min(attack, release));
+    const sample = Math.sin(2 * Math.PI * frequency * time) * envelope * 0.72;
+    view.setInt16(44 + i * 2, Math.round(sample * 32767), true);
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
 function prepareNavWarningAudio() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-
   try {
-    if (!navWarningAudioContext || navWarningAudioContext.state === 'closed') {
+    if (AudioContextClass && (!navWarningAudioContext || navWarningAudioContext.state === 'closed')) {
       navWarningAudioContext = new AudioContextClass();
     }
-    if (navWarningAudioContext.state === 'suspended') {
-      navWarningAudioContext.resume().catch(() => {});
+    if (navWarningAudioContext) {
+      navWarningAudioContext.resume().then(() => {
+        // Einen echten, praktisch unhoerbaren Renderimpuls in der Start-Geste
+        // erzeugen; ein blosses resume() entsperrt Android-PWAs nicht immer.
+        const oscillator = navWarningAudioContext.createOscillator();
+        const gain = navWarningAudioContext.createGain();
+        gain.gain.setValueAtTime(0.0001, navWarningAudioContext.currentTime);
+        oscillator.connect(gain);
+        gain.connect(navWarningAudioContext.destination);
+        oscillator.start();
+        oscillator.stop(navWarningAudioContext.currentTime + 0.03);
+        oscillator.onended = () => {
+          oscillator.disconnect();
+          gain.disconnect();
+        };
+      }).catch(() => {});
     }
-    return navWarningAudioContext;
+
+    if (!navWarningFallbackAudio) {
+      navWarningFallbackAudio = new Audio(createNavWarningWavDataUri());
+      navWarningFallbackAudio.preload = 'auto';
+    }
+    if (!navWarningFallbackUnlocked) {
+      navWarningFallbackAudio.volume = 0.001;
+      navWarningFallbackAudio.currentTime = 0;
+      const unlockPlay = navWarningFallbackAudio.play();
+      if (unlockPlay && typeof unlockPlay.then === 'function') {
+        unlockPlay.then(() => {
+          setTimeout(() => {
+            navWarningFallbackAudio.pause();
+            navWarningFallbackAudio.currentTime = 0;
+            navWarningFallbackAudio.volume = 1;
+            navWarningFallbackUnlocked = true;
+          }, 40);
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
     console.warn('Audioausgabe konnte nicht vorbereitet werden:', err);
-    return null;
   }
+  return navWarningAudioContext;
+}
+
+function playNavWarningWebAudio() {
+  const context = navWarningAudioContext;
+  if (!context || context.state !== 'running') return false;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const now = context.currentTime;
+  oscillator.type = 'square';
+  oscillator.frequency.setValueAtTime(920, now);
+  oscillator.frequency.setValueAtTime(660, now + 0.20);
+  oscillator.frequency.setValueAtTime(920, now + 0.40);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.34, now + 0.025);
+  gain.gain.setValueAtTime(0.34, now + 0.54);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.78);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
+  return true;
+}
+
+function playNavWarningFallback() {
+  if (!navWarningFallbackAudio) return Promise.reject(new Error('Audio-Fallback nicht vorbereitet'));
+  navWarningFallbackAudio.pause();
+  navWarningFallbackAudio.currentTime = 0;
+  navWarningFallbackAudio.volume = 1;
+  return navWarningFallbackAudio.play();
 }
 
 function playNavOffRouteWarning() {
   const soundEnabled = document.getElementById('navSoundEnabled');
   if (soundEnabled && !soundEnabled.checked) return;
 
-  const context = prepareNavWarningAudio();
-  if (!context) return;
+  prepareNavWarningAudio();
+  const useMediaFallback = /Android/i.test(navigator.userAgent || '');
+  console.info('[Navigation] OFF-Route-Warnsignal', {
+    audioContextState: navWarningAudioContext ? navWarningAudioContext.state : 'unavailable',
+    mediaFallbackUnlocked: navWarningFallbackUnlocked,
+    mediaFallbackSelected: useMediaFallback
+  });
 
-  const play = () => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const now = context.currentTime;
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(920, now);
-    oscillator.frequency.setValueAtTime(660, now + 0.20);
-    oscillator.frequency.setValueAtTime(920, now + 0.40);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
-    gain.gain.setValueAtTime(0.28, now + 0.54);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.78);
-    oscillator.onended = () => {
-      oscillator.disconnect();
-      gain.disconnect();
-    };
-  };
-
-  if (context.state === 'running') {
-    play();
-  } else {
-    context.resume().then(play).catch(err => {
-      console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+  if (useMediaFallback) {
+    playNavWarningFallback().catch(err => {
+      if (!playNavWarningWebAudio()) {
+        console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+      }
     });
+    return;
   }
+
+  if (playNavWarningWebAudio()) return;
+  playNavWarningFallback().catch(err => {
+    console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+  });
 }
 
 function syncNavOffRouteUi(showEntryAlert = false) {
@@ -3224,8 +3481,16 @@ function updateNavOffRouteState(distanceM, accuracyM = null) {
   if (!navOffRouteActive) {
     navRejoinFixCount = 0;
     const accuracyMarginM = hasAccuracy ? Math.min(20, accuracyM * 0.5) : 0;
-    if (distanceM >= NAV_OFF_ROUTE_ENTER_M + accuracyMarginM) {
+    const enterThresholdM = NAV_OFF_ROUTE_ENTER_M + accuracyMarginM;
+    if (distanceM >= enterThresholdM) {
       navOffRouteEnterFixCount += 1;
+      console.info('[Navigation] OFF-Route-Raw-Distanz', {
+        distanceM: Math.round(distanceM * 10) / 10,
+        accuracyM,
+        enterThresholdM,
+        stableFix: navOffRouteEnterFixCount,
+        requiredFixes: NAV_OFF_ROUTE_ENTER_FIXES
+      });
       if (navOffRouteEnterFixCount >= NAV_OFF_ROUTE_ENTER_FIXES) {
         setConfirmedNavOffRoute(true, true);
       }
@@ -3410,9 +3675,17 @@ function startNavigation(options = {}) {
 
   const ok = startGPS(
     pos => {
+      const { latitude: lat, longitude: lon, speed, heading, accuracy } = pos.coords;
+      navLastRawGpsPos = {
+        lat,
+        lon,
+        accuracy: Number.isFinite(accuracy) ? accuracy : null,
+        speed: Number.isFinite(speed) ? speed : null,
+        heading: Number.isFinite(heading) ? heading : null,
+        timestamp: Number.isFinite(pos.timestamp) ? pos.timestamp : Date.now()
+      };
       if (navPaused) return;
 
-      const { latitude: lat, longitude: lon, speed, heading, accuracy } = pos.coords;
       gpsActive = true;
       gpsBtn.style.color = '#4a9eff';
 
@@ -3420,7 +3693,7 @@ function startNavigation(options = {}) {
       const smoothed = smoothGPSPosition(lat, lon, speed);
 
       const pts = currentRoute.data.routePoints;
-      const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts, accuracy);
+      const tracked = resolveNavTrackPoint(smoothed.lat, smoothed.lon, pts, accuracy, lat, lon);
       const sensorHeading = smoothHeading(heading);
       const routeHeading = navGetRouteHeadingAtIndex(pts, tracked.index);
       const stableRouteTangent = tracked.snapApplied
@@ -3430,11 +3703,11 @@ function startNavigation(options = {}) {
       const navHeading = hasStableRouteTangent
         ? stableRouteTangent
         : resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
-      const offRoutePosition = tracked.routeState === 'OFF';
-      const displayLat = offRoutePosition ? lat : tracked.lat;
-      const displayLon = offRoutePosition ? lon : tracked.lon;
-      const displayHeading = offRoutePosition ? sensorHeading : navHeading;
-      const markerHeading = offRoutePosition
+      const freeGpsPosition = tracked.routeState === 'OFF' || tracked.routeState === 'SUSPECTED';
+      const displayLat = freeGpsPosition ? lat : tracked.lat;
+      const displayLon = freeGpsPosition ? lon : tracked.lon;
+      const displayHeading = freeGpsPosition ? sensorHeading : navHeading;
+      const markerHeading = freeGpsPosition
         ? sensorHeading
         : (hasStableRouteTangent
           ? stableRouteTangent
@@ -3455,7 +3728,8 @@ function startNavigation(options = {}) {
         pts,
         navCumDists,
         tracked.routeProgressM,
-        tracked.routeState === 'OFF'
+        tracked.routeState === 'OFF',
+        freeGpsPosition
       );
       navCenterOn(displayLon, displayLat, displayHeading, smoothed.speed, hasStableRouteTangent);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
@@ -3506,6 +3780,8 @@ function stopNavigation() {
   navOffRouteEnterFixCount = 0;
   navRejoinFixCount = 0;
   navLastRouteDistanceM = null;
+  navLastRawGpsPos = null;
+  navPendingBusRerouteRequest = null;
   navOffRouteCompactVisible = false;
   document.body.classList.remove('nav-off-route');
   document.body.classList.remove('nav-off-route-compact');
@@ -3916,7 +4192,7 @@ function buildNavStopDists(stops, pts, cumDists) {
   });
 }
 
-function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
+function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = true) {
   if (!pts.length) return 0;
 
   const maxIdx = pts.length - 1;
@@ -3945,7 +4221,7 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
 
   // Falls der beste Treffer am Fensterrand liegt, wurde evtl. stark abgewichen.
   // Dann einmal global suchen (selten, aber korrekt).
-  if (best <= start + edgeMargin || best >= end - edgeMargin) {
+  if (allowGlobalFallback && (best <= start + edgeMargin || best >= end - edgeMargin)) {
     noteNavPerfFallback();
     minD = Infinity;
     best = seed;
@@ -3961,10 +4237,17 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0) {
   return best;
 }
 
-function snapGpsToRoute(lat, lon, pts, hintIdx = 0, windowSize = NAV_SNAP_WINDOW) {
+function snapGpsToRoute(
+  lat,
+  lon,
+  pts,
+  hintIdx = 0,
+  windowSize = NAV_SNAP_WINDOW,
+  allowGlobalFallback = true
+) {
   if (!pts || pts.length < 2) return null;
 
-  const nearestIdx = findNearestNavIdx(lat, lon, pts, hintIdx);
+  const nearestIdx = findNearestNavIdx(lat, lon, pts, hintIdx, allowGlobalFallback);
   const maxSeg = pts.length - 2;
   if (maxSeg < 0) return null;
 
@@ -4040,13 +4323,25 @@ function lerpValue(a, b, t) {
   return a + (b - a) * t;
 }
 
-function resolveNavTrackPoint(rawLat, rawLon, pts, accuracyM = null) {
-  const snap = snapGpsToRoute(rawLat, rawLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
+function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gpsLat = displayLat, gpsLon = displayLon) {
+  const snap = snapGpsToRoute(displayLat, displayLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
+  // Die Zustandsentscheidung darf weder von der geglaetteten Position noch
+  // vom Route-Lock abhaengen. Dafuer wird der echte Fix separat gegen den
+  // aktuellen Routenkorridor projiziert, ohne global zu einer weit entfernten
+  // Stelle derselben Route zu springen.
+  const rawGpsSnap = snapGpsToRoute(
+    gpsLat,
+    gpsLon,
+    pts,
+    navNearestIdx,
+    NAV_SNAP_WINDOW,
+    false
+  );
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
     return {
-      lat: rawLat,
-      lon: rawLon,
+      lat: displayLat,
+      lon: displayLon,
       index: navNearestIdx,
       routeHeading: navGetRouteHeadingAtIndex(pts, navNearestIdx),
       routeProgressM: Number.isFinite(navCumDists[navNearestIdx]) ? navCumDists[navNearestIdx] : null,
@@ -4056,16 +4351,17 @@ function resolveNavTrackPoint(rawLat, rawLon, pts, accuracyM = null) {
     };
   }
 
-  updateNavOffRouteState(snap.distanceM, accuracyM);
+  if (rawGpsSnap) updateNavOffRouteState(rawGpsSnap.distanceM, accuracyM);
+  const offRouteSuspected = !navOffRouteActive && navOffRouteEnterFixCount > 0;
 
-  let displayLat = rawLat;
-  let displayLon = rawLon;
+  let trackedLat = displayLat;
+  let trackedLon = displayLon;
   let snapAppliedNow = false;
 
-  if (!navOffRouteActive) {
+  if (!navOffRouteActive && !offRouteSuspected) {
     if (snap.applied) {
-      displayLat = snap.lat;
-      displayLon = snap.lon;
+      trackedLat = snap.lat;
+      trackedLon = snap.lon;
       snapAppliedNow = true;
     }
   } else {
@@ -4074,26 +4370,26 @@ function resolveNavTrackPoint(rawLat, rawLon, pts, accuracyM = null) {
 
   const routeState = navOffRouteActive
     ? (navRejoinBlend > 0 ? 'REJOIN' : 'OFF')
-    : 'ON';
+    : (offRouteSuspected ? 'SUSPECTED' : 'ON');
 
   let reportedIdx = navNearestIdx;
-  if (snapAppliedNow || !navOffRouteActive) {
+  if (!navOffRouteActive && !offRouteSuspected) {
     reportedIdx = snap.index;
     navNearestIdx = snap.index;
     navProgressIdx = Math.max(navProgressIdx, snap.index);
   }
 
   noteNavRouteState(routeState, navRejoinBlend);
-  noteNavSnap(snap.distanceM, snapAppliedNow);
+  noteNavSnap(rawGpsSnap ? rawGpsSnap.distanceM : snap.distanceM, snapAppliedNow);
 
   return {
-    lat: displayLat,
-    lon: displayLon,
+    lat: trackedLat,
+    lon: trackedLon,
     index: reportedIdx,
     routeHeading: snap.routeHeading,
     routeProgressM: snap.routeProgressM,
     routeState,
-    snapDistanceM: snap.distanceM,
+    snapDistanceM: rawGpsSnap ? rawGpsSnap.distanceM : snap.distanceM,
     snapApplied: snapAppliedNow
   };
 }
@@ -4323,6 +4619,778 @@ function resolveConfiguredDispatchPhone() {
   return String(cityLine?.dispatchPhone || '').trim();
 }
 
+function interpolateBusReroutePosition(routePoints, routeCumDists, progressM) {
+  if (!Array.isArray(routePoints) || !routePoints.length ||
+      !Array.isArray(routeCumDists) || routeCumDists.length !== routePoints.length) {
+    return null;
+  }
+
+  const routeEndM = Number(routeCumDists[routeCumDists.length - 1]);
+  if (!Number.isFinite(routeEndM)) return null;
+
+  const targetM = Math.max(0, Math.min(routeEndM, Number(progressM) || 0));
+  let upperIdx = routeCumDists.findIndex(distanceM => distanceM >= targetM);
+  if (upperIdx < 0) upperIdx = routePoints.length - 1;
+
+  const lowerIdx = Math.max(0, upperIdx - 1);
+  const lowerM = Number(routeCumDists[lowerIdx]);
+  const upperM = Number(routeCumDists[upperIdx]);
+  const [lowerLat, lowerLon] = navGetLatLon(routePoints[lowerIdx]);
+  const [upperLat, upperLon] = navGetLatLon(routePoints[upperIdx]);
+  const segmentM = upperM - lowerM;
+  const ratio = upperIdx === lowerIdx || !Number.isFinite(segmentM) || segmentM <= 0
+    ? 0
+    : Math.max(0, Math.min(1, (targetM - lowerM) / segmentM));
+
+  return {
+    lat: lowerLat + (upperLat - lowerLat) * ratio,
+    lon: lowerLon + (upperLon - lowerLon) * ratio,
+    routeIndex: ratio >= 0.5 ? upperIdx : lowerIdx,
+    routeProgressM: targetM
+  };
+}
+
+function buildBusReroutePreparation({
+  currentPosition,
+  routePoints,
+  routeCumDists,
+  routeProgressIndex,
+  routeStops,
+  maxCandidates = 5
+}) {
+  const safeProgressIndex = Math.max(0, Math.min(
+    routePoints.length - 1,
+    Number.isFinite(routeProgressIndex) ? Math.floor(routeProgressIndex) : 0
+  ));
+  const originalRouteProgressM = Number(routeCumDists[safeProgressIndex]) || 0;
+  const routeEndM = Number(routeCumDists[routeCumDists.length - 1]) || originalRouteProgressM;
+  const candidateLimit = Math.max(3, Math.min(5, Math.floor(maxCandidates) || 5));
+  const remainingStops = (Array.isArray(routeStops) ? routeStops : [])
+    .filter(item => item?.stop && Number.isFinite(item.distFromStart) &&
+      item.distFromStart > originalRouteProgressM + 10)
+    .slice()
+    .sort((a, b) => a.distFromStart - b.distFromStart)
+    .map((item, index) => ({
+      id: item.stop.id || item.stop.catalogId || null,
+      name: item.stop.name || `Haltestelle ${index + 1}`,
+      routeProgressM: item.distFromStart,
+      order: index
+    }));
+  const firstOpenStop = remainingStops[0] || null;
+  const candidatePool = [];
+
+  const addCandidate = (progressM, source) => {
+    const firstForwardProgressM = Math.min(routeEndM, originalRouteProgressM + 40);
+    const targetM = Math.max(firstForwardProgressM, Math.min(routeEndM, progressM));
+    if (candidatePool.some(candidate => Math.abs(candidate.routeProgressM - targetM) < 35)) return;
+
+    const routePosition = interpolateBusReroutePosition(routePoints, routeCumDists, targetM);
+    if (!routePosition) return;
+
+    const nextStop = remainingStops.find(stop => stop.routeProgressM >= targetM - 10) || null;
+    const skippedStopCount = remainingStops.filter(stop => stop.routeProgressM < targetM - 10).length;
+    const relativeToNextOpenStop = !firstOpenStop
+      ? 'none'
+      : (targetM < firstOpenStop.routeProgressM - 10
+        ? 'before'
+        : (targetM <= firstOpenStop.routeProgressM + 10 ? 'at' : 'after'));
+
+    candidatePool.push({
+      coordinate: { lat: routePosition.lat, lon: routePosition.lon },
+      routeIndex: routePosition.routeIndex,
+      routeProgressM: routePosition.routeProgressM,
+      nextStopId: nextStop?.id || null,
+      nextStopName: nextStop?.name || null,
+      skippedStopCount,
+      directDistanceM: Math.round(haversineM(
+        currentPosition.lat,
+        currentPosition.lon,
+        routePosition.lat,
+        routePosition.lon
+      )),
+      beforeNextStop: relativeToNextOpenStop === 'before',
+      relativeToNextOpenStop,
+      source
+    });
+  };
+
+  let previousProgressM = originalRouteProgressM;
+  remainingStops.slice(0, 4).forEach((stop, index) => {
+    if (stop.routeProgressM - previousProgressM >= 240) {
+      addCandidate(previousProgressM + (stop.routeProgressM - previousProgressM) * 0.5, 'between-stops');
+    }
+    addCandidate(stop.routeProgressM - 100, 'before-stop');
+    addCandidate(stop.routeProgressM, 'at-stop');
+    addCandidate(stop.routeProgressM + 100, 'after-stop');
+    previousProgressM = stop.routeProgressM;
+  });
+
+  [80, 250, 500, 900, 1400].forEach(offsetM => {
+    if (originalRouteProgressM + offsetM <= routeEndM) {
+      addCandidate(originalRouteProgressM + offsetM, 'remaining-route');
+    }
+  });
+  if (!candidatePool.length) addCandidate(routeEndM, 'route-end');
+
+  const operationallyRanked = candidatePool.sort((a, b) =>
+    a.skippedStopCount - b.skippedStopCount ||
+    a.routeProgressM - b.routeProgressM ||
+    a.directDistanceM - b.directDistanceM
+  );
+  const selected = [];
+  const selectCandidate = candidate => {
+    if (candidate && selected.length < candidateLimit && !selected.includes(candidate)) {
+      selected.push(candidate);
+    }
+  };
+
+  // Der nachgelagerte Router erhaelt bewusst verschiedenartige Optionen,
+  // aber keinen vorab bestimmten Sieger.
+  selectCandidate(operationallyRanked[0]);
+  ['before-stop', 'at-stop', 'after-stop', 'between-stops'].forEach(source => {
+    selectCandidate(operationallyRanked.find(candidate => candidate.source === source));
+  });
+  operationallyRanked.forEach(selectCandidate);
+  selected.sort((a, b) =>
+    a.skippedStopCount - b.skippedStopCount ||
+    a.routeProgressM - b.routeProgressM ||
+    a.directDistanceM - b.directDistanceM
+  );
+
+  return {
+    originalRouteProgress: {
+      index: safeProgressIndex,
+      distanceM: originalRouteProgressM
+    },
+    remainingStops,
+    returnCandidates: selected,
+    candidateRanking: [
+      'skippedStopCount:asc',
+      'routeProgressM:asc',
+      'directDistanceM:asc'
+    ]
+  };
+}
+
+function decodeBusReroutePolyline6(encoded) {
+  const coordinates = [];
+  let index = 0;
+  let lat = 0;
+  let lon = 0;
+
+  while (index < encoded.length) {
+    let byte;
+    let shift = 0;
+    let result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index <= encoded.length);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index <= encoded.length);
+    lon += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coordinates.push([lat / 1e6, lon / 1e6]);
+  }
+
+  return coordinates;
+}
+
+async function fetchBusRerouteJson(url, body, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // GET wird von Valhalla offiziell unterstützt und vermeidet, dass der
+    // bestehende PWA-Service-Worker einen externen POST zu cachen versucht.
+    const requestUrl = `${url}?json=${encodeURIComponent(JSON.stringify(body))}`;
+    const response = await fetch(requestUrl, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const LOCAL_BUS_ROUTING_GRAPH_SPEC = Object.freeze({
+  schemaVersion: 1,
+  nodes: {
+    required: ['id', 'lat', 'lon']
+  },
+  edges: {
+    required: ['fromNodeId', 'toNodeId', 'lengthM', 'oneway', 'roadClass'],
+    accessData: ['access', 'motorVehicle', 'bus'],
+    dimensions: ['maxHeightM', 'maxWeightT', 'maxWidthM'],
+    conditionData: ['surface', 'use'],
+    turnData: ['turnRestrictionRefs'],
+    optional: ['name', 'ref', 'speedKmh', 'costClass']
+  },
+  unknownValuePolicy: 'unknown-is-not-confirmed-bus-suitable'
+});
+
+const BUS_OFFLINE_REGION_PACKAGE_SPEC = Object.freeze({
+  packageType: 'lehrfahrer-operating-region',
+  required: ['packageId', 'version', 'metadata', 'bounds', 'mapPmtiles', 'busRoutingGraph'],
+  persistence: 'local',
+  lifecycle: ['download-or-import', 'update', 'delete'],
+  coverageRule: 'map-and-routing-regions-must-overlap-sufficiently',
+  commercialProviderBinding: null
+});
+
+function createBusRoutingFailure(code, message, source = null) {
+  return {
+    ok: false,
+    geometry: [],
+    geometryFormat: 'lat-lon',
+    distanceM: null,
+    durationSec: null,
+    roadClasses: [],
+    roadEdges: [],
+    roadMetadataStatus: 'unavailable',
+    maneuvers: [],
+    restrictions: {
+      access: 'unknown',
+      motorVehicle: 'unknown',
+      bus: 'unknown',
+      maxHeightM: null,
+      maxWeightT: null,
+      maxWidthM: null
+    },
+    warnings: [],
+    source,
+    error: { code, message }
+  };
+}
+
+function translateValhallaBusRouteResponse(routeData, attributesData = null) {
+  const trip = routeData?.trip;
+  const leg = trip?.legs?.[0];
+  if (!leg?.shape || !trip?.summary) throw new Error('Valhalla lieferte keine Busroute.');
+
+  const roadEdges = (Array.isArray(attributesData?.edges) ? attributesData.edges : []).map(edge => ({
+    lengthM: Number.isFinite(Number(edge.length)) ? Number(edge.length) * 1000 : 0,
+    roadClass: edge.road_class || null,
+    use: edge.use || null,
+    surface: edge.surface || null,
+    traversability: edge.traversability || null,
+    truckRoute: edge.truck_route === true
+  }));
+  const roadClasses = [...new Set(roadEdges.map(edge => edge.roadClass).filter(Boolean))];
+  const hasTimeRestrictions = trip.summary.has_time_restrictions === true;
+
+  return {
+    ok: true,
+    geometry: decodeBusReroutePolyline6(leg.shape),
+    geometryFormat: 'lat-lon',
+    distanceM: Math.round(Number(trip.summary.length) * 1000),
+    durationSec: Math.round(Number(trip.summary.time)),
+    roadClasses,
+    roadEdges,
+    roadMetadataStatus: roadEdges.length ? 'available' : 'unavailable',
+    maneuvers: (Array.isArray(leg.maneuvers) ? leg.maneuvers : []).map(maneuver => ({
+      type: Number(maneuver.type),
+      instruction: maneuver.instruction || '',
+      lengthM: Number.isFinite(Number(maneuver.length)) ? Number(maneuver.length) * 1000 : null,
+      durationSec: Number.isFinite(Number(maneuver.time)) ? Number(maneuver.time) : null,
+      travelMode: maneuver.travel_mode || null,
+      travelType: maneuver.travel_type || null
+    })),
+    restrictions: {
+      access: 'provider-bus-costing',
+      motorVehicle: 'provider-bus-costing',
+      bus: 'provider-bus-costing',
+      maxHeightM: null,
+      maxWeightT: null,
+      maxWidthM: null,
+      hasTimeRestrictions
+    },
+    warnings: roadEdges.length ? [] : ['Straßenklassen-Metadaten nicht verfügbar.'],
+    source: {
+      id: 'valhalla-bus',
+      type: 'online-development',
+      onlineRequired: true,
+      url: BUS_REROUTE_VALHALLA_URL
+    },
+    providerSummary: {
+      hasTimeRestrictions,
+      hasToll: trip.summary.has_toll === true,
+      hasHighway: trip.summary.has_highway === true,
+      hasFerry: trip.summary.has_ferry === true
+    }
+  };
+}
+
+async function fetchValhallaBusPath({ from, to, heading = null }) {
+  const fromLocation = { lat: from.lat, lon: from.lon, type: 'break' };
+  if (Number.isFinite(heading)) fromLocation.heading = heading;
+  const routeData = await fetchBusRerouteJson(`${BUS_REROUTE_VALHALLA_URL}/route`, {
+    locations: [
+      fromLocation,
+      { lat: to.lat, lon: to.lon, type: 'break' }
+    ],
+    costing: 'bus',
+    directions_options: { units: 'kilometers' }
+  });
+  const leg = routeData?.trip?.legs?.[0];
+  if (!leg?.shape || !routeData?.trip?.summary) throw new Error('Valhalla lieferte keine Busroute.');
+
+  let attributesData = null;
+  try {
+    attributesData = await fetchBusRerouteJson(
+      `${BUS_REROUTE_VALHALLA_URL}/trace_attributes`,
+      {
+        encoded_polyline: leg.shape,
+        shape_match: 'map_snap',
+        costing: 'bus',
+        filters: {
+          action: 'include',
+          attributes: [
+            'edge.length',
+            'edge.road_class',
+            'edge.use',
+            'edge.surface',
+            'edge.traversability',
+            'edge.truck_route'
+          ]
+        }
+      }
+    );
+  } catch (error) {
+    attributesData = null;
+  }
+  return translateValhallaBusRouteResponse(routeData, attributesData);
+}
+
+const ValhallaBusRouter = Object.freeze({
+  id: 'valhalla-bus',
+  type: 'online-development',
+  onlineRequired: true,
+  isAvailable() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+  },
+  routeBusPath(request) {
+    return fetchValhallaBusPath(request);
+  }
+});
+
+let localBusRouterImplementation = null;
+let localBusRouterModulePromise = null;
+const LocalBusRouter = Object.freeze({
+  id: 'local-bus-router',
+  type: 'offline-local',
+  onlineRequired: false,
+  graphSpec: LOCAL_BUS_ROUTING_GRAPH_SPEC,
+  packageSpec: BUS_OFFLINE_REGION_PACKAGE_SPEC,
+  isAvailable() {
+    return !!localBusRouterImplementation && localBusRouterImplementation.isAvailable() === true;
+  },
+  async routeBusPath(request) {
+    if (!this.isAvailable()) {
+      return createBusRoutingFailure(
+        'LOCAL_GRAPH_UNAVAILABLE',
+        'Kein lokaler Bus-Routinggraph installiert.',
+        { id: this.id, type: this.type, onlineRequired: false }
+      );
+    }
+    return localBusRouterImplementation.routeBusPath(request);
+  }
+});
+
+function registerLocalBusRouter(implementation) {
+  const valid = !!implementation &&
+    typeof implementation.isAvailable === 'function' &&
+    typeof implementation.routeBusPath === 'function';
+  localBusRouterImplementation = valid ? implementation : null;
+  return valid;
+}
+
+function loadLocalBusRouterModule() {
+  if (globalThis.LehrfahrerLocalBusRouting) {
+    return Promise.resolve(globalThis.LehrfahrerLocalBusRouting);
+  }
+  if (!localBusRouterModulePromise) {
+    localBusRouterModulePromise = import('./local-bus-router.js')
+      .then(() => {
+        if (!globalThis.LehrfahrerLocalBusRouting) {
+          throw new Error('LocalBusRouter-Modul wurde nicht initialisiert.');
+        }
+        return globalThis.LehrfahrerLocalBusRouting;
+      })
+      .catch(error => {
+        localBusRouterModulePromise = null;
+        throw error;
+      });
+  }
+  return localBusRouterModulePromise;
+}
+
+async function installLocalBusRoutingGraph(graph, options = {}) {
+  try {
+    const moduleApi = await loadLocalBusRouterModule();
+    const implementation = moduleApi.createRouter(graph, options);
+    registerLocalBusRouter(implementation);
+    return { ok: true, source: implementation.source };
+  } catch (error) {
+    registerLocalBusRouter(null);
+    return {
+      ok: false,
+      error: {
+        code: 'LOCAL_GRAPH_INVALID',
+        message: error?.message || 'Lokaler Bus-Routinggraph konnte nicht geladen werden.'
+      }
+    };
+  }
+}
+
+function uninstallLocalBusRoutingGraph() {
+  registerLocalBusRouter(null);
+}
+
+function resolveBusRoutingProvider() {
+  if (LocalBusRouter.isAvailable()) return LocalBusRouter;
+  if (ValhallaBusRouter.isAvailable()) return ValhallaBusRouter;
+  return null;
+}
+
+async function routeBusPath(request, provider = resolveBusRoutingProvider()) {
+  if (!provider || typeof provider.routeBusPath !== 'function') {
+    return createBusRoutingFailure(
+      'PROVIDER_UNAVAILABLE',
+      'Kein Bus-Routingprovider verfügbar.',
+      null
+    );
+  }
+
+  try {
+    const result = await provider.routeBusPath(request);
+    if (!result || result.ok !== true) {
+      return result?.error
+        ? createBusRoutingFailure(result.error.code, result.error.message, result.source || {
+          id: provider.id,
+          type: provider.type,
+          onlineRequired: provider.onlineRequired === true
+        })
+        : createBusRoutingFailure(
+          'ROUTE_UNAVAILABLE',
+          'Provider lieferte keine Busroute.',
+          { id: provider.id, type: provider.type, onlineRequired: provider.onlineRequired === true }
+        );
+    }
+    if (!Array.isArray(result.geometry) || result.geometry.length < 2 ||
+        !Number.isFinite(result.distanceM)) {
+      return createBusRoutingFailure(
+        'INVALID_PROVIDER_RESPONSE',
+        'Provider lieferte kein gültiges neutrales Routingformat.',
+        result.source || { id: provider.id, type: provider.type }
+      );
+    }
+    return {
+      ...result,
+      geometryFormat: result.geometryFormat || 'lat-lon',
+      roadClasses: Array.isArray(result.roadClasses) ? result.roadClasses : [],
+      roadEdges: Array.isArray(result.roadEdges) ? result.roadEdges : [],
+      maneuvers: Array.isArray(result.maneuvers) ? result.maneuvers : [],
+      warnings: Array.isArray(result.warnings) ? result.warnings : [],
+      restrictions: result.restrictions || {},
+      source: result.source || {
+        id: provider.id,
+        type: provider.type,
+        onlineRequired: provider.onlineRequired === true
+      }
+    };
+  } catch (error) {
+    return createBusRoutingFailure(
+      'PROVIDER_ERROR',
+      error?.message || 'Bus-Routingprovider fehlgeschlagen.',
+      { id: provider.id, type: provider.type, onlineRequired: provider.onlineRequired === true }
+    );
+  }
+}
+
+function buildBusRoadClassProfile(roadEdges) {
+  const classDistanceM = {};
+  const useDistanceM = {};
+  const mainClasses = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary']);
+  const minorClasses = new Set(['service_other']);
+  const minorUses = new Set(['driveway', 'alley', 'parking_aisle', 'living_street', 'track']);
+  let totalM = 0;
+  let mainRoadM = 0;
+  let residentialM = 0;
+  let minorRoadM = 0;
+  let smallRoadM = 0;
+  let smallRoadSegmentCount = 0;
+  let unknownM = 0;
+  let truckRouteM = 0;
+
+  (Array.isArray(roadEdges) ? roadEdges : []).forEach(edge => {
+    const lengthM = Math.max(0, Number(edge?.lengthM) || 0);
+    if (!lengthM) return;
+    const roadClass = edge.roadClass || 'unknown';
+    const use = edge.use || 'unknown';
+    totalM += lengthM;
+    classDistanceM[roadClass] = (classDistanceM[roadClass] || 0) + lengthM;
+    useDistanceM[use] = (useDistanceM[use] || 0) + lengthM;
+    if (mainClasses.has(roadClass)) mainRoadM += lengthM;
+    if (roadClass === 'residential') residentialM += lengthM;
+    if (minorClasses.has(roadClass) || minorUses.has(use)) minorRoadM += lengthM;
+    if (roadClass === 'residential' || minorClasses.has(roadClass) || minorUses.has(use)) {
+      smallRoadM += lengthM;
+      smallRoadSegmentCount += 1;
+    }
+    if (roadClass === 'unknown') unknownM += lengthM;
+    if (edge.truckRoute === true) truckRouteM += lengthM;
+  });
+
+  const ratio = distanceM => totalM > 0 ? Number((distanceM / totalM).toFixed(4)) : null;
+  return {
+    metadataAvailable: totalM > 0,
+    totalClassifiedM: Math.round(totalM),
+    classDistanceM,
+    useDistanceM,
+    mainRoadRatio: ratio(mainRoadM),
+    residentialRatio: ratio(residentialM),
+    minorRoadRatio: ratio(minorRoadM),
+    smallRoadRatio: ratio(smallRoadM),
+    smallRoadSegmentCount,
+    unknownRatio: ratio(unknownM),
+    truckRouteRatio: ratio(truckRouteM)
+  };
+}
+
+function evaluateBusRerouteCandidate(routedCandidate) {
+  const candidate = routedCandidate.candidate;
+  const roadEdges = Array.isArray(routedCandidate.roadEdges) ? routedCandidate.roadEdges : [];
+  const maneuvers = Array.isArray(routedCandidate.maneuvers) ? routedCandidate.maneuvers : [];
+  const profile = buildBusRoadClassProfile(roadEdges);
+  const hardViolations = [];
+  const warnings = Array.isArray(routedCandidate.warnings)
+    ? routedCandidate.warnings.slice()
+    : [];
+  const forbiddenUses = new Set(['footway', 'steps', 'sidewalk', 'cycleway', 'pedestrian', 'bridleway']);
+  const uTurnCount = maneuvers.filter(maneuver => maneuver.type === 12 || maneuver.type === 13).length;
+  const sharpTurnCount = maneuvers.filter(maneuver => maneuver.type === 11 || maneuver.type === 14).length;
+
+  if (routedCandidate.ok !== true) {
+    hardViolations.push('Keine belastbare Busroute verfügbar.');
+  }
+  if (routedCandidate.restrictions?.accessForbidden === true ||
+      routedCandidate.restrictions?.bus === 'no' ||
+      routedCandidate.restrictions?.motorVehicle === 'no') {
+    hardViolations.push('Zufahrt oder Fahrzeugdurchfahrt ist ausdrücklich gesperrt.');
+  }
+  if (roadEdges.some(edge => forbiddenUses.has(edge.use) || edge.traversability === 'none' || edge.surface === 'impassable')) {
+    hardViolations.push('Route enthält einen für den Bus klar ungeeigneten oder unbefahrbaren Weg.');
+  }
+  if (roadEdges.some(edge => edge.privateAccess === true) ||
+      routedCandidate.restrictions?.access === 'private') {
+    hardViolations.push('Route enthält einen als privat/gesperrt gekennzeichneten Weg.');
+  }
+  if (uTurnCount > 0) hardViolations.push('Route erfordert ein ausdrückliches U-Turn-Manöver.');
+
+  if (!profile.metadataAvailable || routedCandidate.roadMetadataStatus === 'unavailable') {
+    warnings.push('Straßenklassen konnten nicht belastbar ermittelt werden.');
+  }
+  const unknownDimensions = [
+    ['Höhe', routedCandidate.restrictions?.maxHeightM],
+    ['Gewicht', routedCandidate.restrictions?.maxWeightT],
+    ['Breite', routedCandidate.restrictions?.maxWidthM]
+  ].filter(([, value]) => !Number.isFinite(value)).map(([label]) => label);
+  if (unknownDimensions.length) {
+    warnings.push(`${unknownDimensions.join(', ')} nicht belastbar bekannt.`);
+  }
+  if (routedCandidate.restrictions?.hasTimeRestrictions === true) {
+    warnings.push('Die Route enthält zeitabhängige Einschränkungen.');
+  }
+
+  const roadSuitabilityScore = profile.metadataAvailable
+    ? Number((
+      (profile.mainRoadRatio || 0) * 100 -
+      (profile.residentialRatio || 0) * 25 -
+      (profile.minorRoadRatio || 0) * 100
+    ).toFixed(2))
+    : null;
+  const reasons = [
+    `${candidate.skippedStopCount} Haltestelle(n) ausgelassen`,
+    `Wiedereinstieg bei Routenmeter ${Math.round(candidate.routeProgressM)}`,
+    profile.metadataAvailable
+      ? `${Math.round((profile.mainRoadRatio || 0) * 100)} % Haupt-/größere Straßen`
+      : 'Straßenklassen unbekannt',
+    `${uTurnCount + sharpTurnCount} problematische(s) Manöver`,
+    `${Math.round((routedCandidate.distanceM || 0) / 10) * 10} m / ${Math.round((routedCandidate.durationSec || 0) / 60)} min`
+  ];
+
+  return {
+    ...routedCandidate,
+    routeGeometry: Array.isArray(routedCandidate.geometry) ? routedCandidate.geometry : [],
+    routingError: routedCandidate.error?.message || null,
+    eligible: hardViolations.length === 0,
+    hardViolations,
+    warnings,
+    roadClassProfile: profile,
+    scoreBreakdown: {
+      skippedStopCount: candidate.skippedStopCount,
+      routeProgressM: candidate.routeProgressM,
+      roadSuitabilityScore,
+      mainRoadRatio: profile.mainRoadRatio,
+      minorRoadRatio: profile.minorRoadRatio,
+      smallRoadRatio: profile.smallRoadRatio,
+      smallRoadSegmentCount: profile.smallRoadSegmentCount,
+      uTurnCount,
+      sharpTurnCount,
+      deadEndOrUTurnIndicators: uTurnCount,
+      distanceM: routedCandidate.distanceM,
+      durationSec: routedCandidate.durationSec
+    },
+    reasons
+  };
+}
+
+function compareBusRerouteCandidates(a, b) {
+  const aRoad = a.scoreBreakdown.roadSuitabilityScore;
+  const bRoad = b.scoreBreakdown.roadSuitabilityScore;
+  return (
+    a.scoreBreakdown.skippedStopCount - b.scoreBreakdown.skippedStopCount ||
+    a.scoreBreakdown.routeProgressM - b.scoreBreakdown.routeProgressM ||
+    (bRoad === null ? -Infinity : bRoad) - (aRoad === null ? -Infinity : aRoad) ||
+    (a.scoreBreakdown.uTurnCount + a.scoreBreakdown.sharpTurnCount) -
+      (b.scoreBreakdown.uTurnCount + b.scoreBreakdown.sharpTurnCount) ||
+    (a.scoreBreakdown.durationSec || Infinity) - (b.scoreBreakdown.durationSec || Infinity) ||
+    (a.scoreBreakdown.distanceM || Infinity) - (b.scoreBreakdown.distanceM || Infinity)
+  );
+}
+
+function selectBusReroutePreview(routedCandidates) {
+  const evaluated = (Array.isArray(routedCandidates) ? routedCandidates : [])
+    .map(evaluateBusRerouteCandidate);
+  const eligible = evaluated.filter(candidate => candidate.eligible).sort(compareBusRerouteCandidates);
+  const allRoutingFailed = evaluated.length > 0 && evaluated.every(candidate => candidate.ok !== true);
+  const allProvidersUnavailable = allRoutingFailed && evaluated.every(candidate =>
+    ['PROVIDER_UNAVAILABLE', 'LOCAL_GRAPH_UNAVAILABLE'].includes(candidate.error?.code)
+  );
+  const sources = [...new Set(evaluated.map(candidate => candidate.source?.id).filter(Boolean))];
+  const onlineRequired = evaluated.some(candidate => candidate.source?.onlineRequired === true);
+  const offlineRoutingAvailable = evaluated.some(candidate =>
+    candidate.ok === true && candidate.source?.onlineRequired === false
+  );
+  return {
+    status: eligible.length
+      ? 'ready'
+      : (allProvidersUnavailable
+        ? 'provider-unavailable'
+        : (allRoutingFailed ? 'routing-unavailable' : 'no-suitable-route')),
+    selectedCandidate: eligible[0] || null,
+    alternatives: eligible.slice(1, 3),
+    rejectedCandidates: evaluated.filter(candidate => !candidate.eligible),
+    evaluatedCandidates: evaluated,
+    previewOnly: true,
+    originalRoutePreserved: true,
+    routingSources: sources,
+    onlineRequired,
+    offlineRoutingAvailable,
+    offlineMissingData: [
+      'lokaler routingfähiger OSM-Straßengraph',
+      'lokale Bus-Kosten-/Restriktionsdaten',
+      'lokale Routing-Engine'
+    ]
+  };
+}
+
+async function routeBusRerouteCandidates(preparation, provider = resolveBusRoutingProvider()) {
+  const candidates = Array.isArray(preparation?.returnCandidates)
+    ? preparation.returnCandidates
+    : [];
+  const routedCandidates = await Promise.all(candidates.map(async candidate => {
+    const route = await routeBusPath({
+      from: preparation.currentPosition,
+      to: candidate.coordinate,
+      heading: preparation.currentPosition?.heading ?? null,
+      constraints: preparation.routingPolicy || {}
+    }, provider);
+    return { ...route, candidate: { ...candidate } };
+  }));
+  return selectBusReroutePreview(routedCandidates);
+}
+
+function requestBusReroute() {
+  return prepareBusReroutePreviewRequest();
+}
+
+async function prepareBusReroutePreviewRequest() {
+  if (!navActive || !currentRoute?.data?.routePoints?.length || !navLastRawGpsPos) {
+    showToast('Busgeeignete Umleitung wird vorbereitet. Aktuelle GPS-Position fehlt noch.', 5000);
+    return null;
+  }
+
+  const preparation = buildBusReroutePreparation({
+    currentPosition: navLastRawGpsPos,
+    routePoints: currentRoute.data.routePoints,
+    routeCumDists: navCumDists,
+    routeProgressIndex: navProgressIdx,
+    routeStops: navStopDists
+  });
+  const rerouteRequest = {
+    requestedAt: Date.now(),
+    currentPosition: { ...navLastRawGpsPos },
+    originalRoute: {
+      key: currentRoute.key || null,
+      city: currentRoute.city || null,
+      lineFolder: currentRoute.lineFolder || null,
+      fileBase: currentRoute.fileBase || null,
+      routePoints: currentRoute.data.routePoints,
+      progressIndex: navProgressIdx,
+      progressM: Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : null
+    },
+    ...preparation,
+    routingPolicy: {
+      hardSafetyBeforeOperationalRanking: true,
+      preferMainRoadsOverShortcuts: true,
+      avoidUnsuitableRoadsAndDeadEnds: true,
+      avoidProblematicTurnsAndKnownRestrictions: true,
+      evaluateBridgeLimitsOnlyWithReliableData: true
+    },
+    routingStatus: 'routing',
+    preview: null
+  };
+  navPendingBusRerouteRequest = rerouteRequest;
+
+  showToast('Busgeeignete Rückwege werden geprüft.', 5000);
+  try {
+    const provider = resolveBusRoutingProvider();
+    const preview = await routeBusRerouteCandidates(rerouteRequest, provider);
+    if (navPendingBusRerouteRequest === rerouteRequest) {
+      rerouteRequest.preview = preview;
+      rerouteRequest.routingStatus = preview.status;
+    }
+    console.info('[Navigation] Bus-Re-Route-Preview vorbereitet', rerouteRequest);
+    showToast(
+      preview.selectedCandidate
+        ? 'Busgeeigneter Rückweg als Vorschau vorbereitet.'
+        : 'Kein belastbar geeigneter Bus-Rückweg gefunden.',
+      6000
+    );
+  } catch (error) {
+    rerouteRequest.routingStatus = 'failed';
+    rerouteRequest.preview = {
+      ...selectBusReroutePreview([]),
+      status: 'failed',
+      error: error?.message || 'Bus-Routing fehlgeschlagen.'
+    };
+    console.warn('Bus-Re-Route-Preview fehlgeschlagen:', error);
+    showToast('Bus-Rückroute konnte nicht vorbereitet werden.', 6000);
+  }
+  return rerouteRequest;
+}
+
 function createNavOffRoutePanel() {
   const panel = document.createElement('section');
   panel.className = 'nav-off-route-panel';
@@ -4346,9 +5414,7 @@ function createNavOffRoutePanel() {
   const detourBtn = document.createElement('button');
   detourBtn.type = 'button';
   detourBtn.textContent = 'Umleitung suchen';
-  detourBtn.addEventListener('click', () => {
-    showToast('Bus-Umleitung wird in der nächsten Entwicklungsstufe ergänzt.', 6000);
-  });
+  detourBtn.addEventListener('click', requestBusReroute);
 
   const dispatchInfo = document.createElement('div');
   dispatchInfo.className = 'nav-off-route-dispatch';

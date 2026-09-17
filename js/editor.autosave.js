@@ -14,6 +14,7 @@ function buildAutosaveData() {
     variantCategory: getVariantCategory(),
     directionName: directionNameInput.value.trim(),
     description: getLineDescription(),
+    ...getOperationalRouteFields(),
     ...getLineValidity(),
     color: lineColorInput.value,
     routeMode: state.detourWizard && state.detourWizard.phase ? "freeStop" : state.routeMode,
@@ -270,6 +271,7 @@ function loadAutosave() {
     setVariantCategory(data.variantCategory || "Standard");
     setLineDescription(data.description || "");
     setLineValidity(data.validFrom || "", data.validUntil || "");
+    setOperationalRouteFields(data);
     lineColorInput.value = data.color || "#d32f2f";
 
     state.routeMode = data.routeMode || "auto";

@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.037 - 2026-09-17
+- Offline-Bus-Routing-Grundlage mit providerunabhängiger Bewertung und einheitlicher `routeBusPath()`-Schnittstelle geschaffen
+- `LocalBusRouter` als vollständig lokalen A*-Router mit Busgewichtung, Indizes sowie vorbereiteten Zufahrts-, Fahrzeug- und Abbiegebeschränkungen integriert
+- intelligente Linienrückführung mit vorausliegenden Kandidaten und Priorität für möglichst wenige ausgelassene Haltestellen ergänzt
+- Grundarchitektur für Einsetz-, Aussetz- und Umsetzfahrten mit festen Betriebsrouten, Journey-Plan und vorbereitetem LocalBusRouter-Fallback umgesetzt
+- OFF-Route-Praxiskorrekturen für Raw-GPS-Routenkorridor, Markerfreigabe und -interpolation, manuelle Kartengesten sowie Android/PWA-Warnton gebündelt
+
 ## V2.1.036 - 2026-09-17
 - OFF-Route-Kartenansicht mit stabiler Übersicht, weichem Übergang und sofortiger Freigabe auf die echte GPS-Position verbessert
 - OFF-Route-Marker über reine GPS-Fix-Interpolation ohne Route-Snapping oder Prediction geglättet

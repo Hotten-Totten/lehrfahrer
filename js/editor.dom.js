@@ -19,6 +19,12 @@ const directionNameInput = document.getElementById("directionName");
 const validFromInput = document.getElementById("validFrom");
 const validUntilInput = document.getElementById("validUntil");
 const lineDescriptionInput = document.getElementById("lineDescription");
+const operationalRouteTypeInput = document.getElementById("operationalRouteType");
+const operationalNameInput = document.getElementById("operationalName");
+const operationalFromLabelInput = document.getElementById("operationalFromLabel");
+const operationalToLabelInput = document.getElementById("operationalToLabel");
+const operationalRelatedRouteIdsInput = document.getElementById("operationalRelatedRouteIds");
+const operationalRemarkInput = document.getElementById("operationalRemark");
 const lineColorInput = document.getElementById("lineColor");
 
 const stopSearchInput = document.getElementById("stopSearchInput");

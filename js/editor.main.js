@@ -792,6 +792,7 @@ async function createNewLine() {
   setVariantCategory("Standard");
   directionNameInput.value = "";
   setLineDescription("");
+  setOperationalRouteFields({ routeType: "line" });
   lineColorInput.value = "#d32f2f";
 
   if (typeof stopSearchInput !== "undefined" && stopSearchInput) {

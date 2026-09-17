@@ -153,6 +153,14 @@ foreach ($cities as $city) {
                             'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase . '.gpx' : null,
                             'fileBase'          => $fileBase,
                             'id'                => $city . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase,
+                            'routeType'         => getOperationalRouteType($data),
+                            'operationalName'   => getOperationalCatalogFields($data)['operationalName'],
+                            'fromLabel'         => getOperationalCatalogFields($data)['fromLabel'],
+                            'toLabel'           => getOperationalCatalogFields($data)['toLabel'],
+                            'relatedRouteIds'   => getOperationalCatalogFields($data)['relatedRouteIds'],
+                            'startCoordinate'   => getCatalogEndpoint($data, 'startCoordinate', true),
+                            'endCoordinate'     => getCatalogEndpoint($data, 'endCoordinate', false),
+                            'remark'            => getOperationalCatalogFields($data)['remark'],
                             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
                             'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
                             'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
@@ -207,6 +215,14 @@ foreach ($cities as $city) {
                     'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $fileBase . '.gpx' : null,
                     'fileBase'          => $fileBase,
                     'id'                => $city . '/' . $entry . '/' . $fileBase,
+                    'routeType'         => getOperationalRouteType($data),
+                    'operationalName'   => getOperationalCatalogFields($data)['operationalName'],
+                    'fromLabel'         => getOperationalCatalogFields($data)['fromLabel'],
+                    'toLabel'           => getOperationalCatalogFields($data)['toLabel'],
+                    'relatedRouteIds'   => getOperationalCatalogFields($data)['relatedRouteIds'],
+                    'startCoordinate'   => getCatalogEndpoint($data, 'startCoordinate', true),
+                    'endCoordinate'     => getCatalogEndpoint($data, 'endCoordinate', false),
+                    'remark'            => getOperationalCatalogFields($data)['remark'],
                     'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
                     'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
                     'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
@@ -262,6 +278,14 @@ foreach ($cities as $city) {
             'gpxPath'           => $hasGpx ? $cityUrlBase . '/gpx/' . $fileBase . '.gpx' : null,
             'fileBase'          => $fileBase,
             'id'                => $city . '/' . $fileBase,
+            'routeType'         => getOperationalRouteType($data),
+            'operationalName'   => getOperationalCatalogFields($data)['operationalName'],
+            'fromLabel'         => getOperationalCatalogFields($data)['fromLabel'],
+            'toLabel'           => getOperationalCatalogFields($data)['toLabel'],
+            'relatedRouteIds'   => getOperationalCatalogFields($data)['relatedRouteIds'],
+            'startCoordinate'   => getCatalogEndpoint($data, 'startCoordinate', true),
+            'endCoordinate'     => getCatalogEndpoint($data, 'endCoordinate', false),
+            'remark'            => getOperationalCatalogFields($data)['remark'],
             'lineName'          => $data['lineName'] ?? ($data['line']['lineName'] ?? ''),
             'routeName'         => $data['routeName'] ?? ($data['line']['routeName'] ?? ''),
             'directionName'     => $data['directionName'] ?? ($data['line']['directionName'] ?? ''),
@@ -281,6 +305,45 @@ foreach ($cities as $city) {
             'pdfFile'           => $pdfFileName,
         ];
     }
+}
+
+function getOperationalValue(array $data, string $key, $fallback = null) {
+    return $data[$key] ?? ($data['line'][$key] ?? $fallback);
+}
+
+function getOperationalRouteType(array $data): string {
+    $type = strtolower(trim((string)getOperationalValue($data, 'routeType', 'line')));
+    return in_array($type, ['line', 'pullout', 'pullin', 'transfer'], true) ? $type : 'line';
+}
+
+function normalizeCatalogCoordinate($point): ?array {
+    if (!is_array($point)) return null;
+    $lat = $point['lat'] ?? ($point[0] ?? null);
+    $lon = $point['lon'] ?? ($point[1] ?? null);
+    if (!is_numeric($lat) || !is_numeric($lon)) return null;
+    return ['lat' => (float)$lat, 'lon' => (float)$lon];
+}
+
+function getCatalogEndpoint(array $data, string $explicitKey, bool $start): ?array {
+    $explicit = normalizeCatalogCoordinate(getOperationalValue($data, $explicitKey));
+    if ($explicit) return $explicit;
+    $points = $data['routePoints'] ?? ($data['route']['original'] ?? []);
+    if (!is_array($points) || count($points) === 0) return null;
+    return normalizeCatalogCoordinate($start ? $points[0] : $points[count($points) - 1]);
+}
+
+function getOperationalCatalogFields(array $data): array {
+    $related = getOperationalValue($data, 'relatedRouteIds', []);
+    return [
+        'routeType' => getOperationalRouteType($data),
+        'operationalName' => trim((string)getOperationalValue($data, 'operationalName', '')),
+        'fromLabel' => trim((string)getOperationalValue($data, 'fromLabel', '')),
+        'toLabel' => trim((string)getOperationalValue($data, 'toLabel', '')),
+        'relatedRouteIds' => is_array($related) ? array_values(array_filter(array_map('strval', $related))) : [],
+        'startCoordinate' => getCatalogEndpoint($data, 'startCoordinate', true),
+        'endCoordinate' => getCatalogEndpoint($data, 'endCoordinate', false),
+        'remark' => trim((string)getOperationalValue($data, 'remark', '')),
+    ];
 }
 
 $citySettings = [];

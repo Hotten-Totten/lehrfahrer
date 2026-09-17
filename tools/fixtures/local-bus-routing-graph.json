@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "regionId": "test-region",
+  "graphVersion": "1",
+  "boundingBox": {
+    "minLat": 51.7493,
+    "minLon": 14.3298,
+    "maxLat": 51.7510,
+    "maxLon": 14.3380
+  },
+  "nodes": [
+    { "id": "a", "lat": 51.750000, "lon": 14.330000 },
+    { "id": "b", "lat": 51.750000, "lon": 14.331000 },
+    { "id": "c", "lat": 51.750000, "lon": 14.332000 },
+    { "id": "d", "lat": 51.750000, "lon": 14.333000 },
+    { "id": "ma", "lat": 51.750180, "lon": 14.330000 },
+    { "id": "mb", "lat": 51.750180, "lon": 14.331000 },
+    { "id": "mc", "lat": 51.750180, "lon": 14.332000 },
+    { "id": "md", "lat": 51.750180, "lon": 14.333000 },
+    { "id": "ow1", "lat": 51.749500, "lon": 14.331000 },
+    { "id": "ow2", "lat": 51.749500, "lon": 14.332000 },
+    { "id": "dead", "lat": 51.750800, "lon": 14.331000 },
+    { "id": "x", "lat": 51.750000, "lon": 14.336000 },
+    { "id": "y", "lat": 51.750000, "lon": 14.337000 }
+  ],
+  "edges": [
+    { "id": "res-1", "from": "a", "to": "b", "lengthMeters": 69, "roadClass": "residential", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 30, "name": "Wohnstraße" },
+    { "id": "res-2", "from": "b", "to": "c", "lengthMeters": 69, "roadClass": "residential", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 30, "name": "Wohnstraße" },
+    { "id": "res-3", "from": "c", "to": "d", "lengthMeters": 69, "roadClass": "residential", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 30, "name": "Wohnstraße" },
+
+    { "id": "main-in", "from": "a", "to": "ma", "lengthMeters": 20, "roadClass": "tertiary", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 40 },
+    { "id": "main-1", "from": "ma", "to": "mb", "lengthMeters": 69, "roadClass": "primary", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "designated", "surface": "paved", "speedKph": 55, "name": "Hauptstraße" },
+    { "id": "main-2", "from": "mb", "to": "mc", "lengthMeters": 69, "roadClass": "primary", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "designated", "surface": "paved", "speedKph": 55, "name": "Hauptstraße" },
+    { "id": "main-3", "from": "mc", "to": "md", "lengthMeters": 69, "roadClass": "primary", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "designated", "surface": "paved", "speedKph": 55, "name": "Hauptstraße" },
+    { "id": "main-out", "from": "md", "to": "d", "lengthMeters": 20, "roadClass": "tertiary", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 40 },
+
+    { "id": "service-shortcut", "from": "a", "to": "d", "lengthMeters": 205, "roadClass": "service", "use": "service", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 15, "name": "Betriebszufahrt" },
+    { "id": "oneway", "from": "ow1", "to": "ow2", "lengthMeters": 69, "roadClass": "tertiary", "oneway": true, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 40 },
+    { "id": "dead-end", "from": "b", "to": "dead", "lengthMeters": 90, "roadClass": "residential", "oneway": false, "access": "yes", "motorVehicle": "yes", "bus": "yes", "surface": "paved", "speedKph": 20, "name": "Sackgasse" },
+    { "id": "blocked", "from": "x", "to": "y", "lengthMeters": 69, "roadClass": "secondary", "oneway": false, "access": "no", "motorVehicle": "no", "bus": "no", "surface": "paved", "speedKph": 40 }
+  ],
+  "turnRestrictions": []
+}

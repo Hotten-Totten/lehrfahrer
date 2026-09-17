@@ -52,6 +52,32 @@ function normalizeEditorPlacementMode(value, routeMode = "") {
   return routeMode === "route" || routeMode === "manual" ? "route" : "freeStop";
 }
 
+const OPERATIONAL_ROUTE_TYPES = Object.freeze(["line", "pullout", "pullin", "transfer"]);
+
+function normalizeOperationalRouteType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return OPERATIONAL_ROUTE_TYPES.includes(normalized) ? normalized : "line";
+}
+
+function normalizeRelatedRouteIds(value) {
+  const values = Array.isArray(value) ? value : String(value || "").split(/[;,\n]/);
+  return [...new Set(values.map(item => String(item || "").trim()).filter(Boolean))];
+}
+
+function readOperationalRouteFields(source = {}) {
+  const line = source.line && typeof source.line === "object" ? source.line : {};
+  return {
+    routeType: normalizeOperationalRouteType(source.routeType ?? line.routeType),
+    operationalName: String(source.operationalName ?? line.operationalName ?? "").trim(),
+    fromLabel: String(source.fromLabel ?? line.fromLabel ?? "").trim(),
+    toLabel: String(source.toLabel ?? line.toLabel ?? "").trim(),
+    relatedRouteIds: normalizeRelatedRouteIds(source.relatedRouteIds ?? line.relatedRouteIds),
+    startCoordinate: source.startCoordinate ?? line.startCoordinate ?? null,
+    endCoordinate: source.endCoordinate ?? line.endCoordinate ?? null,
+    remark: String(source.remark ?? line.remark ?? "").trim()
+  };
+}
+
 const state = {
   stops: [],
   routePoints: [],
@@ -83,6 +109,14 @@ visibleCatalogMarkers: new Map(),
   variantCategory: "Standard",
   validFrom: "",
   validUntil: "",
+  routeType: "line",
+  operationalName: "",
+  fromLabel: "",
+  toLabel: "",
+  relatedRouteIds: [],
+  startCoordinate: null,
+  endCoordinate: null,
+  operationalRemark: "",
   selectedRoutePointIds: new Set(),
   groupDragContext: null,
   suppressNextMapClick: false,
@@ -552,6 +586,50 @@ function getLineValidity() {
     validFrom: String(state.validFrom || "").trim(),
     validUntil: String(state.validUntil || "").trim()
   };
+}
+
+function setOperationalRouteFields(source = {}) {
+  const fields = readOperationalRouteFields(source);
+  state.routeType = fields.routeType;
+  state.operationalName = fields.operationalName;
+  state.fromLabel = fields.fromLabel;
+  state.toLabel = fields.toLabel;
+  state.relatedRouteIds = fields.relatedRouteIds;
+  state.startCoordinate = fields.startCoordinate;
+  state.endCoordinate = fields.endCoordinate;
+  state.operationalRemark = fields.remark;
+  if (operationalRouteTypeInput) operationalRouteTypeInput.value = fields.routeType;
+  if (operationalNameInput) operationalNameInput.value = fields.operationalName;
+  if (operationalFromLabelInput) operationalFromLabelInput.value = fields.fromLabel;
+  if (operationalToLabelInput) operationalToLabelInput.value = fields.toLabel;
+  if (operationalRelatedRouteIdsInput) operationalRelatedRouteIdsInput.value = fields.relatedRouteIds.join(", ");
+  if (operationalRemarkInput) operationalRemarkInput.value = fields.remark;
+  updateOperationalRouteFieldsVisibility();
+  return fields;
+}
+
+function getOperationalRouteFields() {
+  return readOperationalRouteFields({
+    routeType: operationalRouteTypeInput?.value ?? state.routeType,
+    operationalName: operationalNameInput?.value ?? state.operationalName,
+    fromLabel: operationalFromLabelInput?.value ?? state.fromLabel,
+    toLabel: operationalToLabelInput?.value ?? state.toLabel,
+    relatedRouteIds: operationalRelatedRouteIdsInput?.value ?? state.relatedRouteIds,
+    startCoordinate: state.startCoordinate,
+    endCoordinate: state.endCoordinate,
+    remark: operationalRemarkInput?.value ?? state.operationalRemark
+  });
+}
+
+function syncOperationalRouteFieldsFromInputs() {
+  return setOperationalRouteFields(getOperationalRouteFields());
+}
+
+function updateOperationalRouteFieldsVisibility() {
+  const isOperational = normalizeOperationalRouteType(operationalRouteTypeInput?.value ?? state.routeType) !== "line";
+  document.querySelectorAll(".operational-route-field").forEach(element => {
+    element.classList.toggle("hidden", !isOperational);
+  });
 }
 
 function normalizeVariantCategory(value) {

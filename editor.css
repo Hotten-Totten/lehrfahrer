@@ -330,6 +330,19 @@ button.detour-phase-build {
   width: 140px;
 }
 
+.top-group.operational-type-group {
+  width: 170px;
+}
+
+.top-group.operational-route-field {
+  flex: 0 1 24ch;
+  min-width: 18ch;
+}
+
+.top-group.operational-related-group {
+  flex-basis: 32ch;
+}
+
 .top-group.variant-name-group {
   flex: 0 1 22ch;
   width: 22ch;

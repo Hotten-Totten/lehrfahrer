@@ -182,6 +182,19 @@ if (variantNameInput) {
 if (variantCategoryInput) {
   variantCategoryInput.addEventListener("change", syncVariantCategoryFromInput);
 }
+if (operationalRouteTypeInput) {
+  operationalRouteTypeInput.addEventListener("change", syncOperationalRouteFieldsFromInputs);
+}
+[
+  operationalNameInput,
+  operationalFromLabelInput,
+  operationalToLabelInput,
+  operationalRelatedRouteIdsInput,
+  operationalRemarkInput
+].filter(Boolean).forEach(input => {
+  input.addEventListener("input", syncOperationalRouteFieldsFromInputs);
+  input.addEventListener("change", syncOperationalRouteFieldsFromInputs);
+});
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
     setMode("specialTrack", "Modus: Sondertrasse zeichnen");

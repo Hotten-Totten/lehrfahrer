@@ -15,6 +15,7 @@ function buildHistorySnapshot() {
     variantCategory: getVariantCategory(),
     directionName: directionNameInput.value.trim(),
     description: getLineDescription(),
+    ...getOperationalRouteFields(),
     ...getLineValidity(),
     color: lineColorInput.value,
     routeMode: state.routeMode,
@@ -93,6 +94,7 @@ function applyHistorySnapshot(snapshot) {
     setVariantCategory(snapshot.variantCategory || "Standard");
     setLineDescription(snapshot.description || "");
     setLineValidity(snapshot.validFrom || "", snapshot.validUntil || "");
+    setOperationalRouteFields(snapshot);
     lineColorInput.value = snapshot.color || "#d32f2f";
 
     state.routeMode = snapshot.routeMode || "auto";

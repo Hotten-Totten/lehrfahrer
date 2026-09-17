@@ -40,6 +40,11 @@ function getLineValue(array $data, string $key, $default = '') {
     return $default;
 }
 
+function normalizeOperationalRouteType($value): string {
+    $type = strtolower(trim((string)$value));
+    return in_array($type, ['line', 'pullout', 'pullin', 'transfer'], true) ? $type : 'line';
+}
+
 function extractLatLon($point): ?array {
     if (is_array($point)) {
         if (isset($point['lat']) && isset($point['lon'])) {
@@ -314,7 +319,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     }
     $createdTimestamp = strtotime($savedAt);
     return lehrfahrer_build_professional_pdf([
-        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.036')),
+        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.037')),
         'metadata' => [
             'Linie' => preg_replace('/^Linie\s+/i', '', $lineName),
             'Route' => preg_replace('/^Route\s+/i', '', $routeName),
@@ -323,7 +328,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
             'Kategorie' => $variantCategory,
             'Gültigkeit' => $validityText,
             'Erstellt' => $createdTimestamp ? date('d.m.Y H:i', $createdTimestamp) : '',
-            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.036'))
+            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.037'))
         ],
         'description' => $description,
         'stops' => $professionalStops
@@ -488,11 +493,14 @@ if ($fileBase === '') {
 }
 
 $data['savedAt'] = date('c');
+$routeType = normalizeOperationalRouteType(getLineValue($data, 'routeType', 'line'));
+$data['routeType'] = $routeType;
 $data['lineFolder'] = $lineFolder;
 $data['categoryFolder'] = $categoryFolder;
 if (isset($data['line']) && is_array($data['line'])) {
     $data['line']['lineFolder'] = $lineFolder;
     $data['line']['categoryFolder'] = $categoryFolder;
+    $data['line']['routeType'] = $routeType;
 }
 
 $forceOverwrite = !empty($data['forceOverwrite']);
