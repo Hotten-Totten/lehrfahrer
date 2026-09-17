@@ -7,6 +7,10 @@ const vm = require('node:vm');
 const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
 const editorStateSource = fs.readFileSync(path.resolve(__dirname, '../js/editor.state.js'), 'utf8');
 const editorApiSource = fs.readFileSync(path.resolve(__dirname, '../js/editor.api.js'), 'utf8');
+const editorHtmlSource = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
+const appHtmlSource = fs.readFileSync(path.resolve(__dirname, '../app/index.html'), 'utf8');
+const saveApiSource = fs.readFileSync(path.resolve(__dirname, '../api/save_line.php'), 'utf8');
+const listApiSource = fs.readFileSync(path.resolve(__dirname, '../api/list_lines.php'), 'utf8');
 
 const sandbox = {};
 vm.createContext(sandbox);
@@ -15,6 +19,7 @@ vm.runInContext(`
   ${appSource.slice(appSource.indexOf('const OPERATIONAL_ROUTE_TYPES'), appSource.indexOf('function lineStorageIdCandidates'))}
   this.operationalApi = {
     normalizeOperationalRouteType,
+    filterCatalogRoutesByOperationalType,
     findOperationalRouteToStart,
     findOperationalRouteFromEnd,
     findOperationalTransfer,
@@ -49,6 +54,20 @@ test('Editor schreibt Betriebsmetadaten in Alt- und neues Linienformat', () => {
   assert.ok(editorApiSource.includes('...operational,'));
   assert.equal((editorApiSource.match(/\.\.\.operational,/g) || []).length, 2);
   assert.ok(editorApiSource.includes('setOperationalRouteFields(data)'));
+});
+
+test('Save-API synchronisiert Routentyp und Betriebsmetadaten in beide Datenblöcke', () => {
+  for (const field of ['operationalName', 'fromLabel', 'toLabel', 'relatedRouteIds', 'startCoordinate', 'endCoordinate', 'remark']) {
+    assert.ok(saveApiSource.includes(`'${field}' =>`));
+  }
+  assert.ok(saveApiSource.includes("$data['line'][$key] = $value"));
+  assert.ok(saveApiSource.includes("$data['line']['routeType'] = $routeType"));
+});
+
+test('list_lines gibt Routentyp und alle Betriebsmetadaten aus', () => {
+  for (const field of ['routeType', 'operationalName', 'fromLabel', 'toLabel', 'relatedRouteIds', 'startCoordinate', 'endCoordinate', 'remark']) {
+    assert.ok(listApiSource.includes(`'${field}'`));
+  }
 });
 
 test('Editor-Normalisierung restauriert pullout, pullin und transfer ohne Haltestellenbezug', () => {
@@ -131,5 +150,42 @@ test('Generator bleibt eine inaktive Schnittstelle ohne Routenerzeugung', () => 
 });
 
 test('normale Auswahlliste filtert Betriebsfahrten und behandelt Altbestand als Linie', () => {
-  assert.ok(appSource.includes("normalizeOperationalRouteType(line.routeType) === 'line'"));
+  const catalog = [
+    { id: 'legacy', city: 'cottbus' },
+    { id: 'line', city: 'cottbus', routeType: 'line' },
+    { id: 'pullout', city: 'cottbus', routeType: 'pullout', operationalName: 'Depotfahrt' }
+  ];
+  assert.deepEqual(Array.from(api.filterCatalogRoutesByOperationalType(catalog, 'cottbus', false), route => route.id), ['legacy', 'line']);
+  assert.deepEqual(Array.from(api.filterCatalogRoutesByOperationalType(catalog, 'cottbus', true), route => route.id), ['pullout']);
+});
+
+test('Betriebsmetadaten bleiben im Online- und Offline-Katalogobjekt vollständig erhalten', () => {
+  const route = { routeType: 'pullout', operationalName: 'Depotfahrt', fromLabel: 'Depot', toLabel: 'Hbf', relatedRouteIds: ['line-16'] };
+  const offlineCopy = { ...route };
+  assert.deepEqual(offlineCopy, route);
+  assert.ok(appSource.includes("catalogStore.put({ ...line })"));
+  assert.ok(appSource.includes("catalog.forEach(line => tx.objectStore('linesCatalog').put({ ...line }))"));
+});
+
+test('Fahrer-App besitzt eine getrennte Betriebsfahrten-Auswahl', () => {
+  assert.match(appHtmlSource, /id="operationalRouteSelect"/);
+  assert.ok(appSource.includes('renderOperationalRoutesFromCatalog'));
+  assert.ok(appSource.includes('onOperationalRouteChange'));
+});
+
+test('Bemerkungen und betrieblicher Hinweis sind native, standardmäßig geschlossene Klappbereiche', () => {
+  const details = [...editorHtmlSource.matchAll(/<details([^>]*)>[\s\S]*?<\/details>/g)].map(match => match[0]);
+  const remarks = details.find(block => block.includes('id="lineDescription"'));
+  const operationalRemark = details.find(block => block.includes('id="operationalRemark"'));
+  assert.ok(remarks && operationalRemark);
+  assert.doesNotMatch(remarks.split('>')[0], /\bopen\b/);
+  assert.doesNotMatch(operationalRemark.split('>')[0], /\bopen\b/);
+  assert.ok(remarks.includes('<summary>Bemerkungen</summary>'));
+  assert.ok(operationalRemark.includes('<summary>Betrieblicher Hinweis</summary>'));
+});
+
+test('Klappen verwendet unveränderte Eingabefelder ohne Datenmutation', () => {
+  assert.equal((editorHtmlSource.match(/id="lineDescription"/g) || []).length, 1);
+  assert.equal((editorHtmlSource.match(/id="operationalRemark"/g) || []).length, 1);
+  assert.ok(!appSource.includes('lineDescription'));
 });

@@ -45,6 +45,28 @@ function normalizeOperationalRouteType($value): string {
     return in_array($type, ['line', 'pullout', 'pullin', 'transfer'], true) ? $type : 'line';
 }
 
+function normalizeOperationalText($value): string {
+    return trim(is_scalar($value) ? (string)$value : '');
+}
+
+function normalizeOperationalRouteIds($value): array {
+    $items = is_array($value) ? $value : preg_split('/[;,\r\n]+/', (string)$value);
+    $normalized = [];
+    foreach ($items ?: [] as $item) {
+        $id = normalizeOperationalText($item);
+        if ($id !== '' && !in_array($id, $normalized, true)) $normalized[] = $id;
+    }
+    return $normalized;
+}
+
+function normalizeOperationalCoordinate($value): ?array {
+    if (!is_array($value)) return null;
+    $lat = $value['lat'] ?? ($value[0] ?? null);
+    $lon = $value['lon'] ?? ($value[1] ?? null);
+    if (!is_numeric($lat) || !is_numeric($lon)) return null;
+    return ['lat' => (float)$lat, 'lon' => (float)$lon];
+}
+
 function extractLatLon($point): ?array {
     if (is_array($point)) {
         if (isset($point['lat']) && isset($point['lon'])) {
@@ -319,7 +341,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
     }
     $createdTimestamp = strtotime($savedAt);
     return lehrfahrer_build_professional_pdf([
-        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.037')),
+        'version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.038')),
         'metadata' => [
             'Linie' => preg_replace('/^Linie\s+/i', '', $lineName),
             'Route' => preg_replace('/^Route\s+/i', '', $routeName),
@@ -328,7 +350,7 @@ function buildLineOverviewPdf(array $data, string $city, string $lineFolder): st
             'Kategorie' => $variantCategory,
             'Gültigkeit' => $validityText,
             'Erstellt' => $createdTimestamp ? date('d.m.Y H:i', $createdTimestamp) : '',
-            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.037'))
+            'Version' => trim((string)getLineValue($data, 'formatVersion', 'V2.1.038'))
         ],
         'description' => $description,
         'stops' => $professionalStops
@@ -495,12 +517,27 @@ if ($fileBase === '') {
 $data['savedAt'] = date('c');
 $routeType = normalizeOperationalRouteType(getLineValue($data, 'routeType', 'line'));
 $data['routeType'] = $routeType;
+$operationalFields = [
+    'operationalName' => normalizeOperationalText(getLineValue($data, 'operationalName', '')),
+    'fromLabel' => normalizeOperationalText(getLineValue($data, 'fromLabel', '')),
+    'toLabel' => normalizeOperationalText(getLineValue($data, 'toLabel', '')),
+    'relatedRouteIds' => normalizeOperationalRouteIds(getLineValue($data, 'relatedRouteIds', [])),
+    'startCoordinate' => normalizeOperationalCoordinate(getLineValue($data, 'startCoordinate', null)),
+    'endCoordinate' => normalizeOperationalCoordinate(getLineValue($data, 'endCoordinate', null)),
+    'remark' => normalizeOperationalText(getLineValue($data, 'remark', '')),
+];
+foreach ($operationalFields as $key => $value) {
+    $data[$key] = $value;
+}
 $data['lineFolder'] = $lineFolder;
 $data['categoryFolder'] = $categoryFolder;
 if (isset($data['line']) && is_array($data['line'])) {
     $data['line']['lineFolder'] = $lineFolder;
     $data['line']['categoryFolder'] = $categoryFolder;
     $data['line']['routeType'] = $routeType;
+    foreach ($operationalFields as $key => $value) {
+        $data['line'][$key] = $value;
+    }
 }
 
 $forceOverwrite = !empty($data['forceOverwrite']);

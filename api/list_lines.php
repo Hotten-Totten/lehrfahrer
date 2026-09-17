@@ -334,12 +334,18 @@ function getCatalogEndpoint(array $data, string $explicitKey, bool $start): ?arr
 
 function getOperationalCatalogFields(array $data): array {
     $related = getOperationalValue($data, 'relatedRouteIds', []);
+    if (!is_array($related)) {
+        $related = preg_split('/[;,\r\n]+/', (string)$related) ?: [];
+    }
+    $related = array_values(array_unique(array_filter(array_map(static function ($value): string {
+        return trim((string)$value);
+    }, $related))));
     return [
         'routeType' => getOperationalRouteType($data),
         'operationalName' => trim((string)getOperationalValue($data, 'operationalName', '')),
         'fromLabel' => trim((string)getOperationalValue($data, 'fromLabel', '')),
         'toLabel' => trim((string)getOperationalValue($data, 'toLabel', '')),
-        'relatedRouteIds' => is_array($related) ? array_values(array_filter(array_map('strval', $related))) : [],
+        'relatedRouteIds' => $related,
         'startCoordinate' => getCatalogEndpoint($data, 'startCoordinate', true),
         'endCoordinate' => getCatalogEndpoint($data, 'endCoordinate', false),
         'remark' => trim((string)getOperationalValue($data, 'remark', '')),

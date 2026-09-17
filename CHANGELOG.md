@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.038 - 2026-09-17
+- Betriebsfahrten in der Fahrer-App getrennt von normalen Linien als Einsetz-, Aussetz- und Umsetzfahrten sichtbar und direkt ladbar gemacht
+- `routeType` und Betriebsmetadaten durch Speicherung, Linienkatalog sowie Online- und IndexedDB-Offlinenutzung vollständig erhalten
+- Betriebsrouten ohne Fahrgasthaltestellen weiterhin unterstützt und normale Linienauswahl unverändert getrennt gehalten
+- Editor-Bereiche „Bemerkungen“ und „Betrieblicher Hinweis“ kompakt, standardmäßig geschlossen und ohne Datenverlust auf-/zuklappbar gemacht
+
 ## V2.1.037 - 2026-09-17
 - Offline-Bus-Routing-Grundlage mit providerunabhängiger Bewertung und einheitlicher `routeBusPath()`-Schnittstelle geschaffen
 - `LocalBusRouter` als vollständig lokalen A*-Router mit Busgewichtung, Indizes sowie vorbereiteten Zufahrts-, Fahrzeug- und Abbiegebeschränkungen integriert

@@ -539,6 +539,47 @@ button.danger:hover {
   min-height: 500px;
 }
 
+.collapsible-metadata {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-metadata > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  list-style: none;
+  user-select: none;
+}
+
+.collapsible-metadata > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-metadata > summary::before {
+  content: "\25B8";
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.collapsible-metadata[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-metadata-content {
+  padding: 0 8px 8px;
+}
+
+.collapsible-metadata-content textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .editor-maplibre-test {
   position: absolute;
   inset: 0 0 0 50%;

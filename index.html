@@ -10,9 +10,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-  <link rel="stylesheet" href="editor.css?v=V2.1.037">
+  <link rel="stylesheet" href="editor.css?v=V2.1.038">
 </head>
-<body data-editor-version="V2.1.037">
+<body data-editor-version="V2.1.038">
 
   <div id="menubar">
 
@@ -198,7 +198,7 @@
 
       <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
 
-      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.037</span>
+      <span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.038</span>
       <span id="apiTokenStatus" class="token-status token-status-off" title="Status des lokal gespeicherten API-Tokens">API-Token: aus</span>
       <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
       <span
@@ -317,15 +317,19 @@
 
     <div class="topbar-row-break" aria-hidden="true"></div>
 
-    <div class="top-group description-group">
-      <label>Bemerkung</label>
-      <textarea id="lineDescription" rows="3" placeholder="z. B. fährt über Betriebshof" title="Besonderheiten dieser Linie oder Variante, z. B. Schülerfahrt, Betriebshof, Umleitung bei Veranstaltungen"></textarea>
-    </div>
+    <details class="top-group description-group collapsible-metadata">
+      <summary>Bemerkungen</summary>
+      <div class="collapsible-metadata-content">
+        <textarea id="lineDescription" rows="3" aria-label="Bemerkungen" placeholder="z. B. fährt über Betriebshof" title="Besonderheiten dieser Linie oder Variante, z. B. Schülerfahrt, Betriebshof, Umleitung bei Veranstaltungen"></textarea>
+      </div>
+    </details>
 
-    <div class="top-group operational-route-field description-group hidden">
-      <label for="operationalRemark">Betrieblicher Hinweis</label>
-      <textarea id="operationalRemark" rows="3" placeholder="Optionaler Hinweis zur Betriebsfahrt"></textarea>
-    </div>
+    <details class="top-group operational-route-field description-group collapsible-metadata hidden">
+      <summary>Betrieblicher Hinweis</summary>
+      <div class="collapsible-metadata-content">
+        <textarea id="operationalRemark" rows="3" aria-label="Betrieblicher Hinweis" placeholder="Optionaler Hinweis zur Betriebsfahrt"></textarea>
+      </div>
+    </details>
 
     <input id="loadLineInput" type="file" accept=".json" class="hidden">
     <input id="gtfsZipInput" type="file" accept=".zip,application/zip" class="hidden">
@@ -737,30 +741,30 @@
     })();
   </script>
 
-  <script src="data/haltestellen.js?v=V2.1.037"></script>
-  <script src="js/editor.map-adapter.js?v=V2.1.037"></script>
+  <script src="data/haltestellen.js?v=V2.1.038"></script>
+  <script src="js/editor.map-adapter.js?v=V2.1.038"></script>
 
-  <script src="js/editor.state.js?v=V2.1.037"></script>
-  <script src="js/editor.dom.js?v=V2.1.037"></script>
-  <script src="js/editor.debug.js?v=V2.1.037"></script>
-  <script src="js/editor.ui.js?v=V2.1.037"></script>
-  <script src="js/editor.selection.js?v=V2.1.037"></script>
-  <script src="js/editor.stops.js?v=V2.1.037"></script>
-  <script src="js/editor.route.js?v=V2.1.037"></script>
-  <script src="js/editor.routing.js?v=V2.1.037"></script>
-  <script src="js/editor.search.js?v=V2.1.037"></script>
-  <script src="js/editor.autosave.js?v=V2.1.037"></script>
-  <script src="js/editor.api.js?v=V2.1.037"></script>
-  <script src="js/editor.lineBrowser.js?v=V2.1.037"></script>
-  <script src="js/editor.driverDocuments.js?v=V2.1.037"></script>
-  <script src="js/editor.academy.js?v=V2.1.037"></script>
-  <script src="js/editor.dashboard.js?v=V2.1.037"></script>
-  <script src="js/editor.help.js?v=V2.1.037"></script>
-  <script src="js/editor.history.js?v=V2.1.037"></script>
-  <script src="js/editor.linelogic.js?v=V2.1.037"></script>
-  <script src="js/editor.main.js?v=V2.1.037"></script>
-  <script src="js/editor.events.js?v=V2.1.037"></script>
-  <script src="js/editor.fetchStops.js?v=V2.1.037"></script>
+  <script src="js/editor.state.js?v=V2.1.038"></script>
+  <script src="js/editor.dom.js?v=V2.1.038"></script>
+  <script src="js/editor.debug.js?v=V2.1.038"></script>
+  <script src="js/editor.ui.js?v=V2.1.038"></script>
+  <script src="js/editor.selection.js?v=V2.1.038"></script>
+  <script src="js/editor.stops.js?v=V2.1.038"></script>
+  <script src="js/editor.route.js?v=V2.1.038"></script>
+  <script src="js/editor.routing.js?v=V2.1.038"></script>
+  <script src="js/editor.search.js?v=V2.1.038"></script>
+  <script src="js/editor.autosave.js?v=V2.1.038"></script>
+  <script src="js/editor.api.js?v=V2.1.038"></script>
+  <script src="js/editor.lineBrowser.js?v=V2.1.038"></script>
+  <script src="js/editor.driverDocuments.js?v=V2.1.038"></script>
+  <script src="js/editor.academy.js?v=V2.1.038"></script>
+  <script src="js/editor.dashboard.js?v=V2.1.038"></script>
+  <script src="js/editor.help.js?v=V2.1.038"></script>
+  <script src="js/editor.history.js?v=V2.1.038"></script>
+  <script src="js/editor.linelogic.js?v=V2.1.038"></script>
+  <script src="js/editor.main.js?v=V2.1.038"></script>
+  <script src="js/editor.events.js?v=V2.1.038"></script>
+  <script src="js/editor.fetchStops.js?v=V2.1.038"></script>
 
 </body>
 </html>

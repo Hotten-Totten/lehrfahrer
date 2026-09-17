@@ -105,6 +105,7 @@ const navDriveLog = {
 // ── DOM-Referenzen ───────────────────────────────────────────
 const citySelect       = document.getElementById('citySelect');
 const lineSelect       = document.getElementById('lineSelect');
+const operationalRouteSelect = document.getElementById('operationalRouteSelect');
 const saveOfflineBtn   = document.getElementById('saveOfflineBtn'); // Jetzt obsolet, aber Modal ersetzt Funktionalität
 const offlineBadge     = document.getElementById('offlineBadge');
 const gpsBtn           = document.getElementById('gpsBtn');
@@ -784,6 +785,14 @@ function normalizeOperationalRouteType(value) {
   return OPERATIONAL_ROUTE_TYPES.includes(normalized) ? normalized : 'line';
 }
 
+function filterCatalogRoutesByOperationalType(catalog, city, operational) {
+  return (Array.isArray(catalog) ? catalog : []).filter(route => {
+    const sameCity = String(route?.city || '').trim() === String(city || '').trim();
+    const isOperational = normalizeOperationalRouteType(route?.routeType) !== 'line';
+    return sameCity && isOperational === !!operational;
+  });
+}
+
 function normalizeOperationalCoordinate(value) {
   if (!value) return null;
   const lat = Number(Array.isArray(value) ? value[0] : value.lat);
@@ -1023,18 +1032,24 @@ function applyActiveDriveSelection(state) {
   if (Array.from(citySelect.options).some(option => option.value === selection.city)) {
     citySelect.value = selection.city;
     renderLinesFromCatalog(selection.city);
+    renderOperationalRoutesFromCatalog(selection.city);
   }
 
-  const matchingOption = Array.from(lineSelect.options).find(option => {
-    if (!option.value) return false;
-    try {
-      const ref = JSON.parse(option.value);
-      return lineStorageIdCandidates(ref).includes(selection.lineStorageId);
-    } catch {
-      return false;
+  for (const select of [lineSelect, operationalRouteSelect].filter(Boolean)) {
+    const matchingOption = Array.from(select.options).find(option => {
+      if (!option.value) return false;
+      try {
+        const ref = JSON.parse(option.value);
+        return lineStorageIdCandidates(ref).includes(selection.lineStorageId);
+      } catch {
+        return false;
+      }
+    });
+    if (matchingOption) {
+      select.value = matchingOption.value;
+      break;
     }
-  });
-  if (matchingOption) lineSelect.value = matchingOption.value;
+  }
 }
 
 async function restoreActiveDriveState() {
@@ -1117,9 +1132,13 @@ async function fetchLineRecordFromServer(line) {
 function renderCatalogPreservingSelection(catalog) {
   const selectedCity = String(citySelect?.value || '').trim();
   const selectedLine = lineSelect?.value || '';
+  const selectedOperationalRoute = operationalRouteSelect?.value || '';
   availableLinesCatalog = catalog;
   renderCitiesFromCatalog(catalog, selectedCity);
-  if (citySelect.value) renderLinesFromCatalog(citySelect.value, selectedLine);
+  if (citySelect.value) {
+    renderLinesFromCatalog(citySelect.value, selectedLine);
+    renderOperationalRoutesFromCatalog(citySelect.value, selectedOperationalRoute);
+  }
 }
 
 async function refreshPersistentLineData() {
@@ -1644,6 +1663,7 @@ function detectOffline() {
 function bindEvents() {
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
+  if (operationalRouteSelect) operationalRouteSelect.addEventListener('change', onOperationalRouteChange);
   if (saveOfflineBtn) saveOfflineBtn.addEventListener('click', saveCurrentRouteOffline);
   if (refreshLinesBtn) refreshLinesBtn.addEventListener('click', refreshLinesNow);
 
@@ -1842,6 +1862,10 @@ function renderCitiesFromCatalog(catalog, preferredCity = '') {
   if (!citySelect.value) {
     lineSelect.innerHTML = '<option value="">Linie …</option>';
     lineSelect.disabled = true;
+    if (operationalRouteSelect) {
+      operationalRouteSelect.innerHTML = '<option value="">Betriebsfahrten …</option>';
+      operationalRouteSelect.disabled = true;
+    }
   }
 }
 
@@ -1852,6 +1876,10 @@ async function loadCities() {
 async function onCityChange() {
   lineSelect.innerHTML = '<option value="">Linie …</option>';
   lineSelect.disabled  = true;
+  if (operationalRouteSelect) {
+    operationalRouteSelect.innerHTML = '<option value="">Betriebsfahrten …</option>';
+    operationalRouteSelect.disabled = true;
+  }
   if (saveOfflineBtn) saveOfflineBtn.disabled = true;
   if (!citySelect.value) return;
   await loadLines(citySelect.value);
@@ -1860,12 +1888,22 @@ async function onCityChange() {
 // ── Linien laden ─────────────────────────────────────────────
 async function loadLines(city) {
   renderLinesFromCatalog(city);
+  renderOperationalRoutesFromCatalog(city);
+}
+
+function buildCatalogSelectionValue(route, city) {
+  return JSON.stringify({
+    city: route.city || city,
+    file: route.file || '',
+    fileBase: route.fileBase || String(route.file || '').replace(/\.json$/i, '') || route.id,
+    lineFolder: route.lineFolder || null,
+    categoryFolder: route.categoryFolder || null,
+    jsonPath: route.jsonPath || null
+  });
 }
 
 function renderLinesFromCatalog(city, preferredValue = '') {
-  const lines = (availableLinesCatalog || []).filter(line => (
-    String(line.city || '').trim() === city && normalizeOperationalRouteType(line.routeType) === 'line'
-  ));
+  const lines = filterCatalogRoutesByOperationalType(availableLinesCatalog, city, false);
   if (!lines.length) {
     lineSelect.innerHTML = '<option value="">Keine Linien vorhanden</option>';
     lineSelect.disabled = true;
@@ -1875,14 +1913,7 @@ function renderLinesFromCatalog(city, preferredValue = '') {
   lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
   lines.forEach(line => {
     const opt = document.createElement('option');
-    opt.value = JSON.stringify({
-      city: line.city || city,
-      file: line.file || '',
-      fileBase: line.fileBase || String(line.file || '').replace(/\.json$/i, '') || line.id,
-      lineFolder: line.lineFolder || null,
-      categoryFolder: line.categoryFolder || null,
-      jsonPath: line.jsonPath || null
-    });
+    opt.value = buildCatalogSelectionValue(line, city);
     opt.textContent = [
       line.lineName || line.id,
       getAppVariantCategory(line),
@@ -1903,9 +1934,38 @@ function renderLinesFromCatalog(city, preferredValue = '') {
   lineSelect.disabled = false;
 }
 
+function getOperationalRouteTypeLabel(routeType) {
+  if (routeType === 'pullout') return 'Einsetzfahrt';
+  if (routeType === 'pullin') return 'Aussetzfahrt';
+  return 'Umsetzfahrt';
+}
+
+function renderOperationalRoutesFromCatalog(city, preferredValue = '') {
+  if (!operationalRouteSelect) return;
+  const routes = filterCatalogRoutesByOperationalType(availableLinesCatalog, city, true);
+  operationalRouteSelect.innerHTML = routes.length
+    ? '<option value="">Betriebsfahrten …</option>'
+    : '<option value="">Keine Betriebsfahrten vorhanden</option>';
+  routes.forEach(route => {
+    const routeType = normalizeOperationalRouteType(route.routeType);
+    const endpoints = [route.fromLabel, route.toLabel].map(value => String(value || '').trim()).filter(Boolean).join(' → ');
+    const name = String(route.operationalName || '').trim() || endpoints || route.routeName || route.fileBase || route.id;
+    const option = document.createElement('option');
+    option.value = buildCatalogSelectionValue(route, city);
+    option.textContent = `${getOperationalRouteTypeLabel(routeType)}: ${name}`;
+    option.title = endpoints || String(route.remark || '').trim();
+    operationalRouteSelect.appendChild(option);
+  });
+  if (preferredValue && Array.from(operationalRouteSelect.options).some(option => option.value === preferredValue)) {
+    operationalRouteSelect.value = preferredValue;
+  }
+  operationalRouteSelect.disabled = routes.length === 0;
+}
+
 async function onLineChange() {
   if (saveOfflineBtn) saveOfflineBtn.disabled = true;
   currentRoute = null;
+  if (operationalRouteSelect) operationalRouteSelect.value = '';
   if (!lineSelect.value) return;
 
   const { city: lineCity, fileBase, lineFolder, categoryFolder, jsonPath, file } = JSON.parse(lineSelect.value);
@@ -2046,10 +2106,20 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
   return currentRoute;
 }
 
+async function onOperationalRouteChange() {
+  if (!operationalRouteSelect?.value) return;
+  if (saveOfflineBtn) saveOfflineBtn.disabled = true;
+  currentRoute = null;
+  if (lineSelect) lineSelect.value = '';
+  const { city: routeCity, fileBase, lineFolder, categoryFolder, jsonPath, file } = JSON.parse(operationalRouteSelect.value);
+  await loadAndShowRoute(routeCity || citySelect.value, fileBase, lineFolder, categoryFolder, jsonPath, file);
+}
+
 function getSelectedLineRef() {
-  if (!lineSelect || !lineSelect.value) return null;
+  const selectedValue = lineSelect?.value || operationalRouteSelect?.value || '';
+  if (!selectedValue) return null;
   try {
-    const parsed = JSON.parse(lineSelect.value);
+    const parsed = JSON.parse(selectedValue);
     return {
       city: String(parsed.city || citySelect?.value || '').trim(),
       file: parsed.file || '',
@@ -2126,8 +2196,11 @@ async function refreshLinesNow() {
         jsonPath: selectionBefore.jsonPath || null
       });
 
-      if (lineSelect && Array.from(lineSelect.options).some(opt => opt.value === selectedValue)) {
-        lineSelect.value = selectedValue;
+      const refreshedSelect = normalizeOperationalRouteType(catalogLine?.routeType) === 'line'
+        ? lineSelect
+        : operationalRouteSelect;
+      if (refreshedSelect && Array.from(refreshedSelect.options).some(opt => opt.value === selectedValue)) {
+        refreshedSelect.value = selectedValue;
       }
 
       await loadAndShowRoute(selectionBefore.city, selectionBefore.fileBase, selectionBefore.lineFolder, selectionBefore.categoryFolder, selectionBefore.jsonPath, selectionBefore.file);
@@ -2169,8 +2242,16 @@ function displayRoute(data) {
   const variantName = getAppVariantName(data, catalogLine);
   const variantCategory = getAppVariantCategory(data, catalogLine);
   const validityText = formatAppValidity(data, catalogLine);
-  panelTitle.textContent = data.lineName  || 'Route';
+  const routeType = normalizeOperationalRouteType(data.routeType ?? data.line?.routeType);
+  const operationalName = String(data.operationalName || data.line?.operationalName || catalogLine?.operationalName || '').trim();
+  const operationalEndpoints = [
+    data.fromLabel || data.line?.fromLabel || catalogLine?.fromLabel,
+    data.toLabel || data.line?.toLabel || catalogLine?.toLabel
+  ].map(value => String(value || '').trim()).filter(Boolean).join(' → ');
+  panelTitle.textContent = routeType === 'line' ? (data.lineName || 'Route') : (operationalName || getOperationalRouteTypeLabel(routeType));
   panelMeta.textContent  = [
+    routeType === 'line' ? '' : getOperationalRouteTypeLabel(routeType),
+    routeType === 'line' ? '' : operationalEndpoints,
     variantCategory,
     variantName,
     description ? `Bemerkung: ${description}` : '',
@@ -2256,6 +2337,9 @@ function getPunctualityEnabled() {
 
 function getAppLineDescription(lineData, catalogLine = null) {
   return String(
+    lineData?.remark ||
+    lineData?.line?.remark ||
+    catalogLine?.remark ||
     lineData?.description ||
     lineData?.line?.description ||
     catalogLine?.description ||
