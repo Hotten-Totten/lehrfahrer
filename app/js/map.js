@@ -21,6 +21,8 @@ const GPS_MARKER_TARGET_MIN_MS = 250;
 const GPS_MARKER_TARGET_MAX_MS = 2500;
 const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
 const GPS_MARKER_TARGET_MAX_SPEED_MPS = 55;
+const OFF_ROUTE_MARKER_TAU_MS = 360;
+const OFF_ROUTE_OVERVIEW_ZOOM = 16.2;
 let gpsAnimFrameId = null;
 let gpsAnimState = null;
 let navCameraBearing = 0;
@@ -33,6 +35,8 @@ let navTurnBoostUntil = 0;
 let navTurnRecoveryActive = false;
 let navCameraSyncTs = 0;
 let navCameraCenter = null;
+let navOffRouteCameraActive = false;
+let navCameraModeTransition = null;
 let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
@@ -85,6 +89,8 @@ function resetNavBearingState() {
   navTurnRecoveryActive = false;
   navCameraSyncTs = 0;
   navCameraCenter = null;
+  navOffRouteCameraActive = false;
+  navCameraModeTransition = null;
 }
 
 function setMap2DMode(enabled) {
@@ -286,7 +292,9 @@ function runGpsMarkerAnimation(ts) {
   const highSpeedFactor = speedKmh != null && speedKmh > 50
     ? 1 - Math.min(1, (speedKmh - 50) / 80) * 0.48
     : 1;
-  const posTau = Math.max(90, basePosTau * highSpeedFactor);
+  const posTau = state.confirmedOffRoute
+    ? OFF_ROUTE_MARKER_TAU_MS
+    : Math.max(90, basePosTau * highSpeedFactor);
   let turnTau = turnProfile === 'calm' ? 230 : (turnProfile === 'direct' ? 90 : 100);
   let maxTurnRate = turnProfile === 'calm' ? 120 : (turnProfile === 'direct' ? 340 : 300);
 
@@ -367,7 +375,8 @@ function setGpsMarkerTarget(
   const targetTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const lockedRoutePosition = routePositionAtProgress(routePoints, routeCumDists, routeProgressM);
 
-  if (confirmedOffRoute && lockedRoutePosition) {
+  if (confirmedOffRoute) {
+    const enteringOffRoute = !state.confirmedOffRoute;
     state.routePoints = routePoints;
     state.routeCumDists = routeCumDists;
     state.confirmedOffRoute = true;
@@ -387,13 +396,24 @@ function setGpsMarkerTarget(
     state.lastNormalTargetLat = null;
     state.lastNormalRouteProgressM = null;
     state.lastNormalTargetTs = null;
-    state.finalTargetRouteProgressM = Number.isFinite(state.finalTargetRouteProgressM)
-      ? Math.max(state.finalTargetRouteProgressM, routeProgressM)
-      : routeProgressM;
+    state.finalTargetRouteProgressM = Number.isFinite(routeProgressM)
+      ? (Number.isFinite(state.finalTargetRouteProgressM)
+        ? Math.max(state.finalTargetRouteProgressM, routeProgressM)
+        : routeProgressM)
+      : state.finalTargetRouteProgressM;
     state.hasHeading = headingDeg != null && Number.isFinite(headingDeg);
     state.targetHeading = state.hasHeading ? normalizeDeg(headingDeg + BUS_HEADING_OFFSET_DEG) : 0;
     state.targetHeadingStable = headingStable === true;
     state.currentSpeedMps = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps : null;
+    if (enteringOffRoute) {
+      // Route-Lock exakt beim bestaetigten Zustandswechsel loesen. Danach
+      // interpoliert die Animation ausschliesslich zwischen echten GPS-Fixes.
+      state.currentLon = lon;
+      state.currentLat = lat;
+      state.currentHeading = state.hasHeading ? state.targetHeading : state.currentHeading;
+      marker.setLngLat([lon, lat]);
+      applyGpsHeadingVisuals(state);
+    }
     if (gpsAnimFrameId == null) {
       state.lastTs = 0;
       gpsAnimFrameId = requestAnimationFrame(runGpsMarkerAnimation);
@@ -1644,6 +1664,23 @@ window.addEventListener('orientationchange', () => {
 // ── Nav-Modus: Karte folgt mit Richtung + Neigung (Fahrerperspektive) ────────
 function navCenterOn(lon, lat, headingDeg, speedMps = null, headingStable = false) {
   if (!map) return;
+  const offRouteActive = document.body.classList.contains('nav-off-route');
+  if (offRouteActive !== navOffRouteCameraActive) {
+    const padding = map.getPadding();
+    navOffRouteCameraActive = offRouteActive;
+    navCameraModeTransition = {
+      startTs: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
+      durationMs: offRouteActive ? 650 : 1100,
+      fromZoom: map.getZoom(),
+      fromPitch: map.getPitch(),
+      fromTop: padding.top || 0,
+      fromBottom: padding.bottom || 0
+    };
+    if (offRouteActive) {
+      // Die echte Position soll beim Freigeben sofort im Kartenzentrum liegen.
+      navCameraCenter = { lon, lat };
+    }
+  }
   const bearing = resolveNavBearing(lon, lat, headingDeg, speedMps, headingStable);
   const opts = _buildCameraOptions(lon, lat, bearing, speedMps);
   navCameraFollowOptions = opts;
@@ -1709,8 +1746,27 @@ function syncNavCameraToGpsMarkerPosition(lon, lat) {
     : 1;
   navCameraCenter.lon += (lon - navCameraCenter.lon) * centerFraction;
   navCameraCenter.lat += (lat - navCameraCenter.lat) * centerFraction;
+  let cameraOptions = navCameraFollowOptions;
+  if (navCameraModeTransition) {
+    const transition = navCameraModeTransition;
+    const progress = Math.min(1, Math.max(0, (nowTs - transition.startTs) / transition.durationMs));
+    const eased = progress * progress * (3 - 2 * progress);
+    const targetPadding = cameraOptions.padding || { top: 0, bottom: 0, left: 0, right: 0 };
+    cameraOptions = {
+      ...cameraOptions,
+      zoom: transition.fromZoom + (cameraOptions.zoom - transition.fromZoom) * eased,
+      pitch: transition.fromPitch + (cameraOptions.pitch - transition.fromPitch) * eased,
+      padding: {
+        top: transition.fromTop + ((targetPadding.top || 0) - transition.fromTop) * eased,
+        bottom: transition.fromBottom + ((targetPadding.bottom || 0) - transition.fromBottom) * eased,
+        left: targetPadding.left || 0,
+        right: targetPadding.right || 0
+      }
+    };
+    if (progress >= 1) navCameraModeTransition = null;
+  }
   map.jumpTo({
-    ...navCameraFollowOptions,
+    ...cameraOptions,
     center: [navCameraCenter.lon, navCameraCenter.lat],
     bearing: normalizeDeg(currentBearing + bearingStep)
   });
@@ -1731,6 +1787,21 @@ function _buildCameraOptions(lon, lat, headingDeg, speedMps = null) {
   const perspective = (typeof getMapPerspective === 'function') ? getMapPerspective() : 'driver';
   const profile = (typeof getCameraProfile === 'function') ? getCameraProfile() : 'balanced';
   const mode = document.body.classList.contains('nav-mode') ? 'driver' : perspective;
+  if (mode === 'driver' && document.body.classList.contains('nav-off-route')) {
+    const vh = Math.max(320, window.innerHeight || 0);
+    return {
+      center: [lon, lat],
+      zoom: isLandscapeTouchDevice() ? OFF_ROUTE_OVERVIEW_ZOOM - 0.35 : OFF_ROUTE_OVERVIEW_ZOOM,
+      pitch: 0,
+      bearing: headingDeg != null ? headingDeg : 0,
+      padding: {
+        top: Math.round(Math.min(180, Math.max(95, vh * 0.22))),
+        bottom: Math.round(Math.min(130, Math.max(65, vh * 0.13))),
+        left: 0,
+        right: 0
+      }
+    };
+  }
   switch (mode) {
     case 'follow':
       return {

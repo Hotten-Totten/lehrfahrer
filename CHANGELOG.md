@@ -1,5 +1,13 @@
 # Changelog
 
+## V2.1.036 - 2026-09-17
+- OFF-Route-Kartenansicht mit stabiler Übersicht, weichem Übergang und sofortiger Freigabe auf die echte GPS-Position verbessert
+- OFF-Route-Marker über reine GPS-Fix-Interpolation ohne Route-Snapping oder Prediction geglättet
+- AudioContext beim Navigationsstart vorbereitet und genau ein Warnsignal je bestätigtem OFF-Route-Ereignis sichergestellt
+- realen Turbokreisel der Linie 999 über ein enges dreiphasiges Gegenbogenprofil als normalen Kreisverkehr erkannt
+- Regressionstests für Realgeometrie, Folgemanöver, normale Kreisverkehre, S-Kurven, Einzelkurven und Abzweige ergänzt
+- normale ON-Route-Navigation und bestehende Kreisverkehrs-/HUD-Routine unverändert beibehalten
+
 ## V2.1.035 - 2026-09-14
 - Leitstellennummer im bestehenden Off-Route-Bereich als reine Information „Leitstelle: <Telefonnummer>“ dargestellt
 - bisherigen Anrufbutton einschließlich `tel:`-Aufruf und Wähldialog entfernt; Hinweis bei fehlender Nummer beibehalten

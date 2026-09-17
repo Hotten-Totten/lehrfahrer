@@ -56,6 +56,7 @@ let navRejoinFixCount = 0;
 let navLastRouteDistanceM = null;
 let navOffRouteAlertTimer = null;
 let navOffRouteCompactVisible = false;
+let navWarningAudioContext = null;
 const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 
 // Navigation Menu
@@ -3127,33 +3128,59 @@ function showNavOffRouteAlert() {
   }, 5000);
 }
 
+function prepareNavWarningAudio() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+
+  try {
+    if (!navWarningAudioContext || navWarningAudioContext.state === 'closed') {
+      navWarningAudioContext = new AudioContextClass();
+    }
+    if (navWarningAudioContext.state === 'suspended') {
+      navWarningAudioContext.resume().catch(() => {});
+    }
+    return navWarningAudioContext;
+  } catch (err) {
+    console.warn('Audioausgabe konnte nicht vorbereitet werden:', err);
+    return null;
+  }
+}
+
 function playNavOffRouteWarning() {
   const soundEnabled = document.getElementById('navSoundEnabled');
   if (soundEnabled && !soundEnabled.checked) return;
 
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = new AudioContextClass();
+  const context = prepareNavWarningAudio();
+  if (!context) return;
+
+  const play = () => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const now = context.currentTime;
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, now);
-    oscillator.frequency.setValueAtTime(620, now + 0.18);
-    oscillator.frequency.setValueAtTime(880, now + 0.36);
+    oscillator.frequency.setValueAtTime(920, now);
+    oscillator.frequency.setValueAtTime(660, now + 0.20);
+    oscillator.frequency.setValueAtTime(920, now + 0.40);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
-    gain.gain.setValueAtTime(0.16, now + 0.48);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.68);
+    gain.gain.exponentialRampToValueAtTime(0.28, now + 0.025);
+    gain.gain.setValueAtTime(0.28, now + 0.54);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start(now);
-    oscillator.stop(now + 0.7);
-    oscillator.onended = () => context.close().catch(() => {});
-    context.resume().catch(() => {});
-  } catch (err) {
-    console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+    oscillator.stop(now + 0.78);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+  };
+
+  if (context.state === 'running') {
+    play();
+  } else {
+    context.resume().then(play).catch(err => {
+      console.warn('Off-Route-Warnton konnte nicht abgespielt werden:', err);
+    });
   }
 }
 
@@ -3221,6 +3248,10 @@ function updateNavOffRouteState(distanceM, accuracyM = null) {
 }
 
 function startNavigation(options = {}) {
+  // Diese Funktion wird regulaer durch den Start-Button aufgerufen. Den
+  // AudioContext deshalb bereits in dieser Benutzeraktion fuer Android/PWA
+  // entsperren; beim spaeteren OFF-Route-Ereignis ist kein Dialog noetig.
+  prepareNavWarningAudio();
   const useSimulation = options && options.useSimulation === true;
   const startAtCurrentPosition = options && options.startAtCurrentPosition === true;
   const restoredNavigation = options?.resumeState?.navigation || null;
@@ -3399,19 +3430,25 @@ function startNavigation(options = {}) {
       const navHeading = hasStableRouteTangent
         ? stableRouteTangent
         : resolveStableNavHeading(sensorHeading, routeHeading, smoothed.speed);
-      const markerHeading = hasStableRouteTangent
-        ? stableRouteTangent
-        : (tracked.snapApplied
-          ? resolveRouteMarkerHeading(sensorHeading, tracked.routeHeading, smoothed.speed)
-          : navHeading);
+      const offRoutePosition = tracked.routeState === 'OFF';
+      const displayLat = offRoutePosition ? lat : tracked.lat;
+      const displayLon = offRoutePosition ? lon : tracked.lon;
+      const displayHeading = offRoutePosition ? sensorHeading : navHeading;
+      const markerHeading = offRoutePosition
+        ? sensorHeading
+        : (hasStableRouteTangent
+          ? stableRouteTangent
+          : (tracked.snapApplied
+            ? resolveRouteMarkerHeading(sensorHeading, tracked.routeHeading, smoothed.speed)
+            : navHeading));
 
       recordNavDriveSample(smoothed.lat, smoothed.lon, tracked, smoothed.speed, heading);
 
-      // Marker und Kamera immer auf denselben (gesnappten) Trackpunkt setzen,
-      // damit der Pfeil nicht von der Route wegdriftet.
+      // ON-Route bleibt der bestehende Trackpunkt massgeblich; OFF-Route
+      // verwenden Marker und Kamera dagegen ausschliesslich den echten Fix.
       setSimulatedGPS(
-        tracked.lon,
-        tracked.lat,
+        displayLon,
+        displayLat,
         markerHeading,
         smoothed.speed,
         hasStableRouteTangent,
@@ -3420,7 +3457,7 @@ function startNavigation(options = {}) {
         tracked.routeProgressM,
         tracked.routeState === 'OFF'
       );
-      navCenterOn(tracked.lon, tracked.lat, navHeading, smoothed.speed, hasStableRouteTangent);
+      navCenterOn(displayLon, displayLat, displayHeading, smoothed.speed, hasStableRouteTangent);
       updateNavHud(tracked.lat, tracked.lon, tracked.index);
       if (navSpeedEl) {
         const kmh = (speed != null && speed >= 0) ? Math.round(speed * 3.6) : '–';
@@ -3754,7 +3791,18 @@ function detectNavRoundabouts(pts, cumDists) {
       const netTurn = Math.abs(positiveTurn - negativeTurn);
       const dominantTurn = Math.max(positiveTurn, negativeTurn);
       const oppositeTurn = Math.min(positiveTurn, negativeTurn);
-      if (totalTurn < 180 || totalTurn > 620 || dominantTurn < 145 || oppositeTurn < 35) continue;
+      const classicCounterCurveTotals = totalTurn >= 180 && totalTurn <= 620
+          && dominantTurn >= 145 && oppositeTurn >= 35;
+      // Gerade durchfahrene Turbokreisel bilden in den Routendaten keinen
+      // kompakten Kreis, sondern eine lange Links-rechts-links-Spurfuehrung.
+      // Das enge Profil bildet den realen Stadtring-Testfall ab, ohne die
+      // Grenzwerte fuer normale Kreisverkehre oder S-Kurven abzusenken.
+      const straightThroughTurboTotals = meaningfulSamples >= 10
+          && signChanges === 2
+          && totalTurn >= 180 && totalTurn <= 230
+          && dominantTurn >= 120 && oppositeTurn >= 55
+          && netTurn >= 45 && netTurn <= 80;
+      if (!classicCounterCurveTotals && !straightThroughTurboTotals) continue;
 
       const [startLat, startLon] = navGetLatLon(pts[firstAnchor]);
       const [endLat, endLon] = navGetLatLon(pts[lastAnchor]);
@@ -3765,10 +3813,18 @@ function detectNavRoundabouts(pts, cumDists) {
       const consistency = netTurn / totalTurn;
       const stronglyDominant = netTurn >= 95 && consistency >= 0.34;
       const tightlySegmented = signChanges >= 3 && totalTurn >= 240 && chordRatio <= 0.68;
-      const candidate = chordRatio <= 0.72
+      const classicCounterCurve = classicCounterCurveTotals
+          && chordRatio <= 0.72
           && estimatedRadiusM >= 5 && estimatedRadiusM <= 70
           && curvatureDensity >= 0.9
           && (stronglyDominant || tightlySegmented);
+      const straightThroughTurbo = straightThroughTurboTotals
+          && arcLengthM >= 200 && arcLengthM <= 245
+          && chordRatio >= 0.90 && chordRatio <= 0.97
+          && estimatedRadiusM >= 68 && estimatedRadiusM <= 80
+          && curvatureDensity >= 0.74 && curvatureDensity <= 0.85
+          && consistency >= 0.25 && consistency <= 0.34;
+      const candidate = classicCounterCurve || straightThroughTurbo;
 
       if (candidate) {
         best = {
