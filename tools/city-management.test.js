@@ -15,6 +15,46 @@ test('Ortsverwaltung ist authentifiziert und bietet kompakte UI-Aktionen', () =>
   assert.match(editorHtml, /id="deleteCityBtn"[^>]*>Löschen<\/button>/);
 });
 
+test('Rename- und Delete-Buttons sind an die echten Aktionen gebunden', () => {
+  assert.ok(editorSource.includes('renameCityBtn.addEventListener("click", renameSelectedCity)'));
+  assert.ok(editorSource.includes('deleteCityBtn.addEventListener("click", deleteSelectedCity)'));
+});
+
+test('Rename-Request benennt alten und neuen Ort eindeutig', () => {
+  assert.ok(editorSource.includes('{ action: "rename", oldName: city, newName }'));
+  assert.ok(apiSource.includes("$input['oldName'] ?? ($input['city'] ?? '')"));
+  assert.ok(apiSource.includes("$input['newName'] ?? ($input['newCity'] ?? '')"));
+});
+
+test('API akzeptiert ausschließlich POST und liefert strukturierte Laufzeitfehler', () => {
+  assert.ok(apiSource.includes("if ($method !== 'POST')"));
+  assert.ok(apiSource.includes('set_exception_handler(function (Throwable $error)'));
+  assert.ok(apiSource.includes("'ok' => false"));
+});
+
+test('Datenverzeichnis wird vor dem gemeinsamen Rename-Delete-Lock angelegt', () => {
+  const mkdirPos = apiSource.indexOf("if (!is_dir($dataRoot) && !mkdir($dataRoot, 0775, true))");
+  const lockPos = apiSource.indexOf("fopen($dataRoot . DIRECTORY_SEPARATOR . '.city-management.lock'");
+  assert.ok(mkdirPos >= 0 && lockPos > mkdirPos);
+});
+
+test('erfolgreicher Rename lädt und validiert die aktualisierte Ortsliste', () => {
+  assert.ok(editorSource.includes('loadCitiesFromServer(result.city, { throwOnError: true })'));
+  assert.ok(editorSource.includes('citySelect.value !== result.city || availableCities.includes(city)'));
+});
+
+test('erfolgreiches Delete lädt den Folgeort und prüft das Entfernen', () => {
+  assert.ok(editorSource.includes('loadCitiesFromServer(result.nextCity || "", { throwOnError: true })'));
+  assert.ok(editorSource.includes('Der gelöschte Ort ist weiterhin in der Ortsliste vorhanden.'));
+});
+
+test('API-Fehler zeigen HTTP-Status, Servertext und sichtbaren Dialog', () => {
+  assert.ok(editorSource.includes('throw new Error(`HTTP ${response.status}:'));
+  assert.ok(editorSource.includes('showCityManagementError("Ort umbenennen", error)'));
+  assert.ok(editorSource.includes('showCityManagementError("Ort löschen", error)'));
+  assert.ok(editorSource.includes('showInfoPopup({'));
+});
+
 test('leerer und identischer neuer Ortsname werden verhindert', () => {
   assert.ok(apiSource.includes("if ($newCity === '')"));
   assert.ok(apiSource.includes('if ($newCity === $city)'));

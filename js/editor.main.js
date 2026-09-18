@@ -523,7 +523,7 @@ async function testApiWriteAuth() {
   }
 }
 
-async function loadCitiesFromServer(selectCity = "") {
+async function loadCitiesFromServer(selectCity = "", { throwOnError = false } = {}) {
   try {
     const response = await fetch(`${API_BASE}/list_cities.php?includeEmpty=1`, {
       cache: "no-store"
@@ -568,6 +568,7 @@ async function loadCitiesFromServer(selectCity = "") {
       citySelect.value = selectCity;
     }
   } catch (error) {
+    if (throwOnError) throw error;
     console.warn("API nicht verfügbar, verwende Fallback:", error.message);
     
     // Fallback für lokalen Betrieb: Standard-Stadt verwenden
@@ -631,9 +632,30 @@ async function requestCityManagement(payload) {
     headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
   });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw new Error(result.error || "Ortsverwaltung fehlgeschlagen.");
+  const responseText = await response.text();
+  let result = null;
+  try {
+    result = responseText ? JSON.parse(responseText) : null;
+  } catch (_error) {
+    // Der HTTP-Status und ein kurzer Servertext bleiben auch bei HTML/PHP-Fehlern sichtbar.
+  }
+  if (!response.ok || !result || !result.ok) {
+    const serverMessage = result && result.error
+      ? String(result.error)
+      : String(responseText || "Leere Serverantwort.").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+    throw new Error(`HTTP ${response.status}: ${serverMessage || "Ortsverwaltung fehlgeschlagen."}`);
+  }
   return result;
+}
+
+function showCityManagementError(actionLabel, error) {
+  const message = error?.message || `${actionLabel} ist fehlgeschlagen.`;
+  setStatus(message, "error");
+  showInfoPopup({
+    title: `${actionLabel} fehlgeschlagen`,
+    message,
+    level: "error"
+  });
 }
 
 async function renameSelectedCity() {
@@ -658,11 +680,15 @@ async function renameSelectedCity() {
   try {
     renameCityBtn.disabled = true;
     deleteCityBtn.disabled = true;
-    const result = await requestCityManagement({ action: "rename", city, newCity: newName });
-    await loadCitiesFromServer(result.city);
+    const result = await requestCityManagement({ action: "rename", oldName: city, newName });
+    await loadCitiesFromServer(result.city, { throwOnError: true });
+    const availableCities = Array.from(citySelect.options, option => option.value);
+    if (citySelect.value !== result.city || availableCities.includes(city)) {
+      throw new Error("HTTP 200: Die aktualisierte Ortsliste konnte nicht eindeutig übernommen werden.");
+    }
     setStatus(`Ort umbenannt: ${prettifyCityName(city)} → ${prettifyCityName(result.city)}`, "success");
   } catch (error) {
-    setStatus(error.message || "Ort konnte nicht umbenannt werden.", "error");
+    showCityManagementError("Ort umbenennen", error);
   } finally {
     updateCityManagementButtons();
   }
@@ -718,10 +744,13 @@ async function deleteSelectedCity() {
     if (!confirmed) return;
     const result = await requestCityManagement({ action: "delete", city, confirmed: true });
     clearEditorAfterCityDeletion();
-    await loadCitiesFromServer(result.nextCity || "");
+    await loadCitiesFromServer(result.nextCity || "", { throwOnError: true });
+    if (Array.from(citySelect.options, option => option.value).includes(city)) {
+      throw new Error("HTTP 200: Der gelöschte Ort ist weiterhin in der Ortsliste vorhanden.");
+    }
     setStatus(result.warning || `Ort gelöscht: ${prettifyCityName(city)}`, result.warning ? "warn" : "success");
   } catch (error) {
-    setStatus(error.message || "Ort konnte nicht gelöscht werden.", "error");
+    showCityManagementError("Ort löschen", error);
   } finally {
     updateCityManagementButtons();
   }

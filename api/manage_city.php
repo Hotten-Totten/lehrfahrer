@@ -9,6 +9,11 @@ function cityManageRespond(int $status, array $payload): void {
     exit;
 }
 
+set_exception_handler(function (Throwable $error): void {
+    error_log('manage_city.php: ' . $error->getMessage());
+    cityManageRespond(500, ['ok' => false, 'error' => 'Interner Serverfehler der Ortsverwaltung.']);
+});
+
 function cityManageSlug($value): string {
     $name = trim((string)$value);
     $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
@@ -161,10 +166,16 @@ function cityManageAvailableCities(string $root): array {
     return array_values($cities);
 }
 
+$method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+if ($method !== 'POST') {
+    header('Allow: POST');
+    cityManageRespond(405, ['ok' => false, 'error' => 'Methode nicht erlaubt.']);
+}
+
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) cityManageRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);
 $action = strtolower(trim((string)($input['action'] ?? '')));
-$city = cityManageSlug($input['city'] ?? '');
+$city = cityManageSlug($input['oldName'] ?? ($input['city'] ?? ''));
 if ($city === '') cityManageRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
 
 $projectRoot = dirname(__DIR__);
@@ -174,6 +185,9 @@ $settingsFile = $dataRoot . DIRECTORY_SEPARATOR . 'city_settings.json';
 $sourcePath = cityManagePath($citiesRoot, $city);
 if ($sourcePath === null) cityManageRespond(404, ['ok' => false, 'error' => 'Ort wurde nicht gefunden.']);
 
+if (!is_dir($dataRoot) && !mkdir($dataRoot, 0775, true)) {
+    cityManageRespond(500, ['ok' => false, 'error' => 'Datenverzeichnis für die Ortsverwaltung ist nicht verfügbar.']);
+}
 $lock = fopen($dataRoot . DIRECTORY_SEPARATOR . '.city-management.lock', 'c');
 if ($lock === false || !flock($lock, LOCK_EX)) cityManageRespond(503, ['ok' => false, 'error' => 'Ortsverwaltung ist derzeit gesperrt.']);
 $settings = cityManageSettingsLoad($settingsFile);
@@ -184,7 +198,7 @@ if ($action === 'analyze') {
 }
 
 if ($action === 'rename') {
-    $newCity = cityManageSlug($input['newCity'] ?? '');
+    $newCity = cityManageSlug($input['newName'] ?? ($input['newCity'] ?? ''));
     if ($newCity === '') cityManageRespond(400, ['ok' => false, 'error' => 'Der neue Ortsname darf nicht leer sein.']);
     if ($newCity === $city) cityManageRespond(409, ['ok' => false, 'error' => 'Der neue Ortsname ist mit dem bisherigen Namen identisch.']);
     if (cityManagePath($citiesRoot, $newCity) !== null) cityManageRespond(409, ['ok' => false, 'error' => 'Ein Ort mit diesem Namen existiert bereits.']);

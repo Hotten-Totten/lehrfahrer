@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.040 - 2026-09-18
+- API- und HTTP-Fehler der Ortsverwaltung mit Status und Servermeldung sichtbar gemacht
+- Ergebnisse von Umbenennen und Löschen nach dem Neuladen der Ortsliste eindeutig verifiziert
+- Rename-Felder `oldName` und `newName` mit kompatiblen Aliasen sowie strukturierte API-Fehler ergänzt
+- Analyse- und Sperrpfad für die Ortsverwaltung robuster vorbereitet; API-Token und Schreibrechte bleiben Voraussetzung
+
 ## V2.1.039 - 2026-09-18
 - sichere Ortsverwaltung im Editor mit Umbenennen und zweistufig bestätigtem Löschen ergänzt
 - leere oder identische Namen und Dubletten verhindert sowie betroffene Linien, Varianten, Betriebsfahrten und Leitstellendaten vor dem Löschen analysiert
