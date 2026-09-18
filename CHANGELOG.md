@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.039 - 2026-09-18
+- sichere Ortsverwaltung im Editor mit Umbenennen und zweistufig bestätigtem Löschen ergänzt
+- leere oder identische Namen und Dubletten verhindert sowie betroffene Linien, Varianten, Betriebsfahrten und Leitstellendaten vor dem Löschen analysiert
+- Ortsordner, JSON-Ortsschlüssel, Pfade, Zuordnungen und Leitstelleneinstellungen mit Rollback-Schutz migriert
+- App- und IndexedDB-Offline-Katalog für die vollständige Bereinigung beim nächsten erfolgreichen Sync vorbereitet
+
 ## V2.1.038 - 2026-09-17
 - Betriebsfahrten in der Fahrer-App getrennt von normalen Linien als Einsetz-, Aussetz- und Umsetzfahrten sichtbar und direkt ladbar gemacht
 - `routeType` und Betriebsmetadaten durch Speicherung, Linienkatalog sowie Online- und IndexedDB-Offlinenutzung vollständig erhalten

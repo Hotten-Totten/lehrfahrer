@@ -6,6 +6,8 @@
 
 // Kopfbereich / Linien-Metadaten
 const citySelect = document.getElementById("citySelect");
+const renameCityBtn = document.getElementById("renameCityBtn");
+const deleteCityBtn = document.getElementById("deleteCityBtn");
 const cityDispatchPhoneInput = document.getElementById("cityDispatchPhone");
 const saveCityDispatchPhoneBtn = document.getElementById("saveCityDispatchPhoneBtn");
 const cityDispatchPhoneStatus = document.getElementById("cityDispatchPhoneStatus");

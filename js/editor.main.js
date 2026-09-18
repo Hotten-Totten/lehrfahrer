@@ -550,7 +550,11 @@ async function loadCitiesFromServer(selectCity = "") {
     const cities = Array.isArray(result.cities) ? result.cities : [];
 
     if (!cities.length) {
-      throw new Error("Keine Orte gefunden");
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Keine Orte vorhanden";
+      citySelect.appendChild(option);
+      citySelect.value = "";
     }
 
     cities.forEach(city => {
@@ -579,6 +583,148 @@ async function loadCitiesFromServer(selectCity = "") {
   }
 
   await loadCityDispatchPhoneSetting();
+  updateCityManagementButtons();
+}
+
+function updateCityManagementButtons() {
+  const hasCity = !!String(citySelect?.value || "").trim();
+  if (renameCityBtn) renameCityBtn.disabled = !hasCity;
+  if (deleteCityBtn) deleteCityBtn.disabled = !hasCity;
+}
+
+function cityOperationHasUnsavedEditorData() {
+  const operational = getOperationalRouteFields();
+  const validity = getLineValidity();
+  return !!(
+    state.stops.length ||
+    state.routePoints.length ||
+    String(lineNameInput?.value || "").trim() ||
+    String(routeNameInput?.value || "").trim() ||
+    String(directionNameInput?.value || "").trim() ||
+    (getVariantName("", "") && getVariantName("", "") !== "Standard") ||
+    getVariantCategory() !== "Standard" ||
+    getLineDescription() ||
+    validity.validFrom ||
+    validity.validUntil ||
+    operational.routeType !== "line" ||
+    operational.operationalName ||
+    operational.fromLabel ||
+    operational.toLabel ||
+    operational.relatedRouteIds.length ||
+    operational.remark
+  );
+}
+
+async function confirmCityOperationWithEditorData(actionLabel) {
+  if (!cityOperationHasUnsavedEditorData()) return true;
+  return showConfirmDialog({
+    title: "Editorinhalt beachten",
+    message: `Im Editor befinden sich geladene oder möglicherweise ungespeicherte Daten.<br><br>${actionLabel} trotzdem fortsetzen?`,
+    okText: "Trotzdem fortsetzen",
+    cancelText: "Abbrechen"
+  });
+}
+
+async function requestCityManagement(payload) {
+  const response = await fetch(`${API_BASE}/manage_city.php`, {
+    method: "POST",
+    headers: withApiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || "Ortsverwaltung fehlgeschlagen.");
+  return result;
+}
+
+async function renameSelectedCity() {
+  const city = String(citySelect?.value || "").trim();
+  if (!city) {
+    setStatus("Bitte zuerst einen Ort auswählen.", "warn");
+    return;
+  }
+  if (!await confirmCityOperationWithEditorData("Ort umbenennen")) return;
+  const enteredName = await askTextInput({
+    title: "Ort umbenennen",
+    message: `Neuen Namen für ${prettifyCityName(city)} eingeben:`,
+    defaultValue: prettifyCityName(city),
+    placeholder: "Neuer Ortsname"
+  });
+  if (enteredName === null) return;
+  const newName = String(enteredName || "").trim();
+  if (!newName) {
+    setStatus("Der neue Ortsname darf nicht leer sein.", "warn");
+    return;
+  }
+  try {
+    renameCityBtn.disabled = true;
+    deleteCityBtn.disabled = true;
+    const result = await requestCityManagement({ action: "rename", city, newCity: newName });
+    await loadCitiesFromServer(result.city);
+    setStatus(`Ort umbenannt: ${prettifyCityName(city)} → ${prettifyCityName(result.city)}`, "success");
+  } catch (error) {
+    setStatus(error.message || "Ort konnte nicht umbenannt werden.", "error");
+  } finally {
+    updateCityManagementButtons();
+  }
+}
+
+function buildCityDeleteMessage(city, analysis) {
+  const hasData = Number(analysis.totalRouteCount || 0) > 0 || analysis.hasDispatchPhone || Number(analysis.additionalSettingCount || 0) > 0;
+  if (!hasData) return `Ort „${escapeInfoPopupHtml(prettifyCityName(city))}“ wirklich löschen?<br><br>Der Ort enthält keine gespeicherten Routen.`;
+  const lines = [
+    `<strong>Ort „${escapeInfoPopupHtml(prettifyCityName(city))}“ wirklich löschen?</strong>`,
+    "<br>Enthalten:",
+    `- ${Number(analysis.normalLineCount || 0)} normale Linien`,
+    `- ${Number(analysis.normalRouteCount || 0)} Routen/Varianten`,
+    `- ${Number(analysis.operationalRouteCount || 0)} Betriebsfahrten`,
+    analysis.hasDispatchPhone ? "- Leitstellennummer vorhanden" : "- keine Leitstellennummer"
+  ];
+  if (Number(analysis.additionalSettingCount || 0) > 0) lines.push(`- ${Number(analysis.additionalSettingCount)} weitere Einstellungen`);
+  lines.push("<br><strong>Diese Daten werden ebenfalls gelöscht.</strong>");
+  return lines.join("<br>");
+}
+
+function clearEditorAfterCityDeletion() {
+  clearEditorData();
+  lineNameInput.value = "";
+  routeNameInput.value = "";
+  directionNameInput.value = "";
+  setVariantName("Standard");
+  setVariantCategory("Standard");
+  setLineDescription("");
+  setOperationalRouteFields({ routeType: "line" });
+  setLineValidity("", "");
+  updateStats();
+  renderStopOrderList();
+}
+
+async function deleteSelectedCity() {
+  const city = String(citySelect?.value || "").trim();
+  if (!city) {
+    setStatus("Bitte zuerst einen Ort auswählen.", "warn");
+    return;
+  }
+  if (!await confirmCityOperationWithEditorData("Ort löschen")) return;
+  try {
+    renameCityBtn.disabled = true;
+    deleteCityBtn.disabled = true;
+    const inspected = await requestCityManagement({ action: "analyze", city });
+    const confirmed = await showConfirmDialog({
+      title: "Ort löschen",
+      message: buildCityDeleteMessage(city, inspected.analysis || {}),
+      okText: "Ort und Daten löschen",
+      cancelText: "Abbrechen"
+    });
+    if (!confirmed) return;
+    const result = await requestCityManagement({ action: "delete", city, confirmed: true });
+    clearEditorAfterCityDeletion();
+    await loadCitiesFromServer(result.nextCity || "");
+    setStatus(result.warning || `Ort gelöscht: ${prettifyCityName(city)}`, result.warning ? "warn" : "success");
+  } catch (error) {
+    setStatus(error.message || "Ort konnte nicht gelöscht werden.", "error");
+  } finally {
+    updateCityManagementButtons();
+  }
 }
 
 async function loadCityDispatchPhoneSetting() {
@@ -919,8 +1065,13 @@ renderStopOrderList();
 updateHistoryButtons();
 loadCitiesFromServer();
 
-if (citySelect) citySelect.addEventListener("change", loadCityDispatchPhoneSetting);
+if (citySelect) citySelect.addEventListener("change", () => {
+  loadCityDispatchPhoneSetting();
+  updateCityManagementButtons();
+});
 if (saveCityDispatchPhoneBtn) saveCityDispatchPhoneBtn.addEventListener("click", saveCityDispatchPhoneSetting);
+if (renameCityBtn) renameCityBtn.addEventListener("click", renameSelectedCity);
+if (deleteCityBtn) deleteCityBtn.addEventListener("click", deleteSelectedCity);
 
 startAutosaveLoop();
 setStatus("Editor bereit.");

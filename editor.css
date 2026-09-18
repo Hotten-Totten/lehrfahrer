@@ -373,6 +373,46 @@ button.detour-phase-build {
   min-width: 280px;
 }
 
+.top-group.city-management-group {
+  flex: 1 1 420px;
+  min-width: 330px;
+}
+
+.city-management-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.city-management-controls select {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.city-management-btn {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.city-management-btn:hover {
+  background: #eef2f7;
+}
+
+.city-management-btn-danger {
+  color: #991b1b;
+}
+
+.city-management-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .city-dispatch-phone-controls {
   display: flex;
   gap: 6px;
