@@ -1,5 +1,12 @@
 # Changelog
 
+## V2.1.041 - 2026-09-19
+- OPFS-Zugriff und PMTiles-Manifest mit klaren Zuständen für vorhandene, fehlende, blockierte oder veraltete Offline-Karten abgesichert
+- Fahrer-App startet ohne lesbare Offline-Karte kontrolliert ohne Online-Tile-Schleife; der Online-Fallback bleibt verfügbar
+- lokale Glyphs im PMTiles-Modus verwendet und die unnötige Font-Awesome-Laufzeitabhängigkeit entfernt
+- MapLibre und PMTiles fest versioniert, Runtime-Ressourcen vorgecached und App-Shell-Aktualisierung ohne Löschung bestehender Tiles oder OPFS-Daten erneuert
+- ungültigen `user-select`-Wert aus MapLibres inaktivem Box-Zoom-Reset verhindert; Navigations- und Routinglogik unverändert belassen
+
 ## V2.1.040 - 2026-09-18
 - API- und HTTP-Fehler der Ortsverwaltung mit Status und Servermeldung sichtbar gemacht
 - Ergebnisse von Umbenennen und Löschen nach dem Neuladen der Ortsliste eindeutig verifiziert

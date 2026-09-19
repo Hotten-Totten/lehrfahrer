@@ -1039,6 +1039,10 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 0 8px rgba(74, 158, 255, 0.35));
+  font-family: system-ui, sans-serif;
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 #navArrow svg {

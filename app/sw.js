@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21040';
+const CACHE_APP = 'lehrfahrer-app-v21041';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
@@ -14,13 +14,14 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.040',
-  './js/app.js?v=V2.1.040',
-  './js/map.js?v=V2.1.040',
-  './js/debug-helper.js?v=V2.1.040',
-  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css',
-  'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js',
-  'https://unpkg.com/pmtiles@3/dist/pmtiles.js',
+  './css/app.css?v=V2.1.041',
+  './js/app.js?v=V2.1.041',
+  './js/map.js?v=V2.1.041',
+  './js/debug-helper.js?v=V2.1.041',
+  './js/local-bus-router.js',
+  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
+  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js',
+  'https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js',
   './glyphs/Noto%20Sans%20Bold/0-255.pbf',
   './glyphs/Noto%20Sans%20Bold/256-511.pbf',
   './glyphs/Noto%20Sans%20Bold/8192-8447.pbf',
@@ -30,7 +31,7 @@ const APP_SHELL = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_APP)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => cache.addAll(APP_SHELL.map(url => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

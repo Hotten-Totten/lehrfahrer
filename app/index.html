@@ -12,12 +12,11 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../assets/icons/icon_final3_blue_64.png">
 
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <script defer src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-  <script defer src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.040">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.041">
 </head>
 <body>
 
@@ -25,7 +24,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.040</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.041</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -117,7 +116,7 @@
       
       <!-- Center: Large Arrow + Instruction -->
       <div id="navArrowSection">
-        <i id="navArrow" class="fa-solid fa-arrow-up"></i>
+        <span id="navArrow" aria-hidden="true">↑</span>
         <div id="navInstruction">
           <div id="navLabel">Starte Navigation</div>
           <div id="navDist">–</div>
@@ -417,9 +416,9 @@
     </div>
   </div>
 
-  <script src="js/map.js?v=V2.1.040"></script>
-  <script src="js/app.js?v=V2.1.040"></script>
-  <script src="js/debug-helper.js?v=V2.1.040"></script>
+  <script src="js/map.js?v=V2.1.041"></script>
+  <script src="js/app.js?v=V2.1.041"></script>
+  <script src="js/debug-helper.js?v=V2.1.041"></script>
 </body>
 </html>
 

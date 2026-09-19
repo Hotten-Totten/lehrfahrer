@@ -13,6 +13,7 @@ let pmtilesProto = null;
 let activeMapSource = { kind: 'none', label: '' };
 let mapSourceErrorHandled = false;
 let offlineMapInstalled = false;
+let offlineMapStorageState = { status: 'unknown', detail: '' };
 const BUS_HEADING_OFFSET_DEG = 0;
 const GPS_MARKER_PREDICT_MAX_MS = 1200;
 const GPS_MARKER_PREDICT_MAX_M = 12;
@@ -1018,12 +1019,27 @@ function formatOfflineMapSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function readOfflineMapManifest() {
+function readOfflineMapManifestRecord() {
   try {
-    const value = JSON.parse(localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY) || 'null');
-    return value && typeof value.storageName === 'string' ? value : null;
+    const raw = localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY);
+    if (raw == null) return { manifest: null, invalid: false };
+    const value = JSON.parse(raw);
+    const valid = value && typeof value.storageName === 'string' && value.storageName.trim() !== '';
+    return { manifest: valid ? value : null, invalid: !valid };
   } catch {
-    return null;
+    return { manifest: null, invalid: true };
+  }
+}
+
+function readOfflineMapManifest() {
+  return readOfflineMapManifestRecord().manifest;
+}
+
+function clearOfflineMapManifest() {
+  try {
+    localStorage.removeItem(OFFLINE_MAP_MANIFEST_KEY);
+  } catch {
+    // Eingeschränkter Storage darf den App-Start nicht verhindern.
   }
 }
 
@@ -1039,12 +1055,20 @@ function setOfflineMapInstallState(state, metadata = null, detail = '') {
     else if (state === 'ready') status.textContent = `Offline-Karte bereit${fileDetails ? ` · ${fileDetails}` : ''}`;
     else if (state === 'error') status.textContent = `Fehler beim Kartenimport${detail ? ` · ${detail}` : ''}`;
     else if (state === 'remove-error') status.textContent = detail || 'Offline-Karte konnte nicht entfernt werden';
+    else if (state === 'unavailable') status.textContent = detail || 'Offline-Speicher wird von diesem Browser nicht unterstützt';
+    else if (state === 'denied') status.textContent = detail || 'Zugriff auf den Offline-Speicher wurde blockiert';
+    else if (state === 'stale') status.textContent = detail || 'Gespeicherte Offline-Karte ist nicht mehr vorhanden';
     else status.textContent = 'Keine Offline-Karte installiert';
   }
   if (state === 'ready') offlineMapInstalled = true;
-  else if (state === 'none') offlineMapInstalled = false;
+  else if (['none', 'unavailable', 'denied', 'stale'].includes(state)) offlineMapInstalled = false;
   if (installButton) installButton.disabled = state === 'installing';
   if (removeButton) removeButton.disabled = state === 'installing' || !offlineMapInstalled;
+}
+
+function offlineMapReadResult(status, source = null, detail = '') {
+  offlineMapStorageState = { status, detail };
+  return { status, source, detail };
 }
 
 async function createLocalPMTilesSource(file, metadata = null) {
@@ -1076,31 +1100,52 @@ async function createLocalPMTilesSource(file, metadata = null) {
 
 async function readStoredPMTilesSource() {
   if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
-    setOfflineMapInstallState('none');
-    return null;
+    const detail = window.isSecureContext === false
+      ? 'Offline-Speicher benötigt einen sicheren Browserkontext'
+      : 'Offline-Speicher wird von diesem Browser nicht unterstützt';
+    setOfflineMapInstallState('unavailable', null, detail);
+    return offlineMapReadResult('opfs-unavailable', null, detail);
   }
-  const manifest = readOfflineMapManifest();
+  const manifestRecord = readOfflineMapManifestRecord();
+  const manifest = manifestRecord.manifest;
   const metadata = manifest || {
     storageName: LEGACY_OFFLINE_MAP_FILE,
     displayName: LEGACY_OFFLINE_MAP_FILE,
     size: null
   };
+  let root = null;
   try {
-    const root = await navigator.storage.getDirectory();
+    root = await navigator.storage.getDirectory();
+  } catch (err) {
+    const denied = err && (err.name === 'SecurityError' || err.name === 'NotAllowedError');
+    const detail = denied
+      ? 'Browserzugriff auf den Offline-Speicher wurde aus Sicherheitsgründen blockiert'
+      : 'Offline-Speicher konnte nicht geöffnet werden';
+    setOfflineMapInstallState(denied ? 'denied' : 'unavailable', metadata, detail);
+    return offlineMapReadResult(denied ? 'opfs-denied' : 'opfs-unavailable', null, detail);
+  }
+
+  try {
     const fileHandle = await root.getFileHandle(metadata.storageName);
     const file = await fileHandle.getFile();
     if (!file.size) throw new Error('Die gespeicherte Datei ist leer.');
     const source = await createLocalPMTilesSource(file, { ...metadata, size: file.size });
     setOfflineMapInstallState('ready', source.metadata);
-    return source;
+    return offlineMapReadResult('ready', source);
   } catch (err) {
-    if (err && err.name === 'NotFoundError' && !manifest) {
-      setOfflineMapInstallState('none');
-      return null;
+    if (err && err.name === 'NotFoundError') {
+      if (!manifest && !manifestRecord.invalid) {
+        setOfflineMapInstallState('none');
+        return offlineMapReadResult('not-installed');
+      }
+      clearOfflineMapManifest();
+      const detail = 'Gespeicherte Kartenreferenz ist veraltet; Offline-Karte bitte erneut importieren';
+      setOfflineMapInstallState('stale', metadata, detail);
+      return offlineMapReadResult('stale-reference', null, detail);
     }
-    console.warn('Offline-Karte konnte nicht gelesen werden:', err);
-    setOfflineMapInstallState('error', metadata, 'Gespeicherte Datei ist nicht lesbar');
-    return null;
+    const detail = 'Gespeicherte Offline-Karte ist nicht lesbar';
+    setOfflineMapInstallState('error', metadata, detail);
+    return offlineMapReadResult('unreadable', null, detail);
   }
 }
 
@@ -1122,16 +1167,35 @@ async function onlineMapAvailable() {
 }
 
 async function resolveInitialMapSource() {
-  const localSource = await readStoredPMTilesSource();
-  if (localSource) return localSource;
+  const localResult = await readStoredPMTilesSource();
+  if (localResult.source) return localResult.source;
   if (await onlineMapAvailable()) {
     return { kind: 'online', label: 'OpenFreeMap', style: buildRasterStyle() };
   }
+  const offlineLabels = {
+    'opfs-denied': 'Karte: Offline – Zugriff auf Offline-Speicher blockiert',
+    'opfs-unavailable': 'Karte: Offline – Offline-Speicher nicht verfügbar',
+    'stale-reference': 'Karte: Offline – gespeicherte Offline-Karte fehlt',
+    unreadable: 'Karte: Offline – Offline-Karte nicht lesbar'
+  };
   return {
     kind: 'none',
-    label: 'Karte: Keine Karte verfügbar – Keine Offline-Karte installiert',
+    label: offlineLabels[localResult.status] || 'Karte: Keine Karte verfügbar – Keine Offline-Karte installiert',
     style: buildEmptyMapStyle()
   };
+}
+
+function guardMapLibreBoxZoomReset(mapInstance) {
+  const boxZoom = mapInstance && mapInstance.boxZoom;
+  if (!boxZoom || typeof boxZoom.reset !== 'function' || boxZoom.__validUserSelectReset) return;
+  const originalReset = boxZoom.reset.bind(boxZoom);
+  boxZoom.reset = function () {
+    // MapLibre 4.7.1 ruft reset() auch inaktiv auf und erzeugt dabei einen ungültigen CSS-Wert.
+    // Nach einem echten Box-Zoom-Start ist der gespeicherte Wert gesetzt und reset() erforderlich.
+    if (!boxZoom.isActive()) return;
+    return originalReset();
+  };
+  boxZoom.__validUserSelectReset = true;
 }
 
 function handleMapSourceError(event) {
@@ -1173,6 +1237,7 @@ async function initMap() {
     maxPitch: 80,
     attributionControl: { compact: true }
   });
+  guardMapLibreBoxZoomReset(map);
 
   map.addControl(
     new maplibregl.NavigationControl({ showCompass: false }),
