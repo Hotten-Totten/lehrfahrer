@@ -397,6 +397,26 @@
       return (arcs || []).filter(arc => edgeEligibility(arc.edge, constraints).allowed);
     }
 
+    getEligibleOutgoingEdges(nodeId, constraints = {}, incoming = null) {
+      const normalizedNodeId = String(nodeId);
+      const incomingArc = incoming
+        ? (this.adjacency.get(String(incoming.fromNodeId)) || []).find(arc =>
+          arc.edge.id === String(incoming.edgeId) && arc.to === normalizedNodeId
+        )
+        : null;
+      if (incoming && !incomingArc) return [];
+      return this._eligibleArcs(this.adjacency.get(normalizedNodeId), constraints)
+        .filter(arc => this._turnAllowed(incomingArc, arc, normalizedNodeId))
+        .map(arc => ({
+          id: arc.edge.id,
+          fromNodeId: arc.from,
+          toNodeId: arc.to,
+          reverse: arc.reverse,
+          name: arc.edge.name,
+          ref: arc.edge.ref
+        }));
+    }
+
     _snapCandidates(point, role, constraints) {
       const candidates = new Map();
       const addCandidate = candidate => {
@@ -709,6 +729,14 @@
         source: this.source,
         localPath: {
           edgeIds: best.path.arcs.map(arc => arc.edge.id),
+          traversals: best.path.arcs.map(arc => ({
+            edgeId: arc.edge.id,
+            fromNodeId: arc.from,
+            toNodeId: arc.to,
+            reverse: arc.reverse,
+            name: arc.edge.name,
+            ref: arc.edge.ref
+          })),
           startSnapDistanceM: Math.round(best.startCandidate.snapDistanceM),
           targetSnapDistanceM: Math.round(best.targetCandidate.snapDistanceM)
         }

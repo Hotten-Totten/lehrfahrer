@@ -44,6 +44,8 @@ test('C: Einbahnstrasse ist nur in erlaubter Richtung nutzbar', async () => {
 
   assert.equal(forward.ok, true);
   assert.deepEqual(Array.from(forward.localPath.edgeIds), ['oneway']);
+  assert.deepEqual(Array.from(router.getEligibleOutgoingEdges('ow1'), edge => edge.id), ['oneway']);
+  assert.deepEqual(Array.from(router.getEligibleOutgoingEdges('ow2')), []);
   assert.equal(reverse.ok, false);
   assert.equal(reverse.error.code, 'NO_ROUTE');
 });
@@ -179,6 +181,10 @@ test('echter Testgraph arbeitet hinter registriertem LocalBusRouter und routeBus
   assert.equal(result.ok, true);
   assert.equal(result.source.id, 'local-bus-router');
   assert.ok(result.roadClassProfile.totalClassifiedM > 0);
+  assert.deepEqual(
+    Array.from(result.localPath.traversals, traversal => traversal.edgeId),
+    Array.from(result.localPath.edgeIds)
+  );
   integration.uninstallLocalBusRoutingGraph();
 });
 

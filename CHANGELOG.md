@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.1.048 - 2026-10-03
+- Bus-Rückführungsmanöver nennen nach Möglichkeit die Zielstraße; Kreisverkehrsausfahrten verwenden die zulässige tatsächliche Ausfahrtsstraße
+
 ## V2.1.047 - 2026-10-03
 - Routing-Straßennamen aus dem installierten LocalBusRouter-Graphen und Haltestellenlabels für Rückführungs-Preview sowie aktive Rückführung besser lesbar dargestellt
 - Routenlabels priorisiert, Seitenstraßen im begrenzten Korridor ergänzt und Duplikate begrenzt; normale PMTiles-Basislabels unverändert

@@ -4303,6 +4303,7 @@ function detectNavTurns(pts, cumDists, minAngle = 28, mergeRadius = 35, lookarou
   roundabouts.forEach(roundabout => {
     filteredTurns.push({
       index: roundabout.startIndex,
+      endIndex: roundabout.endIndex,
       angle: 0,
       type: roundabout.type || 'roundabout',
       distFromStart: roundabout.startDist,
@@ -4540,6 +4541,112 @@ function getTurnInfo(angle, type = null) {
   if (a <= -50 && a > -130)  return { iconKey: 'left', label: 'Links abbiegen' };
   if (a <= -130)             return { iconKey: 'sharp-left', label: 'Scharf links' };
   return { iconKey: 'straight', label: 'Weiterfahren' };
+}
+
+function getBusRerouteStreetName(edge) {
+  const name = typeof edge?.name === 'string' ? edge.name.trim() : '';
+  if (name) return name;
+  const ref = typeof edge?.ref === 'string' ? edge.ref.trim() : '';
+  return ref && /[a-z]/i.test(ref) ? ref : null;
+}
+
+function getBusRerouteTurnInfo(turn, geometry, traversals, router) {
+  const baseInfo = getTurnInfo(turn.angle, turn.type);
+  if (!Array.isArray(traversals) || !traversals.length || !router?.nodesById) return baseInfo;
+  const isOutsideRoundabout = (target, startIndex, endIndex) => {
+    const nearestDistance = geometry.reduce((best, point, index) => {
+      if (index < startIndex || index > endIndex) return best;
+      return Math.min(best, haversineM(target.lat, target.lon, point[0], point[1]));
+    }, Infinity);
+    return nearestDistance > 8;
+  };
+  let geometryCursor = 0;
+  const indexed = traversals.map(traversal => {
+    const fromNode = router.nodesById.get(String(traversal.fromNodeId));
+    const toNode = router.nodesById.get(String(traversal.toNodeId));
+    if (!fromNode || !toNode) return { ...traversal, fromIndex: -1, toIndex: -1 };
+    const nearestIndex = (node, minimumIndex) => {
+      let bestIndex = -1;
+      let bestDistance = Infinity;
+      for (let index = minimumIndex; index < geometry.length; index++) {
+        const point = geometry[index];
+        const distance = haversineM(node.lat, node.lon, point[0], point[1]);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      }
+      return bestDistance <= 12 ? bestIndex : -1;
+    };
+    const fromIndex = nearestIndex(fromNode, geometryCursor);
+    const toIndex = nearestIndex(toNode, Math.max(geometryCursor, fromIndex));
+    if (toIndex >= 0) geometryCursor = toIndex;
+    else if (fromIndex >= 0) geometryCursor = fromIndex;
+    return { ...traversal, fromIndex, toIndex };
+  });
+
+  if (turn.type === 'roundabout') {
+    if (!Number.isInteger(turn.endIndex)) return baseInfo;
+    const exitTraversal = indexed.find(traversal =>
+      traversal.fromIndex >= turn.index && traversal.fromIndex <= turn.endIndex &&
+      traversal.toIndex > turn.endIndex
+    );
+    if (!exitTraversal) return baseInfo;
+    let exitNumber = 0;
+    let previous = null;
+    const visitedNodes = new Set();
+    for (const traversal of indexed) {
+      if (traversal.fromIndex < turn.index || traversal.fromIndex > turn.endIndex) continue;
+      if (traversal.edgeId === exitTraversal.edgeId) {
+        const nodeId = String(traversal.fromNodeId);
+        if (!visitedNodes.has(nodeId)) {
+          const outgoing = router.getEligibleOutgoingEdges?.(nodeId, {}, previous) || [];
+          const hasExit = outgoing.some(edge => {
+            const target = router.nodesById.get(String(edge.toNodeId));
+            return target && isOutsideRoundabout(target, turn.index, turn.endIndex);
+          });
+          const actualExit = outgoing.some(edge => edge.id === exitTraversal.edgeId);
+          if (!hasExit || !actualExit) return baseInfo;
+          exitNumber++;
+          const street = getBusRerouteStreetName(exitTraversal);
+          return {
+            iconKey: baseInfo.iconKey,
+            label: `Im Kreisverkehr die ${exitNumber}. Ausfahrt${street ? ` Richtung ${street}` : ''} nehmen`
+          };
+        }
+        return baseInfo;
+      }
+      const nodeId = String(traversal.fromNodeId);
+      if (visitedNodes.has(nodeId)) continue;
+      visitedNodes.add(nodeId);
+      if (visitedNodes.size === 1) {
+        previous = traversal;
+        continue;
+      }
+      const outgoing = router.getEligibleOutgoingEdges?.(nodeId, {}, previous) || [];
+      const hasExit = outgoing.some(edge => {
+        const target = router.nodesById.get(String(edge.toNodeId));
+        return target && isOutsideRoundabout(target, turn.index, turn.endIndex);
+      });
+      if (hasExit) exitNumber++;
+      previous = traversal;
+    }
+    return baseInfo;
+  }
+
+  const outgoingIndex = indexed.findIndex(traversal =>
+    traversal.fromIndex <= turn.index && traversal.toIndex > turn.index
+  );
+  if (outgoingIndex < 0) return baseInfo;
+  const outgoing = indexed[outgoingIndex];
+  const incoming = [...indexed.slice(0, outgoingIndex)].reverse().find(traversal =>
+    traversal.toIndex >= 0 && traversal.toIndex <= turn.index
+  );
+  const street = getBusRerouteStreetName(outgoing);
+  if (!street) return baseInfo;
+  const incomingStreet = getBusRerouteStreetName(incoming);
+  if (incomingStreet && incomingStreet.toLocaleLowerCase() === street.toLocaleLowerCase()) return null;
+  return { iconKey: baseInfo.iconKey, label: `${baseInfo.label} in die ${street}` };
 }
 
 const NAV_MANEUVER_SVG = {
@@ -5665,10 +5772,15 @@ function buildBusRerouteNavigationState(rerouteRequest) {
     : [];
   if (geometry.length < 2) return null;
   const cumDists = buildNavCumDists(geometry);
+  const selectedTraversals = selected.localPath?.traversals || [];
+  const router = localBusRouterImplementation;
   return {
     geometry,
     cumDists,
-    turns: detectNavTurns(geometry, cumDists),
+    turns: detectNavTurns(geometry, cumDists).map(turn => ({
+      ...turn,
+      info: getBusRerouteTurnInfo(turn, geometry, selectedTraversals, router)
+    })).filter(turn => turn.info),
     nearestIdx: 0,
     reentryHitCount: 0,
     selectedCandidate: selected,
@@ -5752,7 +5864,7 @@ function updateActiveBusRerouteHud(lat, lon) {
   const currentDist = navActiveBusReroute.cumDists[navActiveBusReroute.nearestIdx] || 0;
   const activeTurn = navActiveBusReroute.turns.find(turn => turn.distFromStart >= currentDist - 10);
   if (activeTurn) {
-    const turnInfo = getTurnInfo(activeTurn.angle, activeTurn.type);
+    const turnInfo = activeTurn.info || getTurnInfo(activeTurn.angle, activeTurn.type);
     setNavArrowIcon(turnInfo.iconKey);
     navDistEl.textContent = `in ${navFormatDist(Math.max(0, activeTurn.distFromStart - currentDist))}`;
     navLabelEl.textContent = turnInfo.label;
