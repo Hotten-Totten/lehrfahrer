@@ -129,6 +129,9 @@ const stopList         = document.getElementById('stopList');
 const tileStatus       = document.getElementById('tileStatus');
 const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
+const routingGraphInstallStatus = document.getElementById('routingGraphInstallStatus');
+const importRoutingGraphBtn = document.getElementById('importRoutingGraphBtn');
+const routingGraphFileInput = document.getElementById('routingGraphFileInput');
 const removeLocalTilesBtn = document.getElementById('removeLocalTilesBtn');
 const storagePersistenceStatus = document.getElementById('storagePersistenceStatus');
 const requestStoragePersistenceBtn = document.getElementById('requestStoragePersistenceBtn');
@@ -210,6 +213,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   initNavPerfDebugHud();
   bindEvents();
   detectOffline();
+  await initializePersistentLocalBusRoutingGraph();
   await initializePersistentLineData();
 });
 
@@ -1705,6 +1709,13 @@ function bindEvents() {
     tilesFileInput.click();
   });
   tilesFileInput.addEventListener('change', onTilesFileSelected);
+  if (importRoutingGraphBtn && routingGraphFileInput) {
+    importRoutingGraphBtn.addEventListener('click', () => {
+      routingGraphFileInput.value = '';
+      routingGraphFileInput.click();
+    });
+    routingGraphFileInput.addEventListener('change', onRoutingGraphFileSelected);
+  }
   if (removeLocalTilesBtn) {
     removeLocalTilesBtn.addEventListener('click', async () => {
       if (!confirm('Offline-Karte wirklich von diesem Gerät entfernen?')) return;
@@ -5164,7 +5175,6 @@ async function installLocalBusRoutingGraph(graph, options = {}) {
     registerLocalBusRouter(implementation);
     return { ok: true, source: implementation.source };
   } catch (error) {
-    registerLocalBusRouter(null);
     return {
       ok: false,
       error: {
@@ -5172,6 +5182,112 @@ async function installLocalBusRoutingGraph(graph, options = {}) {
         message: error?.message || 'Lokaler Bus-Routinggraph konnte nicht geladen werden.'
       }
     };
+  }
+}
+
+function formatRoutingGraphSize(bytes) {
+  if (!Number.isFinite(bytes)) return 'Größe unbekannt';
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+    : `${Math.round(bytes / 1024)} KB`;
+}
+
+function renderRoutingGraphStatus(message, state = 'neutral') {
+  if (!routingGraphInstallStatus) return;
+  routingGraphInstallStatus.textContent = message;
+  routingGraphInstallStatus.dataset.state = state;
+}
+
+async function initializePersistentLocalBusRoutingGraph() {
+  const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
+  if (!storageApi) {
+    renderRoutingGraphStatus('Routinggraph-Speicher wird von diesem Browser nicht unterstützt.', 'error');
+    if (importRoutingGraphBtn) importRoutingGraphBtn.disabled = true;
+    return { status: 'unavailable' };
+  }
+
+  try {
+    const store = storageApi.createOPFSGraphStore();
+    const loaded = await store.loadGraph(LOCAL_BUS_ROUTING_GRAPH_SPEC.schemaVersion);
+    if (loaded.status === 'not-installed') {
+      renderRoutingGraphStatus('Kein lokaler Routinggraph installiert.');
+      return loaded;
+    }
+    if (loaded.status !== 'ready') {
+      renderRoutingGraphStatus(loaded.error || 'Gespeicherter Routinggraph ist nicht lesbar.', 'error');
+      if (loaded.status === 'unavailable' && importRoutingGraphBtn) importRoutingGraphBtn.disabled = true;
+      return loaded;
+    }
+
+    const moduleApi = await loadLocalBusRouterModule();
+    const routerStartedAt = performance.now();
+    const implementation = moduleApi.createRouter(loaded.graph);
+    const routerInitMs = Math.round((performance.now() - routerStartedAt) * 10) / 10;
+    if (!implementation.isAvailable()) throw new Error('Routinggraph enthält keine routbaren Kanten.');
+    registerLocalBusRouter(implementation);
+    const metrics = loaded.metrics || {};
+    renderRoutingGraphStatus(
+      `${loaded.metadata.regionId} · ${loaded.metadata.nodeCount.toLocaleString('de-DE')} Nodes · ` +
+      `${formatRoutingGraphSize(loaded.metadata.fileSizeBytes)} · Lesen ${metrics.readMs ?? '?'} ms · ` +
+      `Parse ${metrics.parseMs ?? '?'} ms · Router ${routerInitMs} ms`,
+      'ready'
+    );
+    return { ...loaded, metrics: { ...metrics, routerInitMs } };
+  } catch (error) {
+    renderRoutingGraphStatus(error?.message || 'Routinggraph konnte nicht geladen werden.', 'error');
+    console.warn('Lokaler Routinggraph konnte nicht geladen werden:', error);
+    return { status: 'invalid', error: error?.message || 'Routinggraph konnte nicht geladen werden.' };
+  }
+}
+
+async function onRoutingGraphFileSelected() {
+  const file = routingGraphFileInput?.files?.[0];
+  if (!file) return;
+  const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
+  if (!storageApi) {
+    renderRoutingGraphStatus('Routinggraph-Speicher wird von diesem Browser nicht unterstützt.', 'error');
+    return;
+  }
+
+  if (importRoutingGraphBtn) importRoutingGraphBtn.disabled = true;
+  renderRoutingGraphStatus('Routinggraph wird geprüft …');
+  try {
+    if (file.size <= 0 || file.size > storageApi.MAX_GRAPH_SIZE_BYTES) {
+      throw new Error('Routinggraph-Datei ist leer oder größer als 50 MB.');
+    }
+    const fileReadStartedAt = performance.now();
+    const contents = await file.text();
+    const fileReadMs = Math.round((performance.now() - fileReadStartedAt) * 10) / 10;
+    const parseStartedAt = performance.now();
+    const graph = JSON.parse(contents);
+    const parseMs = Math.round((performance.now() - parseStartedAt) * 10) / 10;
+    const moduleApi = await loadLocalBusRouterModule();
+    const validationStartedAt = performance.now();
+    const metadata = storageApi.validateGraph(graph, moduleApi.FORMAT_VERSION);
+    const validationMs = Math.round((performance.now() - validationStartedAt) * 10) / 10;
+    const routerStartedAt = performance.now();
+    const implementation = moduleApi.createRouter(graph);
+    const routerInitMs = Math.round((performance.now() - routerStartedAt) * 10) / 10;
+    if (!implementation.isAvailable()) throw new Error('Routinggraph enthält keine routbaren Kanten.');
+
+    await requestPersistentStorage(true);
+    const saved = await storageApi.createOPFSGraphStore().saveGraph(graph, moduleApi.FORMAT_VERSION);
+    registerLocalBusRouter(implementation);
+    const persistent = await refreshStoragePersistenceStatus();
+    const durability = persistent.persisted ? '' : ' · Speicherschutz nicht gewährt';
+    renderRoutingGraphStatus(
+      `${metadata.regionId} installiert · ${metadata.nodeCount.toLocaleString('de-DE')} Nodes · ` +
+      `${formatRoutingGraphSize(saved.metadata.fileSizeBytes)} · Datei ${fileReadMs} ms · ` +
+      `Parse ${parseMs + validationMs} ms · OPFS ${saved.metrics.writeMs} ms · Router ${routerInitMs} ms${durability}`,
+      persistent.persisted ? 'ready' : 'warning'
+    );
+    showToast(`Offline-Routingregion ${metadata.regionId} installiert.`, 5000);
+  } catch (error) {
+    renderRoutingGraphStatus(`Import fehlgeschlagen: ${error?.message || 'Graph ungültig.'}`, 'error');
+    showToast('Routinggraph wurde nicht übernommen; die vorhandene Region bleibt erhalten.', 5500);
+  } finally {
+    if (routingGraphFileInput) routingGraphFileInput.value = '';
+    if (importRoutingGraphBtn) importRoutingGraphBtn.disabled = false;
   }
 }
 
@@ -5427,6 +5543,9 @@ function selectBusReroutePreview(routedCandidates) {
   const allProviderErrors = allRoutingFailed && evaluated.every(candidate =>
     ['PROVIDER_ERROR', 'INVALID_PROVIDER_RESPONSE'].includes(candidate.error?.code)
   );
+  const hasOutsideRoutingRegion = evaluated.some(candidate =>
+    candidate.error?.code === 'OUTSIDE_ROUTING_REGION'
+  );
   const sources = [...new Set(evaluated.map(candidate => candidate.source?.id).filter(Boolean))];
   const onlineRequired = evaluated.some(candidate => candidate.source?.onlineRequired === true);
   const offlineRoutingAvailable = evaluated.some(candidate =>
@@ -5435,9 +5554,11 @@ function selectBusReroutePreview(routedCandidates) {
   return {
     status: eligible.length
       ? 'ready'
-      : (allProvidersUnavailable
-        ? 'provider-unavailable'
-        : (allProviderErrors ? 'provider-error' : 'no-suitable-route')),
+      : (hasOutsideRoutingRegion
+        ? 'outside-routing-region'
+        : (allProvidersUnavailable
+          ? 'provider-unavailable'
+          : (allProviderErrors ? 'provider-error' : 'no-suitable-route'))),
     selectedCandidate: eligible[0] || null,
     alternatives: eligible.slice(1, 3),
     rejectedCandidates: evaluated.filter(candidate => !candidate.eligible),
@@ -5518,8 +5639,11 @@ async function routeBusRerouteCandidates(preparation, provider = resolveBusRouti
 
 function getBusRerouteStatusMessage(preview) {
   if (preview?.selectedCandidate) return 'Busgeeigneter Rückweg gefunden.';
+  if (preview?.status === 'outside-routing-region') {
+    return 'Start oder Rückkehrziel liegt außerhalb der installierten Routingregion.';
+  }
   if (preview?.status === 'provider-unavailable') {
-    return 'Für diese Region ist noch kein Offline-Routing installiert.';
+    return 'Kein lokaler Routinggraph installiert; Offline-Routing steht nicht zur Verfügung.';
   }
   if (preview?.status === 'provider-error' || preview?.status === 'failed') {
     return 'Bus-Routingprovider ist momentan nicht erreichbar.';

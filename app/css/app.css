@@ -740,7 +740,8 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 .settings-section button:active,
 #settingsBox > button:active { background: var(--primary); color: #fff; }
 
-#tilesFileInput { display: none; }
+#tilesFileInput,
+#routingGraphFileInput { display: none; }
 
 #closeSettingsBtn { background: var(--surface2) !important; }
 

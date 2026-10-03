@@ -55,9 +55,25 @@ test('D: access- und busgesperrte Kante wird ausgeschlossen', async () => {
   assert.equal(result.geometry.length, 0);
 });
 
+test('Start und Ziel außerhalb der Routing-BBox werden sauber abgelehnt', async () => {
+  const router = createRouter();
+  const startOutside = await router.routeBusPath({
+    from: { lat: 52, lon: 14.33 }, to: points.a, constraints: {}
+  });
+  const targetOutside = await router.routeBusPath({
+    from: points.a, to: { lat: 52, lon: 14.33 }, constraints: {}
+  });
+
+  assert.equal(startOutside.ok, false);
+  assert.equal(startOutside.error.code, 'OUTSIDE_ROUTING_REGION');
+  assert.equal(targetOutside.ok, false);
+  assert.equal(targetOutside.error.code, 'OUTSIDE_ROUTING_REGION');
+});
+
 test('Bus-Ausnahme ueberstimmt allgemeine Sperren; maxlength wird beachtet', async () => {
   const exceptionGraph = {
     ...structuredClone(graph),
+    boundingBox: { minLat: 51.751, minLon: 14.329, maxLat: 51.753, maxLon: 14.332 },
     nodes: [
       { id: 'from', lat: 51.752, lon: 14.330 },
       { id: 'to', lat: 51.752, lon: 14.331 }

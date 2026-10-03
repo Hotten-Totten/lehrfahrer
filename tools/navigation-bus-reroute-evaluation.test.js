@@ -361,13 +361,19 @@ test('Routingzustaende und Meldungen bleiben unterscheidbar', () => {
     ...sandbox.createBusRoutingFailure('NO_ROUTE', 'kein Weg', { id: 'test' }),
     candidate: value
   }]);
+  const outsideRegion = sandbox.selectBusReroutePreview([{
+    ...sandbox.createBusRoutingFailure('OUTSIDE_ROUTING_REGION', 'außerhalb', { id: 'local' }),
+    candidate: value
+  }]);
 
   assert.equal(unavailable.status, 'provider-unavailable');
-  assert.equal(sandbox.getBusRerouteStatusMessage(unavailable), 'Für diese Region ist noch kein Offline-Routing installiert.');
+  assert.equal(sandbox.getBusRerouteStatusMessage(unavailable), 'Kein lokaler Routinggraph installiert; Offline-Routing steht nicht zur Verfügung.');
   assert.equal(providerError.status, 'provider-error');
   assert.equal(sandbox.getBusRerouteStatusMessage(providerError), 'Bus-Routingprovider ist momentan nicht erreichbar.');
   assert.equal(noRoute.status, 'no-suitable-route');
   assert.equal(sandbox.getBusRerouteStatusMessage(noRoute), 'Kein geeigneter Weg für Busse gefunden.');
+  assert.equal(outsideRegion.status, 'outside-routing-region');
+  assert.match(sandbox.getBusRerouteStatusMessage(outsideRegion), /außerhalb der installierten Routingregion/);
 });
 
 test('Diagnose enthaelt Rueckkehrpunkt, Provider, Rejects, Penalties und Gesamtwert', () => {

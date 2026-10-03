@@ -61,6 +61,12 @@
     return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   }
 
+  function isPointWithinBoundingBox(point, boundingBox) {
+    return Number.isFinite(point?.lat) && Number.isFinite(point?.lon) &&
+      point.lat >= boundingBox.minLat && point.lat <= boundingBox.maxLat &&
+      point.lon >= boundingBox.minLon && point.lon <= boundingBox.maxLon;
+  }
+
   function bearingDeg(a, b) {
     const lat1 = toRadians(a.lat);
     const lat2 = toRadians(b.lat);
@@ -619,6 +625,12 @@
       if (![start.lat, start.lon, target.lat, target.lon].every(Number.isFinite)) {
         return localFailure('INVALID_REQUEST', 'Start oder Ziel ist ungültig.', this.source);
       }
+      if (!isPointWithinBoundingBox(start, this.graph.boundingBox)) {
+        return localFailure('OUTSIDE_ROUTING_REGION', 'Startpunkt liegt außerhalb der installierten Routingregion.', this.source);
+      }
+      if (!isPointWithinBoundingBox(target, this.graph.boundingBox)) {
+        return localFailure('OUTSIDE_ROUTING_REGION', 'Rückkehrziel liegt außerhalb der installierten Routingregion.', this.source);
+      }
 
       const startCandidates = this._snapCandidates(start, 'start', constraints);
       const targetCandidates = this._snapCandidates(target, 'target', constraints);
@@ -711,6 +723,7 @@
   global.LehrfahrerLocalBusRouting = Object.freeze({
     FORMAT_VERSION,
     createRouter,
+    isPointWithinBoundingBox,
     LocalBusRoutingEngine
   });
 })(globalThis);

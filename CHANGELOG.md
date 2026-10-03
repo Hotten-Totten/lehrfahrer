@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.045 - 2026-10-03
+- Offline-Routinggraph als unabhängige OPFS-Datenquelle mit JSON-Import, Versions-/Inhaltsvalidierung, Prüfsumme und zweifachem Slot-/Manifest-Rollback dauerhaft speicherbar gemacht
+- installierte LocalBusRouter-Region beim Appstart geladen und Start-/Zielpunkte außerhalb der Regions-BoundingBox sauber abgelehnt
+- Routinggraph getrennt von MapLibre-/PMTiles-Karte gehalten; fehlerhafte Importe erhalten den vorherigen gültigen Graphen
+
 ## V2.1.044 - 2026-10-03
 - lokale OSM-XML-Graphgenerierung mit Bounding-Box, kompakter LocalBusRouter-v1-Ausgabe und Validierungsstatistik vorbereitet
 - gerichtete Einbahnstraßen, normalisierte Bus-/Fahrzeugzugänge und -maße, Straßenmetadaten sowie via-node-Turn-Restrictions berücksichtigt
