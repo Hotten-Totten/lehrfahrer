@@ -16,7 +16,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.048">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.049">
 </head>
 <body>
 
@@ -24,7 +24,7 @@
   <div id="topbar">
     <div id="topbar-left">
       <span id="appTitle">🚌 Lehrfahrer</span>
-      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.048</span>
+      <span id="versionBadge" class="version-badge" title="App-Version">V2.1.049</span>
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
@@ -398,6 +398,12 @@
             </div>
             <div style="margin-bottom: 12px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="navManeuverBeepsEnabled" checked>
+                <span style="font-size: 13px;">Manöver-Pieptöne</span>
+              </label>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="navScreenOn" checked>
                 <span style="font-size: 13px;">Bildschirm immer an</span>
               </label>
@@ -423,10 +429,10 @@
     </div>
   </div>
 
-  <script src="js/map.js?v=V2.1.048"></script>
+  <script src="js/map.js?v=V2.1.049"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.048"></script>
-  <script src="js/debug-helper.js?v=V2.1.048"></script>
+  <script src="js/app.js?v=V2.1.049"></script>
+  <script src="js/debug-helper.js?v=V2.1.049"></script>
 </body>
 </html>
 

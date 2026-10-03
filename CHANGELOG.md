@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.1.049 - 2026-10-03
+- Optionale Manöver-Pieptöne für die aktive Bus-Rückführung ergänzt; OFF-Route-Warnton bleibt unverändert
+
 ## V2.1.048 - 2026-10-03
 - Bus-Rückführungsmanöver nennen nach Möglichkeit die Zielstraße; Kreisverkehrsausfahrten verwenden die zulässige tatsächliche Ausfahrtsstraße
 

@@ -10,6 +10,11 @@ const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(`
   const BUS_REROUTE_VALHALLA_URL = 'https://valhalla.test';
+  const navManeuverAudioNodes = new Set();
+  ${appSource.slice(
+    appSource.indexOf('function resetBusRerouteManeuverAudio'),
+    appSource.indexOf('function maybePlayBusRerouteManeuverCue')
+  )}
   ${appSource.slice(
     appSource.indexOf('function decodeBusReroutePolyline6'),
     appSource.indexOf('function requestBusReroute')

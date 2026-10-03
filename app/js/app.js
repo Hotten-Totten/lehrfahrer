@@ -47,6 +47,7 @@ const NAV_REJOIN_START_M = 25;
 const NAV_OFF_ROUTE_ENTER_FIXES = 3;
 const NAV_REJOIN_FIXES = 3;
 const NAV_OFF_ROUTE_MAX_ACCURACY_M = 50;
+const NAV_MANEUVER_BEEPS_STORAGE_KEY = 'lehrfahrer-nav-maneuver-beeps';
 const NAV_REJOIN_BLEND_STEP = 0.20;
 const NAV_REJOIN_LOOKAHEAD_M = 800;
 const BUS_REROUTE_VALHALLA_URL = 'https://valhalla1.openstreetmap.de';
@@ -59,6 +60,8 @@ let navOffRouteAlertTimer = null;
 let navOffRouteCompactVisible = false;
 let navWarningAudioContext = null;
 let navWarningFallbackAudio = null;
+let navWarningAudioBusyUntil = 0;
+const navManeuverAudioNodes = new Set();
 let navWarningFallbackUnlocked = false;
 let navLastRawGpsPos = null;
 let navPendingBusRerouteRequest = null;
@@ -1666,6 +1669,7 @@ function detectOffline() {
 
 // ── Events binden ────────────────────────────────────────────
 function bindEvents() {
+  initializeNavManeuverBeepsSetting();
   citySelect.addEventListener('change', onCityChange);
   lineSelect.addEventListener('change', onLineChange);
   if (operationalRouteSelect) operationalRouteSelect.addEventListener('change', onOperationalRouteChange);
@@ -3510,10 +3514,33 @@ function playNavWarningFallback() {
   return navWarningFallbackAudio.play();
 }
 
+function isNavManeuverBeepsEnabled() {
+  const toggle = document.getElementById('navManeuverBeepsEnabled');
+  return toggle ? toggle.checked : true;
+}
+
+function initializeNavManeuverBeepsSetting() {
+  const toggle = document.getElementById('navManeuverBeepsEnabled');
+  if (!toggle) return;
+  try {
+    toggle.checked = localStorage.getItem(NAV_MANEUVER_BEEPS_STORAGE_KEY) !== '0';
+  } catch {
+    toggle.checked = true;
+  }
+  toggle.addEventListener('change', () => {
+    try {
+      localStorage.setItem(NAV_MANEUVER_BEEPS_STORAGE_KEY, toggle.checked ? '1' : '0');
+    } catch {
+      // Die Einstellung bleibt fuer diese Sitzung weiterhin bedienbar.
+    }
+  });
+}
+
 function playNavOffRouteWarning() {
   const soundEnabled = document.getElementById('navSoundEnabled');
   if (soundEnabled && !soundEnabled.checked) return;
 
+  navWarningAudioBusyUntil = Date.now() + 800;
   prepareNavWarningAudio();
   const useMediaFallback = /Android/i.test(navigator.userAgent || '');
   console.info('[Navigation] OFF-Route-Warnsignal', {
@@ -3913,6 +3940,7 @@ function stopNavigation() {
   navLastRouteDistanceM = null;
   navLastRawGpsPos = null;
   navPendingBusRerouteRequest = null;
+  resetBusRerouteManeuverAudio(navActiveBusReroute);
   navActiveBusReroute = null;
   if (typeof clearBusReroute === 'function') clearBusReroute();
   navOffRouteCompactVisible = false;
@@ -4647,6 +4675,99 @@ function getBusRerouteTurnInfo(turn, geometry, traversals, router) {
   const incomingStreet = getBusRerouteStreetName(incoming);
   if (incomingStreet && incomingStreet.toLocaleLowerCase() === street.toLocaleLowerCase()) return null;
   return { iconKey: baseInfo.iconKey, label: `${baseInfo.label} in die ${street}` };
+}
+
+function getNavManeuverTonePattern(turn) {
+  if (turn?.type === 'roundabout') {
+    return [
+      { frequency: 1080, start: 0, duration: 0.06 },
+      { frequency: 1080, start: 0.105, duration: 0.06 }
+    ];
+  }
+  if (!Number.isFinite(turn?.angle) || Math.abs(turn.angle) < 20) return null;
+  if (turn.angle > 0) return [{ frequency: 880, start: 0, duration: 0.11 }];
+  return [
+    { frequency: 620, start: 0, duration: 0.085 },
+    { frequency: 620, start: 0.19, duration: 0.085 }
+  ];
+}
+
+function playNavManeuverTone(turn) {
+  const pattern = getNavManeuverTonePattern(turn);
+  const context = navWarningAudioContext;
+  if (!pattern || !context || context.state !== 'running') return false;
+  const now = context.currentTime;
+  const activeNodes = [];
+  try {
+    pattern.forEach(note => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + note.start;
+      const end = start + note.duration;
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(note.frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.012);
+      gain.gain.setValueAtTime(0.16, end - 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.onended = () => {
+        navManeuverAudioNodes.delete(oscillator);
+        oscillator.disconnect();
+        gain.disconnect();
+      };
+      activeNodes.push({ oscillator, gain });
+      navManeuverAudioNodes.add(oscillator);
+      oscillator.start(start);
+      oscillator.stop(end);
+    });
+    return true;
+  } catch {
+    activeNodes.forEach(({ oscillator, gain }) => {
+      navManeuverAudioNodes.delete(oscillator);
+      oscillator.onended = null;
+      try { oscillator.stop(); } catch {}
+      try { oscillator.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    });
+    return false;
+  }
+}
+
+function resetBusRerouteManeuverAudio(state) {
+  if (state) state.maneuverAudio = { turnKey: null, warningPlayed: false, retryAt: 0 };
+  navManeuverAudioNodes.forEach(oscillator => {
+    oscillator.onended = null;
+    try { oscillator.stop(); } catch {}
+    try { oscillator.disconnect(); } catch {}
+  });
+  navManeuverAudioNodes.clear();
+}
+
+function maybePlayBusRerouteManeuverCue(state, activeTurn, currentDist) {
+  if (!state || state !== navActiveBusReroute || !activeTurn) return false;
+  const pattern = getNavManeuverTonePattern(activeTurn);
+  if (!pattern) return false;
+  if (!state.maneuverAudio) resetBusRerouteManeuverAudio(state);
+  const turnKey = `${activeTurn.index ?? activeTurn.distFromStart}:${activeTurn.type || ''}`;
+  if (state.maneuverAudio.turnKey !== turnKey) {
+    state.maneuverAudio = { turnKey, warningPlayed: false, retryAt: 0 };
+  }
+  const distanceM = activeTurn.distFromStart - currentDist;
+  if (distanceM > 250 || distanceM < -10 || state.maneuverAudio.warningPlayed) return false;
+  if (!isNavManeuverBeepsEnabled() || navOffRouteActive || Date.now() < navWarningAudioBusyUntil) return false;
+
+  if (!navWarningAudioContext || navWarningAudioContext.state !== 'running') {
+    if (Date.now() >= state.maneuverAudio.retryAt) {
+      state.maneuverAudio.retryAt = Date.now() + 2000;
+      try { prepareNavWarningAudio(); } catch {}
+    }
+    return false;
+  }
+  if (!playNavManeuverTone(activeTurn)) return false;
+  state.maneuverAudio.warningPlayed = true;
+  return true;
 }
 
 const NAV_MANEUVER_SVG = {
@@ -5782,6 +5903,7 @@ function buildBusRerouteNavigationState(rerouteRequest) {
       info: getBusRerouteTurnInfo(turn, geometry, selectedTraversals, router)
     })).filter(turn => turn.info),
     nearestIdx: 0,
+    maneuverAudio: { turnKey: null, warningPlayed: false, retryAt: 0 },
     reentryHitCount: 0,
     selectedCandidate: selected,
     originalRoute: rerouteRequest.originalRoute,
@@ -5839,6 +5961,7 @@ function startPreparedBusReroute() {
 
 function finishActiveBusReroute() {
   if (!navActiveBusReroute) return false;
+  resetBusRerouteManeuverAudio(navActiveBusReroute);
   const candidate = navActiveBusReroute.selectedCandidate?.candidate || {};
   const targetIdx = Number.isFinite(candidate.routeIndex)
     ? Math.max(navProgressIdx, candidate.routeIndex)
@@ -5863,6 +5986,7 @@ function updateActiveBusRerouteHud(lat, lon) {
   navActiveBusReroute = advanced.state;
   const currentDist = navActiveBusReroute.cumDists[navActiveBusReroute.nearestIdx] || 0;
   const activeTurn = navActiveBusReroute.turns.find(turn => turn.distFromStart >= currentDist - 10);
+  maybePlayBusRerouteManeuverCue(navActiveBusReroute, activeTurn, currentDist);
   if (activeTurn) {
     const turnInfo = activeTurn.info || getTurnInfo(activeTurn.angle, activeTurn.type);
     setNavArrowIcon(turnInfo.iconKey);
