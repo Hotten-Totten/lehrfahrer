@@ -4886,6 +4886,7 @@ function buildBusReroutePreparation({
     },
     remainingStops,
     returnCandidates: selected,
+    routingCandidates: operationallyRanked,
     candidateRanking: [
       'skippedStopCount:asc',
       'routeProgressM:asc',
@@ -5397,16 +5398,21 @@ function evaluateBusRerouteCandidate(routedCandidate) {
 }
 
 function compareBusRerouteCandidates(a, b) {
-  const aRoad = a.scoreBreakdown.roadSuitabilityScore;
-  const bRoad = b.scoreBreakdown.roadSuitabilityScore;
+  const aRoad = Number.isFinite(a.scoreBreakdown.roadSuitabilityScore)
+    ? a.scoreBreakdown.roadSuitabilityScore
+    : -1000;
+  const bRoad = Number.isFinite(b.scoreBreakdown.roadSuitabilityScore)
+    ? b.scoreBreakdown.roadSuitabilityScore
+    : -1000;
+  const aManeuverPenalty = a.scoreBreakdown.uTurnCount * 10 + a.scoreBreakdown.sharpTurnCount;
+  const bManeuverPenalty = b.scoreBreakdown.uTurnCount * 10 + b.scoreBreakdown.sharpTurnCount;
   return (
     a.scoreBreakdown.skippedStopCount - b.scoreBreakdown.skippedStopCount ||
-    a.scoreBreakdown.routeProgressM - b.scoreBreakdown.routeProgressM ||
-    (bRoad === null ? -Infinity : bRoad) - (aRoad === null ? -Infinity : aRoad) ||
-    (a.scoreBreakdown.uTurnCount + a.scoreBreakdown.sharpTurnCount) -
-      (b.scoreBreakdown.uTurnCount + b.scoreBreakdown.sharpTurnCount) ||
+    bRoad - aRoad ||
+    aManeuverPenalty - bManeuverPenalty ||
     (a.scoreBreakdown.durationSec || Infinity) - (b.scoreBreakdown.durationSec || Infinity) ||
-    (a.scoreBreakdown.distanceM || Infinity) - (b.scoreBreakdown.distanceM || Infinity)
+    (a.scoreBreakdown.distanceM || Infinity) - (b.scoreBreakdown.distanceM || Infinity) ||
+    a.scoreBreakdown.routeProgressM - b.scoreBreakdown.routeProgressM
   );
 }
 
@@ -5463,19 +5469,51 @@ function selectBusReroutePreview(routedCandidates) {
 }
 
 async function routeBusRerouteCandidates(preparation, provider = resolveBusRoutingProvider()) {
-  const candidates = Array.isArray(preparation?.returnCandidates)
-    ? preparation.returnCandidates
-    : [];
-  const routedCandidates = await Promise.all(candidates.map(async candidate => {
-    const route = await routeBusPath({
-      from: preparation.currentPosition,
-      to: candidate.coordinate,
-      heading: preparation.currentPosition?.heading ?? null,
-      constraints: preparation.routingPolicy || {}
-    }, provider);
-    return { ...route, candidate: { ...candidate } };
-  }));
-  return selectBusReroutePreview(routedCandidates);
+  const candidates = Array.isArray(preparation?.routingCandidates)
+    ? preparation.routingCandidates
+    : (Array.isArray(preparation?.returnCandidates)
+      ? preparation.returnCandidates
+      : []);
+  const groups = new Map();
+  candidates.forEach(candidate => {
+    const rawSkipped = Number(candidate?.skippedStopCount);
+    const skippedStopCount = Number.isFinite(rawSkipped) ? Math.max(0, Math.floor(rawSkipped)) : 0;
+    if (!groups.has(skippedStopCount)) groups.set(skippedStopCount, []);
+    groups.get(skippedStopCount).push(candidate);
+  });
+
+  const routedCandidates = [];
+  const evaluatedSkippedStopGroups = [];
+  const orderedGroups = [...groups.keys()].sort((a, b) => a - b);
+  for (const skippedStopCount of orderedGroups) {
+    const groupCandidates = groups.get(skippedStopCount) || [];
+    const groupResults = await Promise.all(groupCandidates.map(async candidate => {
+      const route = await routeBusPath({
+        from: preparation.currentPosition,
+        to: candidate.coordinate,
+        heading: preparation.currentPosition?.heading ?? null,
+        constraints: preparation.routingPolicy || {}
+      }, provider);
+      return { ...route, candidate: { ...candidate, skippedStopCount } };
+    }));
+    routedCandidates.push(...groupResults);
+    evaluatedSkippedStopGroups.push(skippedStopCount);
+
+    const groupPreview = selectBusReroutePreview(groupResults);
+    if (groupPreview.selectedCandidate) {
+      return {
+        ...selectBusReroutePreview(routedCandidates),
+        evaluatedSkippedStopGroups,
+        deferredCandidateCount: candidates.length - routedCandidates.length
+      };
+    }
+  }
+
+  return {
+    ...selectBusReroutePreview(routedCandidates),
+    evaluatedSkippedStopGroups,
+    deferredCandidateCount: 0
+  };
 }
 
 function getBusRerouteStatusMessage(preview) {

@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.043 - 2026-10-03
+- Rückführungsziele strikt nach ausgelassenen Haltestellen gruppiert und zuerst ausschließlich die nächste offene Haltestelle geprüft
+- Spätere Haltestellengruppen erst bei fehlender Route oder echten HARD-Busverboten zugelassen; längere Wege, Residential-Anteile und unbekannte Daten verwerfen erreichbare frühere Ziele nicht
+- Straßenqualität, Manöver und Fahrzeit erst zur Rangfolge zulässiger Wege derselben Haltestellengruppe verwendet
+
 ## V2.1.042 - 2026-10-03
 - OFF-Route-Rückführung um busgeeignete Rückwegprüfung mit getrennten Zuständen für fehlenden Offline-Graph, Providerfehler und tatsächlich fehlenden geeigneten Weg ergänzt
 - U-Turns als gewichtete Penalty statt pauschalem HARD-Reject behandelt; unbekannte Straßeninformationen bleiben zulässig und echte Busverbote werden weiterhin hart verworfen

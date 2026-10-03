@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
+const mapSource = fs.readFileSync(path.resolve(__dirname, '../app/js/map.js'), 'utf8');
 const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(`
@@ -53,6 +54,13 @@ function provider(handler) {
   };
 }
 
+function mapFunctionSource(name, nextName) {
+  return mapSource.slice(
+    mapSource.indexOf(`function ${name}`),
+    mapSource.indexOf(`function ${nextName}`)
+  );
+}
+
 test('Evaluator und Kandidatenrouting funktionieren providerunabhaengig', async () => {
   const returnCandidates = [candidate('A', 0, 500), candidate('B', 0, 700), candidate('C', 1, 900)];
   const calls = [];
@@ -65,12 +73,120 @@ test('Evaluator und Kandidatenrouting funktionieren providerunabhaengig', async 
     return neutralRoute(value);
   }));
 
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   assert.ok(calls.every(call => call.from && call.to && 'constraints' in call));
   assert.equal(preview.selectedCandidate.candidate.id, 'A');
-  assert.equal(preview.alternatives.length, 2);
+  assert.equal(preview.alternatives.length, 1);
+  assert.deepEqual(Array.from(preview.evaluatedSkippedStopGroups), [0]);
+  assert.equal(preview.deferredCandidateCount, 1);
   assert.equal(preview.previewOnly, true);
   assert.equal(preview.offlineRoutingAvailable, true);
+});
+
+test('A: erreichbare H1 gewinnt auch ueber laengere Hauptstrasse gegen nahe H2', async () => {
+  const h1 = candidate('H1', 0, 800);
+  const h2 = candidate('H2', 1, 1000);
+  const called = [];
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1, h2]
+  }, provider(async request => {
+    const value = request.to.lat === h1.coordinate.lat ? h1 : h2;
+    called.push(value.id);
+    return neutralRoute(value, {
+      distanceM: value === h1 ? 3200 : 400,
+      roadEdges: [{ lengthM: value === h1 ? 3200 : 400, roadClass: 'primary', use: 'road' }]
+    });
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H1');
+  assert.deepEqual(called, ['H1']);
+});
+
+test('B: zulaessige Residential-Route zu H1 bleibt vor Primary-Route zu H2', async () => {
+  const h1 = candidate('H1', 0, 800);
+  const h2 = candidate('H2', 1, 900);
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1, h2]
+  }, provider(async request => {
+    const value = request.to.lat === h1.coordinate.lat ? h1 : h2;
+    return neutralRoute(value, {
+      roadEdges: [{ lengthM: 1000, roadClass: value === h1 ? 'residential' : 'primary', use: 'road' }]
+    });
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H1');
+  assert.equal(preview.deferredCandidateCount, 1);
+});
+
+test('C: echtes bus=no bei H1 gibt erst dann H2 frei', async () => {
+  const h1 = candidate('H1', 0, 800);
+  const h2 = candidate('H2', 1, 900);
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1, h2]
+  }, provider(async request => {
+    const value = request.to.lat === h1.coordinate.lat ? h1 : h2;
+    return neutralRoute(value, value === h1 ? { restrictions: { bus: 'no' } } : {});
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H2');
+  assert.deepEqual(Array.from(preview.evaluatedSkippedStopGroups), [0, 1]);
+  assert.equal(preview.rejectedCandidates[0].candidate.id, 'H1');
+});
+
+test('D: nicht routbare H1 gibt H2 frei', async () => {
+  const h1 = candidate('H1', 0, 800);
+  const h2 = candidate('H2', 1, 900);
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1, h2]
+  }, provider(async request => {
+    const value = request.to.lat === h1.coordinate.lat ? h1 : h2;
+    return value === h1
+      ? sandbox.createBusRoutingFailure('NO_ROUTE', 'Kein Weg', { id: 'test-provider' })
+      : neutralRoute(value);
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H2');
+  assert.deepEqual(Array.from(preview.evaluatedSkippedStopGroups), [0, 1]);
+});
+
+test('E: unbekannte maxheight verwirft H1 nicht', async () => {
+  const h1 = candidate('H1', 0, 800);
+  const h2 = candidate('H2', 1, 900);
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1, h2]
+  }, provider(async request => {
+    const value = request.to.lat === h1.coordinate.lat ? h1 : h2;
+    return neutralRoute(value, value === h1 ? { restrictions: { maxHeightM: null } } : {});
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H1');
+  assert.equal(preview.deferredCandidateCount, 1);
+});
+
+test('F: innerhalb H1 gewinnt der busgeeignetere Hauptstrassenweg', async () => {
+  const h1Residential = candidate('H1-residential', 0, 800);
+  const h1Primary = candidate('H1-primary', 0, 810);
+  const h2 = candidate('H2', 1, 900);
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [h1Residential, h1Primary, h2]
+  }, provider(async request => {
+    const value = [h1Residential, h1Primary, h2].find(item => item.coordinate.lat === request.to.lat);
+    const primary = value === h1Primary || value === h2;
+    return neutralRoute(value, {
+      distanceM: primary ? 1800 : 700,
+      roadEdges: [{ lengthM: primary ? 1800 : 700, roadClass: primary ? 'primary' : 'residential', use: 'road' }]
+    });
+  }));
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'H1-primary');
+  assert.equal(preview.selectedCandidate.candidate.skippedStopCount, 0);
+  assert.equal(preview.deferredCandidateCount, 1);
 });
 
 test('Valhalla-Antwort wird in das neutrale Routingformat uebersetzt', () => {
@@ -383,7 +499,6 @@ test('Wiedereinstieg braucht stabile Fixes und setzt den Originalfortschritt hin
 });
 
 test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', () => {
-  const mapSource = fs.readFileSync(path.resolve(__dirname, '../app/js/map.js'), 'utf8');
   const showRerouteSource = mapSource.slice(
     mapSource.indexOf('function showBusReroute'),
     mapSource.indexOf('function clearBusReroute')
@@ -391,4 +506,97 @@ test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', 
   assert.match(showRerouteSource, /addSource\('bus-reroute'/);
   assert.doesNotMatch(showRerouteSource, /clearRoute\(\)/);
   assert.match(showRerouteSource, /fitBounds/);
+  assert.match(showRerouteSource, /navBusRerouteManualCameraUntil/);
+});
+
+test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase', () => {
+  const camera = {
+    clock: 1000,
+    zoom: 16,
+    center: { lng: 14.33, lat: 51.76 },
+    jumps: [],
+    performance: { now: () => camera.clock },
+    map: {
+      getZoom: () => camera.zoom,
+      getCenter: () => camera.center,
+      getBearing: () => 0,
+      jumpTo: options => camera.jumps.push(options)
+    },
+    document: { body: { classList: { contains: value => value === 'nav-mode' || value === 'nav-off-route' } } },
+    normalizeDeg: value => (value % 360 + 360) % 360,
+    shortestDegDelta: (from, to) => ((to - from + 540) % 360) - 180,
+    haversineMeters: () => 0,
+    updateStopPoiVisibility() {}
+  };
+  vm.createContext(camera);
+  vm.runInContext(`
+    const BUS_REROUTE_MANUAL_CAMERA_HOLD_MS = 4500;
+    let navOffRouteManualCamera = false;
+    let navBusRerouteCameraMode = 'preview';
+    let navBusRerouteManualCameraUntil = 0;
+    let navBusRerouteManualZoom = null;
+    const navBusRerouteActiveGestures = new Set();
+    let navCameraModeTransition = null;
+    let navCameraCenter = null;
+    let navCameraFollowOptions = { zoom: 16.2, bearing: 90, padding: {} };
+    let navCameraSyncTs = 0;
+    ${mapFunctionSource('mapCameraNow', 'beginBusRerouteMapGesture')}
+    ${mapFunctionSource('beginBusRerouteMapGesture', 'endBusRerouteMapGesture')}
+    ${mapFunctionSource('endBusRerouteMapGesture', 'resetBusRerouteCameraState')}
+    ${mapFunctionSource('resetBusRerouteCameraState', 'setMap2DMode')}
+    ${mapFunctionSource('syncNavCameraToGpsMarkerPosition', '_buildCameraOptions')}
+  `, camera);
+
+  assert.equal(camera.beginBusRerouteMapGesture('drag', { originalEvent: {} }), true);
+  assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
+  camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
+  assert.equal(camera.jumps.length, 0);
+
+  camera.zoom = 17.4;
+  camera.endBusRerouteMapGesture('drag');
+  camera.endBusRerouteMapGesture('zoom');
+  camera.clock = 4000;
+  camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
+  assert.equal(camera.jumps.length, 0);
+
+  camera.clock = 6000;
+  camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
+  assert.equal(camera.jumps.length, 1);
+  assert.equal(camera.jumps[0].zoom, 17.4);
+  assert.ok(camera.jumps[0].bearing > 0);
+
+  vm.runInContext("navBusRerouteCameraMode = 'active'", camera);
+  assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
+});
+
+test('Rueckweg-Bearing friert bei Stillstand und Positionsjitter ein', () => {
+  const bearing = {
+    clock: 1000,
+    performance: { now: () => bearing.clock },
+    normalizeDeg: value => (value % 360 + 360) % 360,
+    shortestDegDelta: (from, to) => ((to - from + 540) % 360) - 180,
+    haversineMeters: () => 0,
+    bearingFromCoords: () => 200
+  };
+  vm.createContext(bearing);
+  vm.runInContext(`
+    let navCameraBearing = 0;
+    let navBearingReady = false;
+    let navLastFix = null;
+    let navLastBearingTs = 0;
+    let navTurnBoostUntil = 0;
+    let navTurnRecoveryActive = false;
+    ${mapFunctionSource('resolveNavBearing', 'updateStopPoiVisibility')}
+  `, bearing);
+
+  assert.equal(bearing.resolveNavBearing(14.33, 51.76, 45, 10, false), 45);
+  bearing.clock = 1500;
+  assert.equal(bearing.resolveNavBearing(14.330001, 51.760001, 210, 0, false), 45);
+});
+
+test('Wiedereinstieg setzt ausschließlich die normale Kamera wieder frei', () => {
+  const clearSource = mapFunctionSource('clearBusReroute', 'drawNavigationPath');
+  assert.match(clearSource, /resetBusRerouteCameraState\(\)/);
+  assert.match(appSource, /navCenterOn\(lon, lat, sensorHeading, smoothed\.speed, false\)/);
+  assert.doesNotMatch(clearSource, /resetNavBearingState\(\)/);
 });

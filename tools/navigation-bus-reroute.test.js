@@ -42,7 +42,11 @@ function prepare(overrides = {}) {
 test('liefert drei bis fuenf ausschliesslich vorausliegende Rueckkehrkandidaten', () => {
   const result = prepare();
   assert.ok(result.returnCandidates.length >= 3 && result.returnCandidates.length <= 5);
+  assert.ok(result.routingCandidates.length >= result.returnCandidates.length);
   assert.ok(result.returnCandidates.every(candidate =>
+    candidate.routeProgressM > result.originalRouteProgress.distanceM
+  ));
+  assert.ok(result.routingCandidates.every(candidate =>
     candidate.routeProgressM > result.originalRouteProgress.distanceM
   ));
 });
