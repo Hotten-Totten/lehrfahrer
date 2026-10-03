@@ -3522,18 +3522,47 @@ function isNavManeuverBeepsEnabled() {
 function initializeNavManeuverBeepsSetting() {
   const toggle = document.getElementById('navManeuverBeepsEnabled');
   if (!toggle) return;
+  const testButtons = [
+    ['navManeuverTestRight', { angle: 90 }],
+    ['navManeuverTestLeft', { angle: -90 }],
+    ['navManeuverTestRoundabout', { type: 'roundabout', angle: 0 }]
+  ];
+  const syncTestButtons = () => testButtons.forEach(([id]) => {
+    const button = document.getElementById(id);
+    if (button) button.disabled = !toggle.checked;
+  });
   try {
     toggle.checked = localStorage.getItem(NAV_MANEUVER_BEEPS_STORAGE_KEY) !== '0';
   } catch {
     toggle.checked = true;
   }
+  testButtons.forEach(([id, turn]) => {
+    const button = document.getElementById(id);
+    if (button) button.addEventListener('click', () => playNavManeuverTestTone(turn));
+  });
+  syncTestButtons();
   toggle.addEventListener('change', () => {
+    syncTestButtons();
     try {
       localStorage.setItem(NAV_MANEUVER_BEEPS_STORAGE_KEY, toggle.checked ? '1' : '0');
     } catch {
       // Die Einstellung bleibt fuer diese Sitzung weiterhin bedienbar.
     }
   });
+}
+
+async function playNavManeuverTestTone(turn) {
+  if (!isNavManeuverBeepsEnabled()) return false;
+  let context;
+  try {
+    context = prepareNavWarningAudio();
+    if (!context) return false;
+    if (context.state !== 'running') await context.resume();
+  } catch {
+    return false;
+  }
+  if (!isNavManeuverBeepsEnabled() || context.state !== 'running') return false;
+  return playNavManeuverTone(turn);
 }
 
 function playNavOffRouteWarning() {

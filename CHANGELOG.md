@@ -1,5 +1,8 @@
 # Changelog
 
+## V2.1.050 - 2026-10-03
+- Manuelle Tests für die vorhandenen Rechts-, Links- und Kreisverkehrs-Manöverpieptöne in den Einstellungen ergänzt
+
 ## V2.1.049 - 2026-10-03
 - Optionale Manöver-Pieptöne für die aktive Bus-Rückführung ergänzt; OFF-Route-Warnton bleibt unverändert
 

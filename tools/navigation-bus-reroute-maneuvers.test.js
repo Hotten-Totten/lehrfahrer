@@ -306,3 +306,78 @@ test('Rejoin-Reset löscht Cue-Zustand; OFF-Route-Warnpfad bleibt bestehen', () 
   );
   assert.match(activeHudSource, /maybePlayBusRerouteManeuverCue\(/);
 });
+
+function createManeuverTestControls(enabled = true) {
+  const handlers = {};
+  const toggleHandlers = {};
+  const toggle = {
+    checked: enabled,
+    addEventListener: (name, handler) => { toggleHandlers[name] = handler; }
+  };
+  const buttons = Object.fromEntries([
+    'navManeuverTestRight',
+    'navManeuverTestLeft',
+    'navManeuverTestRoundabout'
+  ].map(id => [id, {
+    disabled: false,
+    addEventListener: (name, handler) => { handlers[id] = handler; }
+  }]));
+  const values = new Map();
+  if (!enabled) values.set('lehrfahrer-nav-maneuver-beeps', '0');
+  sandbox.document = {
+    getElementById: id => id === 'navManeuverBeepsEnabled' ? toggle : buttons[id]
+  };
+  sandbox.localStorage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value)
+  };
+  return { buttons, handlers, toggle, toggleHandlers, values };
+}
+
+test('Einstellungs-Testbuttons spielen genau die vorhandenen Rechts-, Links- und Kreisverkehrsmuster', async () => {
+  const controls = createManeuverTestControls();
+  const context = createAudioContextRecorder();
+  let unlockCalls = 0;
+  sandbox.prepareNavWarningAudio = () => { unlockCalls++; return context; };
+  sandbox.navWarningAudioContext = context;
+  sandbox.initializeNavManeuverBeepsSetting();
+
+  await controls.handlers.navManeuverTestRight();
+  assert.deepEqual(context.frequencies.splice(0), [880]);
+  await controls.handlers.navManeuverTestLeft();
+  assert.deepEqual(context.frequencies.splice(0), [620, 620]);
+  await controls.handlers.navManeuverTestRoundabout();
+  assert.deepEqual(context.frequencies.splice(0), [1080, 1080]);
+  assert.equal(unlockCalls, 3);
+});
+
+test('ausgeschaltete Pieptöne deaktivieren Testbuttons und verhindern Testaudio', async () => {
+  const controls = createManeuverTestControls(false);
+  const context = createAudioContextRecorder();
+  sandbox.navWarningAudioContext = context;
+  sandbox.prepareNavWarningAudio = () => context;
+  sandbox.initializeNavManeuverBeepsSetting();
+  assert.ok(Object.values(controls.buttons).every(button => button.disabled));
+  assert.equal(await sandbox.playNavManeuverTestTone({ angle: 90 }), false);
+  assert.equal(context.frequencies.length, 0);
+});
+
+test('Testbuttons verändern Rückführungszustand nicht und gesperrter AudioContext crasht nicht', async () => {
+  const controls = createManeuverTestControls();
+  const routeState = {
+    geometry: [[1, 2], [3, 4]],
+    nearestIdx: 0,
+    maneuverAudio: { turnKey: '5', warningPlayed: false, retryAt: 0 }
+  };
+  sandbox.navActiveBusReroute = routeState;
+  const before = JSON.stringify(routeState);
+  const suspendedContext = {
+    state: 'suspended',
+    resume: () => Promise.reject(new Error('Audio gesperrt'))
+  };
+  sandbox.prepareNavWarningAudio = () => suspendedContext;
+  sandbox.initializeNavManeuverBeepsSetting();
+  assert.equal(await controls.handlers.navManeuverTestRight(), false);
+  assert.equal(JSON.stringify(routeState), before);
+  assert.equal(sandbox.navActiveBusReroute, routeState);
+});
