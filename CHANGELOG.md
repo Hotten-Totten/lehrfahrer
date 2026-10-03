@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.1.046 - 2026-10-03
+- Bedienbare Kamera bei Rückführungs-Vorschau und aktiver Rückführung mit temporärem Auto-Follow-Hold und Wiederaufnahme bei erhaltener Nutzer-Zoomstufe abgeschlossen
+- Fahrtrichtungs-Bearing bei Stillstand stabilisiert und Kamera-/Gestenstatus beim Wiedereinstieg vollständig zurückgesetzt
+
 ## V2.1.045 - 2026-10-03
 - Offline-Routinggraph als unabhängige OPFS-Datenquelle mit JSON-Import, Versions-/Inhaltsvalidierung, Prüfsumme und zweifachem Slot-/Manifest-Rollback dauerhaft speicherbar gemacht
 - installierte LocalBusRouter-Region beim Appstart geladen und Start-/Zielpunkte außerhalb der Regions-BoundingBox sauber abgelehnt

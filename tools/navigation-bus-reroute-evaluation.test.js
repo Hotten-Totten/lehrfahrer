@@ -531,7 +531,10 @@ test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase
     document: { body: { classList: { contains: value => value === 'nav-mode' || value === 'nav-off-route' } } },
     normalizeDeg: value => (value % 360 + 360) % 360,
     shortestDegDelta: (from, to) => ((to - from + 540) % 360) - 180,
-    haversineMeters: () => 0,
+    haversineMeters: (lat1, lon1, lat2, lon2) => Math.hypot(
+      (lat1 - lat2) * 111320,
+      (lon1 - lon2) * 70000
+    ),
     updateStopPoiVisibility() {}
   };
   vm.createContext(camera);
@@ -555,6 +558,7 @@ test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase
 
   assert.equal(camera.beginBusRerouteMapGesture('drag', { originalEvent: {} }), true);
   assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
+  camera.center = { lng: 14.35, lat: 51.78 };
   camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
   assert.equal(camera.jumps.length, 0);
 
@@ -567,11 +571,16 @@ test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase
 
   camera.clock = 6000;
   camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
-  assert.equal(camera.jumps.length, 1);
-  assert.equal(camera.jumps[0].zoom, 17.4);
-  assert.ok(camera.jumps[0].bearing > 0);
+  assert.equal(camera.jumps.length, 0);
 
   vm.runInContext("navBusRerouteCameraMode = 'active'", camera);
+  camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
+  assert.equal(camera.jumps.length, 1);
+  assert.equal(camera.jumps[0].zoom, 17.4);
+  assert.ok(camera.jumps[0].center[0] > 14.34 && camera.jumps[0].center[0] < 14.35);
+  assert.ok(camera.jumps[0].center[1] > 51.77 && camera.jumps[0].center[1] < 51.78);
+  assert.ok(camera.jumps[0].bearing > 0);
+
   assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
 });
 
@@ -595,14 +604,33 @@ test('Rueckweg-Bearing friert bei Stillstand und Positionsjitter ein', () => {
     ${mapFunctionSource('resolveNavBearing', 'updateStopPoiVisibility')}
   `, bearing);
 
+  assert.equal(bearing.resolveNavBearing(14.33, 51.76, 270, 0, false), 0);
+  assert.equal(vm.runInContext('navBearingReady', bearing), false);
   assert.equal(bearing.resolveNavBearing(14.33, 51.76, 45, 10, false), 45);
   bearing.clock = 1500;
   assert.equal(bearing.resolveNavBearing(14.330001, 51.760001, 210, 0, false), 45);
 });
 
-test('Wiedereinstieg setzt ausschließlich die normale Kamera wieder frei', () => {
+test('Wiedereinstieg setzt Kamera-Hold, Zoom und aktive Gesten vollständig zurück', () => {
   const clearSource = mapFunctionSource('clearBusReroute', 'drawNavigationPath');
   assert.match(clearSource, /resetBusRerouteCameraState\(\)/);
   assert.match(appSource, /navCenterOn\(lon, lat, sensorHeading, smoothed\.speed, false\)/);
   assert.doesNotMatch(clearSource, /resetNavBearingState\(\)/);
+
+  const camera = {};
+  vm.createContext(camera);
+  vm.runInContext(`
+    let navBusRerouteCameraMode = 'active';
+    let navBusRerouteManualCameraUntil = Infinity;
+    let navBusRerouteManualZoom = 18;
+    const navBusRerouteActiveGestures = new Set(['drag', 'zoom']);
+    let navOffRouteManualCamera = true;
+    ${mapFunctionSource('resetBusRerouteCameraState', 'setMap2DMode')}
+    resetBusRerouteCameraState();
+  `, camera);
+  assert.equal(vm.runInContext('navBusRerouteCameraMode', camera), 'none');
+  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), 0);
+  assert.equal(vm.runInContext('navBusRerouteManualZoom', camera), null);
+  assert.equal(vm.runInContext('navBusRerouteActiveGestures.size', camera), 0);
+  assert.equal(vm.runInContext('navOffRouteManualCamera', camera), false);
 });

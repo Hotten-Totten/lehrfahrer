@@ -23,6 +23,7 @@ const GPS_MARKER_TARGET_MAX_MS = 2500;
 const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
 const GPS_MARKER_TARGET_MAX_SPEED_MPS = 55;
 const OFF_ROUTE_OVERVIEW_ZOOM = 16.2;
+const BUS_REROUTE_MANUAL_CAMERA_HOLD_MS = 4500;
 let gpsAnimFrameId = null;
 let gpsAnimState = null;
 let navCameraBearing = 0;
@@ -38,6 +39,10 @@ let navCameraCenter = null;
 let navOffRouteCameraActive = false;
 let navCameraModeTransition = null;
 let navOffRouteManualCamera = false;
+let navBusRerouteCameraMode = 'none';
+let navBusRerouteManualCameraUntil = 0;
+let navBusRerouteManualZoom = null;
+const navBusRerouteActiveGestures = new Set();
 let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
@@ -92,6 +97,47 @@ function resetNavBearingState() {
   navCameraCenter = null;
   navOffRouteCameraActive = false;
   navCameraModeTransition = null;
+  navOffRouteManualCamera = false;
+  navBusRerouteCameraMode = 'none';
+  navBusRerouteManualCameraUntil = 0;
+  navBusRerouteManualZoom = null;
+  navBusRerouteActiveGestures.clear();
+}
+
+function mapCameraNow() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+
+function beginBusRerouteMapGesture(type, event) {
+  if (!event?.originalEvent || navBusRerouteCameraMode === 'none') return false;
+  navBusRerouteActiveGestures.add(type);
+  navBusRerouteManualCameraUntil = Infinity;
+  navBusRerouteManualZoom = map ? map.getZoom() : navBusRerouteManualZoom;
+  navOffRouteManualCamera = true;
+  navCameraModeTransition = null;
+  return true;
+}
+
+function endBusRerouteMapGesture(type) {
+  if (navBusRerouteCameraMode === 'none') return false;
+  if (!navBusRerouteActiveGestures.has(type)) return false;
+  navBusRerouteActiveGestures.delete(type);
+  if (!navBusRerouteActiveGestures.size) {
+    navBusRerouteManualCameraUntil = mapCameraNow() + BUS_REROUTE_MANUAL_CAMERA_HOLD_MS;
+    if (map) {
+      navBusRerouteManualZoom = map.getZoom();
+      const center = map.getCenter();
+      navCameraCenter = { lon: center.lng, lat: center.lat };
+    }
+  }
+  return true;
+}
+
+function resetBusRerouteCameraState() {
+  navBusRerouteCameraMode = 'none';
+  navBusRerouteManualCameraUntil = 0;
+  navBusRerouteManualZoom = null;
+  navBusRerouteActiveGestures.clear();
   navOffRouteManualCamera = false;
 }
 
@@ -1256,14 +1302,18 @@ async function initMap() {
       navCameraCenter = { lon: center.lng, lat: center.lat };
     }
   });
-  const respectOffRouteMapGesture = event => {
+  const respectOffRouteMapGesture = (type, event) => {
     if (!event.originalEvent || !document.body.classList.contains('nav-off-route')) return;
+    beginBusRerouteMapGesture(type, event);
     navOffRouteManualCamera = true;
     navCameraModeTransition = null;
   };
-  map.on('dragstart', respectOffRouteMapGesture);
-  map.on('zoomstart', respectOffRouteMapGesture);
-  map.on('rotatestart', respectOffRouteMapGesture);
+  map.on('dragstart', event => respectOffRouteMapGesture('drag', event));
+  map.on('zoomstart', event => respectOffRouteMapGesture('zoom', event));
+  map.on('rotatestart', event => respectOffRouteMapGesture('rotate', event));
+  map.on('dragend', () => endBusRerouteMapGesture('drag'));
+  map.on('zoomend', () => endBusRerouteMapGesture('zoom'));
+  map.on('rotateend', () => endBusRerouteMapGesture('rotate'));
 
   return map;
 }
@@ -1512,7 +1562,18 @@ function clearRoute() {
 function showBusReroute(routePoints, currentPosition, active = false) {
   if (!map || !Array.isArray(routePoints) || routePoints.length < 2) return false;
   const render = () => {
-    clearBusReroute();
+    const previousMode = navBusRerouteCameraMode;
+    clearBusReroute(false);
+    navBusRerouteCameraMode = active ? 'active' : 'preview';
+    if (previousMode === 'none') {
+      navBusRerouteManualCameraUntil = 0;
+      navBusRerouteManualZoom = null;
+      navBusRerouteActiveGestures.clear();
+    }
+    if (active && previousMode === 'preview' && !Number.isFinite(navBusRerouteManualZoom)) {
+      navBusRerouteManualCameraUntil = 0;
+      navOffRouteManualCamera = false;
+    }
     const coords = routePoints.map(point => Array.isArray(point)
       ? [Number(point[1]), Number(point[0])]
       : [Number(point.lon), Number(point.lat)]
@@ -1548,6 +1609,8 @@ function showBusReroute(routePoints, currentPosition, active = false) {
         (value, coordinate) => value.extend(coordinate),
         new maplibregl.LngLatBounds(visibleCoords[0], visibleCoords[0])
       );
+      navOffRouteManualCamera = true;
+      navBusRerouteManualCameraUntil = mapCameraNow() + BUS_REROUTE_MANUAL_CAMERA_HOLD_MS;
       map.fitBounds(bounds, {
         padding: { top: 120, bottom: 170, left: 40, right: 40 },
         maxZoom: 16,
@@ -1561,7 +1624,8 @@ function showBusReroute(routePoints, currentPosition, active = false) {
   return true;
 }
 
-function clearBusReroute() {
+function clearBusReroute(resetCamera = true) {
+  if (resetCamera) resetBusRerouteCameraState();
   if (!map) return;
   ['bus-reroute-line', 'bus-reroute-shadow'].forEach(id => {
     if (map.getLayer(id)) map.removeLayer(id);
@@ -1894,12 +1958,16 @@ function routePositionAtProgress(routePoints, routeCumDists, progressM) {
 
 function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
+  const nowTs = mapCameraNow();
   if (document.body.classList.contains('nav-off-route') && navOffRouteManualCamera) {
     const manualCenter = map.getCenter();
     navCameraCenter = { lon: manualCenter.lng, lat: manualCenter.lat };
-    return;
+    const busRerouteHoldActive = navBusRerouteCameraMode !== 'none' && (
+      navBusRerouteActiveGestures.size > 0 || nowTs < navBusRerouteManualCameraUntil
+    );
+    if (navBusRerouteCameraMode !== 'active' || busRerouteHoldActive) return;
+    navOffRouteManualCamera = false;
   }
-  const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const dt = navCameraSyncTs > 0 ? Math.min(120, Math.max(8, nowTs - navCameraSyncTs)) : 16;
   navCameraSyncTs = nowTs;
   const currentBearing = normalizeDeg(map.getBearing());
@@ -1921,6 +1989,9 @@ function syncNavCameraToGpsMarkerPosition(lon, lat) {
   navCameraCenter.lon += (lon - navCameraCenter.lon) * centerFraction;
   navCameraCenter.lat += (lat - navCameraCenter.lat) * centerFraction;
   let cameraOptions = navCameraFollowOptions;
+  if (navBusRerouteCameraMode !== 'none' && Number.isFinite(navBusRerouteManualZoom)) {
+    cameraOptions = { ...cameraOptions, zoom: navBusRerouteManualZoom };
+  }
   if (navCameraModeTransition) {
     const transition = navCameraModeTransition;
     const progress = Math.min(1, Math.max(0, (nowTs - transition.startTs) / transition.durationMs));
