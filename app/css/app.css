@@ -1332,6 +1332,20 @@ body.nav-off-route-compact #navUpcomingStops {
   background: #ffd9dc;
 }
 
+.nav-off-route-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.nav-off-route-summary {
+  padding: 7px 5px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.3;
+  text-align: center;
+}
+
 .nav-off-route-dispatch {
   padding: 4px 2px 1px;
   color: #fff;

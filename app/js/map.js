@@ -1509,6 +1509,66 @@ function clearRoute() {
   if (map.getSource('route')) map.removeSource('route');
 }
 
+function showBusReroute(routePoints, currentPosition, active = false) {
+  if (!map || !Array.isArray(routePoints) || routePoints.length < 2) return false;
+  const render = () => {
+    clearBusReroute();
+    const coords = routePoints.map(point => Array.isArray(point)
+      ? [Number(point[1]), Number(point[0])]
+      : [Number(point.lon), Number(point.lat)]
+    ).filter(point => point.every(Number.isFinite));
+    if (coords.length < 2) return;
+
+    map.addSource('bus-reroute', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } }
+    });
+    map.addLayer({
+      id: 'bus-reroute-shadow',
+      type: 'line',
+      source: 'bus-reroute',
+      paint: { 'line-color': '#07182f', 'line-width': 12, 'line-opacity': 0.72 }
+    });
+    map.addLayer({
+      id: 'bus-reroute-line',
+      type: 'line',
+      source: 'bus-reroute',
+      paint: {
+        'line-color': active ? '#20d6ff' : '#ffd43b',
+        'line-width': active ? 7 : 6,
+        'line-opacity': 1,
+        'line-dasharray': active ? [1, 0] : [1.8, 1.25]
+      }
+    });
+
+    if (!active) {
+      const current = currentPosition && [Number(currentPosition.lon), Number(currentPosition.lat)];
+      const visibleCoords = current?.every(Number.isFinite) ? coords.concat([current]) : coords;
+      const bounds = visibleCoords.reduce(
+        (value, coordinate) => value.extend(coordinate),
+        new maplibregl.LngLatBounds(visibleCoords[0], visibleCoords[0])
+      );
+      map.fitBounds(bounds, {
+        padding: { top: 120, bottom: 170, left: 40, right: 40 },
+        maxZoom: 16,
+        duration: 650
+      });
+    }
+  };
+
+  if (map.isStyleLoaded()) render();
+  else map.once('styledata', render);
+  return true;
+}
+
+function clearBusReroute() {
+  if (!map) return;
+  ['bus-reroute-line', 'bus-reroute-shadow'].forEach(id => {
+    if (map.getLayer(id)) map.removeLayer(id);
+  });
+  if (map.getSource('bus-reroute')) map.removeSource('bus-reroute');
+}
+
 // ── Navigations-Pfad zum Startpunkt ────────────────────────────
 function drawNavigationPath(currentPos, routeStart) {
   if (!map) return;

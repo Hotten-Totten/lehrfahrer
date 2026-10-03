@@ -197,7 +197,7 @@ test('klar unzulaessige Route wird hart verworfen', () => {
   assert.equal(preview.rejectedCandidates[0].candidate.id, 'forbidden');
 });
 
-test('liefert keinen endgueltigen Kandidaten wenn alle Wege ungeeignet sind', () => {
+test('U-Turn bleibt Penalty, ausdrueckliches Busverbot bleibt HARD reject', () => {
   const uturn = candidate('uturn', 0, 500);
   const privateRoute = candidate('private', 0, 700);
   const preview = sandbox.selectBusReroutePreview([
@@ -208,10 +208,65 @@ test('liefert keinen endgueltigen Kandidaten wenn alle Wege ungeeignet sind', ()
     }
   ]);
 
-  assert.equal(preview.status, 'no-suitable-route');
-  assert.equal(preview.selectedCandidate, null);
-  assert.equal(preview.alternatives.length, 0);
-  assert.equal(preview.rejectedCandidates.length, 2);
+  assert.equal(preview.status, 'ready');
+  assert.equal(preview.selectedCandidate.candidate.id, 'uturn');
+  assert.equal(preview.selectedCandidate.hardViolations.length, 0);
+  assert.ok(preview.selectedCandidate.scoreBreakdown.penalties.uTurns > 0);
+  assert.equal(preview.rejectedCandidates.length, 1);
+  assert.equal(preview.rejectedCandidates[0].candidate.id, 'private');
+});
+
+test('unbekannte Busrestriktionen sind kein hartes Verbot', () => {
+  const unknown = candidate('unknown', 0, 500);
+  const preview = sandbox.selectBusReroutePreview([{
+    ...neutralRoute(unknown, {
+      roadEdges: [{ lengthM: 800, roadClass: null, use: null }],
+      restrictions: { access: 'unknown', motorVehicle: 'unknown', bus: 'unknown' }
+    }),
+    candidate: unknown
+  }]);
+
+  assert.equal(preview.status, 'ready');
+  assert.equal(preview.selectedCandidate.candidate.id, 'unknown');
+  assert.equal(preview.selectedCandidate.hardViolations.length, 0);
+});
+
+test('Routingzustaende und Meldungen bleiben unterscheidbar', () => {
+  const value = candidate('state', 0, 500);
+  const unavailable = sandbox.selectBusReroutePreview([{
+    ...sandbox.createBusRoutingFailure('PROVIDER_UNAVAILABLE', 'offline', null),
+    candidate: value
+  }]);
+  const providerError = sandbox.selectBusReroutePreview([{
+    ...sandbox.createBusRoutingFailure('PROVIDER_ERROR', 'kaputt', { id: 'test' }),
+    candidate: value
+  }]);
+  const noRoute = sandbox.selectBusReroutePreview([{
+    ...sandbox.createBusRoutingFailure('NO_ROUTE', 'kein Weg', { id: 'test' }),
+    candidate: value
+  }]);
+
+  assert.equal(unavailable.status, 'provider-unavailable');
+  assert.equal(sandbox.getBusRerouteStatusMessage(unavailable), 'Für diese Region ist noch kein Offline-Routing installiert.');
+  assert.equal(providerError.status, 'provider-error');
+  assert.equal(sandbox.getBusRerouteStatusMessage(providerError), 'Bus-Routingprovider ist momentan nicht erreichbar.');
+  assert.equal(noRoute.status, 'no-suitable-route');
+  assert.equal(sandbox.getBusRerouteStatusMessage(noRoute), 'Kein geeigneter Weg für Busse gefunden.');
+});
+
+test('Diagnose enthaelt Rueckkehrpunkt, Provider, Rejects, Penalties und Gesamtwert', () => {
+  const value = candidate('diag', 1, 750);
+  const preview = sandbox.selectBusReroutePreview([{ ...neutralRoute(value), candidate: value }]);
+  const diagnostic = preview.diagnostics[0];
+
+  assert.deepEqual(JSON.parse(JSON.stringify(diagnostic.returnPoint)), value.coordinate);
+  assert.equal(diagnostic.provider.id, 'test-provider');
+  assert.equal(diagnostic.distanceM, 1800);
+  assert.deepEqual(Array.from(diagnostic.roadClasses), ['primary']);
+  assert.equal(diagnostic.skippedStopCount, 1);
+  assert.deepEqual(Array.from(diagnostic.hardRejectReasons), []);
+  assert.equal(typeof diagnostic.penalties, 'object');
+  assert.equal(typeof diagnostic.totalScore, 'number');
 });
 
 test('Routing-Preview veraendert die Originalroute nicht', async () => {
@@ -233,4 +288,107 @@ test('Routing-Preview veraendert die Originalroute nicht', async () => {
   assert.equal(JSON.stringify(preparation.originalRoute), before);
   assert.equal(preview.originalRoutePreserved, true);
   assert.notStrictEqual(preview.selectedCandidate.routeGeometry, preparation.originalRoute.routePoints);
+});
+
+test('Previewzustand wird zur temporaeren Rueckwegnavigation ohne Originalrouten-Mutation', () => {
+  sandbox.buildNavCumDists = points => points.map((_, index) => index * 100);
+  sandbox.detectNavTurns = () => [];
+  const originalRoute = {
+    routePoints: [[51.75, 14.32], [51.76, 14.33]],
+    progressIndex: 4,
+    progressM: 400
+  };
+  const before = JSON.stringify(originalRoute);
+  const selected = {
+    ...neutralRoute(candidate('active', 2, 900)),
+    candidate: { ...candidate('active', 2, 900), routeIndex: 9, nextStopName: 'Halt C' },
+    routeGeometry: [[51.75, 14.32], [51.755, 14.325], [51.76, 14.33]]
+  };
+  const state = sandbox.buildBusRerouteNavigationState({
+    originalRoute,
+    preview: { selectedCandidate: selected }
+  });
+
+  assert.equal(state.geometry.length, 3);
+  assert.equal(state.selectedCandidate.candidate.skippedStopCount, 2);
+  assert.strictEqual(state.originalRoute, originalRoute);
+  assert.equal(JSON.stringify(originalRoute), before);
+});
+
+test('Abbrechen entfernt nur die Preview, Start aktiviert den temporaeren Rueckweg', () => {
+  sandbox.buildNavCumDists = points => points.map((_, index) => index * 100);
+  sandbox.detectNavTurns = () => [];
+  sandbox.renderUpcomingStops = () => {};
+  sandbox.clearBusReroute = () => { sandbox.previewCleared = true; };
+  sandbox.showBusReroute = () => { sandbox.rerouteShown = true; };
+  sandbox.showToast = () => {};
+  sandbox.navCumDists = [0, 1000];
+  sandbox.navProgressIdx = 0;
+  sandbox.navActiveBusReroute = null;
+  sandbox.navPendingBusRerouteRequest = { preview: null };
+
+  assert.equal(sandbox.cancelBusReroutePreview(), true);
+  assert.equal(sandbox.previewCleared, true);
+  assert.equal(sandbox.navPendingBusRerouteRequest, null);
+
+  const selected = {
+    ...neutralRoute(candidate('start', 0, 500)),
+    candidate: { ...candidate('start', 0, 500), routeIndex: 5 },
+    routeGeometry: [[51.75, 14.32], [51.76, 14.33]]
+  };
+  sandbox.navPendingBusRerouteRequest = {
+    routingStatus: 'ready',
+    originalRoute: { routePoints: [[1, 1], [2, 2]], progressIndex: 0, progressM: 0 },
+    preview: { selectedCandidate: selected }
+  };
+  sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.32 };
+  assert.equal(sandbox.startPreparedBusReroute(), true);
+  assert.ok(sandbox.navActiveBusReroute);
+  assert.equal(sandbox.navPendingBusRerouteRequest.routingStatus, 'active');
+  assert.equal(sandbox.rerouteShown, true);
+});
+
+test('Wiedereinstieg braucht stabile Fixes und setzt den Originalfortschritt hinter ausgelassene Halte', () => {
+  sandbox.findNearestNavIdx = (_lat, _lon, points) => points.length - 1;
+  sandbox.haversineM = (lat1, lon1, lat2, lon2) => (lat1 === lat2 && lon1 === lon2 ? 0 : 100);
+  let state = {
+    geometry: [[51.75, 14.32], [51.76, 14.33]],
+    nearestIdx: 0,
+    reentryHitCount: 0
+  };
+  let result;
+  for (let index = 0; index < 3; index++) {
+    result = sandbox.advanceBusRerouteNavigationState(state, 51.76, 14.33);
+    state = result.state;
+  }
+  assert.equal(result.reached, true);
+
+  sandbox.clearBusReroute = () => {};
+  sandbox.setConfirmedNavOffRoute = active => { sandbox.confirmedOffRoute = active; };
+  sandbox.updateNavHud = (_lat, _lon, idx) => { sandbox.resumedAt = idx; };
+  sandbox.showToast = () => {};
+  sandbox.navProgressIdx = 4;
+  sandbox.navNearestIdx = 4;
+  sandbox.navLastRawGpsPos = { lat: 51.76, lon: 14.33 };
+  sandbox.navPendingBusRerouteRequest = { preview: {} };
+  sandbox.navActiveBusReroute = {
+    selectedCandidate: { candidate: { routeIndex: 9, skippedStopCount: 2 } }
+  };
+  assert.equal(sandbox.finishActiveBusReroute(), true);
+  assert.equal(sandbox.navProgressIdx, 9);
+  assert.equal(sandbox.navNearestIdx, 9);
+  assert.equal(sandbox.resumedAt, 9);
+  assert.equal(sandbox.confirmedOffRoute, false);
+  assert.equal(sandbox.navPendingBusRerouteRequest, null);
+});
+
+test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', () => {
+  const mapSource = fs.readFileSync(path.resolve(__dirname, '../app/js/map.js'), 'utf8');
+  const showRerouteSource = mapSource.slice(
+    mapSource.indexOf('function showBusReroute'),
+    mapSource.indexOf('function clearBusReroute')
+  );
+  assert.match(showRerouteSource, /addSource\('bus-reroute'/);
+  assert.doesNotMatch(showRerouteSource, /clearRoute\(\)/);
+  assert.match(showRerouteSource, /fitBounds/);
 });

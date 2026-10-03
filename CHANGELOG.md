@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.042 - 2026-10-03
+- OFF-Route-Rückführung um busgeeignete Rückwegprüfung mit getrennten Zuständen für fehlenden Offline-Graph, Providerfehler und tatsächlich fehlenden geeigneten Weg ergänzt
+- U-Turns als gewichtete Penalty statt pauschalem HARD-Reject behandelt; unbekannte Straßeninformationen bleiben zulässig und echte Busverbote werden weiterhin hart verworfen
+- gefundene Rückroute als eigene Kartenvorschau bei gleichzeitig sichtbarer Originalroute dargestellt und über „Rückweg starten“ als temporäre GPS-/Manöverführung aktiviert
+- Originalroute nach stabilem Wiedereinstieg automatisch am passenden Fortschritt fortgesetzt und dabei ausgelassene Haltestellen korrekt berücksichtigt
+
 ## V2.1.041 - 2026-09-19
 - OPFS-Zugriff und PMTiles-Manifest mit klaren Zuständen für vorhandene, fehlende, blockierte oder veraltete Offline-Karten abgesichert
 - Fahrer-App startet ohne lesbare Offline-Karte kontrolliert ohne Online-Tile-Schleife; der Online-Fallback bleibt verfügbar
