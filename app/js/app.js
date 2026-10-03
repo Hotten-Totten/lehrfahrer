@@ -5148,6 +5148,10 @@ function registerLocalBusRouter(implementation) {
   return valid;
 }
 
+function getInstalledLocalBusRoutingGraph() {
+  return localBusRouterImplementation?.graph || null;
+}
+
 function loadLocalBusRouterModule() {
   if (globalThis.LehrfahrerLocalBusRouting) {
     return Promise.resolve(globalThis.LehrfahrerLocalBusRouting);
@@ -5708,7 +5712,13 @@ function startPreparedBusReroute() {
   navActiveBusReroute = state;
   navPendingBusRerouteRequest.routingStatus = 'active';
   if (typeof showBusReroute === 'function') {
-    showBusReroute(state.geometry, navLastRawGpsPos, true);
+    showBusReroute(
+      state.geometry,
+      navLastRawGpsPos,
+      true,
+      getInstalledLocalBusRoutingGraph(),
+      state.selectedCandidate?.localPath?.edgeIds || []
+    );
   }
   renderUpcomingStops(state.cumDists[0] || 0);
   showToast('Rückweg gestartet. Die Originalroute bleibt erhalten.', 4500);
@@ -5734,6 +5744,9 @@ function finishActiveBusReroute() {
 
 function updateActiveBusRerouteHud(lat, lon) {
   if (!navActiveBusReroute) return false;
+  if (typeof updateActiveBusRerouteStreetNames === 'function') {
+    updateActiveBusRerouteStreetNames(lon, lat);
+  }
   const advanced = advanceBusRerouteNavigationState(navActiveBusReroute, lat, lon);
   navActiveBusReroute = advanced.state;
   const currentDist = navActiveBusReroute.cumDists[navActiveBusReroute.nearestIdx] || 0;
@@ -5813,7 +5826,13 @@ async function prepareBusReroutePreviewRequest() {
     rerouteRequest.routingStatus = preview.status;
     console.info('[Navigation] Bus-Re-Route-Diagnose', preview.diagnostics);
     if (preview.selectedCandidate && typeof showBusReroute === 'function') {
-      showBusReroute(preview.selectedCandidate.routeGeometry, rerouteRequest.currentPosition, false);
+      showBusReroute(
+        preview.selectedCandidate.routeGeometry,
+        rerouteRequest.currentPosition,
+        false,
+        getInstalledLocalBusRoutingGraph(),
+        preview.selectedCandidate.localPath?.edgeIds || []
+      );
     }
     renderUpcomingStops(Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0);
     showToast(getBusRerouteStatusMessage(preview), 6000);

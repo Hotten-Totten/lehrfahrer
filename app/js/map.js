@@ -43,6 +43,17 @@ let navBusRerouteCameraMode = 'none';
 let navBusRerouteManualCameraUntil = 0;
 let navBusRerouteManualZoom = null;
 const navBusRerouteActiveGestures = new Set();
+let navBusRerouteStreetLabelContext = null;
+let navBusRerouteStreetLabelLastUpdateTs = 0;
+let navBusRerouteStreetLabelLastPosition = null;
+const BUS_REROUTE_STREET_LABEL_LAYER_ID = 'bus-reroute-street-names';
+const BUS_REROUTE_STREET_LABEL_SOURCE_ID = 'bus-reroute-street-names';
+const BUS_REROUTE_STREET_LABEL_UPDATE_MS = 1200;
+const BUS_REROUTE_STREET_LABEL_UPDATE_DISTANCE_M = 35;
+const BUS_REROUTE_STREET_LABEL_AHEAD_M = 900;
+const BUS_REROUTE_STREET_LABEL_BEHIND_M = 220;
+const BUS_REROUTE_STREET_LABEL_CORRIDOR_M = 140;
+const BUS_REROUTE_STREET_LABEL_MAX_FEATURES = 120;
 let map2DModeEnabled = false;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
@@ -102,6 +113,9 @@ function resetNavBearingState() {
   navBusRerouteManualCameraUntil = 0;
   navBusRerouteManualZoom = null;
   navBusRerouteActiveGestures.clear();
+  navBusRerouteStreetLabelContext = null;
+  navBusRerouteStreetLabelLastUpdateTs = 0;
+  navBusRerouteStreetLabelLastPosition = null;
 }
 
 function mapCameraNow() {
@@ -822,13 +836,8 @@ function updateStopPoiVisibility() {
   const zoom = map.getZoom();
   const navMode = document.body.classList.contains('nav-mode');
 
-  if (!navMode && zoom < 16.8) {
+  if (!navMode && zoom < 16.2) {
     stopMarkerMeta.forEach(meta => meta.el.classList.add('label-hidden'));
-    return;
-  }
-
-  if (!navMode) {
-    stopMarkerMeta.forEach(meta => meta.el.classList.remove('label-hidden'));
     return;
   }
 
@@ -840,7 +849,8 @@ function updateStopPoiVisibility() {
     }))
     .sort((a, b) => a.d - b.d);
 
-  const keep = new Set(ranked.slice(0, 1).map(x => x.meta));
+  const maxVisibleLabels = navMode ? 1 : (zoom < 16.8 ? 8 : ranked.length);
+  const keep = new Set(ranked.slice(0, maxVisibleLabels).map(x => x.meta));
   stopMarkerMeta.forEach(meta => {
     if (keep.has(meta)) meta.el.classList.remove('label-hidden');
     else meta.el.classList.add('label-hidden');
@@ -1559,7 +1569,311 @@ function clearRoute() {
   if (map.getSource('route')) map.removeSource('route');
 }
 
-function showBusReroute(routePoints, currentPosition, active = false) {
+const BUS_REROUTE_STREET_LABEL_ROAD_CLASSES = new Set([
+  'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service'
+]);
+
+function getBusRerouteStreetLabel(edge) {
+  const name = typeof edge?.name === 'string' ? edge.name.trim() : '';
+  if (name) return name;
+  const ref = typeof edge?.ref === 'string' ? edge.ref.trim() : '';
+  return ref && !/^\d+$/.test(ref) ? ref : null;
+}
+
+function createBusRerouteStreetLabelContext(graph, routeEdgeIds) {
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges) || !Array.isArray(routeEdgeIds)) {
+    return null;
+  }
+  const nodesById = new Map(graph.nodes.map(node => [String(node.id), node]));
+  const edgesById = new Map(graph.edges.map(edge => [String(edge.id), edge]));
+  const routeEdges = routeEdgeIds.map(id => edgesById.get(String(id))).filter(Boolean);
+  if (!routeEdges.length) return null;
+
+  const routeEdgeIdsSet = new Set(routeEdges.map(edge => String(edge.id)));
+  const routeNodeIds = new Set();
+  routeEdges.forEach(edge => {
+    routeNodeIds.add(String(edge.from));
+    routeNodeIds.add(String(edge.to));
+  });
+  const allLabelEdgesByNode = new Map();
+  graph.edges.forEach(edge => {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    if (!BUS_REROUTE_STREET_LABEL_ROAD_CLASSES.has(edge.roadClass) || !getBusRerouteStreetLabel(edge)) return;
+    if (!allLabelEdgesByNode.has(from)) allLabelEdgesByNode.set(from, []);
+    if (!allLabelEdgesByNode.has(to)) allLabelEdgesByNode.set(to, []);
+    allLabelEdgesByNode.get(from).push(edge);
+    allLabelEdgesByNode.get(to).push(edge);
+  });
+  const corridorEdges = getBusRerouteStreetLabelCorridorEdges(
+    { labelEdgesByNode: allLabelEdgesByNode },
+    routeNodeIds
+  );
+  const labelEdgesByNode = new Map();
+  corridorEdges.forEach(edge => {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    if (!labelEdgesByNode.has(from)) labelEdgesByNode.set(from, []);
+    if (!labelEdgesByNode.has(to)) labelEdgesByNode.set(to, []);
+    labelEdgesByNode.get(from).push(edge);
+    labelEdgesByNode.get(to).push(edge);
+  });
+  return {
+    nodesById,
+    routeEdges,
+    routeEdgeIdsSet: new Set(routeEdges.map(edge => String(edge.id))),
+    labelEdgesByNode
+  };
+}
+
+function getBusRerouteStreetLabelCorridorEdges(context, seedNodeIds) {
+  const included = new Map();
+  const distanceByNode = new Map();
+  const pending = [];
+  seedNodeIds.forEach(nodeId => {
+    if (distanceByNode.has(nodeId)) return;
+    distanceByNode.set(nodeId, 0);
+    pending.push(nodeId);
+  });
+  for (let index = 0; index < pending.length; index++) {
+    const nodeId = pending[index];
+    const currentDistance = distanceByNode.get(nodeId);
+    if (currentDistance >= BUS_REROUTE_STREET_LABEL_CORRIDOR_M) continue;
+    (context.labelEdgesByNode.get(nodeId) || []).forEach(edge => {
+      included.set(String(edge.id), edge);
+      const from = String(edge.from);
+      const to = String(edge.to);
+      const nextNode = from === nodeId ? to : from;
+      const nextDistance = currentDistance + Math.max(1, Number(edge.lengthMeters) || 1);
+      if (nextDistance > BUS_REROUTE_STREET_LABEL_CORRIDOR_M ||
+          nextDistance >= (distanceByNode.get(nextNode) ?? Infinity)) return;
+      distanceByNode.set(nextNode, nextDistance);
+      pending.push(nextNode);
+    });
+  }
+  return [...included.values()];
+}
+
+function buildBusRerouteStreetNameFeatures(context, mode = 'preview', currentPosition = null) {
+  if (!context) return [];
+  const { nodesById, routeEdges, routeEdgeIdsSet, labelEdgesByNode } = context;
+  let visibleRouteEdges = routeEdges;
+  if (mode === 'active' && Number.isFinite(currentPosition?.lat) && Number.isFinite(currentPosition?.lon)) {
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    routeEdges.forEach((edge, index) => {
+      const from = nodesById.get(String(edge.from));
+      const to = nodesById.get(String(edge.to));
+      if (!from || !to) return;
+      const distance = Math.min(
+        haversineMeters(currentPosition.lat, currentPosition.lon, Number(from.lat), Number(from.lon)),
+        haversineMeters(currentPosition.lat, currentPosition.lon, Number(to.lat), Number(to.lon))
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    let progressM = 0;
+    let windowStartM = 0;
+    let windowEndM = 0;
+    routeEdges.forEach((edge, index) => {
+      const lengthM = Number(edge.lengthMeters) || 0;
+      if (index === closestIndex) windowStartM = progressM;
+      progressM += lengthM;
+      if (index === closestIndex) windowEndM = progressM;
+    });
+    const minM = Math.max(0, windowStartM - BUS_REROUTE_STREET_LABEL_BEHIND_M);
+    const maxM = windowEndM + BUS_REROUTE_STREET_LABEL_AHEAD_M;
+    progressM = 0;
+    visibleRouteEdges = routeEdges.filter(edge => {
+      const endM = progressM + (Number(edge.lengthMeters) || 0);
+      const visible = endM >= minM && progressM <= maxM;
+      progressM = endM;
+      return visible;
+    });
+  }
+
+  const visibleRouteIds = new Set(visibleRouteEdges.map(edge => String(edge.id)));
+  const visibleNodeIds = new Set();
+  visibleRouteEdges.forEach(edge => {
+    visibleNodeIds.add(String(edge.from));
+    visibleNodeIds.add(String(edge.to));
+  });
+  const segmentsByLabel = new Map();
+  const uniqueSegments = new Map();
+  const addEdge = edge => {
+    const label = getBusRerouteStreetLabel(edge);
+    if (!label || !BUS_REROUTE_STREET_LABEL_ROAD_CLASSES.has(edge.roadClass)) return;
+    const fromId = String(edge.from);
+    const toId = String(edge.to);
+    const from = nodesById.get(fromId);
+    const to = nodesById.get(toId);
+    if (!from || !to) return;
+    const labelKey = label.toLocaleLowerCase();
+    const segmentKey = `${labelKey}|${fromId < toId ? `${fromId}:${toId}` : `${toId}:${fromId}`}`;
+    const existing = uniqueSegments.get(segmentKey);
+    if (existing) {
+      existing.isRoute = existing.isRoute || visibleRouteIds.has(String(edge.id));
+      return;
+    }
+    const segment = {
+      fromId,
+      toId,
+      label,
+      labelKey,
+      roadClass: edge.roadClass,
+      isRoute: visibleRouteIds.has(String(edge.id))
+    };
+    uniqueSegments.set(segmentKey, segment);
+    if (!segmentsByLabel.has(labelKey)) segmentsByLabel.set(labelKey, []);
+    segmentsByLabel.get(labelKey).push(segment);
+  };
+
+  visibleRouteEdges.forEach(addEdge);
+  getBusRerouteStreetLabelCorridorEdges(context, visibleNodeIds).forEach(edge => {
+    const edgeId = String(edge.id);
+    if (routeEdgeIdsSet.has(edgeId) && !visibleRouteIds.has(edgeId)) return;
+    addEdge(edge);
+  });
+
+  const features = [];
+  segmentsByLabel.forEach(segments => {
+    const adjacency = new Map();
+    segments.forEach((segment, index) => {
+      if (!adjacency.has(segment.fromId)) adjacency.set(segment.fromId, []);
+      if (!adjacency.has(segment.toId)) adjacency.set(segment.toId, []);
+      adjacency.get(segment.fromId).push(index);
+      adjacency.get(segment.toId).push(index);
+    });
+    const visited = new Set();
+    const addChain = (startNodeId, firstIndex) => {
+      const coordinates = [];
+      const chain = [];
+      let nodeId = startNodeId;
+      let segmentIndex = firstIndex;
+      coordinates.push(nodesById.get(nodeId));
+      while (!visited.has(segmentIndex)) {
+        visited.add(segmentIndex);
+        const segment = segments[segmentIndex];
+        chain.push(segment);
+        nodeId = segment.fromId === nodeId ? segment.toId : segment.fromId;
+        coordinates.push(nodesById.get(nodeId));
+        const nextSegments = (adjacency.get(nodeId) || []).filter(index => !visited.has(index));
+        if (nextSegments.length !== 1) break;
+        segmentIndex = nextSegments[0];
+      }
+      const points = coordinates.filter(Boolean).map(node => [Number(node.lon), Number(node.lat)]);
+      if (points.length < 2) return;
+      features.push({
+        type: 'Feature',
+        properties: {
+          label: chain[0].label,
+          priority: chain.some(segment => segment.isRoute) ? 0 : 1,
+          roadClass: chain[0].roadClass
+        },
+        geometry: { type: 'LineString', coordinates: points }
+      });
+    };
+    adjacency.forEach((segmentIndexes, nodeId) => {
+      if (segmentIndexes.length === 2) return;
+      segmentIndexes.forEach(index => {
+        if (!visited.has(index)) addChain(nodeId, index);
+      });
+    });
+    segments.forEach((segment, index) => {
+      if (!visited.has(index)) addChain(segment.fromId, index);
+    });
+  });
+
+  const classPriority = { primary: 0, secondary: 1, tertiary: 2, unclassified: 3, residential: 4, living_street: 5, service: 6 };
+  const visibleLabels = new Set();
+  return features
+    .sort((a, b) => a.properties.priority - b.properties.priority ||
+      (classPriority[a.properties.roadClass] ?? 7) - (classPriority[b.properties.roadClass] ?? 7))
+    .filter(feature => {
+      const labelKey = feature.properties.label.toLocaleLowerCase();
+      if (visibleLabels.has(labelKey)) return false;
+      visibleLabels.add(labelKey);
+      return true;
+    })
+    .slice(0, BUS_REROUTE_STREET_LABEL_MAX_FEATURES);
+}
+
+function clearBusRerouteStreetNameLayer() {
+  if (!map) return;
+  if (map.getLayer(BUS_REROUTE_STREET_LABEL_LAYER_ID)) map.removeLayer(BUS_REROUTE_STREET_LABEL_LAYER_ID);
+  if (map.getSource(BUS_REROUTE_STREET_LABEL_SOURCE_ID)) map.removeSource(BUS_REROUTE_STREET_LABEL_SOURCE_ID);
+  navBusRerouteStreetLabelContext = null;
+  navBusRerouteStreetLabelLastUpdateTs = 0;
+  navBusRerouteStreetLabelLastPosition = null;
+}
+
+function updateBusRerouteStreetNameLayer(mode, currentPosition = null) {
+  if (!map || !navBusRerouteStreetLabelContext) return false;
+  const collection = {
+    type: 'FeatureCollection',
+    features: buildBusRerouteStreetNameFeatures(navBusRerouteStreetLabelContext, mode, currentPosition)
+  };
+  const existing = map.getSource(BUS_REROUTE_STREET_LABEL_SOURCE_ID);
+  if (existing) {
+    existing.setData(collection);
+  } else {
+    map.addSource(BUS_REROUTE_STREET_LABEL_SOURCE_ID, { type: 'geojson', data: collection });
+  }
+  if (!map.getLayer(BUS_REROUTE_STREET_LABEL_LAYER_ID)) {
+    map.addLayer({
+      id: BUS_REROUTE_STREET_LABEL_LAYER_ID,
+      type: 'symbol',
+      source: BUS_REROUTE_STREET_LABEL_SOURCE_ID,
+      minzoom: 12,
+      maxzoom: 21,
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 900,
+        'symbol-sort-key': ['get', 'priority'],
+        'symbol-z-order': 'source',
+        'text-field': ['get', 'label'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 14, 15, 16, 18, 18],
+        'text-max-angle': 35,
+        'text-padding': 2.5,
+        'text-keep-upright': true,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(18, 27, 42, 0.92)',
+        'text-halo-width': 2.4,
+        'text-halo-blur': 0.2
+      }
+    });
+  }
+  return true;
+}
+
+function updateActiveBusRerouteStreetNames(lon, lat) {
+  if (navBusRerouteCameraMode !== 'active' || !navBusRerouteStreetLabelContext || !map) return false;
+  const now = mapCameraNow();
+  const position = { lon: Number(lon), lat: Number(lat) };
+  const movedM = navBusRerouteStreetLabelLastPosition
+    ? haversineMeters(
+      navBusRerouteStreetLabelLastPosition.lat,
+      navBusRerouteStreetLabelLastPosition.lon,
+      position.lat,
+      position.lon
+    )
+    : Infinity;
+  if (now - navBusRerouteStreetLabelLastUpdateTs < BUS_REROUTE_STREET_LABEL_UPDATE_MS &&
+      movedM < BUS_REROUTE_STREET_LABEL_UPDATE_DISTANCE_M) return false;
+  if (!updateBusRerouteStreetNameLayer('active', position)) return false;
+  navBusRerouteStreetLabelLastUpdateTs = now;
+  navBusRerouteStreetLabelLastPosition = position;
+  return true;
+}
+
+function showBusReroute(routePoints, currentPosition, active = false, routingGraph = null, routeEdgeIds = []) {
   if (!map || !Array.isArray(routePoints) || routePoints.length < 2) return false;
   const render = () => {
     const previousMode = navBusRerouteCameraMode;
@@ -1617,6 +1931,12 @@ function showBusReroute(routePoints, currentPosition, active = false) {
         duration: 650
       });
     }
+    navBusRerouteStreetLabelContext = createBusRerouteStreetLabelContext(routingGraph, routeEdgeIds);
+    updateBusRerouteStreetNameLayer(active ? 'active' : 'preview', currentPosition);
+    navBusRerouteStreetLabelLastUpdateTs = mapCameraNow();
+    navBusRerouteStreetLabelLastPosition = currentPosition
+      ? { lon: Number(currentPosition.lon), lat: Number(currentPosition.lat) }
+      : null;
   };
 
   if (map.isStyleLoaded()) render();
@@ -1626,6 +1946,7 @@ function showBusReroute(routePoints, currentPosition, active = false) {
 
 function clearBusReroute(resetCamera = true) {
   if (resetCamera) resetBusRerouteCameraState();
+  clearBusRerouteStreetNameLayer();
   if (!map) return;
   ['bus-reroute-line', 'bus-reroute-shadow'].forEach(id => {
     if (map.getLayer(id)) map.removeLayer(id);

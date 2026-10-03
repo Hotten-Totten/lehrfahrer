@@ -54,11 +54,208 @@ function provider(handler) {
   };
 }
 
+
+test('Reroute-Labeloverlay priorisiert Route und zeigt verbundene Wohn-/Querstraßen', () => {
+  const labels = createRerouteStreetLabelApi();
+  const graph = {
+    nodes: [
+      { id: 'a', lat: 51.75, lon: 14.3 },
+      { id: 'b', lat: 51.75, lon: 14.301 },
+      { id: 'c', lat: 51.75, lon: 14.302 },
+      { id: 'd', lat: 51.7504, lon: 14.301 },
+      { id: 'e', lat: 51.7508, lon: 14.301 },
+      { id: 'f', lat: 51.7504, lon: 14.302 },
+      { id: 'g', lat: 51.7502, lon: 14.302 },
+      { id: 'x', lat: 51.76, lon: 14.31 },
+      { id: 'y', lat: 51.76, lon: 14.311 },
+      { id: 'h', lat: 51.7501, lon: 14.3 },
+      { id: 'i', lat: 51.7502, lon: 14.3 }
+    ],
+    edges: [
+      { id: 'route-1', from: 'a', to: 'b', lengthMeters: 100, name: 'Route Street', roadClass: 'primary' },
+      { id: 'route-1-reverse', from: 'b', to: 'a', lengthMeters: 100, name: 'Route Street', roadClass: 'primary' },
+      { id: 'route-2', from: 'b', to: 'c', lengthMeters: 100, name: 'Route Street', roadClass: 'primary' },
+      { id: 'side-1', from: 'b', to: 'd', lengthMeters: 45, name: 'Residential Side', roadClass: 'residential' },
+      { id: 'side-1-reverse', from: 'd', to: 'b', lengthMeters: 45, name: 'Residential Side', roadClass: 'residential' },
+      { id: 'side-2', from: 'd', to: 'e', lengthMeters: 45, name: 'Residential Side', roadClass: 'residential' },
+      { id: 'ref-road', from: 'c', to: 'f', lengthMeters: 45, ref: 'B 169', roadClass: 'secondary' },
+      { id: 'numeric-ref-road', from: 'a', to: 'h', lengthMeters: 15, ref: '12345678', roadClass: 'tertiary' },
+      { id: 'unnamed-numeric-ref-road', from: 'h', to: 'i', lengthMeters: 15, ref: '123456', roadClass: 'tertiary' },
+      { id: 'unnamed-road', from: 'c', to: 'g', lengthMeters: 20, roadClass: 'tertiary' },
+      { id: 'far-road', from: 'x', to: 'y', lengthMeters: 100, name: 'Far Road', roadClass: 'primary' }
+    ]
+  };
+  const context = labels.createBusRerouteStreetLabelContext(graph, ['route-1', 'route-2']);
+  const features = JSON.parse(JSON.stringify(labels.buildBusRerouteStreetNameFeatures(context, 'preview')));
+  const route = features.filter(feature => feature.properties.label === 'Route Street');
+  const side = features.filter(feature => feature.properties.label === 'Residential Side');
+
+  assert.equal(route.length, 1);
+  assert.equal(route[0].properties.priority, 0);
+  assert.equal(side.length, 1);
+  assert.equal(side[0].properties.priority, 1);
+  assert.ok(features.some(feature => feature.properties.label === 'B 169'));
+  assert.equal(features.some(feature => feature.properties.label === 'Far Road'), false);
+  assert.equal(features.some(feature => feature.properties.label === '12345678'), false);
+  assert.equal(features.some(feature => feature.properties.label === '123456'), false);
+  assert.equal(features.some(feature => feature.properties.label === 'unnamed-road'), false);
+});
+
+test('Active-Labelkorridor folgt der aktuellen Route statt die gesamte Route zu zeigen', () => {
+  const labels = createRerouteStreetLabelApi();
+  const nodes = Array.from({ length: 11 }, (_, index) => ({
+    id: `n${index}`,
+    lat: 51.75,
+    lon: 14.3 + index * 0.001
+  }));
+  const edges = Array.from({ length: 10 }, (_, index) => ({
+    id: `route-${index}`,
+    from: `n${index}`,
+    to: `n${index + 1}`,
+    lengthMeters: 300,
+    name: `Street ${index}`,
+    roadClass: 'tertiary'
+  }));
+  const context = labels.createBusRerouteStreetLabelContext({ nodes, edges }, edges.map(edge => edge.id));
+  const preview = JSON.parse(JSON.stringify(labels.buildBusRerouteStreetNameFeatures(context, 'preview')));
+  const active = JSON.parse(JSON.stringify(labels.buildBusRerouteStreetNameFeatures(context, 'active', nodes[5])));
+  const previewNames = new Set(preview.map(feature => feature.properties.label));
+  const activeNames = new Set(active.map(feature => feature.properties.label));
+
+  assert.ok(previewNames.has('Street 0'));
+  assert.ok(previewNames.has('Street 9'));
+  assert.ok(activeNames.has('Street 4'));
+  assert.ok(activeNames.has('Street 7'));
+  assert.equal(activeNames.has('Street 0'), false);
+  assert.equal(activeNames.has('Street 9'), false);
+});
+
+test('Preview/Active-Aufrufe verwenden Graphkanten; Rejoin entfernt das separate Labeloverlay', () => {
+  const normalMapStyles = mapSource.slice(
+    mapSource.indexOf('function buildRasterStyle'),
+    mapSource.indexOf('function buildEmptyMapStyle')
+  );
+  const showSource = mapSource.slice(
+    mapSource.indexOf('function showBusReroute'),
+    mapSource.indexOf('function clearBusReroute(resetCamera')
+  );
+  const clearSource = mapSource.slice(
+    mapSource.indexOf('function clearBusReroute('),
+    mapSource.indexOf('function drawNavigationPath')
+  );
+  const streetLabelLayerSource = mapFunctionSource(
+    'updateBusRerouteStreetNameLayer',
+    'updateActiveBusRerouteStreetNames'
+  );
+  assert.match(showSource, /createBusRerouteStreetLabelContext\(routingGraph, routeEdgeIds\)/);
+  assert.match(showSource, /updateBusRerouteStreetNameLayer\(active \? 'active' : 'preview'/);
+  assert.match(streetLabelLayerSource, /'symbol-spacing': 900/);
+  assert.equal((normalMapStyles.match(/id: 'road-name'/g) || []).length, 2);
+  assert.doesNotMatch(normalMapStyles, /bus-reroute-street-names/);
+  assert.match(clearSource, /clearBusRerouteStreetNameLayer\(\)/);
+  const activeHudSource = appSource.slice(
+    appSource.indexOf('function updateActiveBusRerouteHud'),
+    appSource.indexOf('function requestBusReroute')
+  );
+  const rejoinSource = appSource.slice(
+    appSource.indexOf('function finishActiveBusReroute'),
+    appSource.indexOf('function updateActiveBusRerouteHud')
+  );
+  assert.match(activeHudSource, /updateActiveBusRerouteStreetNames\(lon, lat\)/);
+  assert.match(rejoinSource, /clearBusReroute\(\)/);
+  assert.deepEqual(JSON.parse(JSON.stringify(
+    createRerouteStreetLabelApi().buildBusRerouteStreetNameFeatures(null, 'preview')
+  )), []);
+  assert.match(appSource, /getInstalledLocalBusRoutingGraph\(\)/);
+  assert.match(appSource, /state\.selectedCandidate\?\.localPath\?\.edgeIds/);
+  assert.match(appSource, /preview\.selectedCandidate\.localPath\?\.edgeIds/);
+});
+
+test('Haltestellenlabels sind bei mittlerem Zoom lesbar und ihre Dichte bleibt begrenzt', () => {
+  const appCss = fs.readFileSync(path.resolve(__dirname, '../app/css/app.css'), 'utf8');
+  const stopLabelCss = appCss.slice(
+    appCss.indexOf('.map-stop-label {'),
+    appCss.indexOf('.map-stop-poi.label-hidden')
+  );
+  const showStopsSource = mapFunctionSource('showStops', 'clearStops');
+  assert.match(stopLabelCss, /font-size:\s*13px/);
+  assert.match(stopLabelCss, /text-shadow:/);
+  assert.match(stopLabelCss, /left:\s*18px/);
+  assert.match(showStopsSource, /label\.textContent = stop\.name/);
+  assert.ok(showStopsSource.indexOf("el.appendChild(dot)") < showStopsSource.indexOf("el.appendChild(label)"));
+  assert.ok(mapSource.includes("if (!navMode && zoom < 16.2)"));
+
+  const markers = Array.from({ length: 10 }, (_, index) => {
+    const classes = new Set(['label-hidden']);
+    return {
+      lat: 51.75 + index * 0.001,
+      lon: 14.33,
+      classes,
+      el: { classList: { add: value => classes.add(value), remove: value => classes.delete(value) } }
+    };
+  });
+  const context = {
+    currentZoom: 16.4,
+    navMode: false,
+    mapObject: {
+      getZoom() { return context.currentZoom; },
+      getCenter() { return { lat: 51.75, lng: 14.33 }; }
+    },
+    markers,
+    documentObject: { body: { classList: { contains: value => value === 'nav-mode' && context.navMode } } },
+    distance: (lat1, lon1, lat2) => Math.abs(lat1 - lat2) * 111320
+  };
+  vm.createContext(context);
+  vm.runInContext(`
+    const map = mapObject;
+    const stopMarkerMeta = markers;
+    const document = documentObject;
+    const haversineMeters = (lat1, lon1, lat2) => distance(lat1, lon1, lat2);
+    ${mapFunctionSource('updateStopPoiVisibility', 'buildRasterStyle')}
+    this.updateVisibility = updateStopPoiVisibility;
+  `, context);
+
+  context.updateVisibility();
+  assert.equal(markers.filter(marker => !marker.classes.has('label-hidden')).length, 8);
+  context.currentZoom = 16.1;
+  context.updateVisibility();
+  assert.equal(markers.filter(marker => !marker.classes.has('label-hidden')).length, 0);
+  context.currentZoom = 17;
+  context.updateVisibility();
+  assert.equal(markers.filter(marker => !marker.classes.has('label-hidden')).length, 10);
+  context.currentZoom = 14.5;
+  context.navMode = true;
+  context.updateVisibility();
+  assert.equal(markers.filter(marker => !marker.classes.has('label-hidden')).length, 1);
+  assert.equal(markers[0].classes.has('label-hidden'), false);
+});
+
 function mapFunctionSource(name, nextName) {
   return mapSource.slice(
     mapSource.indexOf(`function ${name}`),
     mapSource.indexOf(`function ${nextName}`)
   );
+}
+
+function createRerouteStreetLabelApi() {
+  const context = {
+    haversineMeters: (lat1, lon1, lat2, lon2) => Math.hypot(
+      (lat1 - lat2) * 111320,
+      (lon1 - lon2) * 70000
+    )
+  };
+  vm.createContext(context);
+  const start = mapSource.indexOf('const BUS_REROUTE_STREET_LABEL_ROAD_CLASSES');
+  const end = mapSource.indexOf('function clearBusRerouteStreetNameLayer()', start);
+  vm.runInContext(`
+    const BUS_REROUTE_STREET_LABEL_AHEAD_M = 900;
+    const BUS_REROUTE_STREET_LABEL_BEHIND_M = 220;
+    const BUS_REROUTE_STREET_LABEL_CORRIDOR_M = 140;
+    const BUS_REROUTE_STREET_LABEL_MAX_FEATURES = 120;
+    ${mapSource.slice(start, end)}
+    this.streetLabelApi = { createBusRerouteStreetLabelContext, buildBusRerouteStreetNameFeatures };
+  `, context);
+  return context.streetLabelApi;
 }
 
 test('Evaluator und Kandidatenrouting funktionieren providerunabhaengig', async () => {
@@ -507,7 +704,7 @@ test('Wiedereinstieg braucht stabile Fixes und setzt den Originalfortschritt hin
 test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', () => {
   const showRerouteSource = mapSource.slice(
     mapSource.indexOf('function showBusReroute'),
-    mapSource.indexOf('function clearBusReroute')
+    mapSource.indexOf('function clearBusReroute(resetCamera')
   );
   assert.match(showRerouteSource, /addSource\('bus-reroute'/);
   assert.doesNotMatch(showRerouteSource, /clearRoute\(\)/);

@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.1.047 - 2026-10-03
+- Routing-Straßennamen aus dem installierten LocalBusRouter-Graphen und Haltestellenlabels für Rückführungs-Preview sowie aktive Rückführung besser lesbar dargestellt
+- Routenlabels priorisiert, Seitenstraßen im begrenzten Korridor ergänzt und Duplikate begrenzt; normale PMTiles-Basislabels unverändert
+
 ## V2.1.046 - 2026-10-03
 - Bedienbare Kamera bei Rückführungs-Vorschau und aktiver Rückführung mit temporärem Auto-Follow-Hold und Wiederaufnahme bei erhaltener Nutzer-Zoomstufe abgeschlossen
 - Fahrtrichtungs-Bearing bei Stillstand stabilisiert und Kamera-/Gestenstatus beim Wiedereinstieg vollständig zurückgesetzt
