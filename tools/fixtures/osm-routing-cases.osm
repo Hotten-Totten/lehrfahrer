@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Lehrfahrer controlled routing fixture">
+  <node id="1" lat="51.700000" lon="14.300000" />
+  <node id="2" lat="51.700000" lon="14.301000" />
+  <node id="3" lat="51.705000" lon="14.300000" />
+  <node id="4" lat="51.705000" lon="14.301000" />
+  <node id="5" lat="51.710000" lon="14.300000" />
+  <node id="6" lat="51.710000" lon="14.301000" />
+  <node id="7" lat="51.715000" lon="14.300000" />
+  <node id="8" lat="51.715000" lon="14.301000" />
+  <node id="9" lat="51.716000" lon="14.301000" />
+  <node id="10" lat="51.720000" lon="14.300000" />
+  <node id="11" lat="51.720000" lon="14.301000" />
+  <node id="12" lat="51.725000" lon="14.300000" />
+  <node id="13" lat="51.725000" lon="14.301000" />
+  <node id="14" lat="51.730000" lon="14.300000" />
+  <node id="15" lat="51.730000" lon="14.301000" />
+  <node id="16" lat="51.735000" lon="14.300000" />
+  <node id="17" lat="51.735000" lon="14.301000" />
+  <node id="18" lat="51.740000" lon="14.300000" />
+  <node id="19" lat="51.740000" lon="14.304000" />
+  <node id="20" lat="51.741500" lon="14.302000" />
+  <node id="21" lat="51.745000" lon="14.300000" />
+  <node id="22" lat="51.745000" lon="14.301000" />
+  <node id="23" lat="51.747000" lon="14.300000" />
+  <node id="24" lat="51.747000" lon="14.301000" />
+  <node id="25" lat="51.748000" lon="14.300000" />
+  <node id="26" lat="51.748000" lon="14.301000" />
+  <node id="27" lat="51.748000" lon="14.302000" />
+  <node id="28" lat="51.748000" lon="14.303000" />
+  <node id="29" lat="51.750000" lon="14.300000" />
+  <node id="30" lat="51.750000" lon="14.301000" />
+  <node id="31" lat="51.750000" lon="14.302000" />
+  <node id="32" lat="51.751000" lon="14.301000" />
+  <node id="33" lat="51.760000" lon="14.300000" />
+  <node id="34" lat="51.760000" lon="14.301000" />
+  <node id="35" lat="51.760000" lon="14.302000" />
+  <node id="36" lat="51.759000" lon="14.301000" />
+  <node id="37" lat="51.765000" lon="14.300000" />
+  <node id="38" lat="51.765000" lon="14.301000" />
+  <node id="39" lat="51.770000" lon="14.300000" />
+  <node id="40" lat="51.770000" lon="14.301000" />
+  <node id="41" lat="51.775000" lon="14.300000" />
+  <node id="42" lat="51.775000" lon="14.301000" />
+  <node id="43" lat="51.780000" lon="14.300000" />
+  <node id="44" lat="51.780000" lon="14.301000" />
+  <node id="45" lat="51.785000" lon="14.300000" />
+  <node id="46" lat="51.785000" lon="14.301000" />
+  <node id="47" lat="51.786000" lon="14.301000" />
+  <node id="48" lat="51.790000" lon="14.300000" />
+  <node id="49" lat="51.790000" lon="14.301000" />
+  <node id="50" lat="51.795000" lon="14.300000" />
+  <node id="51" lat="51.795000" lon="14.301000" />
+  <node id="52" lat="51.796000" lon="14.300000" />
+  <node id="53" lat="51.796000" lon="14.301000" />
+  <node id="54" lat="51.797000" lon="14.300000" />
+  <node id="55" lat="51.797000" lon="14.301000" />
+  <node id="56" lat="51.798000" lon="14.300000" />
+  <node id="57" lat="51.798000" lon="14.301000" />
+  <node id="58" lat="51.799000" lon="14.300000" />
+  <node id="59" lat="51.799000" lon="14.301000" />
+  <node id="60" lat="51.792000" lon="14.300000" />
+  <node id="61" lat="51.792000" lon="14.301000" />
+  <node id="62" lat="51.793000" lon="14.300000" />
+  <node id="63" lat="51.793000" lon="14.301000" />
+
+  <way id="100"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/><tag k="name" v="two-way"/></way>
+  <way id="101"><nd ref="3"/><nd ref="4"/><tag k="highway" v="tertiary"/><tag k="oneway" v="yes"/><tag k="name" v="oneway-yes"/></way>
+  <way id="102"><nd ref="5"/><nd ref="6"/><tag k="highway" v="primary"/><tag k="oneway" v="-1"/><tag k="name" v="oneway-reverse"/></way>
+  <way id="103"><nd ref="7"/><nd ref="8"/><nd ref="9"/><nd ref="7"/><tag k="highway" v="primary"/><tag k="junction" v="roundabout"/><tag k="name" v="roundabout"/></way>
+  <way id="104"><nd ref="10"/><nd ref="11"/><tag k="highway" v="residential"/><tag k="access" v="no"/><tag k="name" v="access-no"/></way>
+  <way id="105"><nd ref="12"/><nd ref="13"/><tag k="highway" v="residential"/><tag k="motor_vehicle" v="no"/><tag k="bus" v="yes"/><tag k="name" v="bus-exception"/></way>
+  <way id="106"><nd ref="14"/><nd ref="15"/><tag k="highway" v="residential"/><tag k="bus" v="no"/><tag k="name" v="bus-no"/></way>
+  <way id="107"><nd ref="16"/><nd ref="17"/><tag k="highway" v="residential"/><tag k="access" v="private"/><tag k="name" v="private"/></way>
+  <way id="108"><nd ref="18"/><nd ref="19"/><tag k="highway" v="residential"/><tag k="name" v="class-residential"/></way>
+  <way id="109"><nd ref="18"/><nd ref="20"/><nd ref="19"/><tag k="highway" v="primary"/><tag k="name" v="class-primary"/></way>
+  <way id="110"><nd ref="21"/><nd ref="22"/><tag k="highway" v="secondary"/><tag k="maxheight" v="4.2 m"/><tag k="maxweight" v="18 t"/><tag k="maxwidth" v="2.5 m"/><tag k="maxlength" v="12 m"/><tag k="surface" v="asphalt"/><tag k="tracktype" v="grade1"/><tag k="lanes" v="2"/><tag k="maxspeed" v="50 mph"/><tag k="ref" v="R10"/></way>
+  <way id="111"><nd ref="23"/><nd ref="24"/><tag k="highway" v="tertiary"/><tag k="maxheight" v="unknown"/><tag k="name" v="unknown-height"/></way>
+  <way id="112"><nd ref="25"/><nd ref="26"/><tag k="highway" v="footway"/><tag k="bus" v="yes"/><tag k="name" v="footway-bus"/></way>
+  <way id="113"><nd ref="27"/><nd ref="28"/><tag k="highway" v="footway"/><tag k="name" v="footway-excluded"/></way>
+  <way id="114"><nd ref="37"/><nd ref="38"/><tag k="highway" v="tertiary"/><tag k="oneway" v="1"/><tag k="name" v="oneway-one"/></way>
+  <way id="115"><nd ref="39"/><nd ref="40"/><tag k="highway" v="tertiary"/><tag k="oneway" v="true"/><tag k="name" v="oneway-true"/></way>
+  <way id="116"><nd ref="41"/><nd ref="42"/><tag k="highway" v="tertiary"/><tag k="oneway" v="no"/><tag k="name" v="oneway-no"/></way>
+  <way id="117"><nd ref="43"/><nd ref="44"/><tag k="highway" v="motorway"/><tag k="name" v="motorway-implicit"/></way>
+  <way id="118"><nd ref="45"/><nd ref="46"/><nd ref="47"/><nd ref="45"/><tag k="highway" v="primary"/><tag k="junction" v="roundabout"/><tag k="oneway" v="no"/><tag k="name" v="roundabout-two-way"/></way>
+  <way id="119"><nd ref="48"/><nd ref="49"/><tag k="highway" v="service"/><tag k="access" v="delivery"/><tag k="name" v="delivery-access"/></way>
+  <way id="120"><nd ref="50"/><nd ref="51"/><tag k="highway" v="service"/><tag k="psv" v="yes"/><tag k="motor_vehicle" v="no"/><tag k="name" v="psv-exception"/></way>
+  <way id="121"><nd ref="52"/><nd ref="53"/><tag k="highway" v="tertiary"/><tag k="access" v="no"/><tag k="vehicle" v="yes"/><tag k="name" v="vehicle-exception"/></way>
+  <way id="122"><nd ref="54"/><nd ref="55"/><tag k="highway" v="tertiary"/><tag k="oneway:conditional" v="no @ (Mo-Fr 08:00-18:00)"/><tag k="name" v="oneway-conditional"/></way>
+  <way id="123"><nd ref="56"/><nd ref="57"/><tag k="highway" v="tertiary"/><tag k="oneway" v="reversible"/><tag k="name" v="oneway-unknown"/></way>
+  <way id="124"><nd ref="58"/><nd ref="59"/><tag k="highway" v="tertiary"/><tag k="access:conditional" v="no @ (Mo-Fr 08:00-18:00)"/><tag k="name" v="access-conditional"/></way>
+  <way id="125"><nd ref="60"/><nd ref="61"/><tag k="highway" v="service"/><tag k="access" v="customers"/><tag k="name" v="customers-access"/></way>
+  <way id="126"><nd ref="62"/><nd ref="63"/><tag k="highway" v="service"/><tag k="access" v="destination"/><tag k="name" v="destination-access"/></way>
+
+  <way id="200"><nd ref="29"/><nd ref="30"/><tag k="highway" v="primary"/><tag k="name" v="from-no-left"/></way>
+  <way id="201"><nd ref="30"/><nd ref="31"/><tag k="highway" v="primary"/><tag k="name" v="straight-no-left"/></way>
+  <way id="202"><nd ref="30"/><nd ref="32"/><tag k="highway" v="tertiary"/><tag k="name" v="left-target"/></way>
+  <relation id="300"><member type="way" ref="200" role="from"/><member type="node" ref="30" role="via"/><member type="way" ref="202" role="to"/><tag k="type" v="restriction"/><tag k="restriction" v="no_left_turn"/></relation>
+
+  <way id="210"><nd ref="33"/><nd ref="34"/><tag k="highway" v="primary"/><tag k="name" v="from-only-right"/></way>
+  <way id="211"><nd ref="34"/><nd ref="35"/><tag k="highway" v="tertiary"/><tag k="name" v="straight-only-right"/></way>
+  <way id="212"><nd ref="34"/><nd ref="36"/><tag k="highway" v="tertiary"/><tag k="name" v="right-target"/></way>
+  <relation id="301"><member type="way" ref="210" role="from"/><member type="node" ref="34" role="via"/><member type="way" ref="212" role="to"/><tag k="type" v="restriction"/><tag k="restriction" v="only_right_turn"/></relation>
+  <relation id="302"><member type="way" ref="210" role="from"/><member type="way" ref="211" role="via"/><member type="way" ref="212" role="to"/><tag k="type" v="restriction"/><tag k="restriction" v="no_left_turn"/></relation>
+</osm>

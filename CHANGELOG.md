@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.044 - 2026-10-03
+- lokale OSM-XML-Graphgenerierung mit Bounding-Box, kompakter LocalBusRouter-v1-Ausgabe und Validierungsstatistik vorbereitet
+- gerichtete Einbahnstraßen, normalisierte Bus-/Fahrzeugzugänge und -maße, Straßenmetadaten sowie via-node-Turn-Restrictions berücksichtigt
+- Routinggraph als separate Offline-Datenquelle vorbereitet; sichtbare MapLibre-/PMTiles-Karte und deren Darstellung unverändert
+
 ## V2.1.043 - 2026-10-03
 - Rückführungsziele strikt nach ausgelassenen Haltestellen gruppiert und zuerst ausschließlich die nächste offene Haltestelle geprüft
 - Spätere Haltestellengruppen erst bei fehlender Route oder echten HARD-Busverboten zugelassen; längere Wege, Residential-Anteile und unbekannte Daten verwerfen erreichbare frühere Ziele nicht

@@ -7,6 +7,7 @@
   const MAX_SNAP_CANDIDATES = 8;
   const METERS_PER_DEGREE = 111320;
   const FORBIDDEN_ACCESS = new Set(['no', 'private', 'prohibited', 'closed']);
+  const LIMITED_ACCESS = new Set(['destination', 'delivery', 'customers']);
   const BUS_ALLOWED = new Set(['yes', 'designated', 'permissive']);
   const BUS_ONLY_CLASSES = new Set(['track', 'path', 'pedestrian', 'cycleway', 'footway', 'steps']);
   const ROAD_PENALTIES = Object.freeze({
@@ -174,7 +175,10 @@
       maxHeightM: finiteOrNull(rawEdge.maxheight ?? rawEdge.maxHeightM),
       maxWeightT: finiteOrNull(rawEdge.maxweight ?? rawEdge.maxWeightT),
       maxWidthM: finiteOrNull(rawEdge.maxwidth ?? rawEdge.maxWidthM),
+      maxLengthM: finiteOrNull(rawEdge.maxlength ?? rawEdge.maxLengthM),
       surface: normalizeTag(rawEdge.surface),
+      trackType: normalizeTag(rawEdge.tracktype ?? rawEdge.trackType),
+      lanes: finiteOrNull(rawEdge.lanes),
       speedKph: finiteOrNull(rawEdge.speedKph),
       name: rawEdge.name || null,
       ref: rawEdge.ref || null,
@@ -191,9 +195,12 @@
   }
 
   function edgeEligibility(edge, constraints) {
-    if (FORBIDDEN_ACCESS.has(edge.access) ||
-        FORBIDDEN_ACCESS.has(edge.motorVehicle) ||
-        FORBIDDEN_ACCESS.has(edge.bus)) {
+    const busAllowed = BUS_ALLOWED.has(edge.bus);
+    const motorVehicleAllowed = BUS_ALLOWED.has(edge.motorVehicle);
+    if (FORBIDDEN_ACCESS.has(edge.bus) || LIMITED_ACCESS.has(edge.bus) ||
+      ((FORBIDDEN_ACCESS.has(edge.motorVehicle) || LIMITED_ACCESS.has(edge.motorVehicle)) && !busAllowed) ||
+      ((FORBIDDEN_ACCESS.has(edge.access) || LIMITED_ACCESS.has(edge.access)) &&
+        !motorVehicleAllowed && !busAllowed)) {
       return { allowed: false, reason: 'access-forbidden' };
     }
     if (edge.surface === 'impassable') return { allowed: false, reason: 'surface-impassable' };
@@ -204,6 +211,7 @@
     const vehicleHeightM = dimensionConstraint(constraints, ['vehicleHeightM', 'heightM', 'height', 'maxHeightM']);
     const vehicleWeightT = dimensionConstraint(constraints, ['vehicleWeightT', 'weightT', 'weight', 'maxWeightT']);
     const vehicleWidthM = dimensionConstraint(constraints, ['vehicleWidthM', 'widthM', 'width', 'maxWidthM']);
+    const vehicleLengthM = dimensionConstraint(constraints, ['vehicleLengthM', 'lengthM', 'length', 'maxLengthM']);
     if (vehicleHeightM !== null && edge.maxHeightM !== null && vehicleHeightM > edge.maxHeightM) {
       return { allowed: false, reason: 'maxheight-exceeded' };
     }
@@ -212,6 +220,9 @@
     }
     if (vehicleWidthM !== null && edge.maxWidthM !== null && vehicleWidthM > edge.maxWidthM) {
       return { allowed: false, reason: 'maxwidth-exceeded' };
+    }
+    if (vehicleLengthM !== null && edge.maxLengthM !== null && vehicleLengthM > edge.maxLengthM) {
+      return { allowed: false, reason: 'maxlength-exceeded' };
     }
     return { allowed: true, reason: null };
   }
@@ -246,7 +257,8 @@
         bus: 'unknown',
         maxHeightM: null,
         maxWeightT: null,
-        maxWidthM: null
+        maxWidthM: null,
+        maxLengthM: null
       },
       warnings: [],
       source,
@@ -433,6 +445,7 @@
           const edgePart = this._roadEdgeResult(edge, partialLengthM);
           addCandidate({
             nodeId,
+            connectorArc: arc,
             snapDistanceM: projection.distanceM,
             connectorDistanceM,
             connectorDurationSec: projection.distanceM / (15 / 3.6) + partialLengthM / (edgeSpeedKph(edge) / 3.6),
@@ -451,15 +464,19 @@
     }
 
     _turnAllowed(previousArc, nextArc, viaNodeId) {
-      if (!previousArc) return true;
-      if (previousArc.edge.id === nextArc.edge.id && previousArc.from === nextArc.to) return false;
-      for (const restriction of this.turnRestrictions) {
-        if (String(restriction.fromEdgeId) !== previousArc.edge.id ||
-            String(restriction.viaNodeId) !== String(viaNodeId)) continue;
-        const toEdgeId = String(restriction.toEdgeId);
-        if (restriction.type === 'only_turn' && nextArc.edge.id !== toEdgeId) return false;
-        if (restriction.type !== 'only_turn' && nextArc.edge.id === toEdgeId) return false;
+      if (!previousArc || !nextArc) return true;
+      if ((previousArc.edge.id === nextArc.edge.id && previousArc.from === nextArc.to) ||
+          (previousArc.edge.from === nextArc.edge.to && previousArc.edge.to === nextArc.edge.from)) return false;
+      const matching = this.turnRestrictions.filter(restriction =>
+        String(restriction.fromEdgeId) === previousArc.edge.id &&
+        String(restriction.viaNodeId) === String(viaNodeId)
+      );
+      const onlyTurns = matching.filter(restriction => restriction.type === 'only_turn');
+      if (onlyTurns.length && !onlyTurns.some(restriction => String(restriction.toEdgeId) === nextArc.edge.id)) {
+        return false;
       }
+      if (matching.some(restriction => restriction.type !== 'only_turn' &&
+          String(restriction.toEdgeId) === nextArc.edge.id)) return false;
       return true;
     }
 
@@ -475,14 +492,16 @@
       return 0;
     }
 
-    _aStar(startNodeId, targetNodeId, constraints) {
-      if (startNodeId === targetNodeId) return { arcs: [], cost: 0 };
+    _aStar(startNodeId, targetNodeId, constraints, initialArc = null, targetArc = null) {
+      if (startNodeId === targetNodeId && this._turnAllowed(initialArc, targetArc, startNodeId)) {
+        return { arcs: [], cost: 0 };
+      }
       const targetNode = this.nodesById.get(targetNodeId);
       const queue = new MinHeap();
-      const startKey = `${startNodeId}|`;
+      const startKey = initialArc ? `${startNodeId}|${initialArc.edge.id}:${initialArc.reverse ? 'r' : 'f'}` : `${startNodeId}|`;
       const bestCost = new Map([[startKey, 0]]);
       const cameFrom = new Map();
-      const stateData = new Map([[startKey, { nodeId: startNodeId, previousArc: null }]]);
+      const stateData = new Map([[startKey, { nodeId: startNodeId, previousArc: initialArc }]]);
       queue.push({ key: startKey, priority: haversineM(this.nodesById.get(startNodeId), targetNode) / (100 / 3.6) });
 
       let goalKey = null;
@@ -492,8 +511,10 @@
         const currentCost = bestCost.get(current.key);
         if (!state || currentCost === undefined) continue;
         if (state.nodeId === targetNodeId) {
-          goalKey = current.key;
-          break;
+          if (!targetArc || this._turnAllowed(state.previousArc, targetArc, state.nodeId)) {
+            goalKey = current.key;
+            break;
+          }
         }
 
         const outgoing = this._eligibleArcs(this.adjacency.get(state.nodeId), constraints);
@@ -537,6 +558,9 @@
         maxHeightM: edge.maxHeightM,
         maxWeightT: edge.maxWeightT,
         maxWidthM: edge.maxWidthM,
+        maxLengthM: edge.maxLengthM,
+        trackType: edge.trackType,
+        lanes: edge.lanes,
         name: edge.name,
         ref: edge.ref
       };
@@ -608,7 +632,13 @@
       let best = null;
       startCandidates.forEach(startCandidate => {
         targetCandidates.forEach(targetCandidate => {
-          const path = this._aStar(startCandidate.nodeId, targetCandidate.nodeId, constraints);
+          const path = this._aStar(
+            startCandidate.nodeId,
+            targetCandidate.nodeId,
+            constraints,
+            startCandidate.connectorArc || null,
+            targetCandidate.connectorArc || null
+          );
           if (!path) return;
           const cost = startCandidate.connectorCost + path.cost + targetCandidate.connectorCost;
           if (!best || cost < best.cost) best = { startCandidate, targetCandidate, path, cost };
@@ -637,7 +667,8 @@
           ['unknown', null].includes(edge.motorVehicle) || ['unknown', null].includes(edge.bus))) {
         warnings.push('Mindestens eine Kante besitzt unbekannte Bus-/Zugriffsattribute.');
       }
-      if (roadEdges.some(edge => edge.maxHeightM === null || edge.maxWeightT === null || edge.maxWidthM === null)) {
+      if (roadEdges.some(edge => edge.maxHeightM === null || edge.maxWeightT === null ||
+          edge.maxWidthM === null || edge.maxLengthM === null)) {
         warnings.push('Fahrzeugmaßbegrenzungen sind auf mindestens einer Kante unbekannt.');
       }
 
@@ -659,6 +690,7 @@
           maxHeightM: this._knownRouteLimit(roadEdges, 'maxHeightM'),
           maxWeightT: this._knownRouteLimit(roadEdges, 'maxWeightT'),
           maxWidthM: this._knownRouteLimit(roadEdges, 'maxWidthM'),
+          maxLengthM: this._knownRouteLimit(roadEdges, 'maxLengthM'),
           hasTimeRestrictions: false
         },
         warnings,

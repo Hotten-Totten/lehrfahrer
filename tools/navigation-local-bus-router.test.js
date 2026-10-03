@@ -55,6 +55,40 @@ test('D: access- und busgesperrte Kante wird ausgeschlossen', async () => {
   assert.equal(result.geometry.length, 0);
 });
 
+test('Bus-Ausnahme ueberstimmt allgemeine Sperren; maxlength wird beachtet', async () => {
+  const exceptionGraph = {
+    ...structuredClone(graph),
+    nodes: [
+      { id: 'from', lat: 51.752, lon: 14.330 },
+      { id: 'to', lat: 51.752, lon: 14.331 }
+    ],
+    edges: [{
+      id: 'bus-exception', from: 'from', to: 'to', oneway: true,
+      roadClass: 'residential', access: 'no', motorVehicle: 'no', bus: 'yes',
+      lengthMeters: 70, maxlength: 10, maxheight: 4.2, maxweight: 18,
+      maxwidth: 2.5, tracktype: 'grade1', lanes: 2, speedKph: 30
+    }],
+    turnRestrictions: []
+  };
+  const router = routing.createRouter(exceptionGraph, { snapRadiusM: 25 });
+  const from = { lat: 51.752, lon: 14.330 };
+  const to = { lat: 51.752, lon: 14.331 };
+  const tooLong = await router.routeBusPath({
+    from, to, constraints: { vehicleLengthM: 12 }
+  });
+
+  assert.equal(tooLong.ok, false);
+  assert.equal(tooLong.error.code, 'START_NOT_SNAPPABLE');
+  const allowed = await router.routeBusPath({
+    from, to, constraints: { vehicleLengthM: 9, vehicleHeightM: 4 }
+  });
+  assert.equal(allowed.ok, true);
+  assert.equal(allowed.roadEdges[0].maxLengthM, 10);
+  assert.equal(allowed.roadEdges[0].maxHeightM, 4.2);
+  assert.equal(allowed.roadEdges[0].maxWeightT, 18);
+  assert.equal(allowed.roadEdges[0].maxWidthM, 2.5);
+});
+
 test('E: Sackgasse wird verlassen ohne dieselbe Kante sofort zurueckzufahren', async () => {
   const result = await createRouter().routeBusPath({ from: points.dead, to: points.d, constraints: {} });
   const edgeIds = result.roadEdges.map(edge => edge.id);
