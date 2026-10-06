@@ -4383,7 +4383,7 @@ function buildNavStopDists(stops, pts, cumDists) {
   });
 }
 
-function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = true) {
+function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = true, forceGlobalFallback = false) {
   if (!pts.length) return 0;
 
   const maxIdx = pts.length - 1;
@@ -4410,9 +4410,8 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = tru
     }
   }
 
-  // Falls der beste Treffer am Fensterrand liegt, wurde evtl. stark abgewichen.
-  // Dann einmal global suchen (selten, aber korrekt).
-  if (allowGlobalFallback && (best <= start + edgeMargin || best >= end - edgeMargin)) {
+  // Bei unsicherem oder randnahem lokalen Treffer wird global neu gesucht.
+  if (allowGlobalFallback && (forceGlobalFallback || best <= start + edgeMargin || best >= end - edgeMargin)) {
     noteNavPerfFallback();
     minD = Infinity;
     best = seed;
@@ -4434,11 +4433,14 @@ function snapGpsToRoute(
   pts,
   hintIdx = 0,
   windowSize = NAV_SNAP_WINDOW,
-  allowGlobalFallback = true
+  allowGlobalFallback = true,
+  forceGlobalFallback = false
 ) {
   if (!pts || pts.length < 2) return null;
 
-  const nearestIdx = findNearestNavIdx(lat, lon, pts, hintIdx, allowGlobalFallback);
+  const nearestIdx = findNearestNavIdx(
+    lat, lon, pts, hintIdx, allowGlobalFallback, forceGlobalFallback
+  );
   const maxSeg = pts.length - 2;
   if (maxSeg < 0) return null;
 
@@ -4516,11 +4518,9 @@ function lerpValue(a, b, t) {
 
 function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gpsLat = displayLat, gpsLon = displayLon) {
   const snap = snapGpsToRoute(displayLat, displayLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
-  // Die Zustandsentscheidung darf weder von der geglaetteten Position noch
-  // vom Route-Lock abhaengen. Dafuer wird der echte Fix separat gegen den
-  // aktuellen Routenkorridor projiziert, ohne global zu einer weit entfernten
-  // Stelle derselben Route zu springen.
-  const rawGpsSnap = snapGpsToRoute(
+  // Die Zustandsentscheidung nutzt Raw-GPS; ein globaler Fallback wird erst
+  // bei grosser lokaler Distanz genutzt, etwa nach veraltetem Routenfortschritt.
+  let rawGpsSnap = snapGpsToRoute(
     gpsLat,
     gpsLon,
     pts,
@@ -4528,6 +4528,20 @@ function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gps
     NAV_SNAP_WINDOW,
     false
   );
+  if (rawGpsSnap?.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
+    const globalRawGpsSnap = snapGpsToRoute(
+      gpsLat,
+      gpsLon,
+      pts,
+      navNearestIdx,
+      NAV_SNAP_WINDOW,
+      true,
+      true
+    );
+    if (globalRawGpsSnap && globalRawGpsSnap.distanceM < rawGpsSnap.distanceM) {
+      rawGpsSnap = globalRawGpsSnap;
+    }
+  }
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
     return {
@@ -4785,7 +4799,7 @@ function maybePlayBusRerouteManeuverCue(state, activeTurn, currentDist) {
   }
   const distanceM = activeTurn.distFromStart - currentDist;
   if (distanceM > 250 || distanceM < -10 || state.maneuverAudio.warningPlayed) return false;
-  if (!isNavManeuverBeepsEnabled() || navOffRouteActive || Date.now() < navWarningAudioBusyUntil) return false;
+  if (!isNavManeuverBeepsEnabled() || Date.now() < navWarningAudioBusyUntil) return false;
 
   if (!navWarningAudioContext || navWarningAudioContext.state !== 'running') {
     if (Date.now() >= state.maneuverAudio.retryAt) {
@@ -6045,6 +6059,13 @@ async function prepareBusReroutePreviewRequest() {
     showToast('Busgeeignete Umleitung wird vorbereitet. Aktuelle GPS-Position fehlt noch.', 5000);
     return null;
   }
+  const routingGraph = getInstalledLocalBusRoutingGraph();
+  const routingApi = globalThis.LehrfahrerLocalBusRouting;
+  if (!routingGraph || typeof routingApi?.isPointWithinBoundingBox !== 'function' ||
+      !routingApi.isPointWithinBoundingBox(navLastRawGpsPos, routingGraph.boundingBox)) {
+    showToast('Für diese Region ist kein Offline-Routing installiert.', 5000);
+    return null;
+  }
 
   const preparation = buildBusReroutePreparation({
     currentPosition: navLastRawGpsPos,
@@ -6571,5 +6592,3 @@ function startNavSimulation() {
     }
   }, SIM_TICK_MS);
 }
-
-

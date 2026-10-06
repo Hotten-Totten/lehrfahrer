@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.1.051 - 2026-10-06
+- Stabilisiert ON-Route/OFF-Route-Erkennung und Rejoin bei veraltetem Routenfortschritt
+- Sichert die Rückführung ohne passenden Offline-Routinggraph ab und ermöglicht Manöverpieptöne nach dem OFF-Route-Warnton wieder
+
 ## V2.1.050 - 2026-10-03
 - Manuelle Tests für die vorhandenen Rechts-, Links- und Kreisverkehrs-Manöverpieptöne in den Einstellungen ergänzt
 

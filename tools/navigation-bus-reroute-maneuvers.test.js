@@ -222,9 +222,15 @@ test('Preview bleibt stumm; aktive Rückführung spielt denselben Turn höchsten
   state.turns.push(nextTurn);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, nextTurn, 600), true);
   assert.equal(sandbox.navWarningAudioContext.frequencies.length, 3);
+
+  const thirdTurn = { index: 8, type: 'roundabout', angle: 0, distFromStart: 1100 };
+  state.turns.push(thirdTurn);
+  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, thirdTurn, 900), true);
+  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, thirdTurn, 900), false);
+  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 5);
 });
 
-test('Einstellung, OFF-Route und laufendes Warnsignal unterdrücken Manövertöne', () => {
+test('Einstellung und laufendes Warnsignal unterdrücken Manövertöne', () => {
   const turn = { index: 1, angle: 90, distFromStart: 100 };
   const context = createAudioContextRecorder();
   sandbox.navWarningAudioContext = context;
@@ -234,16 +240,28 @@ test('Einstellung, OFF-Route und laufendes Warnsignal unterdrücken Manövertön
   sandbox.navActiveBusReroute = state;
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
 
-  configureCueSandbox({ offRoute: true });
-  state = createCueState(turn);
-  sandbox.navActiveBusReroute = state;
-  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
-
   configureCueSandbox({ busyUntil: Date.now() + 1000 });
   state = createCueState(turn);
   sandbox.navActiveBusReroute = state;
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
   assert.equal(context.frequencies.length, 0);
+});
+
+test('OFF-Route blockiert Cues nur waehrend des Warnsignals, nicht fuer den ganzen Reroute', () => {
+  const turn = { index: 4, angle: 90, distFromStart: 100 };
+  const context = createAudioContextRecorder();
+  sandbox.navWarningAudioContext = context;
+  configureCueSandbox({ offRoute: true, busyUntil: Date.now() + 1000 });
+  const state = createCueState(turn);
+  sandbox.navActiveBusReroute = state;
+
+  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
+  assert.equal(state.maneuverAudio.warningPlayed, false);
+
+  sandbox.navWarningAudioBusyUntil = 0;
+  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), true);
+  assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
+  assert.equal(context.frequencies.length, 1);
 });
 
 test('Audio-Unlock-Fehler stürzt nicht ab und derselbe Cue kann später funktionieren', () => {

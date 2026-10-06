@@ -434,6 +434,38 @@ test('Provider nicht verfuegbar liefert strukturierten Fehler ohne Fake-Route', 
   assert.equal(result.distanceM, null);
 });
 
+test('ohne lokalen Routinggraph startet die Rueckfuehrung nicht und meldet den Grund', async () => {
+  vm.runInContext(appSource.slice(
+    appSource.indexOf('async function prepareBusReroutePreviewRequest'),
+    appSource.indexOf('function createNavOffRoutePanel')
+  ), sandbox);
+  const pendingRequest = { routingStatus: 'unchanged' };
+  const messages = [];
+  sandbox.navActive = true;
+  sandbox.currentRoute = { data: { routePoints: [[51.75, 14.33], [51.76, 14.33]] } };
+  sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.33 };
+  sandbox.navActiveBusReroute = null;
+  sandbox.navPendingBusRerouteRequest = pendingRequest;
+  sandbox.getInstalledLocalBusRoutingGraph = () => null;
+  sandbox.showToast = message => messages.push(message);
+
+  const result = await sandbox.prepareBusReroutePreviewRequest();
+
+  assert.equal(result, null);
+  assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
+  assert.equal(sandbox.navActiveBusReroute, null);
+
+  sandbox.getInstalledLocalBusRoutingGraph = () => ({ boundingBox: {} });
+  sandbox.LehrfahrerLocalBusRouting = { isPointWithinBoundingBox: () => false };
+  assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
+  assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
+  assert.equal(sandbox.navActiveBusReroute, null);
+  assert.deepEqual(messages, [
+    'Für diese Region ist kein Offline-Routing installiert.',
+    'Für diese Region ist kein Offline-Routing installiert.'
+  ]);
+});
+
 test('lokaler Offline-Provider nutzt spaeter dieselbe routeBusPath-Schnittstelle', async () => {
   const installed = {
     isAvailable: () => true,
