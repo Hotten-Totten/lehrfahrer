@@ -152,14 +152,12 @@ body.nav-mode #map2dToggleBtn {
 }
 
 #rerouteCenterBtn {
+  display: none;
   left: calc(var(--safe-left) + 72px);
 }
 
-#rerouteCenterBtn[hidden] {
-  display: none;
-}
-
 body.nav-mode #rerouteCenterBtn {
+  display: block;
   bottom: calc(var(--safe-bottom) + 68px);
   z-index: 520;
 }

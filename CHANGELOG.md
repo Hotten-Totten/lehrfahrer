@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.056 - 2026-10-07
+- Touch-Gesten in normaler Navigation und Rückführung freigegeben
+- Manuelle Kartenansicht bleibt nach Drag/Pinch/Rotation bestehen
+- „◎ Fahrzeug“ zentriert wieder auf aktuelle Position und aktiviert Auto-Follow
+
 ## V2.1.055 - 2026-10-07
 - Karte während aktiver Rückführung frei verschiebbar und zoombar
 - Auto-Follow bleibt nach manueller Kartenbewegung pausiert

@@ -2818,9 +2818,9 @@ async function requestPersistentStorage(automatic) {
 
 // ── GPS toggle ───────────────────────────────────────────────
 function toggleGPS() {
-  if (navActive && navActiveBusReroute) {
+  if (navActive) {
     if (!navLastRawGpsPos ||
-        !resumeBusRerouteCameraFollow(navLastRawGpsPos.lon, navLastRawGpsPos.lat)) {
+        !resumeNavCameraFollow(navLastRawGpsPos.lon, navLastRawGpsPos.lat)) {
       showToast('Aktuelle Fahrzeugposition noch nicht verfügbar.', 4500);
     }
     return;
