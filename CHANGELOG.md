@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.054 - 2026-10-07
+- Start-Halt bei 0 m wird nicht mehr automatisch als bedient behandelt
+- Rückführung schützt den noch offenen ersten Halt korrekt
+- Rückkehrziel am offenen Start-Halt möglich, ohne allgemeine Rückwärtsnavigation
+
 ## V2.1.053 - 2026-10-07
 - Behebt fehlerhafte Ablehnung gültiger Offline-Routingregionen beim Start einer Rückführung
 - Multi-Graph-Vorabcheck verwendet jetzt die reale Raw-GPS-Startposition

@@ -5069,9 +5069,12 @@ function buildBusReroutePreparation({
   const originalRouteProgressM = Number(routeCumDists[safeProgressIndex]) || 0;
   const routeEndM = Number(routeCumDists[routeCumDists.length - 1]) || originalRouteProgressM;
   const candidateLimit = Math.max(3, Math.min(5, Math.floor(maxCandidates) || 5));
+  const openStartStop = Array.isArray(routeStops) && routeStops[0]?.stop &&
+    routeStops[0].distFromStart === 0 && originalRouteProgressM <= 10
+    ? routeStops[0] : null;
   const remainingStops = (Array.isArray(routeStops) ? routeStops : [])
     .filter(item => item?.stop && Number.isFinite(item.distFromStart) &&
-      item.distFromStart > originalRouteProgressM + 10)
+      (item === openStartStop || item.distFromStart > originalRouteProgressM + 10))
     .slice()
     .sort((a, b) => a.distFromStart - b.distFromStart)
     .map((item, index) => ({
@@ -5085,7 +5088,8 @@ function buildBusReroutePreparation({
 
   const addCandidate = (progressM, source) => {
     const firstForwardProgressM = Math.min(routeEndM, originalRouteProgressM + 40);
-    const targetM = Math.max(firstForwardProgressM, Math.min(routeEndM, progressM));
+    const targetM = openStartStop && source === 'at-stop' && progressM === 0
+      ? 0 : Math.max(firstForwardProgressM, Math.min(routeEndM, progressM));
     if (candidatePool.some(candidate => Math.abs(candidate.routeProgressM - targetM) < 35)) return;
 
     const routePosition = interpolateBusReroutePosition(routePoints, routeCumDists, targetM);

@@ -112,3 +112,38 @@ test('liefert auch ohne offene Haltestelle mehrere Punkte des Restverlaufs', () 
     Number.isFinite(candidate.directDistanceM)
   ));
 });
+
+const line15Stops = [
+  { stop: { id: 'stop_1', name: 'Hauptbahnhof' }, distFromStart: 0 },
+  { stop: { id: 'stop_2', name: 'Marienstraße/Glad House' }, distFromStart: 1168.141 },
+  { stop: { id: 'stop_3', name: 'Stadtpromenade' }, distFromStart: 1713.295 }
+];
+
+test('Linie 15: Start-Halt bei 0 m bleibt offen und als Rueckkehrziel erreichbar', () => {
+  const result = prepare({ routeProgressIndex: 0, routeStops: line15Stops });
+  assert.equal(result.remainingStops[0].id, 'stop_1');
+  const startCandidate = result.routingCandidates.find(candidate => candidate.routeProgressM === 0);
+  assert.ok(startCandidate);
+  assert.equal(startCandidate.source, 'at-stop');
+  assert.equal(startCandidate.nextStopId, 'stop_1');
+  assert.equal(startCandidate.skippedStopCount, 0);
+  assert.ok(result.returnCandidates.includes(startCandidate));
+  for (const candidate of result.routingCandidates.filter(candidate => candidate.routeProgressM > 10)) {
+    assert.ok(candidate.skippedStopCount >= 1, 'Offener Hauptbahnhof darf nicht als keine Haltestelle ausgelassen gelten');
+  }
+});
+
+test('Linie 15: innerhalb bestehender 10-m-Toleranz bleibt Start offen, danach Marienstrasse', () => {
+  for (const progressM of [0, 5, 10, 11, 100]) {
+    const distances = routeCumDists.slice();
+    distances[1] = progressM;
+    const result = prepare({ routeProgressIndex: 1, routeCumDists: distances, routeStops: line15Stops });
+    assert.equal(result.remainingStops[0].id, progressM <= 10 ? 'stop_1' : 'stop_2');
+    const atStart = result.routingCandidates.find(candidate => candidate.routeProgressM === 0);
+    assert.equal(!!atStart, progressM <= 10);
+    if (progressM > 10) {
+      assert.ok(result.routingCandidates.every(candidate => candidate.routeProgressM > progressM));
+      assert.ok(result.routingCandidates.some(candidate => candidate.skippedStopCount === 0));
+    }
+  }
+});
