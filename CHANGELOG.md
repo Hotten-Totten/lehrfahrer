@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.055 - 2026-10-07
+- Karte während aktiver Rückführung frei verschiebbar und zoombar
+- Auto-Follow bleibt nach manueller Kartenbewegung pausiert
+- Neuer „◎ Fahrzeug“-Button zentriert wieder auf die aktuelle Position und aktiviert Auto-Follow
+
 ## V2.1.054 - 2026-10-07
 - Start-Halt bei 0 m wird nicht mehr automatisch als bedient behandelt
 - Rückführung schützt den noch offenen ersten Halt korrekt

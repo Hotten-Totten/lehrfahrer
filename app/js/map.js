@@ -137,7 +137,8 @@ function endBusRerouteMapGesture(type) {
   if (!navBusRerouteActiveGestures.has(type)) return false;
   navBusRerouteActiveGestures.delete(type);
   if (!navBusRerouteActiveGestures.size) {
-    navBusRerouteManualCameraUntil = mapCameraNow() + BUS_REROUTE_MANUAL_CAMERA_HOLD_MS;
+    navBusRerouteManualCameraUntil = navBusRerouteCameraMode === 'active'
+      ? Infinity : mapCameraNow() + BUS_REROUTE_MANUAL_CAMERA_HOLD_MS;
     if (map) {
       navBusRerouteManualZoom = map.getZoom();
       const center = map.getCenter();
@@ -153,6 +154,24 @@ function resetBusRerouteCameraState() {
   navBusRerouteManualZoom = null;
   navBusRerouteActiveGestures.clear();
   navOffRouteManualCamera = false;
+  if (typeof document !== 'undefined') {
+    const button = document.getElementById?.('rerouteCenterBtn');
+    if (button) button.hidden = true;
+  }
+}
+
+function resumeBusRerouteCameraFollow(lon, lat) {
+  if (!map || navBusRerouteCameraMode !== 'active' ||
+      !Number.isFinite(lon) || !Number.isFinite(lat) || !navCameraFollowOptions) return false;
+  navBusRerouteManualCameraUntil = 0;
+  navBusRerouteManualZoom = null;
+  navBusRerouteActiveGestures.clear();
+  navOffRouteManualCamera = false;
+  navCameraModeTransition = null;
+  navCameraCenter = { lon, lat };
+  navCameraSyncTs = 0;
+  map.jumpTo({ ...navCameraFollowOptions, center: [lon, lat] });
+  return true;
 }
 
 function setMap2DMode(enabled) {
@@ -1313,7 +1332,9 @@ async function initMap() {
     }
   });
   const respectOffRouteMapGesture = (type, event) => {
-    if (!event.originalEvent || !document.body.classList.contains('nav-off-route')) return;
+    if (!event.originalEvent || (
+      navBusRerouteCameraMode !== 'active' && !document.body.classList.contains('nav-off-route')
+    )) return;
     beginBusRerouteMapGesture(type, event);
     navOffRouteManualCamera = true;
     navCameraModeTransition = null;
@@ -1879,6 +1900,8 @@ function showBusReroute(routePoints, currentPosition, active = false, routingGra
     const previousMode = navBusRerouteCameraMode;
     clearBusReroute(false);
     navBusRerouteCameraMode = active ? 'active' : 'preview';
+    const centerButton = document.getElementById('rerouteCenterBtn');
+    if (centerButton) centerButton.hidden = !active;
     if (previousMode === 'none') {
       navBusRerouteManualCameraUntil = 0;
       navBusRerouteManualZoom = null;
@@ -2280,6 +2303,9 @@ function routePositionAtProgress(routePoints, routeCumDists, progressM) {
 function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
   const nowTs = mapCameraNow();
+  if (navBusRerouteCameraMode === 'active' && (
+    navBusRerouteActiveGestures.size > 0 || nowTs < navBusRerouteManualCameraUntil
+  )) return;
   if (document.body.classList.contains('nav-off-route') && navOffRouteManualCamera) {
     const manualCenter = map.getCenter();
     navCameraCenter = { lon: manualCenter.lng, lat: manualCenter.lat };

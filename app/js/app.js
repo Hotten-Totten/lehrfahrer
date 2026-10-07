@@ -1677,6 +1677,7 @@ function bindEvents() {
   if (refreshLinesBtn) refreshLinesBtn.addEventListener('click', refreshLinesNow);
 
   gpsBtn.addEventListener('click', toggleGPS);
+  document.getElementById('rerouteCenterBtn')?.addEventListener('click', toggleGPS);
   if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
   if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreenMode);
   if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
@@ -2817,6 +2818,13 @@ async function requestPersistentStorage(automatic) {
 
 // ── GPS toggle ───────────────────────────────────────────────
 function toggleGPS() {
+  if (navActive && navActiveBusReroute) {
+    if (!navLastRawGpsPos ||
+        !resumeBusRerouteCameraFollow(navLastRawGpsPos.lon, navLastRawGpsPos.lat)) {
+      showToast('Aktuelle Fahrzeugposition noch nicht verfügbar.', 4500);
+    }
+    return;
+  }
   if (navActive && navInputMode === 'sim') {
     showToast('Simulation läuft. Erst Simulation beenden, dann GPS aktivieren.', 4500);
     return;

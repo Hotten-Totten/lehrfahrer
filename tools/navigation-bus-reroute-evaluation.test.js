@@ -759,9 +759,10 @@ test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', 
   assert.doesNotMatch(showRerouteSource, /clearRoute\(\)/);
   assert.match(showRerouteSource, /fitBounds/);
   assert.match(showRerouteSource, /navBusRerouteManualCameraUntil/);
+  assert.match(showRerouteSource, /centerButton\.hidden = !active/);
 });
 
-test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase', () => {
+test('Preview respektiert Ruhephase; aktiver Rueckweg bleibt bis Zentrieren manuell', () => {
   const camera = {
     clock: 1000,
     zoom: 16,
@@ -828,6 +829,56 @@ test('Preview und aktiver Rueckweg respektieren Pan und Pinch-Zoom mit Ruhephase
   assert.ok(camera.jumps[0].bearing > 0);
 
   assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
+  camera.endBusRerouteMapGesture('zoom');
+  camera.clock = 600000;
+  camera.syncNavCameraToGpsMarkerPosition(14.36, 51.79);
+  assert.equal(camera.jumps.length, 1);
+  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), Infinity);
+  assert.equal(camera.resumeBusRerouteCameraFollow(14.36, 51.79), true);
+  assert.deepEqual(Array.from(camera.jumps[1].center), [14.36, 51.79]);
+  assert.equal(camera.jumps[1].zoom, 16.2);
+  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), 0);
+  assert.equal(vm.runInContext('navBusRerouteManualZoom', camera), null);
+  camera.syncNavCameraToGpsMarkerPosition(14.36001, 51.79001);
+  assert.equal(camera.jumps.length, 3);
+
+  assert.equal(camera.beginBusRerouteMapGesture('drag', { originalEvent: {} }), true);
+  camera.endBusRerouteMapGesture('drag');
+  camera.clock = 1200000;
+  camera.syncNavCameraToGpsMarkerPosition(14.37, 51.8);
+  assert.equal(camera.jumps.length, 3);
+  // Active-camera hold does not depend on the OFF-route CSS class.
+  camera.document.body.classList.contains = value => value === 'nav-mode';
+  camera.syncNavCameraToGpsMarkerPosition(14.38, 51.81);
+  assert.equal(camera.jumps.length, 3);
+  assert.equal(camera.resumeBusRerouteCameraFollow(NaN, 51.8), false);
+  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), Infinity);
+  assert.equal(camera.beginBusRerouteMapGesture('rotate', { originalEvent: {} }), true);
+  camera.endBusRerouteMapGesture('rotate');
+  camera.clock = 1800000;
+  camera.syncNavCameraToGpsMarkerPosition(14.39, 51.82);
+  assert.equal(camera.jumps.length, 3);
+});
+
+test('Fahrzeugbutton zentriert aktive Rueckfuehrung ohne GPS oder Navigation zu stoppen', () => {
+  const active = { preserved: true };
+  const position = { lat: 51.75, lon: 14.33 };
+  const calls = [];
+  const context = {
+    navActive: true, navActiveBusReroute: active, navLastRawGpsPos: position,
+    navInputMode: 'gps', gpsActive: true,
+    resumeBusRerouteCameraFollow: (lon, lat) => { calls.push([lon, lat]); return true; },
+    stopGPS: () => { throw new Error('GPS darf nicht gestoppt werden'); },
+    showToast: () => { throw new Error('Position vorhanden'); }
+  };
+  vm.createContext(context);
+  vm.runInContext(appSource.slice(appSource.indexOf('function toggleGPS'), appSource.indexOf('function togglePanel')), context);
+  context.toggleGPS();
+  assert.deepEqual(calls, [[14.33, 51.75]]);
+  assert.equal(context.gpsActive, true);
+  assert.equal(context.navActiveBusReroute, active);
+  assert.equal(context.navLastRawGpsPos, position);
+  assert.match(appSource, /getElementById\('rerouteCenterBtn'\)\?\.addEventListener\('click', toggleGPS\)/);
 });
 
 test('Rueckweg-Bearing friert bei Stillstand und Positionsjitter ein', () => {
@@ -863,7 +914,8 @@ test('Wiedereinstieg setzt Kamera-Hold, Zoom und aktive Gesten vollst√§ndig zur√
   assert.match(appSource, /navCenterOn\(lon, lat, sensorHeading, smoothed\.speed, false\)/);
   assert.doesNotMatch(clearSource, /resetNavBearingState\(\)/);
 
-  const camera = {};
+  const centerButton = { hidden: false };
+  const camera = { document: { getElementById: () => centerButton } };
   vm.createContext(camera);
   vm.runInContext(`
     let navBusRerouteCameraMode = 'active';
@@ -879,4 +931,5 @@ test('Wiedereinstieg setzt Kamera-Hold, Zoom und aktive Gesten vollst√§ndig zur√
   assert.equal(vm.runInContext('navBusRerouteManualZoom', camera), null);
   assert.equal(vm.runInContext('navBusRerouteActiveGestures.size', camera), 0);
   assert.equal(vm.runInContext('navOffRouteManualCamera', camera), false);
+  assert.equal(centerButton.hidden, true);
 });

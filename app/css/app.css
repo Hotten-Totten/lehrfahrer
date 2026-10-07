@@ -116,7 +116,8 @@ body.is-standalone #fullscreenBtn {
   display: none;
 }
 
-#map2dToggleBtn {
+#map2dToggleBtn,
+#rerouteCenterBtn {
   position: fixed;
   top: auto;
   bottom: calc(var(--panel-peek) + var(--safe-bottom) + 12px);
@@ -146,6 +147,19 @@ body.is-standalone #fullscreenBtn {
 
 body.nav-mode #map2dToggleBtn {
   top: auto;
+  bottom: calc(var(--safe-bottom) + 68px);
+  z-index: 520;
+}
+
+#rerouteCenterBtn {
+  left: calc(var(--safe-left) + 72px);
+}
+
+#rerouteCenterBtn[hidden] {
+  display: none;
+}
+
+body.nav-mode #rerouteCenterBtn {
   bottom: calc(var(--safe-bottom) + 68px);
   z-index: 520;
 }
@@ -1961,7 +1975,8 @@ body.nav-mode #navHud {
     box-shadow: 8px 0 24px rgba(2, 8, 18, 0.22);
   }
 
-  body.nav-mode #map2dToggleBtn {
+  body.nav-mode #map2dToggleBtn,
+  body.nav-mode #rerouteCenterBtn {
     bottom: calc(var(--safe-bottom) + 12px);
   }
 
