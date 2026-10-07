@@ -6253,7 +6253,7 @@ async function prepareBusReroutePreviewRequest() {
   });
   const routingCandidates = preparation.routingCandidates || preparation.returnCandidates || [];
   if (!routingCandidates.some(candidate =>
-    selectLocalBusRoutingRegion(localBusRoutingCatalog, preparation.currentPosition, candidate.coordinate, null, lineGeometry)
+    selectLocalBusRoutingRegion(localBusRoutingCatalog, navLastRawGpsPos, candidate.coordinate, null, lineGeometry)
   )) {
     showToast(localBusRoutingCatalog.length
       ? getBusRerouteStatusMessage({ status: 'outside-routing-region' })

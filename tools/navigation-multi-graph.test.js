@@ -323,3 +323,56 @@ test('Provider behaelt die gesamte Liniengeometrie als unveraenderlichen Anfrage
   assert.equal(result.ok, true);
   assert.deepEqual(loads, ['A']);
 });
+
+function setupRealKolkwitzPreparation() {
+  const regionalGraph = graph('cottbus-kolkwitz', 14.14476, 14.49261);
+  regionalGraph.boundingBox.minLat = 51.65615;
+  regionalGraph.boundingBox.maxLat = 51.87029;
+  regionalGraph.nodes[0].lon = 14.32;
+  regionalGraph.nodes[1].lon = 14.33;
+  const fixture = setup([regionalGraph]);
+  const { sandbox } = fixture;
+  for (const [start, end] of [
+    ['function navGetLatLon', 'function bearingDeg'],
+    ['function buildNavCumDists', 'function buildNavStopDists'],
+    ['function interpolateBusReroutePosition', 'function decodeBusReroutePolyline6']
+  ]) {
+    vm.runInContext(appSource.slice(appSource.indexOf(start), appSource.indexOf(end)), sandbox);
+  }
+  sandbox.currentRoute.data.routePoints = [[51.75, 14.32], [51.75, 14.33]];
+  sandbox.navCumDists = sandbox.buildNavCumDists(sandbox.currentRoute.data.routePoints);
+  sandbox.navLastRawGpsPos = point(14.32);
+  return fixture;
+}
+
+test('echte Vorbereitung ohne currentPosition waehlt cottbus-kolkwitz mit Raw-GPS-Start', async () => {
+  const { sandbox, loads } = setupRealKolkwitzPreparation();
+  const preparation = sandbox.buildBusReroutePreparation({
+    currentPosition: sandbox.navLastRawGpsPos,
+    routePoints: sandbox.currentRoute.data.routePoints,
+    routeCumDists: sandbox.navCumDists,
+    routeProgressIndex: sandbox.navProgressIdx,
+    routeStops: sandbox.navStopDists
+  });
+  assert.equal(Object.hasOwn(preparation, 'currentPosition'), false);
+  assert.ok(preparation.routingCandidates.length > 0);
+  const request = await sandbox.prepareBusReroutePreviewRequest();
+  assert.ok(request);
+  assert.equal(request.currentPosition.lat, 51.75);
+  assert.equal(request.currentPosition.lon, 14.32);
+  assert.equal(request.routingStatus, 'ready');
+  assert.equal(request.preview.selectedCandidate.routingContext.regionId, 'cottbus-kolkwitz');
+  assert.deepEqual(loads, ['cottbus-kolkwitz']);
+});
+
+test('echte Vorbereitung lehnt Raw-GPS-Start ausserhalb trotz passender Linie und Ziele ab', async () => {
+  const { sandbox, loads, messages } = setupRealKolkwitzPreparation();
+  sandbox.navLastRawGpsPos = point(14.6);
+  const pending = { preserved: true };
+  sandbox.navPendingBusRerouteRequest = pending;
+  assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
+  assert.equal(sandbox.navPendingBusRerouteRequest, pending);
+  assert.equal(sandbox.navActiveBusReroute, null);
+  assert.deepEqual(loads, []);
+  assert.match(messages[0], /außerhalb der installierten Routingregion/);
+});

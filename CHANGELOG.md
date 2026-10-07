@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.053 - 2026-10-07
+- Behebt fehlerhafte Ablehnung gültiger Offline-Routingregionen beim Start einer Rückführung
+- Multi-Graph-Vorabcheck verwendet jetzt die reale Raw-GPS-Startposition
+- Regressionstest für echte Rückführungsvorbereitung ergänzt
+
 ## V2.1.052 - 2026-10-07
 - Mehrere Offline-Routinggraphen parallel installierbar; automatische Auswahl eines passenden Graphen
 - Laufende Rückführung bleibt an Region und Graphversion gebunden; die Region muss die vollständige aktive Liniengeometrie abdecken
