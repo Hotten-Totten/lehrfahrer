@@ -12,6 +12,10 @@ vm.runInContext(`
   const BUS_REROUTE_VALHALLA_URL = 'https://valhalla.test';
   const navManeuverAudioNodes = new Set();
   ${appSource.slice(
+    appSource.indexOf('function normalizeOperationalCoordinate'),
+    appSource.indexOf('function getRouteEndpoint')
+  )}
+  ${appSource.slice(
     appSource.indexOf('function resetBusRerouteManeuverAudio'),
     appSource.indexOf('function maybePlayBusRerouteManeuverCue')
   )}
@@ -444,9 +448,17 @@ test('ohne lokalen Routinggraph startet die Rueckfuehrung nicht und meldet den G
   sandbox.navActive = true;
   sandbox.currentRoute = { data: { routePoints: [[51.75, 14.33], [51.76, 14.33]] } };
   sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.33 };
+  sandbox.navCumDists = [0, 100];
+  sandbox.navProgressIdx = 0;
+  sandbox.navStopDists = [];
   sandbox.navActiveBusReroute = null;
   sandbox.navPendingBusRerouteRequest = pendingRequest;
-  sandbox.getInstalledLocalBusRoutingGraph = () => null;
+  sandbox.initializePersistentLocalBusRoutingGraph = async () => ({ status: 'ready' });
+  sandbox.buildBusReroutePreparation = () => ({
+    currentPosition: sandbox.navLastRawGpsPos,
+    routingCandidates: [{ coordinate: { lat: 51.76, lon: 14.33 } }]
+  });
+  vm.runInContext('localBusRoutingCatalog = []', sandbox);
   sandbox.showToast = message => messages.push(message);
 
   const result = await sandbox.prepareBusReroutePreviewRequest();
@@ -455,14 +467,14 @@ test('ohne lokalen Routinggraph startet die Rueckfuehrung nicht und meldet den G
   assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
   assert.equal(sandbox.navActiveBusReroute, null);
 
-  sandbox.getInstalledLocalBusRoutingGraph = () => ({ boundingBox: {} });
-  sandbox.LehrfahrerLocalBusRouting = { isPointWithinBoundingBox: () => false };
+  vm.runInContext("localBusRoutingCatalog = [{ regionId: 'elsewhere', boundingBox: {} }]", sandbox);
+  sandbox.LehrfahrerLocalBusRoutingStorage = { isPointWithinBoundingBox: () => false };
   assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
   assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
   assert.equal(sandbox.navActiveBusReroute, null);
   assert.deepEqual(messages, [
     'Für diese Region ist kein Offline-Routing installiert.',
-    'Für diese Region ist kein Offline-Routing installiert.'
+    'Die vollständige aktive Linie liegt außerhalb der installierten Routingregionen.'
   ]);
 });
 

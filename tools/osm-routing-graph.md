@@ -2,7 +2,7 @@
 
 This build-time tool converts a bounded local OSM XML extract into the existing LocalBusRouter graph format v1. It uses only Python's standard library and makes no network requests. The generated graph is a routing-only data source; it does not provide map tiles, styles, or visible map content.
 
-The visible driver map remains the existing MapLibre rendering backed by PMTiles. A future distribution can install the PMTiles map package and this routing graph separately on the tablet for fully offline use. This change does not add app-side graph installation or change either package's lifecycle.
+The visible driver map remains the existing MapLibre rendering backed by PMTiles. The routing graph is installed separately from the app's **Settings → Offline-Routinggraph → Routinggraph installieren** control; it does not replace or modify PMTiles.
 
 ## Input
 
@@ -17,13 +17,17 @@ Then build a region graph with a west,south,east,north bounding box:
 ```powershell
 python tools/build_osm_routing_graph.py `
   --input cottbus.osm `
-  --output region-routing-graph.json `
-  --region-id cottbus-test `
+  --output cottbus-routing-graph.json `
+  --region-id cottbus `
   --graph-version 1 `
   --bbox 14.10,51.60,14.65,51.90
 ```
 
 Only OSM segments with both endpoint nodes inside the bounding box are emitted. Choose the extract and box with enough margin for the intended routing area. Region IDs and extents are caller supplied; Cottbus is not hard-coded.
+
+Copy `cottbus-routing-graph.json` to the tablet. In the Lehrfahrer app, open **Settings → Offline-Routinggraph → Routinggraph installieren** and select that JSON file. The app validates its schema and bounds, displays its region, version, bounding box and size, then persists it in OPFS. Different region IDs are installed alongside each other; an update replaces only the same region after successful validation. The 50 MiB limit applies to each graph file. Existing single-region installations are migrated without deleting the old source before successful migration.
+
+At startup only the region catalog is loaded. Routing loads a graph on demand whose bounding box contains the start, the return target, and the entire active line geometry, including intermediate sections. Missing full-line coverage is reported before any return-route state is changed. The coverage helper accepts an optional safety distance in meters; the default is zero (geometry only), with no fixed corridor width. Overlaps prefer a matching loaded version, then the smallest bounding box, higher optional priority, and finally the region ID. A prepared or active return route keeps its own router and graph version. Regions are not stitched together; endpoints and the active line require one package that covers all of them. Keep the original files as installable sources; routing storage remains separate from offline map/PMTiles files.
 
 ## Mapping
 

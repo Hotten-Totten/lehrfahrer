@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.052 - 2026-10-07
+- Mehrere Offline-Routinggraphen parallel installierbar; automatische Auswahl eines passenden Graphen
+- Laufende Rückführung bleibt an Region und Graphversion gebunden; die Region muss die vollständige aktive Liniengeometrie abdecken
+- Optionalen Sicherheitskorridor architektonisch vorbereitet; bestehende Single-Graph-Installation migrationsfähig
+- Keine Änderung an Navigations-, Rejoin- oder Routingweglogik
+
 ## V2.1.051 - 2026-10-06
 - Stabilisiert ON-Route/OFF-Route-Erkennung und Rejoin bei veraltetem Routenfortschritt
 - Sichert die Rückführung ohne passenden Offline-Routinggraph ab und ermöglicht Manöverpieptöne nach dem OFF-Route-Warnton wieder
