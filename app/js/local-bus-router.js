@@ -441,7 +441,7 @@
           connectorDurationSec: distanceM / (15 / 3.6),
           connectorCost: distanceM / (15 / 3.6),
           geometry: role === 'start'
-            ? [[point.lat, point.lon], [node.lat, node.lon]]
+            ? [[node.lat, node.lon]]
             : [[node.lat, node.lon], [point.lat, point.lon]],
           roadEdges: []
         });
@@ -477,7 +477,7 @@
             connectorDurationSec: projection.distanceM / (15 / 3.6) + partialLengthM / (edgeSpeedKph(edge) / 3.6),
             connectorCost: projection.distanceM / (15 / 3.6) + traversalCost(edge, partialLengthM),
             geometry: role === 'start'
-              ? [[point.lat, point.lon], [projection.point.lat, projection.point.lon], [node.lat, node.lon]]
+              ? [[projection.point.lat, projection.point.lon], [node.lat, node.lon]]
               : [[node.lat, node.lon], [projection.point.lat, projection.point.lon], [point.lat, point.lon]],
             roadEdges: partialLengthM > 0.5 ? [edgePart] : []
           });

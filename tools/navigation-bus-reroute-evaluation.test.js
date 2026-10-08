@@ -82,6 +82,7 @@ function createReroutePanelContext(candidateValue, active = false) {
     navPendingBusRerouteRequest: !active && selectedCandidate
       ? { preview: { selectedCandidate }, routingStatus: 'ready' }
       : null,
+    navBusRerouteSearchLoading: false,
     navFormatDist: value => `${value} m`,
     resolveConfiguredDispatchPhone: () => '',
     startPreparedBusReroute() {},
@@ -871,9 +872,23 @@ test('Previewzustand wird zur temporaeren Rueckwegnavigation ohne Originalrouten
   });
 
   assert.equal(state.geometry.length, 3);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.geometry)), selected.routeGeometry);
   assert.equal(state.selectedCandidate.candidate.skippedStopCount, 2);
   assert.strictEqual(state.originalRoute, originalRoute);
   assert.equal(JSON.stringify(originalRoute), before);
+});
+
+test('Reroute-Suche zeigt sofort einen deaktivierten Ladebutton', () => {
+  const context = createReroutePanelContext(null);
+  context.navBusRerouteSearchLoading = true;
+  const panel = context.createNavOffRoutePanel();
+  const button = panel.children[1].children.find(child =>
+    child.tagName === 'button' && /berechnet/.test(child.textContent)
+  );
+
+  assert.ok(button);
+  assert.equal(button.disabled, true);
+  assert.match(panelText(panel), /Rückweg wird berechnet/);
 });
 
 test('Abbrechen entfernt nur die Preview, Start aktiviert den temporaeren Rueckweg', () => {
@@ -887,10 +902,12 @@ test('Abbrechen entfernt nur die Preview, Start aktiviert den temporaeren Rueckw
   sandbox.navProgressIdx = 0;
   sandbox.navActiveBusReroute = null;
   sandbox.navPendingBusRerouteRequest = { preview: null };
+  sandbox.navBusRerouteSearchLoading = true;
 
   assert.equal(sandbox.cancelBusReroutePreview(), true);
   assert.equal(sandbox.previewCleared, true);
   assert.equal(sandbox.navPendingBusRerouteRequest, null);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
 
   const selected = {
     ...neutralRoute(candidate('start', 0, 500)),
@@ -920,6 +937,7 @@ test('aktiver Rueckweg kann ohne Verlust der Originalnavigation abgebrochen werd
   sandbox.currentRoute = { data: originalRoute };
   sandbox.navActiveBusReroute = active;
   sandbox.navPendingBusRerouteRequest = { routingStatus: 'active' };
+  sandbox.navBusRerouteSearchLoading = true;
   sandbox.navCumDists = [0, 100];
   sandbox.navProgressIdx = 0;
   sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.32 };
@@ -931,6 +949,7 @@ test('aktiver Rueckweg kann ohne Verlust der Originalnavigation abgebrochen werd
   assert.equal(sandbox.cancelActiveBusReroute(), true);
   assert.equal(sandbox.navActiveBusReroute, null);
   assert.equal(sandbox.navPendingBusRerouteRequest, null);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
   assert.equal(sandbox.activeRerouteCleared, true);
   assert.equal(sandbox.originalHudContinued, true);
   assert.strictEqual(sandbox.currentRoute.data, originalRoute);

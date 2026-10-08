@@ -40,6 +40,7 @@ function setup(graphs = [graph('A', 14.1, 14.3), graph('B', 14.2, 14.4), graph('
     routingGraphInstallStatus: { textContent: '', dataset: {} },
     importRoutingGraphBtn: { disabled: false },
     navActive: true, navActiveBusReroute: null, navPendingBusRerouteRequest: null,
+    navBusRerouteSearchLoading: false,
     currentRoute: { data: { routePoints: [[51.75, 14.15], [51.75, 14.25]] } },
     navLastRawGpsPos: { lat: 51.75, lon: 14.15 },
     navCumDists: [0, 100], navProgressIdx: 0, navStopDists: [],
@@ -387,6 +388,21 @@ test('echte Vorbereitung ohne currentPosition waehlt cottbus-kolkwitz mit Raw-GP
   assert.equal(request.currentPosition.lon, 14.32);
   assert.equal(request.routingStatus, 'ready');
   assert.equal(request.preview.selectedCandidate.routingContext.regionId, 'cottbus-kolkwitz');
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
+  assert.deepEqual(loads, ['cottbus-kolkwitz']);
+});
+
+test('Preview-Abbruch erlaubt sofort eine neue saubere Suche', async () => {
+  const { sandbox, loads } = setupRealKolkwitzPreparation();
+  const first = await sandbox.prepareBusReroutePreviewRequest();
+  assert.equal(first.routingStatus, 'ready');
+  assert.equal(sandbox.cancelBusReroutePreview(), true);
+  assert.equal(sandbox.navPendingBusRerouteRequest, null);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
+
+  const second = await sandbox.prepareBusReroutePreviewRequest();
+  assert.equal(second.routingStatus, 'ready');
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
   assert.deepEqual(loads, ['cottbus-kolkwitz']);
 });
 
@@ -415,7 +431,26 @@ test('schnelle Mehrfachanforderung teilt genau eine Reroute-Berechnung', async (
   const second = sandbox.prepareBusReroutePreviewRequest();
   assert.strictEqual(second, first);
   assert.equal(initializationCalls, 1);
+  assert.equal(sandbox.navBusRerouteSearchLoading, true);
   sandbox.navActive = false;
   releaseInitialization({ status: 'ready' });
   assert.equal(await first, null);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
+});
+
+test('Fehler setzt Ladezustand zurueck und eine erneute Suche bleibt moeglich', async () => {
+  const { sandbox } = setupRealKolkwitzPreparation();
+  let calls = 0;
+  sandbox.initializePersistentLocalBusRoutingGraph = async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('Testfehler');
+    sandbox.navActive = false;
+    return { status: 'ready' };
+  };
+
+  assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
+  assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
+  assert.equal(calls, 2);
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
 });

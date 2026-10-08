@@ -130,10 +130,25 @@ test('G: Start und Ziel nahe einer Kante werden innerhalb des Radius angebunden'
   const result = await createRouter({ snapRadiusM: 40 }).routeBusPath({ from, to, constraints: {} });
 
   assert.equal(result.ok, true);
-  assert.deepEqual(Array.from(result.geometry[0]), [from.lat, from.lon]);
+  assert.notDeepEqual(Array.from(result.geometry[0]), [from.lat, from.lon]);
+  assert.ok(result.localPath.startSnapDistanceM >= 10);
+  assert.ok(result.localPath.startSnapDistanceM <= 30);
   assert.deepEqual(Array.from(result.geometry[result.geometry.length - 1]), [to.lat, to.lon]);
   assert.ok(result.localPath.startSnapDistanceM <= 40);
   assert.ok(result.localPath.targetSnapDistanceM <= 40);
+});
+
+test('Start direkt auf Routingkante erzeugt kein zusaetzliches Verbindungssegment', async () => {
+  const from = { lat: 51.75018, lon: 14.33045 };
+  const result = await createRouter({ snapRadiusM: 40 }).routeBusPath({
+    from,
+    to: { lat: 51.75018, lon: 14.33255 },
+    constraints: {}
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.geometry[0]), [from.lat, from.lon]);
+  assert.equal(result.localPath.startSnapDistanceM, 0);
 });
 
 test('H: neutrales Providerformat ist direkt mit bestehendem Evaluator kompatibel', async () => {

@@ -66,6 +66,7 @@ let navWarningFallbackUnlocked = false;
 let navLastRawGpsPos = null;
 let navPendingBusRerouteRequest = null;
 let navActiveBusReroute = null;
+let navBusRerouteSearchLoading = false;
 let pendingOperationalJourneyPlan = null;
 const NAV_INDEX_BACKTRACK_TOLERANCE = 2;
 
@@ -6361,6 +6362,7 @@ function advanceBusRerouteNavigationState(state, lat, lon, radiusM = 35, require
 
 function cancelBusReroutePreview() {
   if (navActiveBusReroute) return false;
+  navBusRerouteSearchLoading = false;
   navPendingBusRerouteRequest = null;
   if (typeof clearBusReroute === 'function') clearBusReroute();
   const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
@@ -6395,6 +6397,7 @@ function cancelActiveBusReroute() {
   if (!navActiveBusReroute) return false;
   resetBusRerouteManeuverAudio(navActiveBusReroute);
   navActiveBusReroute = null;
+  navBusRerouteSearchLoading = false;
   navPendingBusRerouteRequest = null;
   if (typeof clearBusReroute === 'function') clearBusReroute();
   const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
@@ -6456,13 +6459,26 @@ function requestBusReroute() {
   return prepareBusReroutePreviewRequest();
 }
 
+function setBusRerouteSearchLoading(active) {
+  navBusRerouteSearchLoading = active === true;
+  if (!navActive || typeof renderUpcomingStops !== 'function') return;
+  const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
+  renderUpcomingStops(currentDist);
+}
+
 function prepareBusReroutePreviewRequest() {
   if (prepareBusReroutePreviewRequest.inFlight) return prepareBusReroutePreviewRequest.inFlight;
-  const operation = runBusReroutePreviewRequest();
+  setBusRerouteSearchLoading(true);
+  const operation = runBusReroutePreviewRequest().catch(error => {
+    console.warn('Bus-Re-Route-Berechnung fehlgeschlagen:', error);
+    showToast('Rückweg konnte nicht berechnet werden. Bitte erneut versuchen.', 6000);
+    return null;
+  });
   prepareBusReroutePreviewRequest.inFlight = operation;
   const release = () => {
     if (prepareBusReroutePreviewRequest.inFlight === operation) {
       prepareBusReroutePreviewRequest.inFlight = null;
+      setBusRerouteSearchLoading(false);
     }
   };
   operation.then(release, release);
@@ -6684,10 +6700,10 @@ function createNavOffRoutePanel() {
 
     const detourBtn = document.createElement('button');
     detourBtn.type = 'button';
-    detourBtn.textContent = navPendingBusRerouteRequest?.routingStatus === 'routing'
-      ? 'Rückweg wird gesucht …'
+    detourBtn.textContent = navBusRerouteSearchLoading || navPendingBusRerouteRequest?.routingStatus === 'routing'
+      ? 'Rückweg wird berechnet …'
       : 'Umleitung suchen';
-    detourBtn.disabled = navPendingBusRerouteRequest?.routingStatus === 'routing';
+    detourBtn.disabled = navBusRerouteSearchLoading || navPendingBusRerouteRequest?.routingStatus === 'routing';
     detourBtn.addEventListener('click', requestBusReroute);
     actions.append(returnBtn, detourBtn);
 

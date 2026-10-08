@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.060 - 2026-10-08
+- Rückweg startet sichtbar erst am Straßensnap statt mit Luftliniensegment
+- Sichtbarer Berechnungsstatus bei erneuter Umleitungssuche
+- Wiederholte Rückwegsuche nach Abbruch stabilisiert
+
 ## V2.1.059 - 2026-10-08
 - Touch-Gesten auch während aktiver Rückführung zuverlässig nutzbar
 - Aktiver Rückweg kann abgebrochen werden
