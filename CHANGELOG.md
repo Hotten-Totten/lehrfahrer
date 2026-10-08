@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.057 - 2026-10-08
+- Kartenbedienung mit dauerhaften Touch-Gesten und Fahrzeugzentrierung
+- Rückrouting darf bei deutlichem betrieblichen Vorteil eine Haltestelle auslassen
+- Entfallende Haltestelle wird mit „Leitstelle informieren“ angezeigt
+- Startstopp-Schutz abgesichert
+
 ## V2.1.056 - 2026-10-07
 - Touch-Gesten in normaler Navigation und Rückführung freigegeben
 - Manuelle Kartenansicht bleibt nach Drag/Pinch/Rotation bestehen

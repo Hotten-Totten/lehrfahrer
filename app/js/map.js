@@ -56,6 +56,7 @@ const BUS_REROUTE_STREET_LABEL_BEHIND_M = 220;
 const BUS_REROUTE_STREET_LABEL_CORRIDOR_M = 140;
 const BUS_REROUTE_STREET_LABEL_MAX_FEATURES = 120;
 let map2DModeEnabled = false;
+let lastGpsPosition = null;
 
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
@@ -157,7 +158,6 @@ function resetBusRerouteCameraState() {
   navBusRerouteManualZoom = null;
   navBusRerouteActiveGestures.clear();
   navOffRouteManualCamera = false;
-  navManualCameraHeld = false;
 }
 
 function resumeNavCameraFollow(lon, lat) {
@@ -172,6 +172,20 @@ function resumeNavCameraFollow(lon, lat) {
   navCameraCenter = { lon, lat };
   navCameraSyncTs = 0;
   map.jumpTo({ ...navCameraFollowOptions, center: [lon, lat] });
+  return true;
+}
+
+function updateVehicleCenterButton() {
+  document.getElementById('rerouteCenterBtn')?.classList.toggle('is-visible', !!lastGpsPosition);
+}
+
+function centerMapOnVehicle() {
+  if (!map || !lastGpsPosition) return false;
+  const { lon, lat } = lastGpsPosition;
+  if (document.body.classList.contains('nav-mode')) {
+    return resumeNavCameraFollow(lon, lat);
+  }
+  map.flyTo({ center: [lon, lat], zoom: 15, duration: 600 });
   return true;
 }
 
@@ -1317,11 +1331,6 @@ async function initMap() {
   });
   guardMapLibreBoxZoomReset(map);
 
-  map.addControl(
-    new maplibregl.NavigationControl({ showCompass: false }),
-    'bottom-right'
-  );
-
   map.on('error', e => {
     handleMapSourceError(e);
   });
@@ -1335,9 +1344,7 @@ async function initMap() {
     }
   });
   const respectNavigationMapGesture = (type, event) => {
-    if (!event.originalEvent || (
-      !document.body.classList.contains('nav-mode') && !document.body.classList.contains('nav-off-route')
-    )) return;
+    if (!event.originalEvent || !document.body.classList.contains('nav-mode')) return;
     beginBusRerouteMapGesture(type, event);
     navOffRouteManualCamera = true;
     navCameraModeTransition = null;
@@ -1910,7 +1917,7 @@ function showBusReroute(routePoints, currentPosition, active = false, routingGra
     }
     if (active && previousMode === 'preview' && !Number.isFinite(navBusRerouteManualZoom)) {
       navBusRerouteManualCameraUntil = 0;
-      navOffRouteManualCamera = false;
+      if (!navManualCameraHeld) navOffRouteManualCamera = false;
     }
     const coords = routePoints.map(point => Array.isArray(point)
       ? [Number(point[1]), Number(point[0])]
@@ -2168,6 +2175,10 @@ function startGPS(onPositionUpdate, onError, onFirstFix) {
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
       const lnglat = [pos.coords.longitude, pos.coords.latitude];
+      if (lnglat.every(Number.isFinite)) {
+        lastGpsPosition = { lon: lnglat[0], lat: lnglat[1] };
+        updateVehicleCenterButton();
+      }
       const navMode = document.body.classList.contains('nav-mode');
       const hdg = pos.coords.heading;
       const headingForMarker = (hdg != null && !isNaN(hdg) && (pos.coords.speed || 0) > 0.5)
@@ -2210,6 +2221,8 @@ function stopGPS() {
   }
   stopGpsMarkerAnimation();
   gpsAnimState = null;
+  lastGpsPosition = null;
+  updateVehicleCenterButton();
   resetNavBearingState();
 }
 
@@ -2245,7 +2258,7 @@ function navCenterOn(lon, lat, headingDeg, speedMps = null, headingStable = fals
   if (offRouteActive !== navOffRouteCameraActive) {
     const padding = map.getPadding();
     navOffRouteCameraActive = offRouteActive;
-    navOffRouteManualCamera = false;
+    if (!navManualCameraHeld) navOffRouteManualCamera = false;
     navCameraModeTransition = {
       startTs: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
       durationMs: offRouteActive ? 650 : 1100,
@@ -2305,9 +2318,6 @@ function syncNavCameraToGpsMarkerPosition(lon, lat) {
   if (!map || !navCameraFollowOptions || !document.body.classList.contains('nav-mode')) return;
   if (navManualCameraHeld) return;
   const nowTs = mapCameraNow();
-  if (navBusRerouteCameraMode === 'active' && (
-    navBusRerouteActiveGestures.size > 0 || nowTs < navBusRerouteManualCameraUntil
-  )) return;
   if (document.body.classList.contains('nav-off-route') && navOffRouteManualCamera) {
     const manualCenter = map.getCenter();
     navCameraCenter = { lon: manualCenter.lng, lat: manualCenter.lat };

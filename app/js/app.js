@@ -1677,7 +1677,11 @@ function bindEvents() {
   if (refreshLinesBtn) refreshLinesBtn.addEventListener('click', refreshLinesNow);
 
   gpsBtn.addEventListener('click', toggleGPS);
-  document.getElementById('rerouteCenterBtn')?.addEventListener('click', toggleGPS);
+  document.getElementById('rerouteCenterBtn')?.addEventListener('click', () => {
+    if (typeof centerMapOnVehicle !== 'function' || !centerMapOnVehicle()) {
+      showToast('Aktuelle Fahrzeugposition noch nicht verfügbar.', 4500);
+    }
+  });
   if (simBtn) simBtn.addEventListener('click', toggleSimulationMode);
   if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreenMode);
   if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
@@ -2818,13 +2822,6 @@ async function requestPersistentStorage(automatic) {
 
 // ── GPS toggle ───────────────────────────────────────────────
 function toggleGPS() {
-  if (navActive) {
-    if (!navLastRawGpsPos ||
-        !resumeNavCameraFollow(navLastRawGpsPos.lon, navLastRawGpsPos.lat)) {
-      showToast('Aktuelle Fahrzeugposition noch nicht verfügbar.', 4500);
-    }
-    return;
-  }
   if (navActive && navInputMode === 'sim') {
     showToast('Simulation läuft. Erst Simulation beenden, dann GPS aktivieren.', 4500);
     return;
@@ -4391,7 +4388,7 @@ function buildNavStopDists(stops, pts, cumDists) {
   });
 }
 
-function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = true, forceGlobalFallback = false) {
+function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = true) {
   if (!pts.length) return 0;
 
   const maxIdx = pts.length - 1;
@@ -4418,8 +4415,9 @@ function findNearestNavIdx(lat, lon, pts, hintIdx = 0, allowGlobalFallback = tru
     }
   }
 
-  // Bei unsicherem oder randnahem lokalen Treffer wird global neu gesucht.
-  if (allowGlobalFallback && (forceGlobalFallback || best <= start + edgeMargin || best >= end - edgeMargin)) {
+  // Falls der beste Treffer am Fensterrand liegt, wurde evtl. stark abgewichen.
+  // Dann einmal global suchen (selten, aber korrekt).
+  if (allowGlobalFallback && (best <= start + edgeMargin || best >= end - edgeMargin)) {
     noteNavPerfFallback();
     minD = Infinity;
     best = seed;
@@ -4441,14 +4439,11 @@ function snapGpsToRoute(
   pts,
   hintIdx = 0,
   windowSize = NAV_SNAP_WINDOW,
-  allowGlobalFallback = true,
-  forceGlobalFallback = false
+  allowGlobalFallback = true
 ) {
   if (!pts || pts.length < 2) return null;
 
-  const nearestIdx = findNearestNavIdx(
-    lat, lon, pts, hintIdx, allowGlobalFallback, forceGlobalFallback
-  );
+  const nearestIdx = findNearestNavIdx(lat, lon, pts, hintIdx, allowGlobalFallback);
   const maxSeg = pts.length - 2;
   if (maxSeg < 0) return null;
 
@@ -4526,9 +4521,11 @@ function lerpValue(a, b, t) {
 
 function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gpsLat = displayLat, gpsLon = displayLon) {
   const snap = snapGpsToRoute(displayLat, displayLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
-  // Die Zustandsentscheidung nutzt Raw-GPS; ein globaler Fallback wird erst
-  // bei grosser lokaler Distanz genutzt, etwa nach veraltetem Routenfortschritt.
-  let rawGpsSnap = snapGpsToRoute(
+  // Die Zustandsentscheidung darf weder von der geglaetteten Position noch
+  // vom Route-Lock abhaengen. Dafuer wird der echte Fix separat gegen den
+  // aktuellen Routenkorridor projiziert, ohne global zu einer weit entfernten
+  // Stelle derselben Route zu springen.
+  const rawGpsSnap = snapGpsToRoute(
     gpsLat,
     gpsLon,
     pts,
@@ -4536,20 +4533,6 @@ function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gps
     NAV_SNAP_WINDOW,
     false
   );
-  if (rawGpsSnap?.distanceM >= NAV_OFF_ROUTE_ENTER_M) {
-    const globalRawGpsSnap = snapGpsToRoute(
-      gpsLat,
-      gpsLon,
-      pts,
-      navNearestIdx,
-      NAV_SNAP_WINDOW,
-      true,
-      true
-    );
-    if (globalRawGpsSnap && globalRawGpsSnap.distanceM < rawGpsSnap.distanceM) {
-      rawGpsSnap = globalRawGpsSnap;
-    }
-  }
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
     return {
@@ -4807,7 +4790,7 @@ function maybePlayBusRerouteManeuverCue(state, activeTurn, currentDist) {
   }
   const distanceM = activeTurn.distFromStart - currentDist;
   if (distanceM > 250 || distanceM < -10 || state.maneuverAudio.warningPlayed) return false;
-  if (!isNavManeuverBeepsEnabled() || Date.now() < navWarningAudioBusyUntil) return false;
+  if (!isNavManeuverBeepsEnabled() || navOffRouteActive || Date.now() < navWarningAudioBusyUntil) return false;
 
   if (!navWarningAudioContext || navWarningAudioContext.state !== 'running') {
     if (Date.now() >= state.maneuverAudio.retryAt) {
@@ -5104,7 +5087,14 @@ function buildBusReroutePreparation({
     if (!routePosition) return;
 
     const nextStop = remainingStops.find(stop => stop.routeProgressM >= targetM - 10) || null;
-    const skippedStopCount = remainingStops.filter(stop => stop.routeProgressM < targetM - 10).length;
+    const skippedStops = remainingStops
+      .filter(stop => stop.routeProgressM < targetM - 10)
+      .map(stop => ({
+        id: stop.id,
+        name: stop.name,
+        routeDistanceM: stop.routeProgressM
+      }));
+    const skippedStopCount = skippedStops.length;
     const relativeToNextOpenStop = !firstOpenStop
       ? 'none'
       : (targetM < firstOpenStop.routeProgressM - 10
@@ -5118,6 +5108,7 @@ function buildBusReroutePreparation({
       nextStopId: nextStop?.id || null,
       nextStopName: nextStop?.name || null,
       skippedStopCount,
+      skippedStops,
       directDistanceM: Math.round(haversineM(
         currentPosition.lat,
         currentPosition.lon,
@@ -5402,9 +5393,6 @@ const ValhallaBusRouter = Object.freeze({
 
 let localBusRouterImplementation = null;
 let localBusRouterModulePromise = null;
-let localBusRoutingCatalog = [];
-let localBusRoutingStore = null;
-let localBusRoutingCatalogInitialization = null;
 const LocalBusRouter = Object.freeze({
   id: 'local-bus-router',
   type: 'offline-local',
@@ -5436,130 +5424,6 @@ function registerLocalBusRouter(implementation) {
 
 function getInstalledLocalBusRoutingGraph() {
   return localBusRouterImplementation?.graph || null;
-}
-
-function isRoutingRegionCoveringLine(boundingBox, routePoints, safetyDistanceM = 0) {
-  if (!Number.isFinite(safetyDistanceM) || safetyDistanceM < 0) {
-    throw new Error('Routing-Sicherheitsabstand muss eine endliche, nichtnegative Meterangabe sein.');
-  }
-  if (!Array.isArray(routePoints) || !routePoints.length) {
-    throw new Error('Linienabdeckung benötigt eine vollständige Liniengeometrie.');
-  }
-  const points = routePoints.map(point => {
-    const coordinate = normalizeOperationalCoordinate(point);
-    if (!coordinate || Math.abs(coordinate.lat) > 90 || Math.abs(coordinate.lon) > 180) {
-      throw new Error('Liniengeometrie enthält eine ungültige Koordinate.');
-    }
-    return coordinate;
-  });
-  const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
-  if (!storageApi) throw new Error('Routinggraph-Speicher ist nicht verfügbar.');
-  const extent = points.reduce((box, point) => ({
-    minLat: Math.min(box.minLat, point.lat), maxLat: Math.max(box.maxLat, point.lat),
-    minLon: Math.min(box.minLon, point.lon), maxLon: Math.max(box.maxLon, point.lon)
-  }), { minLat: 90, maxLat: -90, minLon: 180, maxLon: -180 });
-  const angularMargin = safetyDistanceM / 6371000;
-  const latitudeMargin = angularMargin * 180 / Math.PI;
-  // A rectangular envelope covers every line segment and an optional spherical corridor.
-  const maxAbsoluteLatitude = Math.max(Math.abs(extent.minLat), Math.abs(extent.maxLat));
-  const latitudeCosine = Math.cos(maxAbsoluteLatitude * Math.PI / 180);
-  const longitudeMargin = safetyDistanceM === 0 ? 0
-    : angularMargin >= Math.PI / 2 || latitudeMargin + maxAbsoluteLatitude >= 90
-      ? 180
-      : Math.asin(Math.min(1, Math.sin(angularMargin) / latitudeCosine)) * 180 / Math.PI;
-  return storageApi.isPointWithinBoundingBox({
-    lat: extent.minLat - latitudeMargin, lon: extent.minLon - longitudeMargin
-  }, boundingBox) && storageApi.isPointWithinBoundingBox({
-    lat: extent.maxLat + latitudeMargin, lon: extent.maxLon + longitudeMargin
-  }, boundingBox);
-}
-
-function selectLocalBusRoutingRegion(regions, from, to, loadedRouter = null, routePoints = null, safetyDistanceM = 0) {
-  const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
-  if (!storageApi) return null;
-  const eligible = regions.filter(region =>
-    storageApi.isPointWithinBoundingBox(from, region.boundingBox) &&
-    storageApi.isPointWithinBoundingBox(to, region.boundingBox) &&
-    (routePoints === null || isRoutingRegionCoveringLine(region.boundingBox, routePoints, safetyDistanceM))
-  );
-  const loadedRegionId = loadedRouter?.graph?.regionId;
-  const loadedGraphVersion = String(loadedRouter?.graph?.graphVersion);
-  const area = region => {
-    const box = region.boundingBox;
-    return (box.maxLat - box.minLat) * (box.maxLon - box.minLon);
-  };
-  const isLoaded = region => region.regionId === loadedRegionId &&
-    String(region.graphVersion) === loadedGraphVersion &&
-    region.checksum === loadedRouter?.routingGraphChecksum;
-  eligible.sort((a, b) =>
-    Number(isLoaded(b)) - Number(isLoaded(a)) ||
-    area(a) - area(b) ||
-    (Number(b.priority) || 0) - (Number(a.priority) || 0) ||
-    (a.regionId < b.regionId ? -1 : a.regionId > b.regionId ? 1 : 0)
-  );
-  return eligible[0] || null;
-}
-
-function createRegionalBusRoutingProvider(
-  regions = localBusRoutingCatalog,
-  routePoints = typeof navActive !== 'undefined' && navActive ? currentRoute?.data?.routePoints || null : null,
-  safetyDistanceM = 0
-) {
-  const catalog = regions.slice();
-  const lineGeometry = routePoints === null ? null
-    : routePoints.map(point => Array.isArray(point) ? point.slice() : { ...point });
-  let loadedRouter = localBusRouterImplementation;
-  let queue = Promise.resolve();
-  return {
-    id: LocalBusRouter.id,
-    type: LocalBusRouter.type,
-    onlineRequired: false,
-    isAvailable: () => catalog.length > 0,
-    routeBusPath(request) {
-      const run = async () => {
-        const region = selectLocalBusRoutingRegion(catalog, request.from, request.to, loadedRouter, lineGeometry, safetyDistanceM);
-        if (!region) {
-          return createBusRoutingFailure(
-            'OUTSIDE_ROUTING_REGION',
-            'Start, Rückkehrziel oder vollständige Linie liegt außerhalb der installierten Routingregion.',
-            { id: LocalBusRouter.id, type: LocalBusRouter.type, onlineRequired: false }
-          );
-        }
-        if (!loadedRouter || loadedRouter.graph?.regionId !== region.regionId ||
-            String(loadedRouter.graph?.graphVersion) !== String(region.graphVersion) ||
-            loadedRouter.routingGraphChecksum !== region.checksum) {
-          const loaded = await getLocalBusRoutingStore().loadGraph(
-            LOCAL_BUS_ROUTING_GRAPH_SPEC.schemaVersion, region.regionId
-          );
-          if (loaded.status !== 'ready') {
-            throw new Error(loaded.error || `Routingregion ${region.regionId} konnte nicht geladen werden.`);
-          }
-          if (String(loaded.metadata.graphVersion) !== String(region.graphVersion) ||
-              loaded.metadata.checksum !== region.checksum) {
-            throw new Error(`Routingregion ${region.regionId} ist nicht mehr unverändert verfügbar. Bitte Installation prüfen oder erneut suchen.`);
-          }
-          const moduleApi = await loadLocalBusRouterModule();
-          loadedRouter = moduleApi.createRouter(loaded.graph);
-          if (!loadedRouter.isAvailable()) throw new Error('Routinggraph enthält keine routbaren Kanten.');
-          loadedRouter.routingGraphChecksum = loaded.metadata.checksum;
-        }
-        const router = loadedRouter;
-        const result = await router.routeBusPath(request);
-        return {
-          ...result,
-          routingContext: {
-            regionId: region.regionId,
-            graphVersion: region.graphVersion,
-            router
-          }
-        };
-      };
-      const result = queue.then(run);
-      // Keep later candidates runnable; the caller still receives this request's rejection.
-      queue = result.catch(() => {});
-      return result;
-    }
-  };
 }
 
 function loadLocalBusRouterModule() {
@@ -5606,43 +5470,13 @@ function formatRoutingGraphSize(bytes) {
     : `${Math.round(bytes / 1024)} KB`;
 }
 
-function formatRoutingGraphBoundingBox(box) {
-  return `BBox lat ${box.minLat.toFixed(4)}..${box.maxLat.toFixed(4)}, ` +
-    `lon ${box.minLon.toFixed(4)}..${box.maxLon.toFixed(4)}`;
-}
-
 function renderRoutingGraphStatus(message, state = 'neutral') {
   if (!routingGraphInstallStatus) return;
   routingGraphInstallStatus.textContent = message;
   routingGraphInstallStatus.dataset.state = state;
 }
 
-function getLocalBusRoutingStore() {
-  const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
-  if (!storageApi) throw new Error('Routinggraph-Speicher wird von diesem Browser nicht unterstützt.');
-  if (!localBusRoutingStore) localBusRoutingStore = storageApi.createOPFSGraphStore();
-  return localBusRoutingStore;
-}
-
-function renderInstalledLocalBusRoutingRegions(message = '', state = 'ready') {
-  const installed = localBusRoutingCatalog.map(region =>
-    `${region.regionId} · Version ${region.graphVersion} · ` +
-    `${formatRoutingGraphBoundingBox(region.boundingBox)} · ${formatRoutingGraphSize(region.fileSizeBytes)}`
-  );
-  renderRoutingGraphStatus(
-    [message, ...installed].filter(Boolean).join('\n') || 'Kein lokaler Routinggraph installiert.',
-    state
-  );
-}
-
-function initializePersistentLocalBusRoutingGraph() {
-  if (!localBusRoutingCatalogInitialization) {
-    localBusRoutingCatalogInitialization = loadPersistentLocalBusRoutingCatalog();
-  }
-  return localBusRoutingCatalogInitialization;
-}
-
-async function loadPersistentLocalBusRoutingCatalog() {
+async function initializePersistentLocalBusRoutingGraph() {
   const storageApi = globalThis.LehrfahrerLocalBusRoutingStorage;
   if (!storageApi) {
     renderRoutingGraphStatus('Routinggraph-Speicher wird von diesem Browser nicht unterstützt.', 'error');
@@ -5651,21 +5485,32 @@ async function loadPersistentLocalBusRoutingCatalog() {
   }
 
   try {
-    const store = getLocalBusRoutingStore();
-    const migration = await store.migrateLegacyGraph(LOCAL_BUS_ROUTING_GRAPH_SPEC.schemaVersion);
-    if (migration.status === 'unavailable') {
-      throw new Error(migration.error || 'Vorhandener Routinggraph konnte nicht übernommen werden.');
+    const store = storageApi.createOPFSGraphStore();
+    const loaded = await store.loadGraph(LOCAL_BUS_ROUTING_GRAPH_SPEC.schemaVersion);
+    if (loaded.status === 'not-installed') {
+      renderRoutingGraphStatus('Kein lokaler Routinggraph installiert.');
+      return loaded;
     }
-    localBusRoutingCatalog = await store.listGraphs(LOCAL_BUS_ROUTING_GRAPH_SPEC.schemaVersion);
-    const migrationError = migration.status === 'invalid'
-      ? migration.error || 'Vorhandener Routinggraph konnte nicht übernommen werden.'
-      : '';
-    if (migrationError) console.warn('Migration des lokalen Routinggraphs fehlgeschlagen:', migrationError);
-    renderInstalledLocalBusRoutingRegions(migrationError, migrationError ? 'warning' : 'ready');
-    return {
-      status: localBusRoutingCatalog.length ? 'ready' : 'not-installed',
-      regions: localBusRoutingCatalog
-    };
+    if (loaded.status !== 'ready') {
+      renderRoutingGraphStatus(loaded.error || 'Gespeicherter Routinggraph ist nicht lesbar.', 'error');
+      if (loaded.status === 'unavailable' && importRoutingGraphBtn) importRoutingGraphBtn.disabled = true;
+      return loaded;
+    }
+
+    const moduleApi = await loadLocalBusRouterModule();
+    const routerStartedAt = performance.now();
+    const implementation = moduleApi.createRouter(loaded.graph);
+    const routerInitMs = Math.round((performance.now() - routerStartedAt) * 10) / 10;
+    if (!implementation.isAvailable()) throw new Error('Routinggraph enthält keine routbaren Kanten.');
+    registerLocalBusRouter(implementation);
+    const metrics = loaded.metrics || {};
+    renderRoutingGraphStatus(
+      `${loaded.metadata.regionId} · ${loaded.metadata.nodeCount.toLocaleString('de-DE')} Nodes · ` +
+      `${formatRoutingGraphSize(loaded.metadata.fileSizeBytes)} · Lesen ${metrics.readMs ?? '?'} ms · ` +
+      `Parse ${metrics.parseMs ?? '?'} ms · Router ${routerInitMs} ms`,
+      'ready'
+    );
+    return { ...loaded, metrics: { ...metrics, routerInitMs } };
   } catch (error) {
     renderRoutingGraphStatus(error?.message || 'Routinggraph konnte nicht geladen werden.', 'error');
     console.warn('Lokaler Routinggraph konnte nicht geladen werden:', error);
@@ -5685,10 +5530,6 @@ async function onRoutingGraphFileSelected() {
   if (importRoutingGraphBtn) importRoutingGraphBtn.disabled = true;
   renderRoutingGraphStatus('Routinggraph wird geprüft …');
   try {
-    const initialized = await initializePersistentLocalBusRoutingGraph();
-    if (initialized.status === 'unavailable') {
-      throw new Error(initialized.error || 'Routinggraph-Speicher ist nicht verfügbar.');
-    }
     if (file.size <= 0 || file.size > storageApi.MAX_GRAPH_SIZE_BYTES) {
       throw new Error('Routinggraph-Datei ist leer oder größer als 50 MB.');
     }
@@ -5708,22 +5549,19 @@ async function onRoutingGraphFileSelected() {
     if (!implementation.isAvailable()) throw new Error('Routinggraph enthält keine routbaren Kanten.');
 
     await requestPersistentStorage(true);
-    const store = getLocalBusRoutingStore();
-    const saved = await store.saveGraph(graph, moduleApi.FORMAT_VERSION);
-    localBusRoutingCatalog = await store.listGraphs(moduleApi.FORMAT_VERSION);
-    localBusRoutingCatalogInitialization = Promise.resolve({ status: 'ready', regions: localBusRoutingCatalog });
+    const saved = await storageApi.createOPFSGraphStore().saveGraph(graph, moduleApi.FORMAT_VERSION);
+    registerLocalBusRouter(implementation);
     const persistent = await refreshStoragePersistenceStatus();
     const durability = persistent.persisted ? '' : ' · Speicherschutz nicht gewährt';
-    renderInstalledLocalBusRoutingRegions(
+    renderRoutingGraphStatus(
       `${metadata.regionId} installiert · ${metadata.nodeCount.toLocaleString('de-DE')} Nodes · ` +
-      `${formatRoutingGraphBoundingBox(metadata.boundingBox)} · ` +
       `${formatRoutingGraphSize(saved.metadata.fileSizeBytes)} · Datei ${fileReadMs} ms · ` +
       `Parse ${parseMs + validationMs} ms · OPFS ${saved.metrics.writeMs} ms · Router ${routerInitMs} ms${durability}`,
       persistent.persisted ? 'ready' : 'warning'
     );
     showToast(`Offline-Routingregion ${metadata.regionId} installiert.`, 5000);
   } catch (error) {
-    renderInstalledLocalBusRoutingRegions(`Import fehlgeschlagen: ${error?.message || 'Graph ungültig.'}`, 'error');
+    renderRoutingGraphStatus(`Import fehlgeschlagen: ${error?.message || 'Graph ungültig.'}`, 'error');
     showToast('Routinggraph wurde nicht übernommen; die vorhandene Region bleibt erhalten.', 5500);
   } finally {
     if (routingGraphFileInput) routingGraphFileInput.value = '';
@@ -5858,6 +5696,29 @@ function evaluateBusRerouteCandidate(routedCandidate) {
   const forbiddenUses = new Set(['footway', 'steps', 'sidewalk', 'cycleway', 'pedestrian', 'bridleway']);
   const uTurnCount = maneuvers.filter(maneuver => maneuver.type === 12 || maneuver.type === 13).length;
   const sharpTurnCount = maneuvers.filter(maneuver => maneuver.type === 11 || maneuver.type === 14).length;
+  const limitedAccessValues = new Set([
+    'destination', 'delivery', 'customers', 'no', 'private', 'prohibited', 'closed'
+  ]);
+  const busAllowedValues = new Set(['yes', 'designated', 'permissive']);
+  let limitedAccessSegmentCount = 0;
+  let serviceRoadM = 0;
+  let classifiedRoadM = 0;
+  roadEdges.forEach(edge => {
+    const lengthM = Math.max(0, Number(edge?.lengthM) || 0);
+    classifiedRoadM += lengthM;
+    const busAllowed = busAllowedValues.has(String(edge?.bus || '').toLowerCase()) ||
+      busAllowedValues.has(String(edge?.psv || '').toLowerCase());
+    if (!busAllowed && (
+      limitedAccessValues.has(String(edge?.access || '').toLowerCase()) ||
+      limitedAccessValues.has(String(edge?.motorVehicle || '').toLowerCase())
+    )) {
+      limitedAccessSegmentCount += 1;
+    }
+    if (['service', 'service_other'].includes(edge?.roadClass) ||
+        ['driveway', 'alley', 'parking_aisle'].includes(edge?.use)) {
+      serviceRoadM += lengthM;
+    }
+  });
 
   if (routedCandidate.ok !== true) {
     hardViolations.push('Keine belastbare Busroute verfügbar.');
@@ -5892,6 +5753,16 @@ function evaluateBusRerouteCandidate(routedCandidate) {
   if (routedCandidate.restrictions?.hasTimeRestrictions === true) {
     warnings.push('Die Route enthält zeitabhängige Einschränkungen.');
   }
+  const informationalWarningParts = [
+    'unbekannte Bus-/Zugriffsattribute',
+    'Fahrzeugmaßbegrenzungen',
+    'nicht belastbar bekannt',
+    'Straßenklassen konnten nicht belastbar ermittelt werden',
+    'U-Turn-Manöver'
+  ];
+  const severeWarnings = warnings.filter(warning =>
+    !informationalWarningParts.some(part => String(warning).includes(part))
+  );
 
   const roadSuitabilityScore = profile.metadataAvailable
     ? Number((
@@ -5944,6 +5815,12 @@ function evaluateBusRerouteCandidate(routedCandidate) {
       uTurnCount,
       sharpTurnCount,
       deadEndOrUTurnIndicators: uTurnCount,
+      severeWarnings,
+      severeWarningCount: severeWarnings.length,
+      limitedAccessSegmentCount,
+      serviceRoadRatio: classifiedRoadM > 0
+        ? Number((serviceRoadM / classifiedRoadM).toFixed(4))
+        : null,
       distanceM: routedCandidate.distanceM,
       durationSec: routedCandidate.durationSec,
       penalties,
@@ -5971,11 +5848,161 @@ function compareBusRerouteCandidates(a, b) {
     a.scoreBreakdown.routeProgressM - b.scoreBreakdown.routeProgressM
   );
 }
+function buildBusRerouteComparisonData(candidate) {
+  if (!candidate) return null;
+  const rerouteCandidate = candidate.candidate || {};
+  const score = candidate.scoreBreakdown || {};
+  return {
+    skippedStopCount: rerouteCandidate.skippedStopCount,
+    skippedStops: Array.isArray(rerouteCandidate.skippedStops)
+      ? rerouteCandidate.skippedStops.map(stop => ({ ...stop }))
+      : [],
+    distanceM: candidate.distanceM,
+    durationSec: candidate.durationSec,
+    directDistanceM: rerouteCandidate.directDistanceM,
+    rejoin: {
+      coordinate: rerouteCandidate.coordinate || null,
+      routeDistanceM: rerouteCandidate.routeProgressM,
+      routeIndex: rerouteCandidate.routeIndex,
+      source: rerouteCandidate.source || null
+    },
+    nextStopName: rerouteCandidate.nextStopName || null,
+    roadQuality: {
+      roadSuitabilityScore: score.roadSuitabilityScore ?? null,
+      mainRoadRatio: score.mainRoadRatio ?? null,
+      minorRoadRatio: score.minorRoadRatio ?? null,
+      smallRoadRatio: score.smallRoadRatio ?? null,
+      smallRoadSegmentCount: score.smallRoadSegmentCount ?? 0
+    },
+    maneuvers: {
+      uTurnCount: score.uTurnCount ?? 0,
+      sharpTurnCount: score.sharpTurnCount ?? 0
+    },
+    safety: {
+      severeWarningCount: score.severeWarningCount ?? 0,
+      severeWarnings: Array.isArray(score.severeWarnings) ? score.severeWarnings.slice() : [],
+      limitedAccessSegmentCount: score.limitedAccessSegmentCount ?? 0,
+      serviceRoadRatio: score.serviceRoadRatio ?? null
+    },
+    warnings: Array.isArray(candidate.warnings) ? candidate.warnings.slice() : [],
+    penalties: { ...(score.penalties || {}) },
+    totalScore: score.totalScore ?? null
+  };
+}
+
+function decideBusRerouteSkipAlternative(zeroSkip, oneSkip) {
+  const zeroScore = zeroSkip?.scoreBreakdown || {};
+  const oneScore = oneSkip?.scoreBreakdown || {};
+  const absoluteSavingM = Number.isFinite(zeroSkip?.distanceM) && Number.isFinite(oneSkip?.distanceM)
+    ? zeroSkip.distanceM - oneSkip.distanceM
+    : null;
+  const relativeSaving = Number.isFinite(absoluteSavingM) && zeroSkip.distanceM > 0
+    ? absoluteSavingM / zeroSkip.distanceM
+    : null;
+  const timeSavingSec = Number.isFinite(zeroSkip?.durationSec) && Number.isFinite(oneSkip?.durationSec)
+    ? zeroSkip.durationSec - oneSkip.durationSec
+    : null;
+  const maneuverDifference = {
+    uTurns: (zeroScore.uTurnCount ?? 0) - (oneScore.uTurnCount ?? 0),
+    sharpTurns: (zeroScore.sharpTurnCount ?? 0) - (oneScore.sharpTurnCount ?? 0)
+  };
+  const qualityComparison = {
+    zeroSkipRoadSuitabilityScore: zeroScore.roadSuitabilityScore ?? null,
+    oneSkipRoadSuitabilityScore: oneScore.roadSuitabilityScore ?? null,
+    zeroSkipMainRoadRatio: zeroScore.mainRoadRatio ?? null,
+    oneSkipMainRoadRatio: oneScore.mainRoadRatio ?? null,
+    zeroSkipServiceRoadRatio: zeroScore.serviceRoadRatio ?? null,
+    oneSkipServiceRoadRatio: oneScore.serviceRoadRatio ?? null
+  };
+  const warningComparison = {
+    zeroSkipSevereWarningCount: zeroScore.severeWarningCount ?? 0,
+    oneSkipSevereWarningCount: oneScore.severeWarningCount ?? 0,
+    additionalSevereWarning: (oneScore.severeWarningCount ?? 0) > (zeroScore.severeWarningCount ?? 0)
+  };
+  const legalComparison = {
+    zeroSkipLimitedAccessSegmentCount: zeroScore.limitedAccessSegmentCount ?? 0,
+    oneSkipLimitedAccessSegmentCount: oneScore.limitedAccessSegmentCount ?? 0,
+    worseBusAccess: (oneScore.limitedAccessSegmentCount ?? 0) >
+      (zeroScore.limitedAccessSegmentCount ?? 0),
+    additionalServiceRoad: (oneScore.serviceRoadRatio ?? 0) >
+      (zeroScore.serviceRoadRatio ?? 0)
+  };
+  const distanceRule = relativeSaving >= 0.5
+    ? 'A'
+    : (relativeSaving >= 0.3 && absoluteSavingM >= 400 && timeSavingSec >= 30 ? 'B' : null);
+  const diagnostics = {
+    absoluteSavingM,
+    relativeSaving,
+    timeSavingSec,
+    distanceRule,
+    maneuverDifference,
+    qualityComparison,
+    warningComparison,
+    legalComparison
+  };
+
+  if (!zeroSkip && oneSkip) {
+    return { selectedCandidate: oneSkip, decisionReason: 'ZERO_SKIP_UNAVAILABLE', diagnostics };
+  }
+  if (!zeroSkip) {
+    return { selectedCandidate: null, decisionReason: 'NO_ELIGIBLE_0_OR_1_SKIP', diagnostics };
+  }
+  if (!oneSkip) {
+    return { selectedCandidate: zeroSkip, decisionReason: 'ZERO_SKIP_DEFAULT', diagnostics };
+  }
+
+  const clearlyShorter = distanceRule !== null;
+  const additionalUTurn = (oneScore.uTurnCount ?? 0) > (zeroScore.uTurnCount ?? 0);
+  const safetyAndQualityAcceptable = !additionalUTurn &&
+    !warningComparison.additionalSevereWarning &&
+    !legalComparison.worseBusAccess &&
+    !legalComparison.additionalServiceRoad;
+  if (clearlyShorter && safetyAndQualityAcceptable) {
+    return { selectedCandidate: oneSkip, decisionReason: 'SKIP_CLEARLY_BETTER', diagnostics };
+  }
+  return {
+    selectedCandidate: zeroSkip,
+    decisionReason: clearlyShorter ? 'SKIP_SAFETY_OR_QUALITY_REJECTED' : 'ZERO_SKIP_DEFAULT',
+    diagnostics
+  };
+}
+
+function buildBusRerouteComparisonDiagnostic(comparisonBySkippedStopCount) {
+  const zeroSkip = comparisonBySkippedStopCount?.[0] || null;
+  const oneSkip = comparisonBySkippedStopCount?.[1] || null;
+  const finiteDifference = (zeroValue, oneValue) => (
+    Number.isFinite(zeroValue) && Number.isFinite(oneValue)
+      ? zeroValue - oneValue
+      : null
+  );
+  const distanceSavingM = finiteDifference(zeroSkip?.distanceM, oneSkip?.distanceM);
+  return {
+    zeroSkip,
+    oneSkip,
+    difference: {
+      distanceSavingM,
+      relativeDistanceSavingPct: Number.isFinite(distanceSavingM) && zeroSkip.distanceM > 0
+        ? distanceSavingM / zeroSkip.distanceM * 100
+        : null,
+      durationSavingSec: finiteDifference(zeroSkip?.durationSec, oneSkip?.durationSec),
+      uTurnDifference: finiteDifference(
+        zeroSkip?.maneuvers?.uTurnCount,
+        oneSkip?.maneuvers?.uTurnCount
+      ),
+      sharpTurnDifference: finiteDifference(
+        zeroSkip?.maneuvers?.sharpTurnCount,
+        oneSkip?.maneuvers?.sharpTurnCount
+      )
+    }
+  };
+}
 
 function selectBusReroutePreview(routedCandidates) {
   const evaluated = (Array.isArray(routedCandidates) ? routedCandidates : [])
     .map(evaluateBusRerouteCandidate);
-  const eligible = evaluated.filter(candidate => candidate.eligible).sort(compareBusRerouteCandidates);
+  const eligible = evaluated.filter(candidate =>
+    candidate.eligible && candidate.scoreBreakdown.skippedStopCount <= 1
+  ).sort(compareBusRerouteCandidates);
   const allRoutingFailed = evaluated.length > 0 && evaluated.every(candidate => candidate.ok !== true);
   const allProvidersUnavailable = allRoutingFailed && evaluated.every(candidate =>
     ['PROVIDER_UNAVAILABLE', 'LOCAL_GRAPH_UNAVAILABLE'].includes(candidate.error?.code)
@@ -5991,6 +6018,25 @@ function selectBusReroutePreview(routedCandidates) {
   const offlineRoutingAvailable = evaluated.some(candidate =>
     candidate.ok === true && candidate.source?.onlineRequired === false
   );
+  const bestBySkippedStopCount = {};
+  const bestCandidatesBySkippedStopCount = {};
+  [0, 1].forEach(skippedStopCount => {
+    const best = evaluated
+      .filter(candidate => candidate.eligible && candidate.scoreBreakdown.skippedStopCount === skippedStopCount)
+      .sort(compareBusRerouteCandidates)[0] || null;
+    bestCandidatesBySkippedStopCount[skippedStopCount] = best;
+    bestBySkippedStopCount[skippedStopCount] = buildBusRerouteComparisonData(best);
+  });
+  const selectionDecision = decideBusRerouteSkipAlternative(
+    bestCandidatesBySkippedStopCount[0],
+    bestCandidatesBySkippedStopCount[1]
+  );
+  const selectedCandidate = selectionDecision.selectedCandidate;
+  const comparisonDiagnostic = {
+    ...buildBusRerouteComparisonDiagnostic(bestBySkippedStopCount),
+    decisionReason: selectionDecision.decisionReason,
+    decision: selectionDecision.diagnostics
+  };
   return {
     status: eligible.length
       ? 'ready'
@@ -5999,8 +6045,8 @@ function selectBusReroutePreview(routedCandidates) {
         : (allProvidersUnavailable
           ? 'provider-unavailable'
           : (allProviderErrors ? 'provider-error' : 'no-suitable-route'))),
-    selectedCandidate: eligible[0] || null,
-    alternatives: eligible.slice(1, 3),
+    selectedCandidate,
+    alternatives: eligible.filter(candidate => candidate !== selectedCandidate).slice(0, 2),
     rejectedCandidates: evaluated.filter(candidate => !candidate.eligible),
     evaluatedCandidates: evaluated,
     previewOnly: true,
@@ -6008,6 +6054,10 @@ function selectBusReroutePreview(routedCandidates) {
     routingSources: sources,
     onlineRequired,
     offlineRoutingAvailable,
+    comparisonBySkippedStopCount: bestBySkippedStopCount,
+    comparisonDiagnostic,
+    decisionReason: selectionDecision.decisionReason,
+    decisionDiagnostics: selectionDecision.diagnostics,
     diagnostics: evaluated.map(item => ({
       returnPoint: item.candidate?.coordinate || null,
       routeProgressM: item.candidate?.routeProgressM ?? null,
@@ -6017,6 +6067,26 @@ function selectBusReroutePreview(routedCandidates) {
       roadClasses: item.roadClasses,
       restrictions: item.restrictions,
       skippedStopCount: item.candidate?.skippedStopCount ?? null,
+      skippedStops: Array.isArray(item.candidate?.skippedStops)
+        ? item.candidate.skippedStops.map(stop => ({ ...stop }))
+        : [],
+      directDistanceM: item.candidate?.directDistanceM ?? null,
+      durationSec: item.durationSec,
+      rejoin: {
+        routeDistanceM: item.candidate?.routeProgressM ?? null,
+        nextStopName: item.candidate?.nextStopName || null
+      },
+      roadQuality: {
+        roadSuitabilityScore: item.scoreBreakdown?.roadSuitabilityScore ?? null,
+        mainRoadRatio: item.scoreBreakdown?.mainRoadRatio ?? null,
+        minorRoadRatio: item.scoreBreakdown?.minorRoadRatio ?? null,
+        smallRoadRatio: item.scoreBreakdown?.smallRoadRatio ?? null
+      },
+      maneuvers: {
+        uTurnCount: item.scoreBreakdown?.uTurnCount ?? 0,
+        sharpTurnCount: item.scoreBreakdown?.sharpTurnCount ?? 0
+      },
+      warnings: Array.isArray(item.warnings) ? item.warnings.slice() : [],
       hardRejectReasons: item.hardViolations,
       penalties: item.scoreBreakdown?.penalties || {},
       totalScore: item.scoreBreakdown?.totalScore ?? null
@@ -6046,7 +6116,9 @@ async function routeBusRerouteCandidates(preparation, provider = resolveBusRouti
   const routedCandidates = [];
   const evaluatedSkippedStopGroups = [];
   const orderedGroups = [...groups.keys()].sort((a, b) => a - b);
-  for (const skippedStopCount of orderedGroups) {
+  const comparisonGroups = orderedGroups.filter(skippedStopCount => skippedStopCount <= 1);
+
+  const routeGroup = async skippedStopCount => {
     const groupCandidates = groups.get(skippedStopCount) || [];
     const groupResults = await Promise.all(groupCandidates.map(async candidate => {
       const route = await routeBusPath({
@@ -6059,21 +6131,17 @@ async function routeBusRerouteCandidates(preparation, provider = resolveBusRouti
     }));
     routedCandidates.push(...groupResults);
     evaluatedSkippedStopGroups.push(skippedStopCount);
+  };
 
-    const groupPreview = selectBusReroutePreview(groupResults);
-    if (groupPreview.selectedCandidate) {
-      return {
-        ...selectBusReroutePreview(routedCandidates),
-        evaluatedSkippedStopGroups,
-        deferredCandidateCount: candidates.length - routedCandidates.length
-      };
-    }
+  for (const skippedStopCount of comparisonGroups) {
+    await routeGroup(skippedStopCount);
   }
 
+  const preview = selectBusReroutePreview(routedCandidates);
   return {
-    ...selectBusReroutePreview(routedCandidates),
+    ...preview,
     evaluatedSkippedStopGroups,
-    deferredCandidateCount: 0
+    deferredCandidateCount: candidates.length - routedCandidates.length
   };
 }
 
@@ -6102,8 +6170,7 @@ function buildBusRerouteNavigationState(rerouteRequest) {
   if (geometry.length < 2) return null;
   const cumDists = buildNavCumDists(geometry);
   const selectedTraversals = selected.localPath?.traversals || [];
-  const routingContext = selected?.routingContext || null;
-  const router = routingContext?.router || localBusRouterImplementation;
+  const router = localBusRouterImplementation;
   return {
     geometry,
     cumDists,
@@ -6114,9 +6181,6 @@ function buildBusRerouteNavigationState(rerouteRequest) {
     nearestIdx: 0,
     maneuverAudio: { turnKey: null, warningPlayed: false, retryAt: 0 },
     reentryHitCount: 0,
-    routingContext,
-    regionId: routingContext?.regionId || router?.graph?.regionId || null,
-    graphVersion: routingContext?.graphVersion || router?.graph?.graphVersion || null,
     selectedCandidate: selected,
     originalRoute: rerouteRequest.originalRoute,
     originalProgressIndex: rerouteRequest.originalRoute?.progressIndex ?? 0,
@@ -6162,7 +6226,7 @@ function startPreparedBusReroute() {
       state.geometry,
       navLastRawGpsPos,
       true,
-      state.routingContext?.router.graph || getInstalledLocalBusRoutingGraph(),
+      getInstalledLocalBusRoutingGraph(),
       state.selectedCandidate?.localPath?.edgeIds || []
     );
   }
@@ -6228,33 +6292,6 @@ async function prepareBusReroutePreviewRequest() {
     showToast('Busgeeignete Umleitung wird vorbereitet. Aktuelle GPS-Position fehlt noch.', 5000);
     return null;
   }
-  if (navActiveBusReroute) return navPendingBusRerouteRequest;
-  const initialized = await initializePersistentLocalBusRoutingGraph();
-  if (!['ready', 'not-installed'].includes(initialized.status)) {
-    showToast('Offline-Routing konnte nicht geladen werden. Bitte Installation in den Einstellungen prüfen.', 5000);
-    return null;
-  }
-  if (!navActive || !currentRoute?.data?.routePoints?.length || !navLastRawGpsPos || navActiveBusReroute) {
-    return null;
-  }
-
-  const lineGeometry = currentRoute.data.routePoints;
-  try {
-    const coveringRegions = localBusRoutingCatalog.filter(region =>
-      isRoutingRegionCoveringLine(region.boundingBox, lineGeometry)
-    );
-    if (localBusRoutingCatalog.length && !coveringRegions.length) {
-      console.warn('[Navigation] Vollständige Linienabdeckung fehlt:', {
-        regionIds: localBusRoutingCatalog.map(region => region.regionId)
-      });
-      showToast('Die vollständige aktive Linie liegt außerhalb der installierten Routingregionen.', 6000);
-      return null;
-    }
-  } catch (error) {
-    console.warn('[Navigation] Linienabdeckung konnte nicht geprüft werden:', error);
-    showToast('Linienabdeckung konnte nicht geprüft werden. Bitte Liniengeometrie prüfen.', 6000);
-    return null;
-  }
 
   const preparation = buildBusReroutePreparation({
     currentPosition: navLastRawGpsPos,
@@ -6263,15 +6300,6 @@ async function prepareBusReroutePreviewRequest() {
     routeProgressIndex: navProgressIdx,
     routeStops: navStopDists
   });
-  const routingCandidates = preparation.routingCandidates || preparation.returnCandidates || [];
-  if (!routingCandidates.some(candidate =>
-    selectLocalBusRoutingRegion(localBusRoutingCatalog, navLastRawGpsPos, candidate.coordinate, null, lineGeometry)
-  )) {
-    showToast(localBusRoutingCatalog.length
-      ? getBusRerouteStatusMessage({ status: 'outside-routing-region' })
-      : 'Für diese Region ist kein Offline-Routing installiert.', 5000);
-    return null;
-  }
   const rerouteRequest = {
     requestedAt: Date.now(),
     currentPosition: { ...navLastRawGpsPos },
@@ -6300,7 +6328,7 @@ async function prepareBusReroutePreviewRequest() {
 
   showToast('Busgeeignete Rückwege werden geprüft.', 5000);
   try {
-    const provider = createRegionalBusRoutingProvider(localBusRoutingCatalog, lineGeometry);
+    const provider = resolveBusRoutingProvider();
     const preview = await routeBusRerouteCandidates(rerouteRequest, provider);
     if (navPendingBusRerouteRequest !== rerouteRequest) {
       rerouteRequest.routingStatus = 'cancelled';
@@ -6308,16 +6336,16 @@ async function prepareBusReroutePreviewRequest() {
     }
     rerouteRequest.preview = preview;
     rerouteRequest.routingStatus = preview.status;
-    if (preview.selectedCandidate?.routingContext) {
-      registerLocalBusRouter(preview.selectedCandidate.routingContext.router);
-    }
     console.info('[Navigation] Bus-Re-Route-Diagnose', preview.diagnostics);
+    if (navPerfDebugEnabled) {
+      console.info('[Navigation] 0-/1-Skip-Vergleich', preview.comparisonDiagnostic);
+    }
     if (preview.selectedCandidate && typeof showBusReroute === 'function') {
       showBusReroute(
         preview.selectedCandidate.routeGeometry,
         rerouteRequest.currentPosition,
         false,
-        preview.selectedCandidate.routingContext?.router.graph || getInstalledLocalBusRoutingGraph(),
+        getInstalledLocalBusRoutingGraph(),
         preview.selectedCandidate.localPath?.edgeIds || []
       );
     }
@@ -6341,6 +6369,35 @@ async function prepareBusReroutePreviewRequest() {
   return rerouteRequest;
 }
 
+function getBusRerouteSkippedStopNotice(candidate) {
+  if (Number(candidate?.skippedStopCount) !== 1 || !Array.isArray(candidate?.skippedStops)) {
+    return null;
+  }
+  const name = String(candidate.skippedStops[0]?.name || '').trim();
+  if (!name) return null;
+  return {
+    skippedStopText: `Haltestelle entfällt: ${name}`,
+    dispatchText: 'Leitstelle informieren'
+  };
+}
+
+function createBusRerouteSkippedStopNotice(candidate) {
+  const notice = getBusRerouteSkippedStopNotice(candidate);
+  if (!notice) return null;
+  const container = document.createElement('div');
+  container.className = 'nav-reroute-skipped-stop';
+
+  const skippedStop = document.createElement('strong');
+  skippedStop.className = 'nav-reroute-skipped-stop-name';
+  skippedStop.textContent = notice.skippedStopText;
+
+  const dispatch = document.createElement('span');
+  dispatch.className = 'nav-reroute-dispatch-note';
+  dispatch.textContent = notice.dispatchText;
+  container.append(skippedStop, dispatch);
+  return container;
+}
+
 function createNavOffRoutePanel() {
   const panel = document.createElement('section');
   panel.className = 'nav-off-route-panel';
@@ -6350,7 +6407,8 @@ function createNavOffRoutePanel() {
   const title = document.createElement('strong');
   title.className = 'nav-off-route-title';
   const preview = navPendingBusRerouteRequest?.preview || null;
-  const selected = preview?.selectedCandidate || null;
+  const selected = navActiveBusReroute?.selectedCandidate || preview?.selectedCandidate || null;
+  const candidate = selected?.candidate || null;
   title.textContent = navActiveBusReroute
     ? 'RÜCKWEG AKTIV'
     : (selected ? 'Busgeeigneter Rückweg gefunden' : 'ROUTE VERLASSEN');
@@ -6363,8 +6421,9 @@ function createNavOffRoutePanel() {
     detail.className = 'nav-off-route-summary';
     detail.textContent = 'Temporäre Führung bis zum Wiedereinstieg. Die Originalroute bleibt erhalten.';
     actions.append(detail);
+    const skippedStopNotice = createBusRerouteSkippedStopNotice(candidate);
+    if (skippedStopNotice) actions.append(skippedStopNotice);
   } else if (selected) {
-    const candidate = selected.candidate || {};
     const details = [navFormatDist(selected.distanceM || 0)];
     if (candidate.skippedStopCount > 0) {
       details.push(`${candidate.skippedStopCount} Haltestelle(n) ausgelassen`);
@@ -6375,6 +6434,7 @@ function createNavOffRoutePanel() {
     const summary = document.createElement('div');
     summary.className = 'nav-off-route-summary';
     summary.textContent = details.join(' · ');
+    const skippedStopNotice = createBusRerouteSkippedStopNotice(candidate);
 
     const startBtn = document.createElement('button');
     startBtn.type = 'button';
@@ -6385,7 +6445,9 @@ function createNavOffRoutePanel() {
     cancelBtn.type = 'button';
     cancelBtn.textContent = 'Abbrechen';
     cancelBtn.addEventListener('click', cancelBusReroutePreview);
-    actions.append(summary, startBtn, cancelBtn);
+    actions.append(summary);
+    if (skippedStopNotice) actions.append(skippedStopNotice);
+    actions.append(startBtn, cancelBtn);
   } else {
     const returnBtn = document.createElement('button');
     returnBtn.type = 'button';

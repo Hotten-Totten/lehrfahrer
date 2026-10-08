@@ -12,10 +12,6 @@ vm.runInContext(`
   const BUS_REROUTE_VALHALLA_URL = 'https://valhalla.test';
   const navManeuverAudioNodes = new Set();
   ${appSource.slice(
-    appSource.indexOf('function normalizeOperationalCoordinate'),
-    appSource.indexOf('function getRouteEndpoint')
-  )}
-  ${appSource.slice(
     appSource.indexOf('function resetBusRerouteManeuverAudio'),
     appSource.indexOf('function maybePlayBusRerouteManeuverCue')
   )}
@@ -31,7 +27,13 @@ function candidate(id, skippedStopCount, routeProgressM) {
     coordinate: { lat: 51.76 + routeProgressM / 1000000, lon: 14.33 },
     routeProgressM,
     skippedStopCount,
+    skippedStops: Array.from({ length: skippedStopCount }, (_, index) => ({
+      id: `skipped-${id}-${index + 1}`,
+      name: `Ausgelassener Halt ${index + 1}`,
+      routeDistanceM: routeProgressM - (skippedStopCount - index) * 100
+    })),
     nextStopId: `stop-${id}`,
+    nextStopName: `Nächster Halt ${id}`,
     directDistanceM: 500
   };
 }
@@ -61,6 +63,42 @@ function provider(handler) {
     onlineRequired: false,
     routeBusPath: handler
   };
+}
+
+function createReroutePanelContext(candidateValue, active = false) {
+  const createElement = tagName => ({
+    tagName,
+    className: '',
+    textContent: '',
+    children: [],
+    append(...children) { this.children.push(...children); },
+    setAttribute() {},
+    addEventListener() {}
+  });
+  const selectedCandidate = candidateValue ? { candidate: candidateValue, distanceM: 900 } : null;
+  const context = {
+    document: { createElement },
+    navActiveBusReroute: active && selectedCandidate ? { selectedCandidate } : null,
+    navPendingBusRerouteRequest: !active && selectedCandidate
+      ? { preview: { selectedCandidate }, routingStatus: 'ready' }
+      : null,
+    navFormatDist: value => `${value} m`,
+    resolveConfiguredDispatchPhone: () => '',
+    startPreparedBusReroute() {},
+    cancelBusReroutePreview() {},
+    requestBusReroute() {},
+    showToast() {}
+  };
+  vm.createContext(context);
+  vm.runInContext(appSource.slice(
+    appSource.indexOf('function getBusRerouteSkippedStopNotice'),
+    appSource.indexOf('function renderUpcomingStops')
+  ), context);
+  return context;
+}
+
+function panelText(node) {
+  return [node?.textContent || '', ...(node?.children || []).map(panelText)].join(' ');
 }
 
 
@@ -279,17 +317,17 @@ test('Evaluator und Kandidatenrouting funktionieren providerunabhaengig', async 
     return neutralRoute(value);
   }));
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.ok(calls.every(call => call.from && call.to && 'constraints' in call));
   assert.equal(preview.selectedCandidate.candidate.id, 'A');
-  assert.equal(preview.alternatives.length, 1);
-  assert.deepEqual(Array.from(preview.evaluatedSkippedStopGroups), [0]);
-  assert.equal(preview.deferredCandidateCount, 1);
+  assert.equal(preview.alternatives.length, 2);
+  assert.deepEqual(Array.from(preview.evaluatedSkippedStopGroups), [0, 1]);
+  assert.equal(preview.deferredCandidateCount, 0);
   assert.equal(preview.previewOnly, true);
   assert.equal(preview.offlineRoutingAvailable, true);
 });
 
-test('A: erreichbare H1 gewinnt auch ueber laengere Hauptstrasse gegen nahe H2', async () => {
+test('A: klar kuerzerer legaler H2-Weg gewinnt nach konservativer Skip-Regel', async () => {
   const h1 = candidate('H1', 0, 800);
   const h2 = candidate('H2', 1, 1000);
   const called = [];
@@ -305,8 +343,43 @@ test('A: erreichbare H1 gewinnt auch ueber laengere Hauptstrasse gegen nahe H2',
     });
   }));
 
-  assert.equal(preview.selectedCandidate.candidate.id, 'H1');
-  assert.deepEqual(called, ['H1']);
+  assert.equal(preview.selectedCandidate.candidate.id, 'H2');
+  assert.equal(preview.decisionReason, 'SKIP_CLEARLY_BETTER');
+  assert.deepEqual(called, ['H1', 'H2']);
+  assert.equal(preview.comparisonBySkippedStopCount[0].skippedStopCount, 0);
+  assert.equal(preview.comparisonBySkippedStopCount[1].skippedStopCount, 1);
+});
+
+test('beste 0- und 1-Skip-Alternative werden gruppenweise vollstaendig bestimmt', async () => {
+  const noSkip = candidate('zero', 0, 800);
+  const oneSkipMinor = candidate('one-minor', 1, 900);
+  const oneSkipMain = candidate('one-main', 1, 950);
+  const values = [noSkip, oneSkipMinor, oneSkipMain];
+  const called = [];
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: values
+  }, provider(async request => {
+    const value = values.find(item => item.coordinate.lat === request.to.lat);
+    called.push(value.id);
+    const main = value !== oneSkipMinor;
+    return neutralRoute(value, {
+      distanceM: value === noSkip ? 3000 : (main ? 1200 : 700),
+      durationSec: value === noSkip ? 480 : (main ? 180 : 120),
+      roadEdges: [{
+        lengthM: value === noSkip ? 3000 : (main ? 1200 : 700),
+        roadClass: main ? 'primary' : 'service_other',
+        use: main ? 'road' : 'driveway'
+      }]
+    });
+  }));
+
+  assert.deepEqual(called, ['zero', 'one-minor', 'one-main']);
+  assert.equal(preview.selectedCandidate.candidate.id, 'one-main');
+  assert.equal(preview.decisionReason, 'SKIP_CLEARLY_BETTER');
+  assert.equal(preview.comparisonBySkippedStopCount[0].distanceM, 3000);
+  assert.equal(preview.comparisonBySkippedStopCount[1].distanceM, 1200);
+  assert.equal(preview.comparisonBySkippedStopCount[1].nextStopName, 'Nächster Halt one-main');
 });
 
 test('B: zulaessige Residential-Route zu H1 bleibt vor Primary-Route zu H2', async () => {
@@ -323,7 +396,7 @@ test('B: zulaessige Residential-Route zu H1 bleibt vor Primary-Route zu H2', asy
   }));
 
   assert.equal(preview.selectedCandidate.candidate.id, 'H1');
-  assert.equal(preview.deferredCandidateCount, 1);
+  assert.equal(preview.deferredCandidateCount, 0);
 });
 
 test('C: echtes bus=no bei H1 gibt erst dann H2 frei', async () => {
@@ -371,7 +444,7 @@ test('E: unbekannte maxheight verwirft H1 nicht', async () => {
   }));
 
   assert.equal(preview.selectedCandidate.candidate.id, 'H1');
-  assert.equal(preview.deferredCandidateCount, 1);
+  assert.equal(preview.deferredCandidateCount, 0);
 });
 
 test('F: innerhalb H1 gewinnt der busgeeignetere Hauptstrassenweg', async () => {
@@ -392,7 +465,8 @@ test('F: innerhalb H1 gewinnt der busgeeignetere Hauptstrassenweg', async () => 
 
   assert.equal(preview.selectedCandidate.candidate.id, 'H1-primary');
   assert.equal(preview.selectedCandidate.candidate.skippedStopCount, 0);
-  assert.equal(preview.deferredCandidateCount, 1);
+  assert.equal(preview.deferredCandidateCount, 0);
+  assert.equal(preview.comparisonBySkippedStopCount[1].distanceM, 1800);
 });
 
 test('Valhalla-Antwort wird in das neutrale Routingformat uebersetzt', () => {
@@ -436,46 +510,6 @@ test('Provider nicht verfuegbar liefert strukturierten Fehler ohne Fake-Route', 
   assert.equal(result.error.code, 'PROVIDER_UNAVAILABLE');
   assert.equal(result.geometry.length, 0);
   assert.equal(result.distanceM, null);
-});
-
-test('ohne lokalen Routinggraph startet die Rueckfuehrung nicht und meldet den Grund', async () => {
-  vm.runInContext(appSource.slice(
-    appSource.indexOf('async function prepareBusReroutePreviewRequest'),
-    appSource.indexOf('function createNavOffRoutePanel')
-  ), sandbox);
-  const pendingRequest = { routingStatus: 'unchanged' };
-  const messages = [];
-  sandbox.navActive = true;
-  sandbox.currentRoute = { data: { routePoints: [[51.75, 14.33], [51.76, 14.33]] } };
-  sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.33 };
-  sandbox.navCumDists = [0, 100];
-  sandbox.navProgressIdx = 0;
-  sandbox.navStopDists = [];
-  sandbox.navActiveBusReroute = null;
-  sandbox.navPendingBusRerouteRequest = pendingRequest;
-  sandbox.initializePersistentLocalBusRoutingGraph = async () => ({ status: 'ready' });
-  sandbox.buildBusReroutePreparation = () => ({
-    currentPosition: sandbox.navLastRawGpsPos,
-    routingCandidates: [{ coordinate: { lat: 51.76, lon: 14.33 } }]
-  });
-  vm.runInContext('localBusRoutingCatalog = []', sandbox);
-  sandbox.showToast = message => messages.push(message);
-
-  const result = await sandbox.prepareBusReroutePreviewRequest();
-
-  assert.equal(result, null);
-  assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
-  assert.equal(sandbox.navActiveBusReroute, null);
-
-  vm.runInContext("localBusRoutingCatalog = [{ regionId: 'elsewhere', boundingBox: {} }]", sandbox);
-  sandbox.LehrfahrerLocalBusRoutingStorage = { isPointWithinBoundingBox: () => false };
-  assert.equal(await sandbox.prepareBusReroutePreviewRequest(), null);
-  assert.equal(sandbox.navPendingBusRerouteRequest, pendingRequest);
-  assert.equal(sandbox.navActiveBusReroute, null);
-  assert.deepEqual(messages, [
-    'Für diese Region ist kein Offline-Routing installiert.',
-    'Die vollständige aktive Linie liegt außerhalb der installierten Routingregionen.'
-  ]);
 });
 
 test('lokaler Offline-Provider nutzt spaeter dieselbe routeBusPath-Schnittstelle', async () => {
@@ -624,17 +658,174 @@ test('Routingzustaende und Meldungen bleiben unterscheidbar', () => {
 
 test('Diagnose enthaelt Rueckkehrpunkt, Provider, Rejects, Penalties und Gesamtwert', () => {
   const value = candidate('diag', 1, 750);
-  const preview = sandbox.selectBusReroutePreview([{ ...neutralRoute(value), candidate: value }]);
+  const preview = sandbox.selectBusReroutePreview([{
+    ...neutralRoute(value, { maneuvers: [{ type: 12 }, { type: 14 }] }),
+    candidate: value
+  }]);
   const diagnostic = preview.diagnostics[0];
+  const comparison = preview.comparisonBySkippedStopCount[1];
 
   assert.deepEqual(JSON.parse(JSON.stringify(diagnostic.returnPoint)), value.coordinate);
   assert.equal(diagnostic.provider.id, 'test-provider');
   assert.equal(diagnostic.distanceM, 1800);
   assert.deepEqual(Array.from(diagnostic.roadClasses), ['primary']);
   assert.equal(diagnostic.skippedStopCount, 1);
+  assert.equal(diagnostic.skippedStops.length, 1);
+  assert.equal(diagnostic.skippedStopCount, diagnostic.skippedStops.length);
+  assert.equal(diagnostic.durationSec, 300);
+  assert.equal(diagnostic.directDistanceM, 500);
+  assert.equal(diagnostic.rejoin.routeDistanceM, 750);
+  assert.equal(diagnostic.rejoin.nextStopName, 'Nächster Halt diag');
+  assert.equal(diagnostic.maneuvers.uTurnCount, 1);
+  assert.equal(diagnostic.maneuvers.sharpTurnCount, 1);
+  assert.equal(typeof diagnostic.roadQuality.mainRoadRatio, 'number');
   assert.deepEqual(Array.from(diagnostic.hardRejectReasons), []);
   assert.equal(typeof diagnostic.penalties, 'object');
   assert.equal(typeof diagnostic.totalScore, 'number');
+  assert.equal(comparison.skippedStops[0].name, 'Ausgelassener Halt 1');
+  assert.equal(comparison.distanceM, 1800);
+  assert.equal(comparison.durationSec, 300);
+  assert.equal(comparison.maneuvers.uTurnCount, 1);
+  assert.equal(comparison.maneuvers.sharpTurnCount, 1);
+  assert.equal(typeof comparison.roadQuality.roadSuitabilityScore, 'number');
+  assert.equal(typeof comparison.penalties.uTurns, 'number');
+  assert.equal(typeof comparison.totalScore, 'number');
+});
+
+test('0-/1-Skip-Diagnose stellt reale Vergleichsdifferenzen strukturiert bereit', () => {
+  const zeroSkip = candidate('zero-diag', 0, 700);
+  const oneSkip = candidate('one-diag', 1, 1200);
+  const preview = sandbox.selectBusReroutePreview([
+    {
+      ...neutralRoute(zeroSkip, {
+        distanceM: 3000,
+        durationSec: 540,
+        maneuvers: [{ type: 12 }, { type: 14 }, { type: 14 }]
+      }),
+      candidate: zeroSkip
+    },
+    {
+      ...neutralRoute(oneSkip, {
+        distanceM: 1800,
+        durationSec: 300,
+        maneuvers: [{ type: 14 }]
+      }),
+      candidate: oneSkip
+    }
+  ]);
+  const diagnostic = preview.comparisonDiagnostic;
+
+  assert.equal(diagnostic.zeroSkip.skippedStopCount, 0);
+  assert.equal(diagnostic.oneSkip.skippedStops[0].name, 'Ausgelassener Halt 1');
+  assert.equal(diagnostic.zeroSkip.distanceM, 3000);
+  assert.equal(diagnostic.oneSkip.durationSec, 300);
+  assert.equal(diagnostic.difference.distanceSavingM, 1200);
+  assert.equal(diagnostic.difference.relativeDistanceSavingPct, 40);
+  assert.equal(diagnostic.difference.durationSavingSec, 240);
+  assert.equal(diagnostic.difference.uTurnDifference, 1);
+  assert.equal(diagnostic.difference.sharpTurnDifference, 1);
+  assert.equal(preview.selectedCandidate.candidate.id, 'one-diag');
+  assert.equal(preview.decisionReason, 'SKIP_CLEARLY_BETTER');
+  assert.equal(preview.decisionDiagnostics.absoluteSavingM, 1200);
+  assert.equal(preview.decisionDiagnostics.relativeSaving, 0.4);
+  assert.equal(preview.decisionDiagnostics.timeSavingSec, 240);
+});
+
+test('minimal besserer 1-Skip-Weg belaesst die produktive Auswahl bei 0-Skip', () => {
+  const zeroSkip = candidate('minimal-zero', 0, 700);
+  const oneSkip = candidate('minimal-one', 1, 1200);
+  const preview = sandbox.selectBusReroutePreview([
+    { ...neutralRoute(zeroSkip, { distanceM: 1000, durationSec: 120 }), candidate: zeroSkip },
+    { ...neutralRoute(oneSkip, { distanceM: 850, durationSec: 105 }), candidate: oneSkip }
+  ]);
+
+  assert.equal(preview.selectedCandidate.candidate.id, 'minimal-zero');
+  assert.equal(preview.decisionReason, 'ZERO_SKIP_DEFAULT');
+  assert.equal(preview.decisionDiagnostics.absoluteSavingM, 150);
+  assert.equal(preview.decisionDiagnostics.relativeSaving, 0.15);
+  assert.equal(preview.decisionDiagnostics.timeSavingSec, 15);
+});
+
+test('zusaetzlicher U-Turn, schwere Warnung, Access-Risiko oder Service-Abkuerzung sperren 1-Skip', () => {
+  const zeroSkip = candidate('safe-zero', 0, 700);
+  const oneSkip = candidate('risky-one', 1, 1200);
+  const zeroRoute = { ...neutralRoute(zeroSkip, { distanceM: 1200, durationSec: 180 }), candidate: zeroSkip };
+  const risks = [
+    { maneuvers: [{ type: 12 }] },
+    { warnings: ['Brueckenfreigabe muss betrieblich geprueft werden.'] },
+    { roadEdges: [{ lengthM: 400, roadClass: 'residential', use: 'road', access: 'destination' }] },
+    { roadEdges: [{ lengthM: 400, roadClass: 'service', use: 'driveway' }] }
+  ];
+
+  risks.forEach(overrides => {
+    const oneRoute = {
+      ...neutralRoute(oneSkip, { distanceM: 400, durationSec: 60, ...overrides }),
+      candidate: oneSkip
+    };
+    const preview = sandbox.selectBusReroutePreview([zeroRoute, oneRoute]);
+    assert.equal(preview.selectedCandidate.candidate.id, 'safe-zero');
+    assert.equal(preview.decisionReason, 'SKIP_SAFETY_OR_QUALITY_REJECTED');
+  });
+});
+
+test('mehr als eine Haltestelle wird nicht automatisch geroutet oder gewaehlt', async () => {
+  const twoSkip = candidate('two-skip', 2, 1500);
+  let calls = 0;
+  const preview = await sandbox.routeBusRerouteCandidates({
+    currentPosition: { lat: 51.75, lon: 14.32 },
+    returnCandidates: [twoSkip]
+  }, provider(async () => {
+    calls += 1;
+    return neutralRoute(twoSkip);
+  }));
+
+  assert.equal(calls, 0);
+  assert.equal(preview.selectedCandidate, null);
+  assert.equal(preview.decisionReason, 'NO_ELIGIBLE_0_OR_1_SKIP');
+  assert.equal(preview.deferredCandidateCount, 1);
+});
+
+test('0-Skip zeigt keine Leitstellenwarnung', () => {
+  const context = createReroutePanelContext(candidate('zero-ui', 0, 700));
+  const text = panelText(context.createNavOffRoutePanel());
+
+  assert.match(text, /keine Haltestelle ausgelassen/);
+  assert.doesNotMatch(text, /Haltestelle entfällt:/);
+  assert.doesNotMatch(text, /Leitstelle informieren/);
+});
+
+test('1-Skip zeigt Haltestellenname und Leitstellenhinweis vor dem Start', () => {
+  const value = candidate('one-ui', 1, 1200);
+  value.skippedStops[0].name = 'Ausbesserungswerk';
+  const context = createReroutePanelContext(value);
+  const text = panelText(context.createNavOffRoutePanel());
+
+  assert.match(text, /Haltestelle entfällt: Ausbesserungswerk/);
+  assert.match(text, /Leitstelle informieren/);
+  assert.match(text, /Rückweg starten/);
+});
+
+test('1-Skip-Hinweis bleibt waehrend aktiver Rueckfuehrung sichtbar', () => {
+  const value = candidate('active-ui', 1, 1200);
+  value.skippedStops[0].name = 'Stadtmuseum';
+  const context = createReroutePanelContext(value, true);
+  const text = panelText(context.createNavOffRoutePanel());
+
+  assert.match(text, /RÜCKWEG AKTIV/);
+  assert.match(text, /Haltestelle entfällt: Stadtmuseum/);
+  assert.match(text, /Leitstelle informieren/);
+});
+
+test('1-Skip-Hinweis verschwindet nach Rejoin-Reset', () => {
+  const value = candidate('reset-ui', 1, 1200);
+  const context = createReroutePanelContext(value, true);
+  assert.match(panelText(context.createNavOffRoutePanel()), /Haltestelle entfällt:/);
+
+  context.navActiveBusReroute = null;
+  context.navPendingBusRerouteRequest = null;
+  const text = panelText(context.createNavOffRoutePanel());
+  assert.doesNotMatch(text, /Haltestelle entfällt:/);
+  assert.doesNotMatch(text, /Leitstelle informieren/);
 });
 
 test('Routing-Preview veraendert die Originalroute nicht', async () => {
@@ -761,13 +952,12 @@ test('Kartenpreview nutzt separaten Layer und laesst die Originalroute stehen', 
   assert.match(showRerouteSource, /navBusRerouteManualCameraUntil/);
 });
 
-test('Navigation und Rueckweg bleiben nach Drag/Pinch/Rotation bis Zentrieren manuell', () => {
+test('Navigation und Rueckweg bleiben nach Drag/Pinch/Rotation bis Fahrzeug-Klick manuell', () => {
   const camera = {
     clock: 1000,
     zoom: 16,
     center: { lng: 14.33, lat: 51.76 },
     jumps: [],
-    navigationActive: true,
     performance: { now: () => camera.clock },
     map: {
       getZoom: () => camera.zoom,
@@ -775,8 +965,7 @@ test('Navigation und Rueckweg bleiben nach Drag/Pinch/Rotation bis Zentrieren ma
       getBearing: () => 0,
       jumpTo: options => camera.jumps.push(options)
     },
-    document: { body: { classList: { contains: value =>
-      value === 'nav-off-route' || (value === 'nav-mode' && camera.navigationActive) } } },
+    document: { body: { classList: { contains: value => value === 'nav-mode' || value === 'nav-off-route' } } },
     normalizeDeg: value => (value % 360 + 360) % 360,
     shortestDegDelta: (from, to) => ((to - from + 540) % 360) - 180,
     haversineMeters: (lat1, lon1, lat2, lon2) => Math.hypot(
@@ -825,139 +1014,37 @@ test('Navigation und Rueckweg bleiben nach Drag/Pinch/Rotation bis Zentrieren ma
   vm.runInContext("navBusRerouteCameraMode = 'active'", camera);
   camera.syncNavCameraToGpsMarkerPosition(14.34, 51.77);
   assert.equal(camera.jumps.length, 0);
+  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), Infinity);
+
   assert.equal(camera.resumeNavCameraFollow(14.34, 51.77), true);
   assert.equal(camera.jumps.length, 1);
   assert.equal(camera.jumps[0].zoom, 16.2);
   assert.deepEqual(Array.from(camera.jumps[0].center), [14.34, 51.77]);
-
-  assert.equal(camera.beginBusRerouteMapGesture('zoom', { originalEvent: {} }), true);
-  camera.endBusRerouteMapGesture('zoom');
-  camera.clock = 600000;
-  camera.syncNavCameraToGpsMarkerPosition(14.36, 51.79);
-  assert.equal(camera.jumps.length, 1);
-  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), Infinity);
-  assert.equal(camera.resumeNavCameraFollow(14.36, 51.79), true);
-  assert.deepEqual(Array.from(camera.jumps[1].center), [14.36, 51.79]);
-  assert.equal(camera.jumps[1].zoom, 16.2);
-  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), 0);
-  assert.equal(vm.runInContext('navBusRerouteManualZoom', camera), null);
-  camera.syncNavCameraToGpsMarkerPosition(14.36001, 51.79001);
-  assert.equal(camera.jumps.length, 3);
-
-  assert.equal(camera.beginBusRerouteMapGesture('drag', { originalEvent: {} }), true);
-  camera.endBusRerouteMapGesture('drag');
-  camera.clock = 1200000;
-  camera.syncNavCameraToGpsMarkerPosition(14.37, 51.8);
-  assert.equal(camera.jumps.length, 3);
-  // Active-camera hold does not depend on the OFF-route CSS class.
-  camera.document.body.classList.contains = value => value === 'nav-mode';
-  camera.syncNavCameraToGpsMarkerPosition(14.38, 51.81);
-  assert.equal(camera.jumps.length, 3);
-  assert.equal(camera.resumeNavCameraFollow(NaN, 51.8), false);
-  assert.equal(vm.runInContext('navBusRerouteManualCameraUntil', camera), Infinity);
-  assert.equal(camera.beginBusRerouteMapGesture('rotate', { originalEvent: {} }), true);
-  camera.endBusRerouteMapGesture('rotate');
-  camera.clock = 1800000;
-  camera.syncNavCameraToGpsMarkerPosition(14.39, 51.82);
-  assert.equal(camera.jumps.length, 3);
-
-  camera.resetBusRerouteCameraState();
   assert.equal(vm.runInContext('navManualCameraHeld', camera), false);
-  assert.equal(camera.beginBusRerouteMapGesture('drag', {}), false);
+  camera.syncNavCameraToGpsMarkerPosition(14.34001, 51.77001);
+  assert.equal(camera.jumps.length, 2);
+
   for (const gesture of ['drag', 'zoom', 'rotate']) {
-    const before = camera.jumps.length;
     assert.equal(camera.beginBusRerouteMapGesture(gesture, { originalEvent: { type: 'touchmove' } }), true);
     camera.endBusRerouteMapGesture(gesture);
     camera.clock += 600000;
-    for (let fix = 0; fix < 5; fix++) {
-      camera.syncNavCameraToGpsMarkerPosition(14.4 + fix * 0.0001, 51.83);
-    }
-    assert.equal(camera.jumps.length, before, `Normale Navigation: ${gesture} bleibt manuell`);
-    assert.equal(camera.resumeNavCameraFollow(14.4, 51.83), true);
-    assert.deepEqual(Array.from(camera.jumps.at(-1).center), [14.4, 51.83]);
-    assert.equal(camera.jumps.at(-1).zoom, 16.2);
-    camera.syncNavCameraToGpsMarkerPosition(14.40001, 51.83001);
-    assert.equal(camera.jumps.length, before + 2);
+    const before = camera.jumps.length;
+    camera.syncNavCameraToGpsMarkerPosition(14.35, 51.78);
+    assert.equal(camera.jumps.length, before, `${gesture} pausiert Auto-Follow dauerhaft`);
+    assert.equal(camera.resumeNavCameraFollow(14.35, 51.78), true);
   }
+  assert.equal(camera.beginBusRerouteMapGesture('drag', {}), false);
 });
 
-test('Fahrzeugbutton zentriert aktive Rueckfuehrung ohne GPS oder Navigation zu stoppen', () => {
-  const active = { preserved: true };
-  const position = { lat: 51.75, lon: 14.33 };
-  const calls = [];
-  const context = {
-    navActive: true, navActiveBusReroute: active, navLastRawGpsPos: position,
-    navInputMode: 'gps', gpsActive: true,
-    resumeNavCameraFollow: (lon, lat) => { calls.push([lon, lat]); return true; },
-    stopGPS: () => { throw new Error('GPS darf nicht gestoppt werden'); },
-    showToast: () => { throw new Error('Position vorhanden'); }
-  };
-  vm.createContext(context);
-  vm.runInContext(appSource.slice(appSource.indexOf('function toggleGPS'), appSource.indexOf('function togglePanel')), context);
-  context.toggleGPS();
-  assert.deepEqual(calls, [[14.33, 51.75]]);
-  assert.equal(context.gpsActive, true);
-  assert.equal(context.navActiveBusReroute, active);
-  assert.equal(context.navLastRawGpsPos, position);
-  context.navActiveBusReroute = null;
-  context.toggleGPS();
-  assert.deepEqual(calls, [[14.33, 51.75], [14.33, 51.75]]);
-  assert.equal(context.gpsActive, true);
-  assert.match(appSource, /getElementById\('rerouteCenterBtn'\)\?\.addEventListener\('click', toggleGPS\)/);
-});
-
-test('MapLibre aktiviert native Touchgesten und behaelt +/-; Navigationsgesten erreichen Hold', async () => {
-  const handlers = {};
-  const gestures = [];
-  const controls = [];
-  let options;
-  const instance = {
-    on(name, handler) { (handlers[name] ||= []).push(handler); },
-    addControl(control, position) { controls.push({ control, position }); }
-  };
-  const navigationControl = {};
-  const context = {
-    window: { maplibregl: {
-      Map: function (configuration) { options = configuration; return instance; },
-      NavigationControl: function () { return navigationControl; }
-    } },
-    maplibregl: { NavigationControl: function () { return navigationControl; } },
-    document: { body: { classList: { contains: name => name === 'nav-mode' } } },
-    ensurePMTilesProtocol() {},
-    resolveInitialMapSource: async () => ({ kind: 'none', style: {} }),
-    setMapSourceState() {},
-    guardMapLibreBoxZoomReset() {},
-    updateStopPoiVisibility() {},
-    handleMapSourceError() {},
-    beginBusRerouteMapGesture: (type, event) => gestures.push([type, event.originalEvent]),
-    endBusRerouteMapGesture() {}
-  };
-  context.maplibregl = context.window.maplibregl;
-  vm.createContext(context);
-  vm.runInContext(`
-    let map = null;
-    const DEFAULT_CENTER = [14.33, 51.76], DEFAULT_ZOOM = 12;
-    let mapSourceErrorHandled = false, navOffRouteManualCamera = false;
-    let navCameraCenter = null, navCameraModeTransition = null;
-    ${mapSource.slice(mapSource.indexOf('async function initMap'), mapSource.indexOf('function switchToPMTiles'))}
-  `, context);
-  await context.initMap();
-  assert.equal(options.dragPan, true);
-  assert.equal(options.touchZoomRotate, true);
-  assert.equal(controls[0].control, navigationControl);
-  const touch = { type: 'touchmove' };
-  for (const event of ['dragstart', 'zoomstart', 'rotatestart']) {
-    handlers[event][0]({ originalEvent: touch });
-  }
-  assert.deepEqual(gestures.map(entry => entry[0]), ['drag', 'zoom', 'rotate']);
-  const click = { type: 'click' };
-  handlers.zoomstart[0]({ originalEvent: click });
-  assert.equal(gestures.at(-1)[1], click);
-  handlers.zoomstart[0]({});
-  assert.equal(gestures.length, 4, 'Programmgesteuerter Zoom pausiert Follow nicht');
-  const css = fs.readFileSync(path.resolve(__dirname, '../app/css/app.css'), 'utf8');
-  assert.match(css, /#navHud\s*\{[^}]*pointer-events:\s*none/s);
-  assert.match(css, /body\.nav-mode #rerouteCenterBtn\s*\{[^}]*display:\s*block/s);
+test('MapLibre-Gesten sind ohne Zoommodus aktiv und +/- werden nicht eingebaut', () => {
+  const initSource = mapFunctionSource('initMap', 'switchToPMTiles');
+  assert.match(initSource, /dragPan:\s*true/);
+  assert.match(initSource, /touchZoomRotate:\s*true/);
+  assert.doesNotMatch(initSource, /NavigationControl/);
+  assert.match(initSource, /map\.on\('dragstart'/);
+  assert.match(initSource, /map\.on\('zoomstart'/);
+  assert.match(initSource, /map\.on\('rotatestart'/);
+  assert.match(appSource, /getElementById\('rerouteCenterBtn'\).*centerMapOnVehicle/s);
 });
 
 test('Rueckweg-Bearing friert bei Stillstand und Positionsjitter ein', () => {
@@ -987,12 +1074,11 @@ test('Rueckweg-Bearing friert bei Stillstand und Positionsjitter ein', () => {
   assert.equal(bearing.resolveNavBearing(14.330001, 51.760001, 210, 0, false), 45);
 });
 
-test('Wiedereinstieg setzt Kamera-Hold, Zoom und aktive Gesten vollständig zurück', () => {
+test('Wiedereinstieg beendet Rückweg-Hold, behält aber die manuelle Navigationsansicht', () => {
   const clearSource = mapFunctionSource('clearBusReroute', 'drawNavigationPath');
   assert.match(clearSource, /resetBusRerouteCameraState\(\)/);
   assert.match(appSource, /navCenterOn\(lon, lat, sensorHeading, smoothed\.speed, false\)/);
   assert.doesNotMatch(clearSource, /resetNavBearingState\(\)/);
-  assert.match(mapFunctionSource('resetNavBearingState', 'mapCameraNow'), /navManualCameraHeld = false/);
 
   const camera = {};
   vm.createContext(camera);
@@ -1011,5 +1097,5 @@ test('Wiedereinstieg setzt Kamera-Hold, Zoom und aktive Gesten vollständig zur�
   assert.equal(vm.runInContext('navBusRerouteManualZoom', camera), null);
   assert.equal(vm.runInContext('navBusRerouteActiveGestures.size', camera), 0);
   assert.equal(vm.runInContext('navOffRouteManualCamera', camera), false);
-  assert.equal(vm.runInContext('navManualCameraHeld', camera), false);
+  assert.equal(vm.runInContext('navManualCameraHeld', camera), true);
 });

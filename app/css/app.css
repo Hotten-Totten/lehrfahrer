@@ -138,6 +138,15 @@ body.is-standalone #fullscreenBtn {
   touch-action: manipulation;
 }
 
+#rerouteCenterBtn {
+  display: none;
+  left: calc(var(--safe-left) + 72px);
+}
+
+#rerouteCenterBtn.is-visible {
+  display: block;
+}
+
 #map2dToggleBtn.is-active {
   border-color: #a8d83f;
   background: #47720d;
@@ -145,19 +154,9 @@ body.is-standalone #fullscreenBtn {
   box-shadow: 0 0 0 2px rgba(168, 216, 63, 0.18), 0 3px 12px rgba(0, 0, 0, 0.32);
 }
 
-body.nav-mode #map2dToggleBtn {
-  top: auto;
-  bottom: calc(var(--safe-bottom) + 68px);
-  z-index: 520;
-}
-
-#rerouteCenterBtn {
-  display: none;
-  left: calc(var(--safe-left) + 72px);
-}
-
+body.nav-mode #map2dToggleBtn,
 body.nav-mode #rerouteCenterBtn {
-  display: block;
+  top: auto;
   bottom: calc(var(--safe-bottom) + 68px);
   z-index: 520;
 }
@@ -1358,6 +1357,29 @@ body.nav-off-route-compact #navUpcomingStops {
   font-weight: 750;
   line-height: 1.3;
   text-align: center;
+}
+
+.nav-reroute-skipped-stop {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 221, 128, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 221, 128, 0.14);
+  color: #fff;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.nav-reroute-skipped-stop-name {
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.nav-reroute-dispatch-note {
+  color: #ffe7a6;
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .nav-off-route-dispatch {

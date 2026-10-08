@@ -49,6 +49,9 @@ test('liefert drei bis fuenf ausschliesslich vorausliegende Rueckkehrkandidaten'
   assert.ok(result.routingCandidates.every(candidate =>
     candidate.routeProgressM > result.originalRouteProgress.distanceM
   ));
+  assert.ok(result.routingCandidates.every(candidate =>
+    candidate.skippedStopCount === candidate.skippedStops.length
+  ));
 });
 
 test('ordnet verbleibende Haltestellen und kennzeichnet Kandidaten davor korrekt', () => {
@@ -60,6 +63,7 @@ test('ordnet verbleibende Haltestellen und kennzeichnet Kandidaten davor korrekt
   assert.ok(beforeFirstStop);
   assert.equal(beforeFirstStop.nextStopId, 'A');
   assert.equal(beforeFirstStop.skippedStopCount, 0);
+  assert.deepEqual(Array.from(beforeFirstStop.skippedStops), []);
   assert.equal(beforeFirstStop.relativeToNextOpenStop, 'before');
   const atFirstStop = result.returnCandidates.find(candidate =>
     candidate.relativeToNextOpenStop === 'at'
@@ -83,6 +87,15 @@ test('bildet spaetere Alternativen mit korrekter Zahl ausgelassener Haltestellen
   assert.ok(afterSeveralStops.routeProgressM > closeStops[1].distFromStart);
   assert.equal(afterSeveralStops.relativeToNextOpenStop, 'after');
   assert.ok(['C', 'D', null].includes(afterSeveralStops.nextStopId));
+  assert.equal(afterSeveralStops.skippedStopCount, afterSeveralStops.skippedStops.length);
+  assert.deepEqual(
+    Array.from(afterSeveralStops.skippedStops, stop => stop.name),
+    closeStops.slice(0, afterSeveralStops.skippedStopCount).map(stop => stop.stop.name)
+  );
+  assert.deepEqual(
+    Array.from(afterSeveralStops.skippedStops, stop => stop.routeDistanceM),
+    closeStops.slice(0, afterSeveralStops.skippedStopCount).map(stop => stop.distFromStart)
+  );
 });
 
 test('priorisiert weniger ausgelassene Haltestellen trotz laengerer Luftlinie', () => {
@@ -108,6 +121,7 @@ test('liefert auch ohne offene Haltestelle mehrere Punkte des Restverlaufs', () 
   assert.ok(result.returnCandidates.every(candidate =>
     candidate.nextStopId === null &&
     candidate.skippedStopCount === 0 &&
+    candidate.skippedStops.length === 0 &&
     candidate.relativeToNextOpenStop === 'none' &&
     Number.isFinite(candidate.directDistanceM)
   ));
