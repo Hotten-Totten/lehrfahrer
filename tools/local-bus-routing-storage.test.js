@@ -253,7 +253,9 @@ test('Graphvalidierung weist fehlende Nodes und ungültige Restriktionsreferenze
     assert.equal((await restarted.loadGraph(1, 'C')).graph.graphVersion, '1');
     assert.equal((await getRegionDirectory(storage, 'A')).files.get('routing-graph-0.json'), beforeA);
     assert.equal((await getRegionDirectory(storage, 'C')).files.get('routing-index-0.json'), beforeC);
-    assert.equal((await restarted.loadGraph()).graph.regionId, 'B');
+    const implicitLoad = await restarted.loadGraph();
+    assert.equal(implicitLoad.status, 'selection-required');
+    assert.deepEqual(Array.from(implicitLoad.regions, entry => entry.regionId), ['B', 'A', 'C']);
     assert.equal((await restarted.loadGraph(1, 'missing')).status, 'not-installed');
   });
 
@@ -725,4 +727,30 @@ test('App-Dateiimport und Neustart laden nur den Katalog; fehlerhafter Folgeimpo
   await vm.runInContext('onRoutingGraphFileSelected()', context);
   assert.equal(vm.runInContext('localBusRoutingCatalog[0].graphVersion', context), '2');
   assert.equal(vm.runInContext('localBusRouterImplementation', context), null);
+});
+
+test('zwei Regionen bleiben ueber zwei Store-Neustarts katalogisiert', async () => {
+  const storage = createStorage();
+  const store = storageApi.createOPFSGraphStore(storage);
+  await store.saveGraph(createGraph({
+    regionId: 'cottbus',
+    boundingBox: { minLat: 51.72, minLon: 14.25, maxLat: 51.80, maxLon: 14.42 }
+  }), routingApi.FORMAT_VERSION);
+  await store.saveGraph(createGraph({
+    regionId: 'cottbus-kolkwitz',
+    boundingBox: { minLat: 51.65, minLon: 14.14, maxLat: 51.88, maxLon: 14.50 }
+  }), routingApi.FORMAT_VERSION);
+
+  for (let restart = 0; restart < 2; restart += 1) {
+    const restarted = storageApi.createOPFSGraphStore(storage);
+    const catalog = await restarted.listGraphs(routingApi.FORMAT_VERSION);
+    assert.deepEqual(Array.from(catalog, entry => entry.regionId), ['cottbus', 'cottbus-kolkwitz']);
+    const implicitLoad = await restarted.loadGraph(routingApi.FORMAT_VERSION);
+    assert.equal(implicitLoad.status, 'selection-required');
+    assert.deepEqual(Array.from(implicitLoad.regions, entry => entry.regionId), ['cottbus', 'cottbus-kolkwitz']);
+  }
+
+  const selected = await storageApi.createOPFSGraphStore(storage)
+    .loadGraph(routingApi.FORMAT_VERSION, 'cottbus-kolkwitz');
+  assert.equal(selected.graph.regionId, 'cottbus-kolkwitz');
 });

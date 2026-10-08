@@ -89,6 +89,29 @@ test('Neustart listet nur Metadaten und erzeugt keinen Router', async () => {
   for (const region of ['A', 'B', 'C']) assert.match(sandbox.routingGraphInstallStatus.textContent, new RegExp(`${region} · Version 1`));
 });
 
+test('zweiter Neustart zeigt weiterhin alle Regionen und laedt keinen Default-Graph', async () => {
+  const { sandbox, loads } = setup([
+    graph('cottbus', 14.25, 14.42),
+    graph('cottbus-kolkwitz', 14.14, 14.50)
+  ]);
+
+  for (let restart = 0; restart < 2; restart += 1) {
+    vm.runInContext(`
+      localBusRoutingCatalog = [];
+      localBusRoutingStore = store;
+      localBusRoutingCatalogInitialization = null;
+      localBusRouterImplementation = null;
+    `, sandbox);
+    const result = await sandbox.initializePersistentLocalBusRoutingGraph();
+    assert.deepEqual(Array.from(result.regions, entry => entry.regionId), ['cottbus', 'cottbus-kolkwitz']);
+    assert.equal(vm.runInContext('localBusRouterImplementation', sandbox), null);
+    assert.match(sandbox.routingGraphInstallStatus.textContent, /cottbus · Version 1/);
+    assert.match(sandbox.routingGraphInstallStatus.textContent, /cottbus-kolkwitz · Version 1/);
+  }
+
+  assert.deepEqual(loads, []);
+});
+
 test('Anfragen laden nur den Graph fuer Start und Ziel: A dann B', async () => {
   const { sandbox, loads } = setup();
   sandbox.navActive = false;

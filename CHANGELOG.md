@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.058 - 2026-10-08
+- Multi-Region-Offline-Routing nach Regression wiederhergestellt
+- Installierte Routingregionen werden wieder katalogisiert und passend zur Linie gewählt
+- Lazy-Loading und regionsisolierte Updates wiederhergestellt
+- V2.1.057 Skip-/Touch-Funktionen bleiben erhalten
+
 ## V2.1.057 - 2026-10-08
 - Kartenbedienung mit dauerhaften Touch-Gesten und Fahrzeugzentrierung
 - Rückrouting darf bei deutlichem betrieblichen Vorteil eine Haltestelle auslassen

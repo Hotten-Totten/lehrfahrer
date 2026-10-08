@@ -327,6 +327,9 @@
           if (!entries.length) {
             return migration.status === 'invalid' ? migration : { status: 'not-installed' };
           }
+          if (entries.length > 1) {
+            return { status: 'selection-required', regions: entries };
+          }
           regionId = entries[0].regionId;
         }
         const directory = await openDirectory(false);
