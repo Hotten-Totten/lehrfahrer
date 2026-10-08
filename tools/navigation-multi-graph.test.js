@@ -403,6 +403,12 @@ test('Preview-Abbruch erlaubt sofort eine neue saubere Suche', async () => {
   const second = await sandbox.prepareBusReroutePreviewRequest();
   assert.equal(second.routingStatus, 'ready');
   assert.equal(sandbox.navBusRerouteSearchLoading, false);
+  assert.equal(sandbox.cancelBusReroutePreview(), true);
+  assert.equal(sandbox.navPendingBusRerouteRequest, null);
+
+  const third = await sandbox.prepareBusReroutePreviewRequest();
+  assert.equal(third.routingStatus, 'ready');
+  assert.equal(sandbox.navBusRerouteSearchLoading, false);
   assert.deepEqual(loads, ['cottbus-kolkwitz']);
 });
 
@@ -422,6 +428,13 @@ test('schnelle Mehrfachanforderung teilt genau eine Reroute-Berechnung', async (
   const { sandbox } = setupRealKolkwitzPreparation();
   let releaseInitialization;
   let initializationCalls = 0;
+  let renderCalls = 0;
+  const animationFrames = [];
+  sandbox.renderUpcomingStops = () => { renderCalls += 1; };
+  sandbox.requestAnimationFrame = callback => {
+    animationFrames.push(callback);
+    return animationFrames.length;
+  };
   sandbox.initializePersistentLocalBusRoutingGraph = () => {
     initializationCalls += 1;
     return new Promise(resolve => { releaseInitialization = resolve; });
@@ -430,12 +443,23 @@ test('schnelle Mehrfachanforderung teilt genau eine Reroute-Berechnung', async (
   const first = sandbox.prepareBusReroutePreviewRequest();
   const second = sandbox.prepareBusReroutePreviewRequest();
   assert.strictEqual(second, first);
-  assert.equal(initializationCalls, 1);
   assert.equal(sandbox.navBusRerouteSearchLoading, true);
+  assert.equal(renderCalls, 1);
+  assert.equal(initializationCalls, 0);
+  assert.equal(animationFrames.length, 1);
+
+  animationFrames.shift()(0);
+  assert.equal(initializationCalls, 0);
+  assert.equal(animationFrames.length, 1);
+  animationFrames.shift()(16);
+  await Promise.resolve();
+  assert.equal(initializationCalls, 1);
+
   sandbox.navActive = false;
   releaseInitialization({ status: 'ready' });
   assert.equal(await first, null);
   assert.equal(sandbox.navBusRerouteSearchLoading, false);
+  assert.equal(renderCalls, 1);
 });
 
 test('Fehler setzt Ladezustand zurueck und eine erneute Suche bleibt moeglich', async () => {

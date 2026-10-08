@@ -6466,10 +6466,17 @@ function setBusRerouteSearchLoading(active) {
   renderUpcomingStops(currentDist);
 }
 
+function yieldToBrowserPaint() {
+  if (typeof requestAnimationFrame !== 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
 function prepareBusReroutePreviewRequest() {
   if (prepareBusReroutePreviewRequest.inFlight) return prepareBusReroutePreviewRequest.inFlight;
   setBusRerouteSearchLoading(true);
-  const operation = runBusReroutePreviewRequest().catch(error => {
+  const operation = yieldToBrowserPaint().then(runBusReroutePreviewRequest).catch(error => {
     console.warn('Bus-Re-Route-Berechnung fehlgeschlagen:', error);
     showToast('Rückweg konnte nicht berechnet werden. Bitte erneut versuchen.', 6000);
     return null;
@@ -6691,6 +6698,13 @@ function createNavOffRoutePanel() {
     if (skippedStopNotice) actions.append(skippedStopNotice);
     actions.append(startBtn, cancelBtn);
   } else {
+    if (navBusRerouteSearchLoading) {
+      const loadingStatus = document.createElement('div');
+      loadingStatus.className = 'nav-off-route-summary';
+      loadingStatus.textContent = 'Rückweg wird berechnet …';
+      actions.append(loadingStatus);
+    }
+
     const returnBtn = document.createElement('button');
     returnBtn.type = 'button';
     returnBtn.textContent = 'Zur Route zurück';

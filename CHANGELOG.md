@@ -1,5 +1,9 @@
 # Changelog
 
+## V2.1.061 - 2026-10-08
+- Ladezustand der Rückwegsuche wird vor der eigentlichen Berechnung sichtbar gerendert
+- Freeze-Eindruck bei erneuter Umleitungssuche beseitigt
+
 ## V2.1.060 - 2026-10-08
 - Rückweg startet sichtbar erst am Straßensnap statt mit Luftliniensegment
 - Sichtbarer Berechnungsstatus bei erneuter Umleitungssuche

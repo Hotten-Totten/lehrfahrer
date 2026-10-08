@@ -889,6 +889,7 @@ test('Reroute-Suche zeigt sofort einen deaktivierten Ladebutton', () => {
   assert.ok(button);
   assert.equal(button.disabled, true);
   assert.match(panelText(panel), /Rückweg wird berechnet/);
+  assert.equal((panelText(panel).match(/Rückweg wird berechnet/g) || []).length, 2);
 });
 
 test('Abbrechen entfernt nur die Preview, Start aktiviert den temporaeren Rueckweg', () => {
