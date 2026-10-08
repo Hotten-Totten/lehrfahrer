@@ -13,7 +13,16 @@ vm.runInContext(appSource.slice(
   appSource.indexOf('function navGetLatLon'),
   appSource.indexOf('function buildNavStopDists')
 ), sandbox);
-vm.runInContext('const navManeuverAudioNodes = new Set();', sandbox);
+vm.runInContext(`
+  const navManeuverAudioNodes = new Set();
+  const NAV_MANEUVER_BEEPS_STORAGE_KEY = 'lehrfahrer-nav-maneuver-beeps';
+  const NAV_MANEUVER_VOLUME_STORAGE_KEY = 'lehrfahrer-nav-maneuver-volume';
+  const NAV_MANEUVER_VOLUME_DEFAULT = 70;
+  const NAV_MANEUVER_PEAK_GAIN = 0.16;
+  const navLineManeuverAudioState = {
+    maneuverAudio: { turnKey: null, warningPlayed: false, retryAt: 0 }
+  };
+`, sandbox);
 vm.runInContext(appSource.slice(
   appSource.indexOf('function getTurnInfo'),
   appSource.indexOf('const NAV_MANEUVER_SVG')
@@ -150,9 +159,11 @@ test('gesperrte Ausfahrt wird nicht mitgezählt und unbenannte Ausfahrt bleibt n
 
 function createAudioContextRecorder() {
   const frequencies = [];
+  const gainValues = [];
   const oscillators = [];
   return {
     frequencies,
+    gainValues,
     oscillators,
     state: 'running',
     currentTime: 10,
@@ -169,8 +180,8 @@ function createAudioContextRecorder() {
     createGain() {
       return {
         gain: {
-          setValueAtTime() {},
-          exponentialRampToValueAtTime() {}
+          setValueAtTime(value) { gainValues.push(value); },
+          exponentialRampToValueAtTime(value) { gainValues.push(value); }
         },
         connect() {}, disconnect() {}
       };
@@ -198,11 +209,37 @@ test('rechts, links und Kreisverkehr erzeugen eindeutig unterscheidbare Tonmuste
   const context = createAudioContextRecorder();
   sandbox.navWarningAudioContext = context;
   assert.equal(sandbox.playNavManeuverTone({ angle: 90 }), true);
-  assert.deepEqual(context.frequencies.splice(0), [880]);
+  assert.deepEqual(context.frequencies.splice(0), [880, 1040]);
   assert.equal(sandbox.playNavManeuverTone({ angle: -90 }), true);
-  assert.deepEqual(context.frequencies.splice(0), [620, 620]);
+  assert.deepEqual(context.frequencies.splice(0), [660, 560]);
   assert.equal(sandbox.playNavManeuverTone({ type: 'roundabout', angle: 0 }), true);
-  assert.deepEqual(context.frequencies.splice(0), [1080, 1080]);
+  assert.deepEqual(context.frequencies.splice(0), [760, 860, 960]);
+});
+
+test('normale aktive Navigation nutzt dieselbe einmalige Cue-Logik', () => {
+  configureCueSandbox();
+  sandbox.navWarningAudioContext = createAudioContextRecorder();
+  sandbox.navActive = true;
+  sandbox.navPaused = false;
+  sandbox.navActiveBusReroute = null;
+  vm.runInContext('resetBusRerouteManeuverAudio(navLineManeuverAudioState)', sandbox);
+  const turn = { index: 4, angle: 90, distFromStart: 500 };
+
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), true);
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 290), false);
+  assert.deepEqual(sandbox.navWarningAudioContext.frequencies, [880, 1040]);
+
+  configureCueSandbox({ enabled: false });
+  vm.runInContext('resetBusRerouteManeuverAudio(navLineManeuverAudioState)', sandbox);
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), false);
+
+  configureCueSandbox();
+  sandbox.navActive = false;
+  vm.runInContext('resetBusRerouteManeuverAudio(navLineManeuverAudioState)', sandbox);
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), false);
+  sandbox.navActive = true;
+  sandbox.navPaused = true;
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), false);
 });
 
 test('Preview bleibt stumm; aktive Rückführung spielt denselben Turn höchstens einmal', () => {
@@ -216,18 +253,18 @@ test('Preview bleibt stumm; aktive Rückführung spielt denselben Turn höchsten
   assert.equal(sandbox.navWarningAudioContext.frequencies.length, 0);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 300), true);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 290), false);
-  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 1);
+  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 2);
 
   const nextTurn = { index: 5, angle: -90, distFromStart: 800 };
   state.turns.push(nextTurn);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, nextTurn, 600), true);
-  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 3);
+  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 4);
 
   const thirdTurn = { index: 8, type: 'roundabout', angle: 0, distFromStart: 1100 };
   state.turns.push(thirdTurn);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, thirdTurn, 900), true);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, thirdTurn, 900), false);
-  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 5);
+  assert.equal(sandbox.navWarningAudioContext.frequencies.length, 7);
 });
 
 test('Einstellung und laufendes Warnsignal unterdrücken Manövertöne', () => {
@@ -261,7 +298,28 @@ test('OFF-Route blockiert Cues nur waehrend des Warnsignals, nicht fuer den ganz
   sandbox.navWarningAudioBusyUntil = 0;
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), true);
   assert.equal(sandbox.maybePlayBusRerouteManeuverCue(state, turn, 0), false);
-  assert.equal(context.frequencies.length, 1);
+  assert.equal(context.frequencies.length, 2);
+});
+
+test('Lautstaerke skaliert nur den gemeinsamen Manoever-Gain von 0 bis 100 Prozent', () => {
+  const slider = { value: '100' };
+  sandbox.document = { getElementById: id => id === 'navManeuverVolume' ? slider : null };
+  let context = createAudioContextRecorder();
+  sandbox.navWarningAudioContext = context;
+  assert.equal(sandbox.playNavManeuverTone({ angle: 90 }), true);
+  assert.ok(context.gainValues.includes(0.16));
+
+  slider.value = '50';
+  context = createAudioContextRecorder();
+  sandbox.navWarningAudioContext = context;
+  assert.equal(sandbox.playNavManeuverTone({ angle: 90 }), true);
+  assert.ok(context.gainValues.includes(0.08));
+
+  slider.value = '0';
+  context = createAudioContextRecorder();
+  sandbox.navWarningAudioContext = context;
+  assert.equal(sandbox.playNavManeuverTone({ angle: 90 }), true);
+  assert.equal(context.oscillators.length, 0);
 });
 
 test('Audio-Unlock-Fehler stürzt nicht ab und derselbe Cue kann später funktionieren', () => {
@@ -285,20 +343,45 @@ test('Manöver-Audioeinstellung ist standardmäßig an und wird gespeichert', ()
     checked: false,
     addEventListener: (name, handler) => { handlers[name] = handler; }
   };
-  sandbox.document = { getElementById: () => toggle };
-  sandbox.NAV_MANEUVER_BEEPS_STORAGE_KEY = 'lehrfahrer-nav-maneuver-beeps';
+  const volumeHandlers = {};
+  const volume = {
+    value: '',
+    addEventListener: (name, handler) => { volumeHandlers[name] = handler; }
+  };
+  const volumeValue = { textContent: '' };
+  sandbox.document = { getElementById: id => ({
+    navManeuverBeepsEnabled: toggle,
+    navManeuverVolume: volume,
+    navManeuverVolumeValue: volumeValue
+  }[id] || null) };
   sandbox.localStorage = {
     getItem: key => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value)
   };
   sandbox.initializeNavManeuverBeepsSetting();
   assert.equal(toggle.checked, true);
+  assert.equal(volume.value, '70');
+  assert.equal(volumeValue.textContent, '70 %');
   toggle.checked = false;
   handlers.change();
   assert.equal(values.get('lehrfahrer-nav-maneuver-beeps'), '0');
+  volume.value = '50';
+  volumeHandlers.input();
+  assert.equal(values.get('lehrfahrer-nav-maneuver-volume'), '50');
+
+  const restoredVolume = { value: '', addEventListener() {} };
+  sandbox.document = { getElementById: id => ({
+    navManeuverBeepsEnabled: toggle,
+    navManeuverVolume: restoredVolume,
+    navManeuverVolumeValue: volumeValue
+  }[id] || null) };
+  sandbox.initializeNavManeuverBeepsSetting();
+  assert.equal(toggle.checked, false);
+  assert.equal(restoredVolume.value, '50');
 });
 
 test('Rejoin-Reset löscht Cue-Zustand; OFF-Route-Warnpfad bleibt bestehen', () => {
+  configureCueSandbox();
   const state = createCueState({ index: 3, angle: 90, distFromStart: 200 });
   state.maneuverAudio.warningPlayed = true;
   const context = createAudioContextRecorder();
@@ -323,6 +406,11 @@ test('Rejoin-Reset löscht Cue-Zustand; OFF-Route-Warnpfad bleibt bestehen', () 
     appSource.indexOf('function requestBusReroute')
   );
   assert.match(activeHudSource, /maybePlayBusRerouteManeuverCue\(/);
+  const lineHudSource = appSource.slice(
+    appSource.indexOf('function updateNavHud'),
+    appSource.indexOf('function checkNavDestinationReached')
+  );
+  assert.match(lineHudSource, /maybePlayLineNavigationManeuverCue\(/);
 });
 
 function createManeuverTestControls(enabled = true) {
@@ -343,7 +431,7 @@ function createManeuverTestControls(enabled = true) {
   const values = new Map();
   if (!enabled) values.set('lehrfahrer-nav-maneuver-beeps', '0');
   sandbox.document = {
-    getElementById: id => id === 'navManeuverBeepsEnabled' ? toggle : buttons[id]
+    getElementById: id => id === 'navManeuverBeepsEnabled' ? toggle : (buttons[id] || null)
   };
   sandbox.localStorage = {
     getItem: key => values.get(key) ?? null,
@@ -361,11 +449,11 @@ test('Einstellungs-Testbuttons spielen genau die vorhandenen Rechts-, Links- und
   sandbox.initializeNavManeuverBeepsSetting();
 
   await controls.handlers.navManeuverTestRight();
-  assert.deepEqual(context.frequencies.splice(0), [880]);
+  assert.deepEqual(context.frequencies.splice(0), [880, 1040]);
   await controls.handlers.navManeuverTestLeft();
-  assert.deepEqual(context.frequencies.splice(0), [620, 620]);
+  assert.deepEqual(context.frequencies.splice(0), [660, 560]);
   await controls.handlers.navManeuverTestRoundabout();
-  assert.deepEqual(context.frequencies.splice(0), [1080, 1080]);
+  assert.deepEqual(context.frequencies.splice(0), [760, 860, 960]);
   assert.equal(unlockCalls, 3);
 });
 

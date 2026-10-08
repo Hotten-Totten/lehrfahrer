@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.062 - 2026-10-08
+- Abbiegealarmierung auf normale Liniennavigation erweitert
+- Unterschiedliche Töne für links, rechts und Kreisverkehr
+- Alarmierung ein-/ausschaltbar und Lautstärke einstellbar
+- Einstellungen werden dauerhaft gespeichert
+
 ## V2.1.061 - 2026-10-08
 - Ladezustand der Rückwegsuche wird vor der eigentlichen Berechnung sichtbar gerendert
 - Freeze-Eindruck bei erneuter Umleitungssuche beseitigt
