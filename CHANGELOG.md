@@ -1,5 +1,11 @@
 # Changelog
 
+## V2.1.059 - 2026-10-08
+- Touch-Gesten auch während aktiver Rückführung zuverlässig nutzbar
+- Aktiver Rückweg kann abgebrochen werden
+- Kamera-/Reroute-Event-Stürme abgesichert
+- Keine Änderung der Verkehrsrestriktionen
+
 ## V2.1.058 - 2026-10-08
 - Multi-Region-Offline-Routing nach Regression wiederhergestellt
 - Installierte Routingregionen werden wieder katalogisiert und passend zur Linie gewählt

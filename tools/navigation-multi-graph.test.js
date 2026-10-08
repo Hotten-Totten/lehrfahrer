@@ -184,7 +184,9 @@ test('Rueckfuehrung behaelt konkrete Routerinstanz und Version bei anderem gelad
   assert.equal(state.routingContext.router, a.routingContext.router);
   let renderedGraph;
   sandbox.showBusReroute = (_geometry, _pos, _active, usedGraph) => { renderedGraph = usedGraph; };
-  sandbox.navPendingBusRerouteRequest = { originalRoute: {}, preview: { selectedCandidate: selected } };
+  sandbox.navPendingBusRerouteRequest = {
+    routingStatus: 'ready', originalRoute: {}, preview: { selectedCandidate: selected }
+  };
   assert.equal(sandbox.startPreparedBusReroute(), true);
   assert.equal(sandbox.navActiveBusReroute.routingContext.router, a.routingContext.router);
   assert.equal(renderedGraph.regionId, 'A');
@@ -398,4 +400,22 @@ test('echte Vorbereitung lehnt Raw-GPS-Start ausserhalb trotz passender Linie un
   assert.equal(sandbox.navActiveBusReroute, null);
   assert.deepEqual(loads, []);
   assert.match(messages[0], /außerhalb der installierten Routingregion/);
+});
+
+test('schnelle Mehrfachanforderung teilt genau eine Reroute-Berechnung', async () => {
+  const { sandbox } = setupRealKolkwitzPreparation();
+  let releaseInitialization;
+  let initializationCalls = 0;
+  sandbox.initializePersistentLocalBusRoutingGraph = () => {
+    initializationCalls += 1;
+    return new Promise(resolve => { releaseInitialization = resolve; });
+  };
+
+  const first = sandbox.prepareBusReroutePreviewRequest();
+  const second = sandbox.prepareBusReroutePreviewRequest();
+  assert.strictEqual(second, first);
+  assert.equal(initializationCalls, 1);
+  sandbox.navActive = false;
+  releaseInitialization({ status: 'ready' });
+  assert.equal(await first, null);
 });

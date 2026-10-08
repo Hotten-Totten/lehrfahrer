@@ -86,6 +86,7 @@ function createReroutePanelContext(candidateValue, active = false) {
     resolveConfiguredDispatchPhone: () => '',
     startPreparedBusReroute() {},
     cancelBusReroutePreview() {},
+    cancelActiveBusReroute() {},
     requestBusReroute() {},
     showToast() {}
   };
@@ -814,6 +815,7 @@ test('1-Skip-Hinweis bleibt waehrend aktiver Rueckfuehrung sichtbar', () => {
   assert.match(text, /RÜCKWEG AKTIV/);
   assert.match(text, /Haltestelle entfällt: Stadtmuseum/);
   assert.match(text, /Leitstelle informieren/);
+  assert.match(text, /Rückweg abbrechen/);
 });
 
 test('1-Skip-Hinweis verschwindet nach Rejoin-Reset', () => {
@@ -905,6 +907,35 @@ test('Abbrechen entfernt nur die Preview, Start aktiviert den temporaeren Rueckw
   assert.ok(sandbox.navActiveBusReroute);
   assert.equal(sandbox.navPendingBusRerouteRequest.routingStatus, 'active');
   assert.equal(sandbox.rerouteShown, true);
+  assert.equal(sandbox.startPreparedBusReroute(), false);
+});
+
+test('aktiver Rueckweg kann ohne Verlust der Originalnavigation abgebrochen werden', () => {
+  const originalRoute = { routePoints: [[51.75, 14.32], [51.76, 14.33]] };
+  const active = {
+    maneuverAudio: { turnKey: 'turn-1', warningPlayed: true, retryAt: 5 },
+    selectedCandidate: { candidate: candidate('cancel-active', 1, 900) },
+    originalRoute
+  };
+  sandbox.currentRoute = { data: originalRoute };
+  sandbox.navActiveBusReroute = active;
+  sandbox.navPendingBusRerouteRequest = { routingStatus: 'active' };
+  sandbox.navCumDists = [0, 100];
+  sandbox.navProgressIdx = 0;
+  sandbox.navLastRawGpsPos = { lat: 51.75, lon: 14.32 };
+  sandbox.clearBusReroute = () => { sandbox.activeRerouteCleared = true; };
+  sandbox.renderUpcomingStops = () => { sandbox.activePanelRendered = true; };
+  sandbox.updateNavHud = () => { sandbox.originalHudContinued = true; };
+  sandbox.showToast = () => {};
+
+  assert.equal(sandbox.cancelActiveBusReroute(), true);
+  assert.equal(sandbox.navActiveBusReroute, null);
+  assert.equal(sandbox.navPendingBusRerouteRequest, null);
+  assert.equal(sandbox.activeRerouteCleared, true);
+  assert.equal(sandbox.originalHudContinued, true);
+  assert.strictEqual(sandbox.currentRoute.data, originalRoute);
+  assert.equal(active.maneuverAudio.turnKey, null);
+  assert.equal(sandbox.cancelActiveBusReroute(), false);
 });
 
 test('Wiedereinstieg braucht stabile Fixes und setzt den Originalfortschritt hinter ausgelassene Halte', () => {
@@ -977,6 +1008,7 @@ test('Navigation und Rueckweg bleiben nach Drag/Pinch/Rotation bis Fahrzeug-Klic
   vm.createContext(camera);
   vm.runInContext(`
     const BUS_REROUTE_MANUAL_CAMERA_HOLD_MS = 4500;
+    const NAV_CAMERA_MIN_SYNC_INTERVAL_MS = 50;
     let navOffRouteManualCamera = false;
     let navManualCameraHeld = false;
     let navBusRerouteCameraMode = 'preview';
@@ -1040,10 +1072,14 @@ test('MapLibre-Gesten sind ohne Zoommodus aktiv und +/- werden nicht eingebaut',
   const initSource = mapFunctionSource('initMap', 'switchToPMTiles');
   assert.match(initSource, /dragPan:\s*true/);
   assert.match(initSource, /touchZoomRotate:\s*true/);
+  assert.match(initSource, /dragPan\.enable\(\)/);
+  assert.match(initSource, /touchZoomRotate\.enable\(\)/);
   assert.doesNotMatch(initSource, /NavigationControl/);
   assert.match(initSource, /map\.on\('dragstart'/);
   assert.match(initSource, /map\.on\('zoomstart'/);
   assert.match(initSource, /map\.on\('rotatestart'/);
+  assert.equal((initSource.match(/map\.on\('touchstart'/g) || []).length, 1);
+  assert.equal((initSource.match(/map\.on\('touchend'/g) || []).length, 1);
   assert.match(appSource, /getElementById\('rerouteCenterBtn'\).*centerMapOnVehicle/s);
 });
 

@@ -24,6 +24,7 @@ const GPS_MARKER_TARGET_MAX_JUMP_M = 80;
 const GPS_MARKER_TARGET_MAX_SPEED_MPS = 55;
 const OFF_ROUTE_OVERVIEW_ZOOM = 16.2;
 const BUS_REROUTE_MANUAL_CAMERA_HOLD_MS = 4500;
+const NAV_CAMERA_MIN_SYNC_INTERVAL_MS = 50;
 let gpsAnimFrameId = null;
 let gpsAnimState = null;
 let navCameraBearing = 0;
@@ -128,6 +129,7 @@ function mapCameraNow() {
 function beginBusRerouteMapGesture(type, event) {
   const navigationActive = document.body.classList.contains('nav-mode');
   if (!event?.originalEvent || (!navigationActive && navBusRerouteCameraMode === 'none')) return false;
+  if (!navBusRerouteActiveGestures.size && map && typeof map.stop === 'function') map.stop();
   navManualCameraHeld = navigationActive;
   navBusRerouteActiveGestures.add(type);
   navBusRerouteManualCameraUntil = Infinity;
@@ -171,6 +173,7 @@ function resumeNavCameraFollow(lon, lat) {
   navCameraModeTransition = null;
   navCameraCenter = { lon, lat };
   navCameraSyncTs = 0;
+  if (typeof map.stop === 'function') map.stop();
   map.jumpTo({ ...navCameraFollowOptions, center: [lon, lat] });
   return true;
 }
@@ -185,6 +188,7 @@ function centerMapOnVehicle() {
   if (document.body.classList.contains('nav-mode')) {
     return resumeNavCameraFollow(lon, lat);
   }
+  if (typeof map.stop === 'function') map.stop();
   map.flyTo({ center: [lon, lat], zoom: 15, duration: 600 });
   return true;
 }
@@ -1330,6 +1334,8 @@ async function initMap() {
     attributionControl: { compact: true }
   });
   guardMapLibreBoxZoomReset(map);
+  map.dragPan.enable();
+  map.touchZoomRotate.enable();
 
   map.on('error', e => {
     handleMapSourceError(e);
@@ -1352,9 +1358,11 @@ async function initMap() {
   map.on('dragstart', event => respectNavigationMapGesture('drag', event));
   map.on('zoomstart', event => respectNavigationMapGesture('zoom', event));
   map.on('rotatestart', event => respectNavigationMapGesture('rotate', event));
+  map.on('touchstart', event => respectNavigationMapGesture('touch', event));
   map.on('dragend', () => endBusRerouteMapGesture('drag'));
   map.on('zoomend', () => endBusRerouteMapGesture('zoom'));
   map.on('rotateend', () => endBusRerouteMapGesture('rotate'));
+  map.on('touchend', () => endBusRerouteMapGesture('touch'));
 
   return map;
 }
@@ -2327,6 +2335,7 @@ function syncNavCameraToGpsMarkerPosition(lon, lat) {
     if (navBusRerouteCameraMode !== 'active' || busRerouteHoldActive) return;
     navOffRouteManualCamera = false;
   }
+  if (navCameraSyncTs > 0 && nowTs - navCameraSyncTs < NAV_CAMERA_MIN_SYNC_INTERVAL_MS) return;
   const dt = navCameraSyncTs > 0 ? Math.min(120, Math.max(8, nowTs - navCameraSyncTs)) : 16;
   navCameraSyncTs = nowTs;
   const currentBearing = normalizeDeg(map.getBearing());

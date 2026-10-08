@@ -6369,6 +6369,7 @@ function cancelBusReroutePreview() {
 }
 
 function startPreparedBusReroute() {
+  if (navActiveBusReroute || navPendingBusRerouteRequest?.routingStatus !== 'ready') return false;
   const state = buildBusRerouteNavigationState(navPendingBusRerouteRequest);
   if (!state) {
     showToast('Der vorbereitete Rückweg enthält keine nutzbare Geometrie.', 5000);
@@ -6387,6 +6388,19 @@ function startPreparedBusReroute() {
   }
   renderUpcomingStops(state.cumDists[0] || 0);
   showToast('Rückweg gestartet. Die Originalroute bleibt erhalten.', 4500);
+  return true;
+}
+
+function cancelActiveBusReroute() {
+  if (!navActiveBusReroute) return false;
+  resetBusRerouteManeuverAudio(navActiveBusReroute);
+  navActiveBusReroute = null;
+  navPendingBusRerouteRequest = null;
+  if (typeof clearBusReroute === 'function') clearBusReroute();
+  const currentDist = Number.isFinite(navCumDists[navProgressIdx]) ? navCumDists[navProgressIdx] : 0;
+  renderUpcomingStops(currentDist);
+  if (navLastRawGpsPos) updateNavHud(navLastRawGpsPos.lat, navLastRawGpsPos.lon, navProgressIdx);
+  showToast('Rückweg abgebrochen. Liniennavigation wird fortgesetzt.', 4500);
   return true;
 }
 
@@ -6442,7 +6456,20 @@ function requestBusReroute() {
   return prepareBusReroutePreviewRequest();
 }
 
-async function prepareBusReroutePreviewRequest() {
+function prepareBusReroutePreviewRequest() {
+  if (prepareBusReroutePreviewRequest.inFlight) return prepareBusReroutePreviewRequest.inFlight;
+  const operation = runBusReroutePreviewRequest();
+  prepareBusReroutePreviewRequest.inFlight = operation;
+  const release = () => {
+    if (prepareBusReroutePreviewRequest.inFlight === operation) {
+      prepareBusReroutePreviewRequest.inFlight = null;
+    }
+  };
+  operation.then(release, release);
+  return operation;
+}
+
+async function runBusReroutePreviewRequest() {
   if (!navActive || !currentRoute?.data?.routePoints?.length || !navLastRawGpsPos) {
     showToast('Busgeeignete Umleitung wird vorbereitet. Aktuelle GPS-Position fehlt noch.', 5000);
     return null;
@@ -6617,6 +6644,11 @@ function createNavOffRoutePanel() {
     actions.append(detail);
     const skippedStopNotice = createBusRerouteSkippedStopNotice(candidate);
     if (skippedStopNotice) actions.append(skippedStopNotice);
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Rückweg abbrechen';
+    cancelBtn.addEventListener('click', cancelActiveBusReroute);
+    actions.append(cancelBtn);
   } else if (selected) {
     const details = [navFormatDist(selected.distanceM || 0)];
     if (candidate.skippedStopCount > 0) {
