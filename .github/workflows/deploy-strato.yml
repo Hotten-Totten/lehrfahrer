@@ -268,7 +268,44 @@ jobs:
             exit 1
           fi
 
+          if ! command -v php >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+            echo "PHP oder curl fehlt fuer den authentifizierten Produktions-Smoketest." >&2
+            exit 1
+          fi
+          secret_file="$webroot/api/_secret.php"
+          if [ ! -f "$secret_file" ]; then
+            echo "Produktiver API-Schluessel ist fuer den Smoketest nicht konfiguriert." >&2
+            exit 1
+          fi
+          api_token="$(php -r '$secret = include $argv[1]; echo is_array($secret) ? ($secret["LEHRFAHRER_API_TOKEN"] ?? "") : "";' "$secret_file")"
+          if [ -z "$api_token" ]; then
+            echo "Produktiver API-Schluessel ist leer." >&2
+            exit 1
+          fi
+
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$smoke_dir"' EXIT
+          authenticated_json_get() {
+            endpoint="$1"
+            output_file="$2"
+            status="$(curl -sS \
+              -o "$output_file" \
+              -w '%{http_code}' \
+              -H "X-Api-Token: $api_token" \
+              "https://www.lehrfahrer.de/api/$endpoint")"
+            if [ "$status" != "200" ]; then
+              echo "Authentifizierter API-Smoketest fehlgeschlagen." >&2
+              exit 1
+            fi
+            php -r '$data = json_decode(file_get_contents($argv[1]), true); exit(is_array($data) && ($data["ok"] ?? false) === true ? 0 : 1);' "$output_file"
+          }
+
+          authenticated_json_get "drivers.php" "$smoke_dir/drivers.json"
+          authenticated_json_get "trainings.php" "$smoke_dir/trainings.json"
+          authenticated_json_get "list_driver_packages.php" "$smoke_dir/packages.json"
+
           echo "Private-Storage-Migration erfolgreich."
+          echo "Authentifizierte Fahrer-, Einweisungs- und Paket-APIs erfolgreich."
           MIGRATION
 
           printf -v QUOTED_REMOTE_PATH '%q' "$REMOTE_PATH"
