@@ -223,20 +223,22 @@ jobs:
             "$private_root/personnel/drivers.json"
 
           if [ -d "$webroot/data/trainings" ]; then
-            while IFS= read -r -d '' source_file; do
+            find "$webroot/data/trainings" -maxdepth 1 -type f -name 'training_*.json' -print0 \
+              | while IFS= read -r -d '' source_file; do
               migrate_file \
                 "$source_file" \
                 "$private_root/trainings/$(basename "$source_file")"
-            done < <(find "$webroot/data/trainings" -maxdepth 1 -type f -name 'training_*.json' -print0)
+              done
           fi
 
           if [ -d "$webroot/fahrerunterlagen" ]; then
-            while IFS= read -r -d '' source_file; do
+            find "$webroot/fahrerunterlagen" -type f -print0 \
+              | while IFS= read -r -d '' source_file; do
               relative_file="${source_file#"$webroot/fahrerunterlagen/"}"
               migrate_file \
                 "$source_file" \
                 "$private_root/fahrerunterlagen/$relative_file"
-            done < <(find "$webroot/fahrerunterlagen" -type f -print0)
+              done
             find "$webroot/fahrerunterlagen" -depth -type d -empty -delete
           fi
 
