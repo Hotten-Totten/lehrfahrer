@@ -1,13 +1,12 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_driver_packages.php';
-lehrfahrer_api_authorize('packages.manage', true, true);
+$companyId = lehrfahrer_personnel_authorize('packages.manage', true);
 
 $input = json_decode(file_get_contents('php://input'), true);
 $action = trim((string)($input['action'] ?? ''));
 $packageId = trim((string)($input['id'] ?? ''));
-$package = driverPackageFind($packageId);
+$package = driverPackageFind($companyId, $packageId);
 
 if ($package === null) {
     http_response_code(404);
@@ -16,7 +15,7 @@ if ($package === null) {
 }
 
 if ($action === 'delete') {
-    if (!driverPackageDeleteDirectory($package['dir'])) {
+    if (!driverPackageDeleteDirectory($companyId, $packageId)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Einweisungspaket konnte nicht vollständig gelöscht werden.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -28,7 +27,7 @@ if ($action === 'delete') {
 if ($action === 'rename') {
     $driverName = trim((string)($input['driverName'] ?? ''));
     $data = $package['data'];
-    $data['id'] = $package['storedId'] !== '' ? $package['storedId'] : driverPackageNewId();
+    $data['id'] = $packageId;
     $data['driverName'] = $driverName;
     $data['created'] = trim((string)($data['created'] ?? ($data['createdAt'] ?? ''))) ?: date('c');
     $data['updated'] = date('c');

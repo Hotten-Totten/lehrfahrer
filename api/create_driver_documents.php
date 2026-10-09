@@ -1,9 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_driver_packages.php';
 require_once __DIR__ . '/_professional_pdf.php';
-lehrfahrer_api_authorize('packages.create', true, true);
+$companyId = lehrfahrer_personnel_authorize('packages.create', true);
 
 function driverDocSlug(string $value, string $fallback): string {
     $value = str_replace(
@@ -315,12 +314,53 @@ if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items'])
 $driverName = trim((string)($input['driverName'] ?? ''));
 $packageNote = trim((string)($input['note'] ?? ''));
 $driverId = trim((string)($input['driverId'] ?? ''));
-if ($driverId !== '' && !preg_match('/^drv_[a-f0-9]{32}$/', $driverId)) {
-    $driverId = '';
+if (lehrfahrer_personnel_driver($companyId, $driverId) === null) {
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'Fahrer nicht gefunden.']);
+    exit;
+}
+$trainingId = trim((string)($input['trainingId'] ?? ''));
+if ($trainingId !== '') {
+    $training = lehrfahrer_personnel_training($companyId, $trainingId);
+    if ($training === null || ($training['driverId'] ?? null) !== $driverId) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Einweisung nicht gefunden.']);
+        exit;
+    }
+}
+$selectedItems = [];
+$routeData = [];
+foreach ($input['items'] as $item) {
+    if (!is_array($item)) continue;
+    $selected = [
+        'city' => driverDocSlug((string)($item['city'] ?? ''), ''),
+        'lineFolder' => driverDocSlug((string)($item['lineFolder'] ?? ''), ''),
+        'categoryFolder' => driverDocSlug((string)($item['categoryFolder'] ?? ''), ''),
+        'fileBase' => driverDocSlug((string)($item['fileBase'] ?? ''), '')
+    ];
+    $sourcePath = lehrfahrer_personnel_route_file($companyId, $selected);
+    if ($sourcePath === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Linie nicht gefunden.']);
+        exit;
+    }
+    $data = json_decode((string)file_get_contents($sourcePath), true);
+    if (!is_array($data)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Linienunterlagen sind ungueltig.']);
+        exit;
+    }
+    $selectedItems[] = $selected;
+    $routeData[] = $data;
+}
+if (!$routeData) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Keine Unterlagen ausgewaehlt.']);
+    exit;
 }
 $mode = trim((string)($input['mode'] ?? 'new'));
 $requestedPackageId = trim((string)($input['packageId'] ?? ''));
-$existingPackage = $mode === 'update' ? driverPackageFind($requestedPackageId) : null;
+$existingPackage = $mode === 'update' ? driverPackageFind($companyId, $requestedPackageId) : null;
 $now = date('c');
 $oldPdfPaths = [];
 
@@ -331,76 +371,37 @@ if ($mode === 'update') {
         exit;
     }
     $packageDir = $existingPackage['dir'];
-    $driverFolder = basename(dirname($packageDir));
-    $packageId = $existingPackage['storedId'] !== '' ? $existingPackage['storedId'] : driverPackageNewId();
-    $created = trim((string)($existingPackage['data']['created'] ?? ($existingPackage['data']['createdAt'] ?? ''))) ?: $now;
-    $oldPdfPaths = glob($packageDir . '/*.pdf') ?: [];
-    @unlink($packageDir . '/paket.zip');
-} else {
-    $driverFolder = driverDocSlug($driverName, 'Unbenannt');
-    $root = driverPackageRoot();
-    $driverDir = $root . '/' . $driverFolder;
-    $timestamp = date('Y-m-d_His');
-    $packageDir = $driverDir . '/' . $timestamp;
-    $suffix = 1;
-    while (file_exists($packageDir)) {
-        $packageDir = $driverDir . '/' . $timestamp . '_' . str_pad((string)$suffix++, 2, '0', STR_PAD_LEFT);
-    }
-    if (!mkdir($packageDir, 0775, true)) {
-        http_response_code(500);
-        echo json_encode(['ok' => false, 'error' => 'Paketordner konnte nicht erstellt werden.']);
+    if (($existingPackage['data']['driverId'] ?? null) !== $driverId) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Paket nicht gefunden.']);
         exit;
     }
-    $packageId = driverPackageNewId();
+    $packageId = $requestedPackageId;
+    $created = trim((string)($existingPackage['data']['created'] ?? ($existingPackage['data']['createdAt'] ?? ''))) ?: $now;
+    $oldPdfPaths = glob(lehrfahrer_tenant_path($companyId, 'documents', $packageId) . '/*.pdf') ?: [];
+    @unlink($packageDir . '/paket.zip');
+} else {
+    $packageId = driverPackageNewId($companyId);
+    $packageDir = lehrfahrer_tenant_ensure_directory($companyId, 'packages', $packageId);
     $created = $now;
 }
+$documentDir = lehrfahrer_tenant_ensure_directory($companyId, 'documents', $packageId);
 
 $documents = [];
 $usedNames = [];
-$selectedItems = [];
-foreach ($input['items'] as $item) {
-    if (!is_array($item)) continue;
-    $city = driverDocSlug((string)($item['city'] ?? ''), '');
-    $lineFolder = driverDocSlug((string)($item['lineFolder'] ?? ''), '');
-    $categoryFolder = driverDocSlug((string)($item['categoryFolder'] ?? ''), '');
-    $fileBase = driverDocSlug((string)($item['fileBase'] ?? ''), '');
-    if ($city === '' || $fileBase === '') continue;
-    $selectedItems[] = [
-        'city' => $city,
-        'lineFolder' => $lineFolder,
-        'categoryFolder' => $categoryFolder,
-        'fileBase' => $fileBase
-    ];
-
-    $cityDir = dirname(__DIR__) . '/linien/' . $city;
-    if (!is_dir($cityDir) && is_dir(dirname(__DIR__) . '/linien/linien/' . $city)) {
-        $cityDir = dirname(__DIR__) . '/linien/linien/' . $city;
-    }
-    $candidates = [];
-    if ($lineFolder && $categoryFolder) $candidates[] = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json';
-    if ($lineFolder) $candidates[] = $cityDir . '/' . $lineFolder . '/' . $fileBase . '.json';
-    $candidates[] = $cityDir . '/' . $fileBase . '.json';
-    $sourcePath = '';
-    foreach ($candidates as $candidate) {
-        if (is_file($candidate)) {
-            $sourcePath = $candidate;
-            break;
-        }
-    }
-    if ($sourcePath === '') continue;
-    $data = json_decode((string)file_get_contents($sourcePath), true);
-    if (!is_array($data)) continue;
+foreach ($routeData as $data) {
 
     $lineLabel = driverDocSlug(driverDocValue($data, 'lineName'), 'Linie');
     $variantLabel = driverDocSlug(driverDocValue($data, 'variantName'), driverDocSlug(driverDocValue($data, 'routeName'), 'Variante'));
     $pdfBase = $lineLabel . '_' . $variantLabel;
     $pdfName = $pdfBase . '.pdf';
     $number = 2;
-    while (isset($usedNames[strtolower($pdfName)]) || file_exists($packageDir . '/' . $pdfName)) {
+    while (isset($usedNames[strtolower($pdfName)])) {
         $pdfName = $pdfBase . '_' . $number++ . '.pdf';
     }
     $usedNames[strtolower($pdfName)] = true;
-    if (file_put_contents($packageDir . '/' . $pdfName, driverDocBuildPdf($data, $driverName)) === false) {
+    $pdfPath = lehrfahrer_personnel_document_file($companyId, $packageId, $pdfName, true);
+    if ($pdfPath === null || file_put_contents($pdfPath, driverDocBuildPdf($data, $driverName)) === false) {
         continue;
     }
     $documents[] = [
@@ -424,7 +425,7 @@ if (!$documents) {
 }
 
 $currentPdfNames = array_map(static function (array $document): string {
-    return basename((string)$document['path']);
+    return (string)$document['file'];
 }, $documents);
 foreach ($oldPdfPaths as $oldPdfPath) {
     if (!in_array(basename($oldPdfPath), $currentPdfNames, true)) {
@@ -450,6 +451,7 @@ foreach ($documents as $document) {
 $package = [
     'id' => $packageId,
     'driverId' => $driverId,
+    'trainingId' => $trainingId,
     'driverName' => $driverName,
     'created' => $created,
     'updated' => $now,
@@ -465,7 +467,7 @@ $package = [
     'selectedItems' => $selectedItems
 ];
 $packageWrite = file_put_contents(
-    $packageDir . '/paket.json',
+    lehrfahrer_tenant_path($companyId, 'packages', $packageId . '/paket.json', true),
     json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
 );
 if ($packageWrite === false) {
@@ -477,11 +479,12 @@ if ($packageWrite === false) {
 $zipAvailable = class_exists('ZipArchive');
 if ($zipAvailable) {
     $zip = new ZipArchive();
-    $zipPath = $packageDir . '/paket.zip';
+    $zipPath = lehrfahrer_tenant_path($companyId, 'packages', $packageId . '/paket.zip');
     if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
         $zip->addFile($packageDir . '/paket.json', 'paket.json');
-        foreach (glob($packageDir . '/*.pdf') ?: [] as $pdfFile) {
-            $zip->addFile($pdfFile, basename($pdfFile));
+        foreach ($documents as $document) {
+            $pdfFile = lehrfahrer_personnel_document_file($companyId, $packageId, $document['file']);
+            if ($pdfFile !== null && is_file($pdfFile)) $zip->addFile($pdfFile, $document['file']);
         }
         $zip->close();
     }

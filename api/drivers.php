@@ -1,13 +1,11 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-require_once __DIR__ . '/_private_storage.php';
+require_once __DIR__ . '/_tenant_personnel_storage.php';
 $driverMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-lehrfahrer_api_authorize($driverMethod === 'GET' ? 'drivers.read' : 'drivers.manage', $driverMethod !== 'GET', true);
+$companyId = lehrfahrer_personnel_authorize($driverMethod === 'GET' ? 'drivers.read' : 'drivers.manage', $driverMethod !== 'GET');
 
-$dataDir = lehrfahrer_private_storage_directory('personnel');
-$dataFile = $dataDir . '/drivers.json';
-lehrfahrer_migrate_private_file(dirname(__DIR__) . '/data/drivers.json', $dataFile);
+$dataDir = lehrfahrer_tenant_area($companyId, 'drivers', true);
+$dataFile = lehrfahrer_personnel_driver_file($companyId, true);
 
 function driverText($value, int $maxLength = 200): string {
     $text = trim((string)$value);
@@ -39,11 +37,12 @@ function normalizeDriver(array $driver): array {
     return $driver;
 }
 
-function saveDrivers(string $directory, string $file, array $drivers): bool {
-    if (!is_dir($directory) && !mkdir($directory, 0775, true)) return false;
+function saveDrivers(string $companyId, string $directory, string $file, array $drivers): bool {
+    if (!is_dir($directory)) return false;
     $json = json_encode(array_values($drivers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) return false;
     $tempFile = $file . '.tmp';
+    lehrfahrer_tenant_path($companyId, 'drivers', basename($tempFile));
     if (file_put_contents($tempFile, $json, LOCK_EX) === false) return false;
     if (@rename($tempFile, $file)) return true;
     $written = file_put_contents($file, $json, LOCK_EX) !== false;
@@ -51,7 +50,7 @@ function saveDrivers(string $directory, string $file, array $drivers): bool {
     return $written;
 }
 
-if (!is_file($dataFile) && !saveDrivers($dataDir, $dataFile, [])) {
+if (!is_file($dataFile) && !saveDrivers($companyId, $dataDir, $dataFile, [])) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Fahrerliste konnte nicht angelegt werden.'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -131,7 +130,7 @@ if ($action === 'create' || $action === 'update') {
     exit;
 }
 
-if (!saveDrivers($dataDir, $dataFile, $drivers)) {
+if (!saveDrivers($companyId, $dataDir, $dataFile, $drivers)) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Fahrerliste konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
     exit;

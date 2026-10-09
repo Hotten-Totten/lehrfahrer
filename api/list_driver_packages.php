@@ -1,14 +1,13 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_driver_packages.php';
-lehrfahrer_api_authorize('packages.read', false, true);
+$companyId = lehrfahrer_personnel_authorize('packages.read');
 
-$root = driverPackageRoot();
+$root = driverPackageRoot($companyId);
 $packages = [];
 
 if (is_dir($root)) {
-    foreach (glob($root . '/*/*/paket.json') ?: [] as $packageFile) {
+    foreach (driverPackageFiles($companyId) as $packageFile) {
         $data = json_decode((string)@file_get_contents($packageFile), true);
         if (!is_array($data)) continue;
 
@@ -44,7 +43,7 @@ if (is_dir($root)) {
         }
 
         $packages[] = [
-            'id' => trim((string)($data['id'] ?? '')) ?: driverPackageLegacyId($packageFile),
+            'id' => trim((string)($data['id'] ?? '')),
             'driverName' => trim((string)($data['driverName'] ?? '')),
             'created' => trim((string)($data['created'] ?? ($data['createdAt'] ?? ''))) ?: date('c', (int)filemtime($packageFile)),
             'updated' => trim((string)($data['updated'] ?? ($data['createdAt'] ?? ''))) ?: date('c', (int)filemtime($packageFile)),

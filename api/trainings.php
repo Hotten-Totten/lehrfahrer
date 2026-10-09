@@ -1,12 +1,10 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-require_once __DIR__ . '/_private_storage.php';
+require_once __DIR__ . '/_tenant_personnel_storage.php';
 $trainingMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-lehrfahrer_api_authorize($trainingMethod === 'GET' ? 'trainings.read' : 'trainings.manage', $trainingMethod !== 'GET', true);
+$companyId = lehrfahrer_personnel_authorize($trainingMethod === 'GET' ? 'trainings.read' : 'trainings.manage', $trainingMethod !== 'GET');
 
-$trainingDir = lehrfahrer_private_storage_directory('trainings');
-lehrfahrer_migrate_private_files(dirname(__DIR__) . '/data/trainings', $trainingDir, 'training_*.json');
+$trainingDir = lehrfahrer_tenant_area($companyId, 'trainings', true);
 
 function trainingText($value, int $maxLength = 500): string {
     $text = trim((string)$value);
@@ -20,6 +18,7 @@ function trainingLoadAll(string $directory): array {
     if (!is_dir($directory)) return [];
     $trainings = [];
     foreach (glob($directory . '/training_*.json') ?: [] as $file) {
+        if (is_link($file)) continue;
         $data = json_decode((string)@file_get_contents($file), true);
         if (!is_array($data)) continue;
         $data['routes'] = trainingNormalizeRoutes(is_array($data['routes'] ?? null) ? $data['routes'] : []);
@@ -35,6 +34,7 @@ function trainingLoadAll(string $directory): array {
 function trainingNextId(string $directory): string {
     $max = 0;
     foreach (glob($directory . '/training_*.json') ?: [] as $file) {
+        if (is_link($file)) continue;
         if (preg_match('/training_(\d{6})\.json$/', basename($file), $match)) {
             $max = max($max, (int)$match[1]);
         }
@@ -48,6 +48,12 @@ function trainingSanitizeStatus(string $status): string {
 
 function trainingRouteItem($item): array {
     if (!is_array($item)) return [];
+    $routeQuery = http_build_query([
+        'city' => trainingText($item['city'] ?? '', 120),
+        'line' => trainingText($item['fileBase'] ?? '', 220),
+        'lineFolder' => trainingText($item['lineFolder'] ?? '', 160),
+        'categoryFolder' => trainingText($item['categoryFolder'] ?? '', 160),
+    ]);
     return [
         'city' => trainingText($item['city'] ?? '', 120),
         'lineFolder' => trainingText($item['lineFolder'] ?? '', 160),
@@ -58,10 +64,10 @@ function trainingRouteItem($item): array {
         'directionName' => trainingText($item['directionName'] ?? '', 240),
         'variantName' => trainingText($item['variantName'] ?? '', 180),
         'variantCategory' => trainingText($item['variantCategory'] ?? 'Standard', 160),
-        'jsonPath' => trainingText($item['jsonPath'] ?? '', 260),
-        'pdfPath' => trainingText($item['pdfPath'] ?? '', 260),
-        'gpxPath' => trainingText($item['gpxPath'] ?? '', 260),
-        'routeStatus' => in_array(($item['routeStatus'] ?? 'open'), ['open', 'completed'], true) ? $item['routeStatus'] : 'open',
+        'jsonPath' => 'api/download_line_json.php?' . $routeQuery,
+        'pdfPath' => 'api/download_line_pdf.php?' . $routeQuery,
+        'gpxPath' => 'api/download_line_gpx.php?' . $routeQuery,
+        'routeStatus' => in_array(($item['routeStatus'] ?? 'open'), ['open', 'completed'], true) ? ($item['routeStatus'] ?? 'open') : 'open',
         'completedAt' => trainingText($item['completedAt'] ?? '', 80),
     ];
 }
@@ -77,11 +83,12 @@ function trainingNormalizeRoutes(array $routes): array {
     }, $routes));
 }
 
-function trainingSave(string $directory, string $file, array $training): bool {
-    if (!is_dir($directory) && !mkdir($directory, 0775, true)) return false;
+function trainingSave(string $companyId, string $directory, string $file, array $training): bool {
+    if (!is_dir($directory)) return false;
     $json = json_encode($training, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) return false;
     $tempFile = $file . '.tmp';
+    lehrfahrer_tenant_path($companyId, 'trainings', basename($tempFile));
     if (file_put_contents($tempFile, $json, LOCK_EX) === false) return false;
     if (@rename($tempFile, $file)) return true;
     $written = file_put_contents($file, $json, LOCK_EX) !== false;
@@ -89,13 +96,13 @@ function trainingSave(string $directory, string $file, array $training): bool {
     return $written;
 }
 
-function trainingFileForId(string $directory, string $trainingId): string {
+function trainingFileForId(string $companyId, string $trainingId): string {
     if (!preg_match('/^training_\d{6}$/', $trainingId)) return '';
-    return $directory . '/' . $trainingId . '.json';
+    return lehrfahrer_personnel_training_file($companyId, $trainingId) ?? '';
 }
 
-function trainingLoadById(string $directory, string $trainingId): ?array {
-    $file = trainingFileForId($directory, $trainingId);
+function trainingLoadById(string $companyId, string $trainingId): ?array {
+    $file = trainingFileForId($companyId, $trainingId);
     if ($file === '' || !is_file($file)) return null;
     $data = json_decode((string)@file_get_contents($file), true);
     if (!is_array($data)) return null;
@@ -144,7 +151,7 @@ $action = trainingText($input['action'] ?? '', 40);
 if ($action === 'updateStatus') {
     $trainingId = trainingText($input['trainingId'] ?? '', 80);
     $targetStatus = trainingSanitizeStatus((string)($input['status'] ?? ''));
-    $training = trainingLoadById($trainingDir, $trainingId);
+    $training = trainingLoadById($companyId, $trainingId);
     if ($training === null) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
@@ -163,8 +170,8 @@ if ($action === 'updateStatus') {
     if ($targetStatus === 'completed') {
         $training['completed'] = $now;
     }
-    $file = trainingFileForId($trainingDir, $trainingId);
-    if ($file === '' || !trainingSave($trainingDir, $file, $training)) {
+    $file = trainingFileForId($companyId, $trainingId);
+    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht aktualisiert werden.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -176,7 +183,7 @@ if ($action === 'updateStatus') {
 if ($action === 'completeRoute') {
     $trainingId = trainingText($input['trainingId'] ?? '', 80);
     $routeIndex = (int)($input['routeIndex'] ?? -1);
-    $training = trainingLoadById($trainingDir, $trainingId);
+    $training = trainingLoadById($companyId, $trainingId);
     if ($training === null) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
@@ -198,8 +205,8 @@ if ($action === 'completeRoute') {
     $training['updated'] = $now;
     $training['routes'][$routeIndex]['routeStatus'] = 'completed';
     $training['routes'][$routeIndex]['completedAt'] = $now;
-    $file = trainingFileForId($trainingDir, $trainingId);
-    if ($file === '' || !trainingSave($trainingDir, $file, $training)) {
+    $file = trainingFileForId($companyId, $trainingId);
+    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Linienstatus konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -221,6 +228,20 @@ if (!$routes) {
     exit;
 }
 
+$driverId = trainingText($input['driverId'] ?? '', 120);
+if (lehrfahrer_personnel_driver($companyId, $driverId) === null) {
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'Fahrer nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+foreach ($routes as $route) {
+    if (lehrfahrer_personnel_route_file($companyId, $route) === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Linie nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
 $trainingId = trainingNextId($trainingDir);
 $now = date('c');
 $training = [
@@ -228,7 +249,7 @@ $training = [
     'created' => $now,
     'updated' => $now,
     'status' => trainingSanitizeStatus($input['status'] ?? 'created'),
-    'driverId' => trainingText($input['driverId'] ?? '', 120),
+    'driverId' => $driverId,
     'driverName' => trainingText($input['driverName'] ?? '', 200),
     'trainer' => trainingText($input['trainer'] ?? '', 200),
     'company' => trainingText($input['company'] ?? '', 200),
@@ -238,8 +259,8 @@ $training = [
     'completed' => null,
 ];
 
-$file = $trainingDir . '/' . $trainingId . '.json';
-if (!trainingSave($trainingDir, $file, $training)) {
+$file = lehrfahrer_personnel_training_file($companyId, $trainingId, true);
+if (!trainingSave($companyId, $trainingDir, $file, $training)) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
     exit;
