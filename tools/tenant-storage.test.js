@@ -9,6 +9,11 @@ const projectRoot = path.resolve(__dirname, '..');
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'lehrfahrer-tenant-storage-'));
 const webroot = path.join(sandbox, 'webroot');
 const privateRoot = path.join(sandbox, 'private');
+const companyA = 'cmp_' + 'a'.repeat(32);
+const companyB = 'cmp_' + 'b'.repeat(32);
+const companyC = 'cmp_' + 'c'.repeat(32);
+const companyD = 'cmp_' + 'd'.repeat(32);
+const companyE = 'cmp_' + 'e'.repeat(32);
 fs.mkdirSync(webroot);
 after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
 
@@ -44,21 +49,24 @@ function outside(root, candidate) {
 test('gueltige IDs liefern getrennte Roots ausserhalb des Webroots', () => {
   const result = runPhp(`
     echo json_encode([
-      lehrfahrer_tenant_root(1),
-      lehrfahrer_tenant_root('2'),
-      lehrfahrer_tenant_path(1, 'lines', 'route-1.json')
+      lehrfahrer_tenant_root(${phpString(companyA)}),
+      lehrfahrer_tenant_root(${phpString(companyB)}),
+      lehrfahrer_tenant_path(${phpString(companyA)}, 'lines', 'route-1.json')
     ]);
   `);
-  assert.equal(path.resolve(result[0]), path.join(privateRoot, 'companies', '1'));
-  assert.equal(path.resolve(result[1]), path.join(privateRoot, 'companies', '2'));
-  assert.equal(path.resolve(result[2]), path.join(privateRoot, 'companies', '1', 'lines', 'route-1.json'));
+  assert.equal(path.resolve(result[0]), path.join(privateRoot, 'companies', companyA));
+  assert.equal(path.resolve(result[1]), path.join(privateRoot, 'companies', companyB));
+  assert.equal(path.resolve(result[2]), path.join(privateRoot, 'companies', companyA, 'lines', 'route-1.json'));
   assert.ok(outside(webroot, result[0]));
   assert.equal(fs.existsSync(path.join(privateRoot, 'companies')), false);
 });
 
 test('ungueltige und ueberlaufende company_id werden abgewiesen', () => {
   const result = runPhp(`
-    $values = [0, -1, '0', '01', '1/2', '../2', '2%2f3', '999999999999999999999999', 'abc'];
+    $values = ['0', '01', 'cmp_', 'cmp_' . str_repeat('a', 31),
+      'cmp_' . str_repeat('a', 33), 'CMP_' . str_repeat('a', 32),
+      'cmp_' . str_repeat('g', 32), 'cmp_' . str_repeat('a', 32) . '/..',
+      '../' . str_repeat('a', 32), 'cmp_%61', 'cmp_%2561', 'abc'];
     $rejected = [];
     foreach ($values as $value) {
       try { lehrfahrer_tenant_root($value); $rejected[] = false; }
@@ -66,13 +74,13 @@ test('ungueltige und ueberlaufende company_id werden abgewiesen', () => {
     }
     echo json_encode($rejected);
   `);
-  assert.deepEqual(result, Array(9).fill(true));
+  assert.deepEqual(result, Array(12).fill(true));
 });
 
 test('nur die neun festgelegten Bereiche sind erlaubt', () => {
   const result = runPhp(`
     $areas = LEHRFAHRER_TENANT_AREAS;
-    try { lehrfahrer_tenant_area(1, 'other'); $rejected = false; }
+    try { lehrfahrer_tenant_area(${phpString(companyA)}, 'other'); $rejected = false; }
     catch (InvalidArgumentException $error) { $rejected = true; }
     echo json_encode([$areas, $rejected]);
   `);
@@ -95,7 +103,7 @@ test('Traversal, absolute und kodierte Pfade sowie Sonderzeichen werden abgewies
     $paths[] = "a\\0b";
     $rejected = [];
     foreach ($paths as $relative) {
-      try { lehrfahrer_tenant_path(1, 'lines', $relative); $rejected[] = false; }
+      try { lehrfahrer_tenant_path(${phpString(companyA)}, 'lines', $relative); $rejected[] = false; }
       catch (InvalidArgumentException $error) { $rejected[] = true; }
     }
     echo json_encode($rejected);
@@ -106,12 +114,12 @@ test('Traversal, absolute und kodierte Pfade sowie Sonderzeichen werden abgewies
 test('Tenant A kann weder Tenant B noch die Root-Grenze aufloesen', () => {
   const result = runPhp(`
     echo json_encode([
-      lehrfahrer_tenant_path(1, 'lines', 'nested/route.json'),
-      lehrfahrer_tenant_path(2, 'lines', 'nested/route.json')
+      lehrfahrer_tenant_path(${phpString(companyA)}, 'lines', 'nested/route.json'),
+      lehrfahrer_tenant_path(${phpString(companyB)}, 'lines', 'nested/route.json')
     ]);
   `);
-  const tenantA = path.join(privateRoot, 'companies', '1');
-  const tenantB = path.join(privateRoot, 'companies', '2');
+  const tenantA = path.join(privateRoot, 'companies', companyA);
+  const tenantB = path.join(privateRoot, 'companies', companyB);
   assert.ok(!outside(tenantA, result[0]));
   assert.ok(!outside(tenantB, result[1]));
   assert.ok(outside(tenantA, result[1]));
@@ -121,15 +129,15 @@ test('Tenant A kann weder Tenant B noch die Root-Grenze aufloesen', () => {
 test('Verzeichnisse werden nur auf Anforderung und privat angelegt', () => {
   const result = runPhp(`
     echo json_encode([
-      lehrfahrer_tenant_root(3, true),
-      lehrfahrer_tenant_area(3, 'documents', true),
-      lehrfahrer_tenant_ensure_directory(3, 'documents', 'nested/deep'),
-      lehrfahrer_tenant_path(3, 'documents', 'another/file.pdf', true)
+      lehrfahrer_tenant_root(${phpString(companyC)}, true),
+      lehrfahrer_tenant_area(${phpString(companyC)}, 'documents', true),
+      lehrfahrer_tenant_ensure_directory(${phpString(companyC)}, 'documents', 'nested/deep'),
+      lehrfahrer_tenant_path(${phpString(companyC)}, 'documents', 'another/file.pdf', true)
     ]);
   `);
   for (const directory of [result[0], result[1], result[2], path.dirname(result[3])]) {
     assert.ok(fs.statSync(directory).isDirectory());
-    assert.ok(!outside(path.join(privateRoot, 'companies', '3'), directory));
+    assert.ok(!outside(path.join(privateRoot, 'companies', companyC), directory));
     if (process.platform !== 'win32') {
       assert.equal(fs.statSync(directory).mode & 0o777, 0o700);
     }
@@ -138,8 +146,8 @@ test('Verzeichnisse werden nur auf Anforderung und privat angelegt', () => {
 });
 
 test('Symlinks auf fremde Roots werden auch bei vorhandenen Dateien abgewiesen', t => {
-  const tenantA = path.join(privateRoot, 'companies', '4', 'lines');
-  const tenantB = path.join(privateRoot, 'companies', '5', 'lines');
+  const tenantA = path.join(privateRoot, 'companies', companyD, 'lines');
+  const tenantB = path.join(privateRoot, 'companies', companyE, 'lines');
   fs.mkdirSync(tenantA, { recursive: true });
   fs.mkdirSync(tenantB, { recursive: true });
   const link = path.join(tenantA, 'escape');
@@ -150,7 +158,7 @@ test('Symlinks auf fremde Roots werden auch bei vorhandenen Dateien abgewiesen',
     return;
   }
   const result = runPhp(`
-    try { lehrfahrer_tenant_path(4, 'lines', 'escape/secret.json'); $blocked = false; }
+    try { lehrfahrer_tenant_path(${phpString(companyD)}, 'lines', 'escape/secret.json'); $blocked = false; }
     catch (RuntimeException $error) { $blocked = true; }
     echo json_encode($blocked);
   `);

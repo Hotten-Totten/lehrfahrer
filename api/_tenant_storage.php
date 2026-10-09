@@ -11,13 +11,9 @@ const LEHRFAHRER_TENANT_AREAS = [
  * The company ID must come from authenticated server-side context, never from
  * a request parameter passed through without authorization.
  */
-function lehrfahrer_tenant_company_id(int|string $companyId): string {
-    if (is_int($companyId)) {
-        if ($companyId < 1) throw new InvalidArgumentException('Ungueltige Gesellschafts-ID.');
-        return (string)$companyId;
-    }
-    if (!preg_match('/^[1-9][0-9]*$/D', $companyId)
-        || (string)(int)$companyId !== $companyId) {
+function lehrfahrer_tenant_company_id(string $companyId): string {
+    // LehrfahrerCompanyRepository generates cmp_ + 16 random bytes as lowercase hex.
+    if (!preg_match('/^cmp_[0-9a-f]{32}$/D', $companyId)) {
         throw new InvalidArgumentException('Ungueltige Gesellschafts-ID.');
     }
     return $companyId;
@@ -80,7 +76,7 @@ function lehrfahrer_tenant_walk_directory(string $base, array $segments, bool $c
     return $current;
 }
 
-function lehrfahrer_tenant_root(int|string $companyId, bool $create = false): string {
+function lehrfahrer_tenant_root(string $companyId, bool $create = false): string {
     $id = lehrfahrer_tenant_company_id($companyId);
     return lehrfahrer_tenant_walk_directory(
         lehrfahrer_private_storage_root(),
@@ -89,7 +85,7 @@ function lehrfahrer_tenant_root(int|string $companyId, bool $create = false): st
     );
 }
 
-function lehrfahrer_tenant_area(int|string $companyId, string $area, bool $create = false): string {
+function lehrfahrer_tenant_area(string $companyId, string $area, bool $create = false): string {
     if (!in_array($area, LEHRFAHRER_TENANT_AREAS, true)) {
         throw new InvalidArgumentException('Unbekannter Tenant-Bereich.');
     }
@@ -101,7 +97,7 @@ function lehrfahrer_tenant_area(int|string $companyId, string $area, bool $creat
 }
 
 function lehrfahrer_tenant_path(
-    int|string $companyId,
+    string $companyId,
     string $area,
     string $relative,
     bool $createParentDirectories = false
@@ -116,7 +112,7 @@ function lehrfahrer_tenant_path(
 }
 
 function lehrfahrer_tenant_ensure_directory(
-    int|string $companyId,
+    string $companyId,
     string $area,
     string $relative
 ): string {
