@@ -6,6 +6,8 @@ const vm = require('node:vm');
 
 const projectRoot = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(projectRoot, 'app/js/app.js'), 'utf8');
+const appHtml = fs.readFileSync(path.join(projectRoot, 'app/index.html'), 'utf8');
+const appCss = fs.readFileSync(path.join(projectRoot, 'app/css/app.css'), 'utf8');
 const routerSource = fs.readFileSync(path.join(projectRoot, 'app/js/local-bus-router.js'), 'utf8');
 const sandbox = {};
 vm.createContext(sandbox);
@@ -229,9 +231,11 @@ test('normale aktive Navigation nutzt dieselbe einmalige Cue-Logik', () => {
   assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 290), false);
   assert.deepEqual(sandbox.navWarningAudioContext.frequencies, [880, 1040]);
 
-  configureCueSandbox({ enabled: false });
+  const toggle = configureCueSandbox({ enabled: false });
   vm.runInContext('resetBusRerouteManeuverAudio(navLineManeuverAudioState)', sandbox);
   assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), false);
+  toggle.checked = true;
+  assert.equal(sandbox.maybePlayLineNavigationManeuverCue(turn, 300), true);
 
   configureCueSandbox();
   sandbox.navActive = false;
@@ -365,9 +369,12 @@ test('Manöver-Audioeinstellung ist standardmäßig an und wird gespeichert', ()
   toggle.checked = false;
   handlers.change();
   assert.equal(values.get('lehrfahrer-nav-maneuver-beeps'), '0');
-  volume.value = '50';
-  volumeHandlers.input();
-  assert.equal(values.get('lehrfahrer-nav-maneuver-volume'), '50');
+  for (const value of ['0', '50', '100']) {
+    volume.value = value;
+    volumeHandlers.input();
+    assert.equal(values.get('lehrfahrer-nav-maneuver-volume'), value);
+    assert.equal(volumeValue.textContent, `${value} %`);
+  }
 
   const restoredVolume = { value: '', addEventListener() {} };
   sandbox.document = { getElementById: id => ({
@@ -377,7 +384,28 @@ test('Manöver-Audioeinstellung ist standardmäßig an und wird gespeichert', ()
   }[id] || null) };
   sandbox.initializeNavManeuverBeepsSetting();
   assert.equal(toggle.checked, false);
-  assert.equal(restoredVolume.value, '50');
+  assert.equal(restoredVolume.value, '100');
+});
+
+test('Abbiegealarmierung ist im allgemeinen Tablet-Einstellungsdialog sichtbar', () => {
+  const generalSettings = appHtml.slice(
+    appHtml.indexOf('<div id="settingsOverlay"'),
+    appHtml.indexOf('<div id="navMenuOverlay"')
+  );
+  const navigationMenu = appHtml.slice(appHtml.indexOf('<div id="navMenuOverlay"'));
+
+  assert.match(generalSettings, /id="navManeuverSettingsSection"/);
+  assert.match(generalSettings, /id="navManeuverBeepsEnabled"[^>]*checked/);
+  assert.match(generalSettings, /id="navManeuverVolume"[^>]*min="0"[^>]*max="100"[^>]*value="70"/);
+  assert.match(generalSettings, /id="navManeuverVolumeValue"[^>]*>70 %</);
+  assert.doesNotMatch(navigationMenu, /id="navManeuverBeepsEnabled"|id="navManeuverVolume"/);
+  assert.equal((appHtml.match(/id="navManeuverBeepsEnabled"/g) || []).length, 1);
+  assert.equal((appHtml.match(/id="navManeuverVolume"/g) || []).length, 1);
+  assert.match(appCss, /\.nav-maneuver-volume-control[\s\S]*min-height:\s*44px/);
+  assert.match(appSource.slice(
+    appSource.indexOf('function openSettings'),
+    appSource.indexOf('function closeSettings')
+  ), /settingsOverlay\.classList\.remove\('hidden'\)/);
 });
 
 test('Rejoin-Reset löscht Cue-Zustand; OFF-Route-Warnpfad bleibt bestehen', () => {

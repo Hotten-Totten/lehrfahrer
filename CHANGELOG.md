@@ -1,5 +1,10 @@
 # Changelog
 
+## V2.1.063 - 2026-10-09
+- Einstellungen für Abbiegealarmierung jetzt im allgemeinen Einstellungsdialog sichtbar
+- Ein-/Ausschalter und Lautstärkeregler unter „Navigationston“
+- Lautstärkewert mit Prozentanzeige
+
 ## V2.1.062 - 2026-10-08
 - Abbiegealarmierung auf normale Liniennavigation erweitert
 - Unterschiedliche Töne für links, rechts und Kreisverkehr

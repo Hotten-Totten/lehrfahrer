@@ -726,6 +726,50 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 }
 .settings-section a { color: var(--primary); }
 
+.nav-maneuver-volume-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.nav-maneuver-volume-control {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 52px;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+#navManeuverVolume {
+  width: 100%;
+  min-height: 32px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+#navManeuverVolumeValue {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.nav-maneuver-test-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.nav-maneuver-test-buttons button {
+  min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .nav-maneuver-test-buttons { grid-template-columns: 1fr; }
+}
+
 .status-box {
   font-size: 13px;
   background: var(--bg);
