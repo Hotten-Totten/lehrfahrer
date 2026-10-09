@@ -961,12 +961,11 @@ function renderDriverPackageDetail(container, packageData) {
       description.textContent = value;
       info.append(term, description);
     });
-    const link = document.createElement("a");
-    link.href = documentInfo.path;
-    link.target = "_blank";
-    link.rel = "noopener";
+    const link = document.createElement("button");
+    link.type = "button";
     link.className = "driver-documents-open";
     link.textContent = "PDF öffnen";
+    link.addEventListener("click", () => openDriverPackageDocument(packageData.id, documentInfo, link));
     item.append(info, link);
     list.appendChild(item);
   });
@@ -975,6 +974,39 @@ function renderDriverPackageDetail(container, packageData) {
   savedHint.className = "driver-documents-saved-hint";
   savedHint.textContent = "Paketdaten gespeichert";
   container.append(detailHeader, meta, packageInfo, sectionTitle, list, savedHint);
+}
+
+async function openDriverPackageDocument(packageId, documentInfo, button) {
+  const documentName = String(documentInfo?.file || "").trim();
+  if (!packageId || !documentName) {
+    alert("Dokument konnte nicht geöffnet werden.");
+    return;
+  }
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      `api/download_driver_package.php?id=${encodeURIComponent(packageId)}&document=${encodeURIComponent(documentName)}`,
+      { headers: withApiAuthHeaders({}) }
+    );
+    if (!response.ok) {
+      const errorResult = await response.json().catch(() => ({}));
+      throw new Error(errorResult.error || "Dokument konnte nicht geöffnet werden.");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    alert(error.message || "Dokument konnte nicht geöffnet werden.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function downloadDriverPackageZip(packageId, button, statusElement = null) {

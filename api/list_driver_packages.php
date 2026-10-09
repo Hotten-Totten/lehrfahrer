@@ -12,7 +12,6 @@ if (is_dir($root)) {
         $data = json_decode((string)@file_get_contents($packageFile), true);
         if (!is_array($data)) continue;
 
-        $relativePath = str_replace('\\', '/', substr($packageFile, strlen(dirname(__DIR__)) + 1));
         $documents = [];
         foreach (($data['documents'] ?? []) as $document) {
             if (!is_array($document)) continue;
@@ -24,7 +23,8 @@ if (is_dir($root)) {
                 'variantCategory' => trim((string)($document['variantCategory'] ?? '')),
                 'validFrom' => trim((string)($document['validFrom'] ?? '')),
                 'validUntil' => trim((string)($document['validUntil'] ?? '')),
-                'path' => trim((string)($document['path'] ?? ''))
+                'file' => basename(trim((string)($document['file'] ?? ($document['path'] ?? '')))),
+                'path' => ''
             ];
         }
 
@@ -57,7 +57,7 @@ if (is_dir($root)) {
             'validity' => array_values($validity),
             'documents' => $documents,
             'selectedItems' => is_array($data['selectedItems'] ?? null) ? $data['selectedItems'] : [],
-            'packagePath' => $relativePath
+            'packagePath' => ''
         ];
     }
 }

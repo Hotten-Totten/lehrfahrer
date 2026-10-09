@@ -1,7 +1,13 @@
 <?php
 
+require_once __DIR__ . '/_private_storage.php';
+
 function driverPackageRoot(): string {
-    return dirname(__DIR__) . '/fahrerunterlagen';
+    static $root = null;
+    if (is_string($root)) return $root;
+    $root = lehrfahrer_private_storage_directory('fahrerunterlagen');
+    lehrfahrer_migrate_private_tree(dirname(__DIR__) . '/fahrerunterlagen', $root);
+    return $root;
 }
 
 function driverPackageLegacyId(string $packageFile): string {

@@ -1,10 +1,12 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_private_storage.php';
 lehrfahrer_require_write_auth();
 
-$dataDir = dirname(__DIR__) . '/data';
+$dataDir = lehrfahrer_private_storage_directory('personnel');
 $dataFile = $dataDir . '/drivers.json';
+lehrfahrer_migrate_private_file(dirname(__DIR__) . '/data/drivers.json', $dataFile);
 
 function driverText($value, int $maxLength = 200): string {
     $text = trim((string)$value);

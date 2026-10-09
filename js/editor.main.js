@@ -280,12 +280,12 @@ function askTextInputModal({ title, message, defaultValue = "", placeholder = ""
     box.className = "save-confirm-box";
     box.innerHTML = `
       <div class="save-confirm-header">
-        <h3>${title || "Eingabe"}</h3>
+        <h3 id="promptFallbackTitle"></h3>
       </div>
       <div class="save-confirm-body">
         <div class="save-confirm-row" style="display:block;border-bottom:none;padding-bottom:10px;">
-          <div style="font-size:13px;color:#475569;margin-bottom:8px;">${message || ""}</div>
-          <input id="promptFallbackInput" class="prompt-fallback-input" type="text" placeholder="${placeholder || ""}" />
+          <div id="promptFallbackMessage" style="font-size:13px;color:#475569;margin-bottom:8px;"></div>
+          <input id="promptFallbackInput" class="prompt-fallback-input" type="text" />
         </div>
       </div>
       <div class="save-confirm-actions">
@@ -297,7 +297,10 @@ function askTextInputModal({ title, message, defaultValue = "", placeholder = ""
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
+    box.querySelector("#promptFallbackTitle").textContent = title || "Eingabe";
+    box.querySelector("#promptFallbackMessage").textContent = message || "";
     const input = box.querySelector("#promptFallbackInput");
+    input.placeholder = placeholder || "";
     const okBtn = box.querySelector("#promptFallbackOkBtn");
     const cancelBtn = box.querySelector("#promptFallbackCancelBtn");
 

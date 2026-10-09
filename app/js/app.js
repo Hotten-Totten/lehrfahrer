@@ -1427,11 +1427,19 @@ async function showDownloadCenterModal() {
     
     const label = document.createElement('div');
     label.style.cssText = 'flex: 1;';
-    label.innerHTML = `
-      <div style="font-weight: 600; font-size: 14px;">${line.lineName}</div>
-      <div style="font-size: 12px; color: var(--text-muted);">${line.routeName} • ${line.city}</div>
-      ${isCached ? '<div style="font-size: 11px; color: var(--accent);">✓ Schon geladen</div>' : ''}
-    `;
+    const lineName = document.createElement('div');
+    lineName.style.cssText = 'font-weight: 600; font-size: 14px;';
+    lineName.textContent = String(line.lineName || '');
+    const routeDetails = document.createElement('div');
+    routeDetails.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+    routeDetails.textContent = `${String(line.routeName || '')} • ${String(line.city || '')}`;
+    label.append(lineName, routeDetails);
+    if (isCached) {
+      const cachedStatus = document.createElement('div');
+      cachedStatus.style.cssText = 'font-size: 11px; color: var(--accent);';
+      cachedStatus.textContent = '✓ Schon geladen';
+      label.appendChild(cachedStatus);
+    }
     
     lineItem.appendChild(checkbox);
     lineItem.appendChild(label);
@@ -2647,10 +2655,13 @@ async function displayAvailableLines() {
 
       const textWrap = document.createElement('div');
       textWrap.style.flex = '1';
-      textWrap.innerHTML = `
-        <div style="font-weight: 600; font-size: 14px;">${lineName}</div>
-        <div style="font-size: 12px; color: var(--text-muted);">${variantCategory} -> ${variantName}</div>
-      `;
+      const lineNameEl = document.createElement('div');
+      lineNameEl.style.cssText = 'font-weight: 600; font-size: 14px;';
+      lineNameEl.textContent = String(lineName || '');
+      const variantEl = document.createElement('div');
+      variantEl.style.cssText = 'font-size: 12px; color: var(--text-muted);';
+      variantEl.textContent = `${String(variantCategory || '')} -> ${String(variantName || '')}`;
+      textWrap.append(lineNameEl, variantEl);
       if (description) {
         const descriptionEl = document.createElement('div');
         descriptionEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.35;';

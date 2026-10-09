@@ -403,7 +403,6 @@ foreach ($input['items'] as $item) {
     if (file_put_contents($packageDir . '/' . $pdfName, driverDocBuildPdf($data, $driverName)) === false) {
         continue;
     }
-    $relativePath = 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/' . $pdfName;
     $documents[] = [
         'lineName' => driverDocValue($data, 'lineName'),
         'routeName' => driverDocValue($data, 'routeName'),
@@ -412,7 +411,8 @@ foreach ($input['items'] as $item) {
         'variantCategory' => driverDocValue($data, 'variantCategory'),
         'validFrom' => driverDocValue($data, 'validFrom'),
         'validUntil' => driverDocValue($data, 'validUntil'),
-        'path' => $relativePath
+        'file' => $pdfName,
+        'path' => ''
     ];
 }
 
@@ -490,6 +490,6 @@ if ($zipAvailable) {
 echo json_encode([
     'ok' => true,
     'package' => $package,
-    'packagePath' => 'fahrerunterlagen/' . $driverFolder . '/' . basename($packageDir) . '/paket.json',
+    'packagePath' => '',
     'zipAvailable' => $zipAvailable
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

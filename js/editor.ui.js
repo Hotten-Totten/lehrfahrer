@@ -110,16 +110,56 @@ function showSaveToast(info) {
     ? new Date(info.savedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : "";
 
-  const badges = ['<span class="toast-badge">JSON</span>'];
-  if (info.gpxSaved) badges.push('<span class="toast-badge">GPX</span>');
-  if (info.pdfSaved) badges.push('<span class="toast-badge">PDF</span>');
+  toast.replaceChildren();
+  const title = document.createElement("div");
+  title.className = "toast-title";
+  title.textContent = "✓ Gespeichert";
+  toast.appendChild(title);
 
-  toast.innerHTML =
-    '<div class="toast-title">&#10003; Gespeichert</div>' +
-    '<div class="toast-row"><span class="toast-label">Datei:</span> ' + (info.fileBase || "–") + '</div>' +
-    '<div class="toast-row"><span class="toast-label">Ort:</span> ' + (info.city || "–") + '</div>' +
-    '<div class="toast-row"><span class="toast-label">Haltestellen:</span> ' + (info.stopCount ?? "–") + ' &nbsp;|&nbsp; <span class="toast-label">Punkte:</span> ' + (info.routePointCount ?? "–") + '</div>' +
-    '<div class="toast-row" style="margin-top:4px">' + badges.join('') + (time ? '<span style="opacity:.65;font-size:11px;margin-left:4px">' + time + '</span>' : '') + '</div>';
+  const appendRow = (label, value) => {
+    const row = document.createElement("div");
+    row.className = "toast-row";
+    const labelEl = document.createElement("span");
+    labelEl.className = "toast-label";
+    labelEl.textContent = `${label}:`;
+    row.append(labelEl, document.createTextNode(` ${String(value ?? "–")}`));
+    toast.appendChild(row);
+  };
+  appendRow("Datei", info.fileBase || "–");
+  appendRow("Ort", info.city || "–");
+
+  const counts = document.createElement("div");
+  counts.className = "toast-row";
+  const stopsLabel = document.createElement("span");
+  stopsLabel.className = "toast-label";
+  stopsLabel.textContent = "Haltestellen:";
+  const pointsLabel = document.createElement("span");
+  pointsLabel.className = "toast-label";
+  pointsLabel.textContent = "Punkte:";
+  counts.append(
+    stopsLabel,
+    document.createTextNode(` ${String(info.stopCount ?? "–")}  |  `),
+    pointsLabel,
+    document.createTextNode(` ${String(info.routePointCount ?? "–")}`)
+  );
+  toast.appendChild(counts);
+
+  const badges = document.createElement("div");
+  badges.className = "toast-row";
+  badges.style.marginTop = "4px";
+  ["JSON", info.gpxSaved ? "GPX" : "", info.pdfSaved ? "PDF" : ""].filter(Boolean).forEach(text => {
+    const badge = document.createElement("span");
+    badge.className = "toast-badge";
+    badge.textContent = text;
+    badges.appendChild(badge);
+  });
+  if (time) {
+    const timeEl = document.createElement("span");
+    timeEl.style.cssText = "opacity:.65;font-size:11px;margin-left:4px";
+    timeEl.textContent = time;
+    badges.appendChild(timeEl);
+  }
+  toast.appendChild(badges);
 
   // Animation
   toast.classList.remove("visible");

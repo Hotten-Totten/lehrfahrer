@@ -1,9 +1,11 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_private_storage.php';
 lehrfahrer_require_write_auth();
 
-$trainingDir = dirname(__DIR__) . '/data/trainings';
+$trainingDir = lehrfahrer_private_storage_directory('trainings');
+lehrfahrer_migrate_private_files(dirname(__DIR__) . '/data/trainings', $trainingDir, 'training_*.json');
 
 function trainingText($value, int $maxLength = 500): string {
     $text = trim((string)$value);

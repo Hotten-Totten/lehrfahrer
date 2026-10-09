@@ -3,16 +3,6 @@ require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_driver_packages.php';
 lehrfahrer_require_write_auth();
 
-if (!class_exists('ZipArchive')) {
-    http_response_code(501);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'ok' => false,
-        'error' => 'ZIP-Erstellung benötigt PHP ZipArchive.'
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
 $package = driverPackageFind(trim((string)($_GET['id'] ?? '')));
 if ($package === null) {
     http_response_code(404);
@@ -31,6 +21,33 @@ if (!is_array($packageData)) {
 }
 
 $packageDir = dirname($packageFile);
+$documentName = basename(trim((string)($_GET['document'] ?? '')));
+if ($documentName !== '') {
+    $documentPath = $packageDir . '/' . $documentName;
+    if (strtolower((string)pathinfo($documentName, PATHINFO_EXTENSION)) !== 'pdf' || !is_file($documentPath)) {
+        http_response_code(404);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'Dokument nicht gefunden.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    header('Content-Type: application/pdf');
+    header('Content-Length: ' . filesize($documentPath));
+    header('Content-Disposition: inline; filename="' . rawurlencode($documentName) . '"; filename*=UTF-8\'\'' . rawurlencode($documentName));
+    header('X-Content-Type-Options: nosniff');
+    readfile($documentPath);
+    exit;
+}
+
+if (!class_exists('ZipArchive')) {
+    http_response_code(501);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => false,
+        'error' => 'ZIP-Erstellung benötigt PHP ZipArchive.'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $zipPath = $packageDir . '/paket.zip';
 if (!is_file($zipPath)) {
     $zip = new ZipArchive();
