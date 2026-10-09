@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.import', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.import', true, true);
 
 function vbb_json_error(int $status, string $message): void {
     http_response_code($status);
@@ -691,15 +691,6 @@ if (!is_array($input)) {
     $input = [];
 }
 
-$cfg = vbb_load_config();
-$requestAccessId = trim(strval($input['accessId'] ?? ''));
-if ($requestAccessId !== '') {
-    $cfg['accessId'] = $requestAccessId;
-}
-if ($cfg['accessId'] === '') {
-    vbb_json_error(400, 'VBB Access-ID fehlt. Bitte im Import-Dialog eingeben oder serverseitig konfigurieren.');
-}
-
 $action = trim(strtolower(strval($input['action'] ?? 'search')));
 $lineQuery = trim(strval($input['lineQuery'] ?? ''));
 $city = trim(strtolower(strval($input['city'] ?? 'cottbus')));
@@ -713,6 +704,19 @@ $effectiveAllDay = ($searchMode === 'variants') ? true : $allDay;
 $window = vbb_build_window($searchDate, $allDay, $searchTimeFrom, $searchTimeTo);
 if ($city === '') {
     $city = 'cottbus';
+}
+try {
+    if (!lehrfahrer_route_city_exists($companyId, $city)) {
+        vbb_json_error(404, 'Ort nicht gefunden.');
+    }
+} catch (InvalidArgumentException $error) {
+    vbb_json_error(404, 'Ort nicht gefunden.');
+}
+$cfg = vbb_load_config();
+$requestAccessId = trim(strval($input['accessId'] ?? ''));
+if ($requestAccessId !== '') $cfg['accessId'] = $requestAccessId;
+if ($cfg['accessId'] === '') {
+    vbb_json_error(400, 'VBB Access-ID fehlt. Bitte im Import-Dialog eingeben oder serverseitig konfigurieren.');
 }
 
 if ($lineQuery === '') {

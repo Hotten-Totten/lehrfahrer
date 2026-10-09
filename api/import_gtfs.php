@@ -1,7 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.import', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.import', true, true);
+define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
 const GTFS_MAX_UPLOAD_BYTES = 262144000;
 const GTFS_MAX_FILTERED_ROUTES = 5000;
@@ -18,18 +19,30 @@ function gtfs_error(int $status, string $message): void {
 }
 
 function gtfs_temp_root(): string {
-    return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'lehrfahrer_gtfs';
+    return lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/sessions');
+}
+
+function gtfs_session_file(string $dir, string $name): string {
+    $token = basename($dir);
+    if (!preg_match('/^[a-f0-9]{32}$/D', $token)) gtfs_error(400, 'Ungueltige GTFS-Sitzung.');
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/sessions/' . $token . '/' . $name);
+}
+
+function gtfs_index_file(string $name): string {
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/index/' . $name);
 }
 
 function gtfs_cleanup_sessions(string $root): void {
     if (!is_dir($root)) return;
     $now = time();
     foreach (glob($root . DIRECTORY_SEPARATOR . '*') ?: [] as $path) {
-        if (!is_dir($path) || $now - (int)@filemtime($path) < GTFS_SESSION_TTL_SECONDS) continue;
+        if (!preg_match('/^[a-f0-9]{32}$/D', basename($path))) continue;
+        if (is_link($path) || !is_dir($path) || $now - (int)@filemtime($path) < GTFS_SESSION_TTL_SECONDS) continue;
         foreach (glob($path . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
-            if (is_file($file)) @unlink($file);
+            if (is_link($file)) continue;
+            if (is_file($file)) @unlink(gtfs_session_file($path, basename($file)));
         }
-        @rmdir($path);
+        @rmdir(lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/sessions/' . basename($path)));
     }
 }
 
@@ -37,7 +50,7 @@ function gtfs_session_dir(string $token): string {
     if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
         gtfs_error(400, 'Ungültige GTFS-Sitzung.');
     }
-    $dir = gtfs_temp_root() . DIRECTORY_SEPARATOR . $token;
+    $dir = lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/sessions/' . $token);
     if (!is_dir($dir)) {
         gtfs_error(410, 'GTFS-Sitzung abgelaufen. ZIP bitte erneut laden.');
     }
@@ -478,15 +491,15 @@ function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel)
     }
     gtfs_cleanup_sessions($root);
     $token = bin2hex(random_bytes(16));
-    $dir = $root . DIRECTORY_SEPARATOR . $token;
-    if (!mkdir($dir, 0700, true)) {
+    $dir = lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/sessions/' . $token);
+    if (!is_dir($dir)) {
         $zip->close();
         gtfs_error(500, 'GTFS-Sitzung kann nicht erstellt werden.');
     }
     $sessionZipPath = $zipPath;
     $sourceType = 'server';
     if ($copyZip) {
-        $sessionZipPath = $dir . DIRECTORY_SEPARATOR . 'feed.zip';
+        $sessionZipPath = gtfs_session_file($dir, 'feed.zip');
         if (!@copy($zipPath, $sessionZipPath)) {
             $zip->close();
             @rmdir($dir);
@@ -502,7 +515,7 @@ function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel)
         'mtime' => (int)@filemtime($sessionZipPath),
     ];
     if (@file_put_contents(
-        $dir . DIRECTORY_SEPARATOR . 'source.json',
+        gtfs_session_file($dir, 'source.json'),
         json_encode($sourceData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
     ) === false) {
         $zip->close();
@@ -522,34 +535,18 @@ function gtfs_start_session(string $zipPath, bool $copyZip, string $sourceLabel)
 }
 
 function gtfs_server_zip_path(): string {
-    $projectRoot = realpath(dirname(__DIR__));
-    if ($projectRoot === false) gtfs_error(500, 'Projektverzeichnis für Server-GTFS kann nicht aufgelöst werden.');
-    $expectedDir = $projectRoot . DIRECTORY_SEPARATOR . 'gtfs' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'gtfs';
-    $realDir = realpath($expectedDir);
-    $realPath = realpath($expectedDir . DIRECTORY_SEPARATOR . 'latest.zip');
-    if ($realDir === false || $realPath === false || !is_file($realPath)) {
-        gtfs_error(404, 'Server-GTFS-ZIP fehlt: gtfs/data/gtfs/latest.zip');
-    }
-    $projectPrefix = rtrim($projectRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    $allowedPrefix = rtrim($realDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    if (strpos($allowedPrefix, $projectPrefix) !== 0) {
-        gtfs_error(403, 'Server-GTFS-Verzeichnis liegt außerhalb des Projekts.');
-    }
-    if (strpos($realPath, $allowedPrefix) !== 0 || basename($realPath) !== 'latest.zip') {
-        gtfs_error(403, 'Ungültiger Pfad für Server-GTFS-ZIP.');
-    }
-    if (!is_readable($realPath)) {
-        gtfs_error(500, 'Server-GTFS-ZIP ist nicht lesbar: gtfs/data/gtfs/latest.zip');
-    }
-    return $realPath;
+    $path = lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/latest.zip');
+    if (!is_file($path)) gtfs_error(404, 'Server-GTFS-ZIP fehlt.');
+    if (!is_readable($path)) gtfs_error(500, 'Server-GTFS-ZIP ist nicht lesbar.');
+    return $path;
 }
 
 function gtfs_index_dir(): string {
-    return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'gtfs' . DIRECTORY_SEPARATOR . 'imports';
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/index');
 }
 
 function gtfs_index_path(): string {
-    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'variants.sqlite';
+    return gtfs_index_file('variants.sqlite');
 }
 
 function gtfs_require_sqlite(): void {
@@ -690,20 +687,20 @@ function gtfs_read_index_variants(string $routeId): ?array {
 }
 
 function gtfs_session_uses_server_source(string $dir): bool {
-    $source = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'source.json')), true);
+    $source = json_decode(strval(@file_get_contents(gtfs_session_file($dir, 'source.json'))), true);
     return is_array($source) && ($source['type'] ?? '') === 'server';
 }
 
 function gtfs_index_job_path(): string {
-    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'index_job.json';
+    return gtfs_index_file('index_job.json');
 }
 
 function gtfs_index_building_path(): string {
-    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'variants.building.sqlite';
+    return gtfs_index_file('variants.building.sqlite');
 }
 
 function gtfs_index_extracted_dir(): string {
-    return gtfs_index_dir() . DIRECTORY_SEPARATOR . 'extracted';
+    return gtfs_index_file('extracted');
 }
 
 function gtfs_read_index_job(): ?array {
@@ -719,13 +716,14 @@ function gtfs_write_index_job(array $job): void {
 }
 
 function gtfs_clear_index_job_files(): void {
-    foreach ([gtfs_index_job_path(), gtfs_index_building_path(), gtfs_index_building_path() . '-journal'] as $file) {
+    foreach ([gtfs_index_job_path(), gtfs_index_building_path(), gtfs_index_file('variants.building.sqlite-journal')] as $file) {
         if (is_file($file)) @unlink($file);
     }
     $extractedDir = gtfs_index_extracted_dir();
     if (is_dir($extractedDir)) {
         foreach (glob($extractedDir . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
-            if (is_file($file)) @unlink($file);
+            if (is_link($file)) continue;
+            if (is_file($file)) @unlink(gtfs_index_file('extracted/' . basename($file)));
         }
         @rmdir($extractedDir);
     }
@@ -797,7 +795,7 @@ function gtfs_sqlite_diagnostics(PDO $pdo, string $label, ?string $databasePath 
         'recordedAt' => date('c'),
     ];
     @file_put_contents(
-        gtfs_index_dir() . DIRECTORY_SEPARATOR . 'index_diagnostics.log',
+        gtfs_index_file('index_diagnostics.log'),
         json_encode($diagnostics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
     );
@@ -913,17 +911,17 @@ function gtfs_start_index_job(bool $restart, array $requestedAgencyIds): void {
         }
         gtfs_reply(['ok' => true, 'job' => $existing, 'resumed' => true]);
     }
-    $indexDir = gtfs_index_dir();
-    if (!is_dir($indexDir) && !mkdir($indexDir, 0700, true)) {
+    $indexDir = lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/index');
+    if (!is_dir($indexDir)) {
         gtfs_error(500, 'GTFS-Indexverzeichnis kann nicht erstellt werden.');
     }
-    $lock = @fopen($indexDir . DIRECTORY_SEPARATOR . 'index_job.lock', 'c+');
+    $lock = @fopen(gtfs_index_file('index_job.lock'), 'c+');
     if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
         gtfs_error(409, 'Ein GTFS-Indexschritt läuft bereits; Neustart ist momentan nicht möglich.');
     }
     gtfs_clear_index_job_files();
-    $extractedDir = gtfs_index_extracted_dir();
-    if (!mkdir($extractedDir, 0700, true)) gtfs_error(500, 'GTFS-Extraktionsverzeichnis kann nicht erstellt werden.');
+    $extractedDir = lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/index/extracted');
+    if (!is_dir($extractedDir)) gtfs_error(500, 'GTFS-Extraktionsverzeichnis kann nicht erstellt werden.');
 
     $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec('PRAGMA temp_store=FILE');
@@ -972,7 +970,7 @@ function gtfs_extract_index_file(array $job): array {
     $entry = gtfs_find_zip_entry($zip, $fileName);
     if ($entry === null) gtfs_error(422, 'GTFS-ZIP enthält ' . $fileName . ' nicht.');
     $input = $zip->getStream($entry);
-    $output = @fopen(gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . $fileName, 'wb');
+    $output = @fopen(gtfs_index_file('extracted/' . $fileName), 'wb');
     if (!$input || !$output) gtfs_error(500, 'GTFS-Datei kann nicht extrahiert werden: ' . $fileName);
     stream_copy_to_stream($input, $output);
     fclose($input);
@@ -996,7 +994,7 @@ function gtfs_import_index_rows(array $job, int $batchSize): array {
         return $job;
     }
     $fileName = $files[$fileIndex];
-    $path = gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . $fileName;
+    $path = gtfs_index_file('extracted/' . $fileName);
     $handle = @fopen($path, 'rb');
     if (!$handle) gtfs_error(500, 'Extrahierte GTFS-Datei fehlt: ' . $fileName);
     $offset = (int)($job['fileOffset'] ?? 0);
@@ -1198,7 +1196,7 @@ function gtfs_finalize_batch_index(array $job): array {
     $pdo = null;
 
     $finalPath = gtfs_index_path();
-    $backupPath = $finalPath . '.previous';
+    $backupPath = gtfs_index_file('variants.sqlite.previous');
     @unlink($backupPath);
     if (is_file($finalPath) && !@rename($finalPath, $backupPath)) {
         gtfs_error(500, 'Alter GTFS-Index kann nicht für Austausch vorbereitet werden.');
@@ -1209,7 +1207,8 @@ function gtfs_finalize_batch_index(array $job): array {
     }
     @unlink($backupPath);
     foreach (glob(gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
-        if (is_file($file)) @unlink($file);
+        if (is_link($file)) continue;
+        if (is_file($file)) @unlink(gtfs_index_file('extracted/' . basename($file)));
     }
     @rmdir(gtfs_index_extracted_dir());
     $job['phase'] = 'done';
@@ -1227,7 +1226,7 @@ function gtfs_run_index_step(): void {
     if ((int)$job['feedSize'] !== $signature['size'] || (int)$job['feedMtime'] !== $signature['mtime']) {
         gtfs_error(409, 'latest.zip wurde während der Indexierung geändert. Job bitte neu starten.');
     }
-    $lock = @fopen(gtfs_index_dir() . DIRECTORY_SEPARATOR . 'index_job.lock', 'c+');
+    $lock = @fopen(gtfs_index_file('index_job.lock'), 'c+');
     if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) gtfs_error(409, 'Ein Indexschritt läuft bereits.');
     try {
         $phase = strval($job['phase'] ?? '');
@@ -1254,12 +1253,12 @@ function gtfs_index_job_status(): void {
 }
 
 function gtfs_open_session_zip(string $dir): ZipArchive {
-    $sourcePath = $dir . DIRECTORY_SEPARATOR . 'source.json';
+    $sourcePath = gtfs_session_file($dir, 'source.json');
     $source = json_decode(strval(@file_get_contents($sourcePath)), true);
     if (!is_array($source)) gtfs_error(410, 'GTFS-Sitzung ist unvollständig. Quelle bitte erneut laden.');
 
     $zipPath = ($source['type'] ?? '') === 'session'
-        ? $dir . DIRECTORY_SEPARATOR . 'feed.zip'
+        ? gtfs_session_file($dir, 'feed.zip')
         : gtfs_server_zip_path();
     if (!is_file($zipPath) || !is_readable($zipPath)) {
         gtfs_error(410, 'GTFS-Quelldatei der Sitzung ist nicht mehr verfügbar.');
@@ -1275,7 +1274,7 @@ function gtfs_open_session_zip(string $dir): ZipArchive {
 }
 
 function gtfs_handle_server_zip(): void {
-    gtfs_start_session(gtfs_server_zip_path(), false, 'Server gtfs/data/gtfs/latest.zip');
+    gtfs_start_session(gtfs_server_zip_path(), false, 'Server-GTFS der Gesellschaft');
 }
 
 function gtfs_handle_index_agencies(): void {
@@ -1307,8 +1306,8 @@ function gtfs_handle_route_filter(string $dir): void {
     $routesJson = json_encode($routes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $selectionJson = json_encode($selection, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($routesJson === false || $selectionJson === false
-        || @file_put_contents($dir . DIRECTORY_SEPARATOR . 'routes.json', $routesJson) === false
-        || @file_put_contents($dir . DIRECTORY_SEPARATOR . 'selection.json', $selectionJson) === false) {
+        || @file_put_contents(gtfs_session_file($dir, 'routes.json'), $routesJson) === false
+        || @file_put_contents(gtfs_session_file($dir, 'selection.json'), $selectionJson) === false) {
         gtfs_error(500, 'GTFS-Betreiber- und Linienauswahl kann nicht temporär gespeichert werden.');
     }
     gtfs_reply([
@@ -1320,7 +1319,7 @@ function gtfs_handle_route_filter(string $dir): void {
 }
 
 function gtfs_load_listed_route(string $dir, string $routeId): array {
-    $routes = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'routes.json')), true);
+    $routes = json_decode(strval(@file_get_contents(gtfs_session_file($dir, 'routes.json'))), true);
     if (!is_array($routes)) gtfs_error(410, 'Gefilterte GTFS-Linienliste ist nicht mehr verfügbar.');
     foreach ($routes as $route) {
         if (is_array($route) && ($route['id'] ?? '') === $routeId) return $route;
@@ -1329,11 +1328,11 @@ function gtfs_load_listed_route(string $dir, string $routeId): array {
 }
 
 function gtfs_variant_cache_path(string $dir, string $routeId): string {
-    return $dir . DIRECTORY_SEPARATOR . 'variants_' . sha1($routeId) . '.json';
+    return gtfs_session_file($dir, 'variants_' . sha1($routeId) . '.json');
 }
 
 function gtfs_source_fingerprint(string $dir): string {
-    $source = json_decode(strval(@file_get_contents($dir . DIRECTORY_SEPARATOR . 'source.json')), true);
+    $source = json_decode(strval(@file_get_contents(gtfs_session_file($dir, 'source.json'))), true);
     if (!is_array($source)) gtfs_error(410, 'GTFS-Sitzungsquelle ist nicht mehr verfügbar.');
     return hash('sha256', implode('|', [
         strval($source['type'] ?? ''),
@@ -1515,5 +1514,6 @@ try {
     }
     gtfs_error(400, 'Unbekannte GTFS-Aktion.');
 } catch (Throwable $error) {
-    gtfs_error(500, 'GTFS-Import fehlgeschlagen: ' . $error->getMessage());
+    error_log('GTFS-Import fehlgeschlagen: ' . $error->getMessage());
+    gtfs_error(500, 'GTFS-Import fehlgeschlagen.');
 }

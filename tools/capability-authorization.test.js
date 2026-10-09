@@ -26,6 +26,7 @@ const apiCases = [
   { name: 'download_line_json', file: '_tenant_route_download.php', capability: 'routes.read', role: 'FAHRER', method: 'GET', path: '/api/download_line_json.php?city=phase4b-missing&line=missing' },
   { name: 'download_line_gpx', file: '_tenant_route_download.php', capability: 'routes.read', role: 'FAHRER', method: 'GET', path: '/api/download_line_gpx.php?city=phase4b-missing&line=missing' },
   { name: 'download_line_pdf', file: 'download_line_pdf.php', capability: 'routes.read', role: 'FAHRER', method: 'GET', path: '/api/download_line_pdf.php?line=phase3-missing' },
+  { name: 'load_catalog', file: 'load_catalog.php', capability: 'stops.fetch', role: 'EDITOR', method: 'GET', path: '/api/load_catalog.php' },
   { name: 'city_settings GET', file: 'city_settings.php', capability: 'operations.settings.read', role: 'DISPONENT', method: 'GET', path: '/api/city_settings.php?city=phase3' },
   { name: 'drivers GET', file: 'drivers.php', capability: 'drivers.read', role: 'EINWEISER', method: 'GET', path: '/api/drivers.php' },
   { name: 'trainings GET', file: 'trainings.php', capability: 'trainings.read', role: 'EINWEISER', method: 'GET', path: '/api/trainings.php' },

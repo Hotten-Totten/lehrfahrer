@@ -453,7 +453,7 @@
               body: saveBody
             });
             if (!saveRes.ok) throw new Error("HTTP " + saveRes.status);
-            statusNote += " · als haltestellen.js gespeichert";
+            statusNote += " · im privaten Katalog gespeichert";
           } catch (saveErr) {
             statusNote += " · Speichern fehlgeschlagen: " + saveErr.message;
           }
@@ -465,7 +465,7 @@
         finalCount = json.count;
         const replaceNote = json.saveError
           ? "Speichern fehlgeschlagen: " + json.saveError
-          : saveCheckbox.checked ? "als haltestellen.js gespeichert" : "";
+          : saveCheckbox.checked ? "im privaten Katalog gespeichert" : "";
         statusNote = statusNote
           ? [replaceNote, statusNote].filter(Boolean).join(" · ")
           : replaceNote;

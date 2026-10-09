@@ -25,8 +25,8 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP direkt aus gtfs/data/gtfs/latest.zip auf dem Server laden">GTFS vom Server laden</button>
-          <button type="button" class="menu-item" onclick="rebuildGtfsServerIndex()" title="Persistenten Variantenindex aus gtfs/data/gtfs/latest.zip neu erstellen">GTFS-Index neu erstellen</button>
+          <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP aus dem privaten Importbereich dieser Gesellschaft laden">GTFS vom Server laden</button>
+          <button type="button" class="menu-item" onclick="rebuildGtfsServerIndex()" title="Privaten Variantenindex dieser Gesellschaft neu erstellen">GTFS-Index neu erstellen</button>
           <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="Fertigen oder abgebrochenen GTFS-Turboindex auf Variantenanzahl und Speicherbedarf untersuchen">GTFS-Index analysieren</button>
           <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
@@ -473,7 +473,7 @@
         <div class="fetch-stops-row fetch-stops-save-row">
           <label>
             <input id="fetchStopsSave" type="checkbox" checked>
-            Als haltestellen.js auf dem Server speichern
+            Im privaten Haltestellenkatalog speichern
           </label>
         </div>
         <div class="fetch-stops-row fetch-stops-save-row">
@@ -713,9 +713,11 @@
             var value = String(token || "").trim();
             if (!value) {
               localStorage.removeItem(KEY);
+              if (typeof window.loadTenantStopCatalog === "function") window.loadTenantStopCatalog();
               return false;
             }
             localStorage.setItem(KEY, value);
+            if (typeof window.loadTenantStopCatalog === "function") window.loadTenantStopCatalog();
             return true;
           } catch (_err) {
             return false;
@@ -727,6 +729,7 @@
         window.clearApiToken = function () {
           try {
             localStorage.removeItem(KEY);
+            if (typeof window.loadTenantStopCatalog === "function") window.loadTenantStopCatalog();
             return true;
           } catch (_err) {
             return false;
@@ -745,7 +748,7 @@
     })();
   </script>
 
-  <script src="data/haltestellen.js?v=V2.1.063"></script>
+  <script>window.stopCatalog = [];</script>
   <script src="js/editor.map-adapter.js?v=V2.1.063"></script>
 
   <script src="js/editor.state.js?v=V2.1.063"></script>
@@ -769,6 +772,31 @@
   <script src="js/editor.main.js?v=V2.1.063"></script>
   <script src="js/editor.events.js?v=V2.1.063"></script>
   <script src="js/editor.fetchStops.js?v=V2.1.063"></script>
+  <script>
+    let tenantCatalogRequestId = 0;
+    window.loadTenantStopCatalog = async function () {
+      const requestId = ++tenantCatalogRequestId;
+      stopCatalog.splice(0, stopCatalog.length);
+      if (typeof clearVisibleCatalogMarkers === "function") clearVisibleCatalogMarkers();
+      if (typeof scheduleCatalogMarkerVisibilityUpdate === "function") scheduleCatalogMarkerVisibilityUpdate();
+      if (typeof updateUI === "function") updateUI();
+      try {
+        const response = await fetch("api/load_catalog.php", {
+          cache: "no-store", headers: withApiAuthHeaders({})
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (requestId !== tenantCatalogRequestId || !Array.isArray(result.stops)) return;
+        stopCatalog.splice(0, stopCatalog.length, ...result.stops);
+        if (typeof clearVisibleCatalogMarkers === "function") clearVisibleCatalogMarkers();
+        if (typeof scheduleCatalogMarkerVisibilityUpdate === "function") scheduleCatalogMarkerVisibilityUpdate();
+        if (typeof updateUI === "function") updateUI();
+      } catch (error) {
+        console.warn("Haltestellenkatalog konnte nicht geladen werden.", error);
+      }
+    };
+    window.loadTenantStopCatalog();
+  </script>
 
 </body>
 </html>

@@ -1,14 +1,14 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
 set_time_limit(120); // PHP-Ausführungszeit erhöhen
-require_once __DIR__ . '/_api_authorization.php';
+require_once __DIR__ . '/_tenant_catalog_storage.php';
 
 // ---- Parameter lesen & validieren ----
 $lat    = isset($_POST["lat"])    ? (float) $_POST["lat"]    : null;
 $lon    = isset($_POST["lon"])    ? (float) $_POST["lon"]    : null;
 $radius = isset($_POST["radius"]) ? (int)   $_POST["radius"] : null;
 $save   = isset($_POST["save"])   && $_POST["save"] === "1";
-lehrfahrer_api_authorize($save ? 'stops.catalog.write' : 'stops.fetch', $save, true);
+$companyId = lehrfahrer_route_authorize($save ? 'stops.catalog.write' : 'stops.fetch', $save, true);
 
 if ($lat === null || $lon === null || $radius === null) {
     http_response_code(400);
@@ -247,7 +247,7 @@ foreach ($merged as $i => $s) {
     ];
 }
 
-// ---- Optional: als haltestellen.js speichern ----
+// ---- Optional: im privaten Tenant-Katalog speichern ----
 if ($save) {
     if (count($stops) === 0) {
         // Sicherheitscheck: niemals mit 0 Einträgen speichern
@@ -255,9 +255,10 @@ if ($save) {
             "saveError" => "Speichern verhindert: 0 Haltestellen gefunden – vorhandene Datei bleibt erhalten."]);
         exit;
     }
-    $jsContent = "const stopCatalog = " . json_encode($stops, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . ";\n";
-    $outPath = __DIR__ . "/../data/haltestellen.js";
-    if (file_put_contents($outPath, $jsContent) === false) {
+    $saved = false;
+    try { $saved = lehrfahrer_catalog_save($companyId, $stops); }
+    catch (Throwable $error) { error_log('Tenant-Katalog konnte nicht gespeichert werden: ' . $error->getMessage()); }
+    if (!$saved) {
         echo json_encode(["stops" => $stops, "count" => count($stops), "rawCount" => count($parsed["elements"]),
             "saveError" => "Konnte Datei nicht schreiben"]);
         exit;

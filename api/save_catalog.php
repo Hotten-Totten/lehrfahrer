@@ -1,9 +1,9 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('stops.catalog.write', true, true);
+require_once __DIR__ . '/_tenant_catalog_storage.php';
+$companyId = lehrfahrer_route_authorize('stops.catalog.write', true, true);
 
-// Speichert den (bereits clientseitig gemergten) Haltestellen-Katalog als haltestellen.js
+// Speichert den clientseitig gemergten Katalog im privaten Tenant-Bereich.
 
 $rawCatalog = isset($_POST["catalog"]) ? $_POST["catalog"] : null;
 
@@ -52,12 +52,12 @@ if (count($clean) === 0) {
     exit;
 }
 
-$jsContent = "const stopCatalog = " . json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . ";\n";
-$outPath = __DIR__ . "/../data/haltestellen.js";
-
-if (file_put_contents($outPath, $jsContent) === false) {
+$saved = false;
+try { $saved = lehrfahrer_catalog_save($companyId, $clean); }
+catch (Throwable $error) { error_log('Tenant-Katalog konnte nicht gespeichert werden: ' . $error->getMessage()); }
+if (!$saved) {
     http_response_code(500);
-    echo json_encode(["error" => "Konnte Datei nicht schreiben: " . $outPath]);
+    echo json_encode(["error" => "Konnte Katalog nicht speichern"]);
     exit;
 }
 
