@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.read');
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.read');
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -23,8 +23,6 @@ function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
     }
     return $base . '.pdf';
 }
-
-$baseDir = dirname(__DIR__);
 
 $city = trim($_GET['city'] ?? 'cottbus');
 $city = strtolower($city);
@@ -52,23 +50,24 @@ if ($line === '') {
     exit;
 }
 
-$lineDir = $baseDir . '/linien/' . $city;
 $pdfPath = '';
 
 $pdfStorageFile = buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $line);
-
-if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf')) {
-    $pdfPath = $lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf';
-} elseif (file_exists($lineDir . '/pdf/' . $pdfStorageFile)) {
-    $pdfPath = $lineDir . '/pdf/' . $pdfStorageFile;
-} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.pdf')) {
-    $pdfPath = $lineDir . '/' . $lineFolder . '/' . $line . '.pdf';
-} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf')) {
-    $pdfPath = $lineDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
-} elseif (file_exists($lineDir . '/' . $line . '.pdf')) {
-    $pdfPath = $lineDir . '/' . $line . '.pdf';
-} elseif (file_exists($lineDir . '/gpx/' . $line . '.pdf')) {
-    $pdfPath = $lineDir . '/gpx/' . $line . '.pdf';
+if (lehrfahrer_route_city_exists($companyId, $city)) {
+    $candidates = [];
+    if ($lineFolder !== '' && $categoryFolder !== '') {
+        $candidates[] = lehrfahrer_route_file($companyId, $city, $line, 'pdf', $lineFolder, $categoryFolder);
+    }
+    $candidates[] = lehrfahrer_tenant_path($companyId, 'lines', $city . '/pdf/' . $pdfStorageFile);
+    if ($lineFolder !== '') {
+        $candidates[] = lehrfahrer_route_file($companyId, $city, $line, 'pdf', $lineFolder);
+        $candidates[] = lehrfahrer_tenant_path($companyId, 'lines', $city . '/' . $lineFolder . '/gpx/' . $line . '.pdf');
+    }
+    $candidates[] = lehrfahrer_route_file($companyId, $city, $line, 'pdf');
+    $candidates[] = lehrfahrer_tenant_path($companyId, 'lines', $city . '/gpx/' . $line . '.pdf');
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) { $pdfPath = $candidate; break; }
+    }
 }
 
 if ($pdfPath === '' || !file_exists($pdfPath)) {

@@ -1,7 +1,7 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('cities.manage', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('cities.manage', true, true);
 
 $raw = file_get_contents("php://input");
 $data = json_decode($raw, true);
@@ -42,9 +42,10 @@ if ($slug === "") {
     exit;
 }
 
-$baseDir = __DIR__ . "/../linien/" . $slug;
-
-if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true)) {
+try {
+    lehrfahrer_tenant_ensure_directory($companyId, 'cities', $slug);
+    lehrfahrer_tenant_ensure_directory($companyId, 'lines', $slug);
+} catch (Throwable $error) {
     http_response_code(500);
     echo json_encode([
         "ok" => false,

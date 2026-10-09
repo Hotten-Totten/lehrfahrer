@@ -320,6 +320,17 @@ function renderLineBrowser(lines) {
           return btn;
         }
 
+        async function downloadTenantAsset(url, fileName) {
+          const response = await fetch(url, { headers: withApiAuthHeaders({}), cache: "no-store" });
+          if (!response.ok) throw new Error("Datei konnte nicht geladen werden.");
+          const blobUrl = URL.createObjectURL(await response.blob());
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        }
+
         const loadBtn    = makeBtn("Laden", "lbr-btn-load");
         const dlJsonBtn  = makeBtn("↓ JSON", "lbr-btn-download");
         const renameBtn  = makeBtn("Umbenennen", "lbr-btn-rename");
@@ -329,14 +340,11 @@ function renderLineBrowser(lines) {
         actions.appendChild(dlJsonBtn);
         if (line.hasGpx) {
           const dlGpxBtn = makeBtn("↓ GPX", "lbr-btn-download");
-          dlGpxBtn.addEventListener("click", e => {
+          dlGpxBtn.addEventListener("click", async e => {
             e.stopPropagation();
-            const a = document.createElement("a");
-            a.href = line.lineFolder
-              ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + (line.categoryFolder ? encodeURIComponent(line.categoryFolder) + "/" : "") + encodeURIComponent(line.fileBase) + ".gpx"
-              : "linien/" + encodeURIComponent(line.city) + "/gpx/" + encodeURIComponent(line.fileBase) + ".gpx";
-            a.download = line.fileBase + ".gpx";
-            document.body.appendChild(a); a.click(); a.remove();
+            try {
+              await downloadTenantAsset(line.gpxPath, line.fileBase + ".gpx");
+            } catch (error) { alert(error.message); }
           });
           actions.appendChild(dlGpxBtn);
         }
@@ -424,14 +432,11 @@ function renderLineBrowser(lines) {
           await loadLineFromServer(line.fileBase || line.id, line.lineFolder || null, line.city || null, line.categoryFolder || null);
         });
 
-        dlJsonBtn.addEventListener("click", e => {
+        dlJsonBtn.addEventListener("click", async e => {
           e.stopPropagation();
-          const a = document.createElement("a");
-          a.href = line.lineFolder
-            ? "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.lineFolder) + "/" + (line.categoryFolder ? encodeURIComponent(line.categoryFolder) + "/" : "") + encodeURIComponent(line.fileBase) + ".json"
-            : "linien/" + encodeURIComponent(line.city) + "/" + encodeURIComponent(line.fileBase) + ".json";
-          a.download = line.fileBase + ".json";
-          document.body.appendChild(a); a.click(); a.remove();
+          try {
+            await downloadTenantAsset(line.jsonPath, line.fileBase + ".json");
+          } catch (error) { alert(error.message); }
         });
 
         renameBtn.addEventListener("click", e => {

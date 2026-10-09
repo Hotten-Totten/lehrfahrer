@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.read');
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.read');
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -25,8 +25,6 @@ function buildPdfStorageFileName(string $lineFolder, string $fileBase): string {
     return $base . '.pdf';
 }
 
-$baseDir = dirname(__DIR__);
-
 $city = trim($_GET['city'] ?? 'cottbus');
 $city = strtolower($city);
 $city = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $city);
@@ -35,10 +33,7 @@ if ($city === '') {
     $city = 'cottbus';
 }
 
-$lineDir = $baseDir . '/linien/' . $city;
-if (!is_dir($lineDir) && is_dir($baseDir . '/linien/linien/' . $city)) {
-    $lineDir = $baseDir . '/linien/linien/' . $city;
-}
+$lineDir = lehrfahrer_route_line_city_path($companyId, $city);
 
 $line = $_GET['line'] ?? '';
 $line = preg_replace('/\.json$/i', '', $line);
@@ -61,14 +56,7 @@ if ($line === '') {
 // Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json
 // Zwischenformat: linien/{city}/{lineFolder}/{line}.json
 // Fallback:     linien/{city}/{line}.json  (alte Dateien)
-$filePath = '';
-if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json')) {
-    $filePath = $lineDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json';
-} elseif ($lineFolder !== '' && file_exists($lineDir . '/' . $lineFolder . '/' . $line . '.json')) {
-    $filePath = $lineDir . '/' . $lineFolder . '/' . $line . '.json';
-} elseif (file_exists($lineDir . '/' . $line . '.json')) {
-    $filePath = $lineDir . '/' . $line . '.json';
-}
+$filePath = lehrfahrer_route_find_file($companyId, $city, $line, 'json', $lineFolder, $categoryFolder);
 
 if (!$filePath || !file_exists($filePath)) {
     http_response_code(404);
@@ -95,9 +83,9 @@ $baseName = pathinfo($filePath, PATHINFO_FILENAME);
 $dirName = dirname($filePath);
 
 $gpx = null;
-$gpxPath = $dirName . '/' . $baseName . '.gpx';
+$gpxPath = lehrfahrer_route_sibling_path($companyId, $filePath, $baseName . '.gpx');
 if (!file_exists($gpxPath)) {
-    $legacyGpxPath = $lineDir . '/gpx/' . $baseName . '.gpx';
+    $legacyGpxPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/gpx/' . $baseName . '.gpx');
     if (file_exists($legacyGpxPath)) {
         $gpxPath = $legacyGpxPath;
     }
@@ -110,9 +98,9 @@ if (file_exists($gpxPath)) {
 }
 
 $pdfFile = null;
-$pdfPath = $lineDir . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $baseName);
+$pdfPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $baseName));
 if (!file_exists($pdfPath)) {
-    $pdfPath = $dirName . '/' . $baseName . '.pdf';
+    $pdfPath = lehrfahrer_route_sibling_path($companyId, $filePath, $baseName . '.pdf');
 }
 if (file_exists($pdfPath)) {
     $pdfFile = basename($pdfPath);

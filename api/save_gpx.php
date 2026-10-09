@@ -1,7 +1,7 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.write', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.write', true, true);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -59,21 +59,21 @@ if (!preg_match('/\.gpx$/i', $filename)) {
     $filename .= ".gpx";
 }
 
-// Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{filename}
-$baseDir = __DIR__ . "/../linien/" . $city . "/" . $lineFolder . "/" . $categoryFolder;
-
-if (!is_dir($baseDir)) {
-    if (!mkdir($baseDir, 0775, true)) {
-        http_response_code(500);
-        echo json_encode([
-            "ok" => false,
-            "error" => "GPX-Ordner konnte nicht erstellt werden."
-        ]);
-        exit;
-    }
+if (!lehrfahrer_route_city_exists($companyId, $city)) {
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden']);
+    exit;
 }
 
-$fullPath = $baseDir . "/" . $filename;
+lehrfahrer_tenant_ensure_directory($companyId, 'lines', $city . '/' . $lineFolder . '/' . $categoryFolder);
+$fileBase = sanitizeForFilesystem(preg_replace('/\.gpx$/i', '', $filename));
+if ($fileBase === '') {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Ungueltiger GPX-Dateiname.']);
+    exit;
+}
+$filename = $fileBase . '.gpx';
+$fullPath = lehrfahrer_route_file($companyId, $city, $fileBase, 'gpx', $lineFolder, $categoryFolder);
 
 $result = file_put_contents($fullPath, $gpx);
 
@@ -89,6 +89,9 @@ if ($result === false) {
 echo json_encode([
     "ok" => true,
     "filename" => $filename,
-    "fileBase" => preg_replace('/\.gpx$/i', '', $filename),
-    "path" => "linien/" . $city . "/" . $lineFolder . "/" . $categoryFolder . "/" . $filename
+    "fileBase" => $fileBase,
+    "path" => 'api/download_line_gpx.php?' . http_build_query([
+        'city' => $city, 'line' => $fileBase,
+        'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder
+    ], '', '&', PHP_QUERY_RFC3986)
 ]);

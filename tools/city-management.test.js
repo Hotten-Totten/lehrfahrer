@@ -10,7 +10,7 @@ const listLinesSource = fs.readFileSync(path.resolve(__dirname, '../api/list_lin
 const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
 
 test('Ortsverwaltung ist authentifiziert und bietet kompakte UI-Aktionen', () => {
-  assert.ok(apiSource.includes("lehrfahrer_api_authorize('cities.manage'"));
+  assert.ok(apiSource.includes("lehrfahrer_route_authorize('cities.manage'"));
   assert.match(editorHtml, /id="renameCityBtn"[^>]*>Umbenennen<\/button>/);
   assert.match(editorHtml, /id="deleteCityBtn"[^>]*>Löschen<\/button>/);
 });
@@ -33,7 +33,7 @@ test('API akzeptiert ausschließlich POST und liefert strukturierte Laufzeitfehl
 });
 
 test('Datenverzeichnis wird vor dem gemeinsamen Rename-Delete-Lock angelegt', () => {
-  const mkdirPos = apiSource.indexOf("if (!is_dir($dataRoot) && !mkdir($dataRoot, 0775, true))");
+  const mkdirPos = apiSource.indexOf("lehrfahrer_tenant_area($companyId, 'settings', true)");
   const lockPos = apiSource.indexOf("fopen($dataRoot . DIRECTORY_SEPARATOR . '.city-management.lock'");
   assert.ok(mkdirPos >= 0 && lockPos > mkdirPos);
 });
@@ -62,7 +62,7 @@ test('leerer und identischer neuer Ortsname werden verhindert', () => {
 });
 
 test('Dublette aus Verzeichnis oder vorhandenen Einstellungen wird verhindert', () => {
-  assert.ok(apiSource.includes('if (cityManagePath($citiesRoot, $newCity) !== null)'));
+  assert.ok(apiSource.includes('lehrfahrer_route_city_exists($companyId, $newCity) || cityManagePath($citiesRoot, $newCity) !== null'));
   assert.ok(apiSource.includes('if (array_key_exists($newCity, $settings))'));
 });
 

@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
+require_once __DIR__ . '/_tenant_route_storage.php';
 
 function cityManageRespond(int $status, array $payload): void {
     http_response_code($status);
@@ -24,12 +24,8 @@ function cityManageSlug($value): string {
 
 function cityManagePath(string $root, string $city): ?string {
     $direct = $root . DIRECTORY_SEPARATOR . $city;
-    $legacy = $root . DIRECTORY_SEPARATOR . 'linien' . DIRECTORY_SEPARATOR . $city;
-    $matches = array_values(array_filter([$direct, $legacy], 'is_dir'));
-    if (count($matches) > 1) {
-        cityManageRespond(409, ['ok' => false, 'error' => 'Der Ort existiert in mehreren Speicherstrukturen. Bitte zuerst die Verzeichnisstruktur bereinigen.']);
-    }
-    return $matches[0] ?? null;
+    if (is_link($direct)) throw new RuntimeException('Symbolischer Link im Ortsbestand.');
+    return is_dir($direct) ? $direct : null;
 }
 
 function cityManageJsonFiles(string $directory): array {
@@ -38,6 +34,7 @@ function cityManageJsonFiles(string $directory): array {
         new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS)
     );
     foreach ($iterator as $item) {
+        if ($item->isLink()) throw new RuntimeException('Symbolischer Link im Linienbestand.');
         if ($item->isFile() && strtolower($item->getExtension()) === 'json') $files[] = $item->getPathname();
     }
     sort($files, SORT_NATURAL | SORT_FLAG_CASE);
@@ -52,7 +49,7 @@ function cityManageSettingsLoad(string $file): array {
 
 function cityManageAtomicJsonSave(string $file, array $data): bool {
     $directory = dirname($file);
-    if (!is_dir($directory) && !mkdir($directory, 0775, true)) return false;
+    if (!is_dir($directory) && !mkdir($directory, 0700, true)) return false;
     $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) return false;
     $temp = $file . '.tmp-' . bin2hex(random_bytes(6));
@@ -126,6 +123,7 @@ function cityManageMigrateReferences(&$value, string $key, string $oldCity, stri
     }
     if (in_array($key, ['jsonPath', 'gpxPath', 'pdfPath'], true)) {
         $value = str_replace('linien/' . $oldCity . '/', 'linien/' . $newCity . '/', $value);
+        $value = str_replace('city=' . rawurlencode($oldCity), 'city=' . rawurlencode($newCity), $value);
     }
 }
 
@@ -140,6 +138,7 @@ function cityManageDeleteTree(string $directory): bool {
     foreach ($items as $item) {
         if ($item === '.' || $item === '..') continue;
         $path = $directory . DIRECTORY_SEPARATOR . $item;
+        if (is_link($path)) return false;
         if (is_dir($path)) {
             if (!cityManageDeleteTree($path)) return false;
         } elseif (!@unlink($path)) {
@@ -153,12 +152,7 @@ function cityManageAvailableCities(string $root): array {
     $cities = [];
     foreach (@scandir($root) ?: [] as $entry) {
         if ($entry === '.' || $entry === '..' || in_array($entry, ['linien', 'backup', 'gpx', 'pdf'], true) || str_starts_with($entry, '.')) continue;
-        if (is_dir($root . DIRECTORY_SEPARATOR . $entry)) $cities[] = $entry;
-    }
-    $legacyRoot = $root . DIRECTORY_SEPARATOR . 'linien';
-    foreach (@scandir($legacyRoot) ?: [] as $entry) {
-        if ($entry === '.' || $entry === '..' || str_starts_with($entry, '.')) continue;
-        if (is_dir($legacyRoot . DIRECTORY_SEPARATOR . $entry)) $cities[] = $entry;
+        if (!is_link($root . DIRECTORY_SEPARATOR . $entry) && is_dir($root . DIRECTORY_SEPARATOR . $entry)) $cities[] = $entry;
     }
     $cities = array_values(array_unique($cities));
     natcasesort($cities);
@@ -174,20 +168,20 @@ if ($method !== 'POST') {
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) cityManageRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);
 $action = strtolower(trim((string)($input['action'] ?? '')));
-lehrfahrer_api_authorize('cities.manage', $action !== 'analyze', true);
+$companyId = lehrfahrer_route_authorize('cities.manage', $action !== 'analyze', true);
 $city = cityManageSlug($input['oldName'] ?? ($input['city'] ?? ''));
 if ($city === '') cityManageRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
 
-$projectRoot = dirname(__DIR__);
-$citiesRoot = $projectRoot . DIRECTORY_SEPARATOR . 'linien';
-$dataRoot = $projectRoot . DIRECTORY_SEPARATOR . 'data';
-$settingsFile = $dataRoot . DIRECTORY_SEPARATOR . 'city_settings.json';
+$citiesRoot = lehrfahrer_tenant_area($companyId, 'lines');
+$cityMarkerRoot = lehrfahrer_tenant_area($companyId, 'cities');
+$dataRoot = lehrfahrer_tenant_area($companyId, 'settings', true);
+$settingsFile = lehrfahrer_route_settings_path($companyId, true);
+if (!lehrfahrer_route_city_exists($companyId, $city)) {
+    cityManageRespond(404, ['ok' => false, 'error' => 'Ort wurde nicht gefunden.']);
+}
 $sourcePath = cityManagePath($citiesRoot, $city);
 if ($sourcePath === null) cityManageRespond(404, ['ok' => false, 'error' => 'Ort wurde nicht gefunden.']);
 
-if (!is_dir($dataRoot) && !mkdir($dataRoot, 0775, true)) {
-    cityManageRespond(500, ['ok' => false, 'error' => 'Datenverzeichnis für die Ortsverwaltung ist nicht verfügbar.']);
-}
 $lock = fopen($dataRoot . DIRECTORY_SEPARATOR . '.city-management.lock', 'c');
 if ($lock === false || !flock($lock, LOCK_EX)) cityManageRespond(503, ['ok' => false, 'error' => 'Ortsverwaltung ist derzeit gesperrt.']);
 $settings = cityManageSettingsLoad($settingsFile);
@@ -201,7 +195,7 @@ if ($action === 'rename') {
     $newCity = cityManageSlug($input['newName'] ?? ($input['newCity'] ?? ''));
     if ($newCity === '') cityManageRespond(400, ['ok' => false, 'error' => 'Der neue Ortsname darf nicht leer sein.']);
     if ($newCity === $city) cityManageRespond(409, ['ok' => false, 'error' => 'Der neue Ortsname ist mit dem bisherigen Namen identisch.']);
-    if (cityManagePath($citiesRoot, $newCity) !== null) cityManageRespond(409, ['ok' => false, 'error' => 'Ein Ort mit diesem Namen existiert bereits.']);
+    if (lehrfahrer_route_city_exists($companyId, $newCity) || cityManagePath($citiesRoot, $newCity) !== null) cityManageRespond(409, ['ok' => false, 'error' => 'Ein Ort mit diesem Namen existiert bereits.']);
     if (array_key_exists($newCity, $settings)) cityManageRespond(409, ['ok' => false, 'error' => 'Für diesen Ortsnamen existieren bereits Einstellungen.']);
 
     $parent = dirname($sourcePath);
@@ -244,6 +238,15 @@ if ($action === 'rename') {
         @rename($tempPath, $sourcePath);
         cityManageRespond(500, ['ok' => false, 'error' => 'Ortsordner konnte nicht auf den neuen Namen gesetzt werden.']);
     }
+    if (!@rename(lehrfahrer_route_city_path($companyId, $city), lehrfahrer_route_city_path($companyId, $newCity))) {
+        @rename($targetPath, $sourcePath);
+        foreach ($originals as $originalFile => $raw) {
+            $restoredFile = $sourcePath . substr($originalFile, strlen($tempPath));
+            @file_put_contents($restoredFile, $raw, LOCK_EX);
+        }
+        cityManageAtomicJsonSave($settingsFile, $originalSettings);
+        cityManageRespond(500, ['ok' => false, 'error' => 'Ortszuordnung konnte nicht umbenannt werden.']);
+    }
     cityManageRespond(200, [
         'ok' => true,
         'action' => 'rename',
@@ -256,7 +259,6 @@ if ($action === 'rename') {
 
 if ($action === 'delete') {
     if (($input['confirmed'] ?? false) !== true) cityManageRespond(409, ['ok' => false, 'error' => 'Explizite Löschbestätigung fehlt.', 'analysis' => $analysis]);
-    if (!is_dir($dataRoot) && !mkdir($dataRoot, 0775, true)) cityManageRespond(500, ['ok' => false, 'error' => 'Datenverzeichnis ist nicht verfügbar.']);
     $trashPath = $dataRoot . DIRECTORY_SEPARATOR . '.city-trash-' . $city . '-' . bin2hex(random_bytes(8));
     if (!@rename($sourcePath, $trashPath)) cityManageRespond(500, ['ok' => false, 'error' => 'Ortsdaten konnten nicht atomar aus dem Katalog entfernt werden.']);
     unset($settings[$city]);
@@ -265,8 +267,9 @@ if ($action === 'delete') {
         cityManageRespond(500, ['ok' => false, 'error' => 'Ortseinstellungen konnten nicht entfernt werden.']);
     }
     $deleted = cityManageDeleteTree($trashPath);
+    if ($deleted && !cityManageDeleteTree(lehrfahrer_route_city_path($companyId, $city))) $deleted = false;
     if (!$deleted) {
-        $remaining = cityManageAvailableCities($citiesRoot);
+        $remaining = cityManageAvailableCities($cityMarkerRoot);
         cityManageRespond(200, [
             'ok' => true,
             'action' => 'delete',
@@ -277,7 +280,7 @@ if ($action === 'delete') {
             'warning' => 'Der Ort wurde aus Katalog und Einstellungen entfernt; nicht aktive Restdateien konnten serverseitig nicht vollständig bereinigt werden.',
         ]);
     }
-    $remaining = cityManageAvailableCities($citiesRoot);
+    $remaining = cityManageAvailableCities($cityMarkerRoot);
     cityManageRespond(200, [
         'ok' => true,
         'action' => 'delete',

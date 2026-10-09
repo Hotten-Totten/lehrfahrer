@@ -1,8 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_professional_pdf.php';
-lehrfahrer_api_authorize('routes.write', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.write', true, true);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -447,8 +447,6 @@ function isRealPdfFile(string $path): bool {
     return is_file($path) && filesize($path) > 0;
 }
 
-$baseDir = dirname(__DIR__);
-
 $raw = file_get_contents('php://input');
 $data = json_decode($raw, true);
 
@@ -482,20 +480,12 @@ if ($categoryFolder === '') {
     $categoryFolder = 'Standard';
 }
 
-$cityDir = $baseDir . '/linien/' . $city;
-$lineBaseDir = $cityDir . '/' . $lineFolder;
-$lineDir = $lineBaseDir . '/' . $categoryFolder;
-
-if (!is_dir($lineDir)) {
-    if (!mkdir($lineDir, 0775, true)) {
-        http_response_code(500);
-        echo json_encode([
-            'ok' => false,
-            'error' => 'Linienordner konnte nicht erstellt werden'
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+if (!lehrfahrer_route_city_exists($companyId, $city)) {
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
+$lineDir = lehrfahrer_tenant_ensure_directory($companyId, 'lines', $city . '/' . $lineFolder . '/' . $categoryFolder);
 
 $fileBase = trim($data['fileBase'] ?? '');
 
@@ -542,7 +532,7 @@ if (isset($data['line']) && is_array($data['line'])) {
 
 $forceOverwrite = !empty($data['forceOverwrite']);
 
-$filePath = $lineDir . '/' . $fileBase . '.json';
+$filePath = lehrfahrer_route_file($companyId, $city, $fileBase, 'json', $lineFolder, $categoryFolder);
 
 // Konfliktvermeidung:
 // - Andere Route im selben Dateinamen -> freier Dateiname mit Zählsuffix
@@ -574,7 +564,7 @@ if (file_exists($filePath) && !$forceOverwrite) {
             while ($i <= 99) {
                 $suffix = 'Umleitung_' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
                 $candidateBase = $origBase . '_' . $suffix;
-                $candidatePath = $lineDir . '/' . $candidateBase . '.json';
+                $candidatePath = lehrfahrer_route_file($companyId, $city, $candidateBase, 'json', $lineFolder, $categoryFolder);
                 if (!file_exists($candidatePath)) {
                     $fileBase = $candidateBase;
                     $filePath = $candidatePath;
@@ -601,7 +591,7 @@ if (file_exists($filePath) && !$forceOverwrite) {
             $i = 1;
             while (file_exists($filePath) && $i <= 99) {
                 $fileBase = $origBase . '_' . str_pad($i, 2, '0', STR_PAD_LEFT);
-                $filePath = $lineDir . '/' . $fileBase . '.json';
+                $filePath = lehrfahrer_route_file($companyId, $city, $fileBase, 'json', $lineFolder, $categoryFolder);
                 $i++;
             }
         }
@@ -632,7 +622,7 @@ if ($result === false) {
 
 $pdfSaved = false;
 $pdfFile = $fileBase . '.pdf';
-$pdfPath = $lineDir . '/' . $pdfFile;
+$pdfPath = lehrfahrer_route_file($companyId, $city, $fileBase, 'pdf', $lineFolder, $categoryFolder);
 $pdfError = null;
 $pdfSavedPath = null;
 $pdfTriedPaths = [];
@@ -643,13 +633,16 @@ try {
     $candidates = [$pdfPath];
 
     foreach ($candidates as $candidatePath) {
-        $pdfTriedPaths[] = $candidatePath;
+        $pdfTriedPaths[] = basename($candidatePath);
 
         $tmpPath = $candidatePath . '.tmp';
         $tmpWrite = @file_put_contents($tmpPath, $pdfBinary);
         if ($tmpWrite !== false && @rename($tmpPath, $candidatePath) && isRealPdfFile($candidatePath)) {
             $pdfSaved = true;
-            $pdfSavedPath = $candidatePath;
+            $pdfSavedPath = 'api/download_line_pdf.php?' . http_build_query([
+                'city' => $city, 'line' => $fileBase,
+                'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder
+            ], '', '&', PHP_QUERY_RFC3986);
             $pdfPath = $candidatePath;
             break;
         }
@@ -660,7 +653,10 @@ try {
         $directWrite = @file_put_contents($candidatePath, $pdfBinary);
         if ($directWrite !== false && isRealPdfFile($candidatePath)) {
             $pdfSaved = true;
-            $pdfSavedPath = $candidatePath;
+            $pdfSavedPath = 'api/download_line_pdf.php?' . http_build_query([
+                'city' => $city, 'line' => $fileBase,
+                'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder
+            ], '', '&', PHP_QUERY_RFC3986);
             $pdfPath = $candidatePath;
             break;
         }

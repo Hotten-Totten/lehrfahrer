@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.delete', true, true);
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.delete', true, true);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -63,38 +63,9 @@ if ($line === '') {
     exit;
 }
 
-$cityDir = dirname(__DIR__) . '/linien/' . $city;
+$jsonPath = lehrfahrer_route_find_file($companyId, $city, $line, 'json', $lineFolder, $categoryFolder);
 
-// Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json + .gpx
-// Zwischenformat: linien/{city}/{lineFolder}/{line}.json + .gpx
-// Fallback:     linien/{city}/{line}.json + /gpx/{line}.gpx
-if ($lineFolder !== '' && $categoryFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json')) {
-    $jsonPath = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.json';
-    $gpxPath  = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.gpx';
-    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName($lineFolder . '_' . $categoryFolder, $line);
-    $legacyPdfPathA = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/' . $line . '.pdf';
-    $legacyPdfPathB = $cityDir . '/' . $lineFolder . '/' . $categoryFolder . '/gpx/' . $line . '.pdf';
-    $folderToClean = $cityDir . '/' . $lineFolder . '/' . $categoryFolder;
-    $parentFolderToClean = $cityDir . '/' . $lineFolder;
-} elseif ($lineFolder !== '' && file_exists($cityDir . '/' . $lineFolder . '/' . $line . '.json')) {
-    $jsonPath = $cityDir . '/' . $lineFolder . '/' . $line . '.json';
-    $gpxPath  = $cityDir . '/' . $lineFolder . '/' . $line . '.gpx';
-    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName($lineFolder, $line);
-    $legacyPdfPathA = $cityDir . '/' . $lineFolder . '/' . $line . '.pdf';
-    $legacyPdfPathB = $cityDir . '/' . $lineFolder . '/gpx/' . $line . '.pdf';
-    $folderToClean = $cityDir . '/' . $lineFolder;
-    $parentFolderToClean = null;
-} else {
-    $jsonPath = $cityDir . '/' . $line . '.json';
-    $gpxPath  = $cityDir . '/gpx/' . $line . '.gpx';
-    $pdfPath  = $cityDir . '/pdf/' . buildPdfStorageFileName('', $line);
-    $legacyPdfPathA = $cityDir . '/' . $line . '.pdf';
-    $legacyPdfPathB = $cityDir . '/gpx/' . $line . '.pdf';
-    $folderToClean = null;
-    $parentFolderToClean = null;
-}
-
-if (!file_exists($jsonPath)) {
+if ($jsonPath === null) {
     http_response_code(404);
     echo json_encode([
         'ok' => false,
@@ -102,6 +73,19 @@ if (!file_exists($jsonPath)) {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+$linesRoot = lehrfahrer_tenant_area($companyId, 'lines');
+$cityDir = lehrfahrer_route_line_city_path($companyId, $city);
+$folderToClean = dirname($jsonPath) !== $cityDir ? dirname($jsonPath) : null;
+$parentFolderToClean = $folderToClean && dirname($folderToClean) !== $cityDir ? dirname($folderToClean) : null;
+$relativeDirectory = str_replace('\\', '/', substr(dirname($jsonPath), strlen($linesRoot) + 1));
+$gpxPath = lehrfahrer_tenant_path($companyId, 'lines', $relativeDirectory . '/' . $line . '.gpx');
+if (!is_file($gpxPath) && $relativeDirectory === $city) {
+    $gpxPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/gpx/' . $line . '.gpx');
+}
+$pdfPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $line));
+$legacyPdfPathA = lehrfahrer_tenant_path($companyId, 'lines', $relativeDirectory . '/' . $line . '.pdf');
+$legacyPdfPathB = lehrfahrer_tenant_path($companyId, 'lines', $relativeDirectory . '/gpx/' . $line . '.pdf');
 
 $deletedJson = unlink($jsonPath);
 $deletedGpx = false;

@@ -2020,11 +2020,12 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
     if (line.hasGpx) {
       const gpxUrl = line.gpxPath
         ? String(line.gpxPath)
-        : "linien/" + [city, oldLineFolder, categoryFolder, fileBase + ".gpx"]
-          .filter(Boolean)
-          .map(part => encodeURIComponent(part))
-          .join("/");
-      const gpxResponse = await fetch(gpxUrl, { cache: "no-store" });
+        : "api/download_line_gpx.php?" + new URLSearchParams({
+          city, line: fileBase, lineFolder: oldLineFolder || "", categoryFolder: categoryFolder || ""
+        }).toString();
+      const gpxResponse = await fetch(gpxUrl, {
+        cache: "no-store", headers: withApiAuthHeaders({})
+      });
       if (!gpxResponse.ok) {
         throw new Error("Vorhandene GPX-Datei konnte für den Ordnerwechsel nicht geladen werden.");
       }

@@ -1,20 +1,17 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.read');
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.read');
 
-$baseDir = __DIR__ . "/../linien";
-if (!is_dir($baseDir)) {
-    mkdir($baseDir, 0775, true);
-}
+$baseDir = lehrfahrer_tenant_area($companyId, 'cities');
 
-$entries = scandir($baseDir);
+$entries = lehrfahrer_route_safe_entries($baseDir);
 $cities = [];
 $includeEmpty = (($_GET['includeEmpty'] ?? '0') === '1');
 
 function cityHasLineJson(string $cityPath): bool {
     // Altes Format: linien/{city}/*.json
-    $directJson = glob($cityPath . '/*.json');
+    $directJson = array_filter(glob($cityPath . '/*.json') ?: [], static fn($file) => !is_link($file));
     if (!empty($directJson)) {
         return true;
     }
@@ -29,8 +26,8 @@ function cityHasLineJson(string $cityPath): bool {
     foreach ($subEntries as $sub) {
         if ($sub === '.' || $sub === '..' || $sub === 'backup' || $sub === 'gpx') continue;
         $subPath = $cityPath . '/' . $sub;
-        if (!is_dir($subPath)) continue;
-        $jsonFiles = glob($subPath . '/*.json');
+        if (is_link($subPath) || !is_dir($subPath)) continue;
+        $jsonFiles = array_filter(glob($subPath . '/*.json') ?: [], static fn($file) => !is_link($file));
         if (!empty($jsonFiles)) {
             return true;
         }
@@ -39,7 +36,8 @@ function cityHasLineJson(string $cityPath): bool {
         foreach ($categoryEntries as $category) {
             if ($category === '.' || $category === '..' || $category === 'backup' || $category === 'gpx' || $category === 'pdf') continue;
             $categoryPath = $subPath . '/' . $category;
-            if (is_dir($categoryPath) && !empty(glob($categoryPath . '/*.json'))) {
+            if (!is_link($categoryPath) && is_dir($categoryPath)
+                && !empty(array_filter(glob($categoryPath . '/*.json') ?: [], static fn($file) => !is_link($file)))) {
                 return true;
             }
         }
@@ -52,22 +50,11 @@ foreach ($entries as $entry) {
     if ($entry === "." || $entry === "..") continue;
     if ($entry === 'backup' || $entry === 'gpx') continue;
 
-    $fullPath = $baseDir . "/" . $entry;
+    $fullPath = lehrfahrer_route_city_path($companyId, $entry);
 
     if (!is_dir($fullPath)) continue;
 
-    if ($entry === 'linien') {
-        foreach (@scandir($fullPath) ?: [] as $nestedCity) {
-            if ($nestedCity === '.' || $nestedCity === '..') continue;
-            $nestedCityPath = $fullPath . '/' . $nestedCity;
-            if (is_dir($nestedCityPath) && ($includeEmpty || cityHasLineJson($nestedCityPath))) {
-                $cities[] = $nestedCity;
-            }
-        }
-        continue;
-    }
-
-    if ($includeEmpty || cityHasLineJson($fullPath)) {
+    if ($includeEmpty || cityHasLineJson(lehrfahrer_route_line_city_path($companyId, $entry))) {
         $cities[] = $entry;
     }
 }

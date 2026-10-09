@@ -2,12 +2,26 @@
 error_reporting(0);
 ini_set('display_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
-lehrfahrer_api_authorize('routes.read');
+require_once __DIR__ . '/_tenant_route_storage.php';
+$companyId = lehrfahrer_route_authorize('routes.read');
 
-$baseDir = dirname(__DIR__);
-$linienBaseDir = $baseDir . '/linien';
-$citySettingsFile = $baseDir . '/data/city_settings.json';
+$linienBaseDir = lehrfahrer_tenant_area($companyId, 'lines');
+$citiesBaseDir = lehrfahrer_tenant_area($companyId, 'cities');
+$citySettingsFile = lehrfahrer_route_settings_path($companyId);
+
+function tenantAssetUrl(string $city, string $fileBase, ?string $lineFolder, ?string $categoryFolder, string $extension): string {
+    $endpoint = $extension === 'gpx' ? 'download_line_gpx.php' : 'download_line_json.php';
+    $params = ['city' => $city, 'line' => $fileBase];
+    if ($lineFolder) $params['lineFolder'] = $lineFolder;
+    if ($categoryFolder) $params['categoryFolder'] = $categoryFolder;
+    return 'api/' . $endpoint . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+}
+
+function tenantAssetExists(string $path): bool {
+    if (is_link($path) || !is_file($path)) return false;
+    $resolved = realpath($path);
+    return $resolved !== false && lehrfahrer_tenant_same_path($resolved, $path);
+}
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -55,7 +69,7 @@ function getVariantCategoryForList(array $data): string {
     return $category !== '' ? $category : 'Standard';
 }
 
-if (!is_dir($linienBaseDir)) {
+if (!is_dir($citiesBaseDir)) {
     echo json_encode([
         'ok' => true,
         'lines' => []
@@ -71,33 +85,22 @@ $cities = [];
 $cityDirs = [];
 
 if ($requestedCity !== '') {
-    $cityDir = $linienBaseDir . '/' . $requestedCity;
-    if (is_dir($cityDir)) {
+    if (lehrfahrer_route_city_exists($companyId, $requestedCity)) {
+        $cityDir = lehrfahrer_route_line_city_path($companyId, $requestedCity);
         $cities[] = $requestedCity;
         $cityDirs[$requestedCity] = $cityDir;
-    } elseif (is_dir($linienBaseDir . '/linien/' . $requestedCity)) {
-        $cities[] = $requestedCity;
-        $cityDirs[$requestedCity] = $linienBaseDir . '/linien/' . $requestedCity;
+    } else {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden']);
+        exit;
     }
 } else {
-    $entries = scandir($linienBaseDir);
+    $entries = lehrfahrer_route_safe_entries($citiesBaseDir);
     foreach ($entries as $entry) {
-        if ($entry === '.' || $entry === '..') continue;
-        $fullPath = $linienBaseDir . '/' . $entry;
+        $fullPath = lehrfahrer_route_city_path($companyId, $entry);
         if (is_dir($fullPath)) {
-            if ($entry === 'linien') {
-                foreach (@scandir($fullPath) ?: [] as $nestedCity) {
-                    if ($nestedCity === '.' || $nestedCity === '..') continue;
-                    $nestedPath = $fullPath . '/' . $nestedCity;
-                    if (is_dir($nestedPath) && !isset($cityDirs[$nestedCity])) {
-                        $cities[] = $nestedCity;
-                        $cityDirs[$nestedCity] = $nestedPath;
-                    }
-                }
-            } else {
-                $cities[] = $entry;
-                $cityDirs[$entry] = $fullPath;
-            }
+            $cities[] = $entry;
+            $cityDirs[$entry] = lehrfahrer_route_line_city_path($companyId, $entry);
         }
     }
 }
@@ -105,26 +108,26 @@ if ($requestedCity !== '') {
 $lines = [];
 
 foreach ($cities as $city) {
-    $cityDir = $cityDirs[$city] ?? ($linienBaseDir . '/' . $city);
-    $cityUrlBase = str_replace('\\', '/', substr($cityDir, strlen($baseDir) + 1));
+    $cityDir = $cityDirs[$city] ?? lehrfahrer_route_line_city_path($companyId, $city);
 
     // ---- Neues Format: linien/{city}/{lineFolder}/*.json ----
-    $entries = @scandir($cityDir);
+    $entries = lehrfahrer_route_safe_entries($cityDir);
     if ($entries) {
         foreach ($entries as $entry) {
             if ($entry === '.' || $entry === '..' || $entry === 'gpx' || $entry === 'backup') continue;
             $subPath = $cityDir . '/' . $entry;
-            if (!is_dir($subPath)) continue;  // nur Unterordner (= lineFolders)
+            if (is_link($subPath) || !is_dir($subPath)) continue;
 
-            $categoryEntries = @scandir($subPath);
+            $categoryEntries = lehrfahrer_route_safe_entries($subPath);
             if ($categoryEntries) {
                 foreach ($categoryEntries as $categoryEntry) {
                     if ($categoryEntry === '.' || $categoryEntry === '..' || $categoryEntry === 'gpx' || $categoryEntry === 'backup') continue;
                     $categoryPath = $subPath . '/' . $categoryEntry;
-                    if (!is_dir($categoryPath)) continue;
+                    if (is_link($categoryPath) || !is_dir($categoryPath)) continue;
 
                     $categoryFiles = glob($categoryPath . '/*.json');
                     foreach ($categoryFiles as $file) {
+                        if (is_link($file)) continue;
                         $content = file_get_contents($file);
                         $data    = json_decode($content, true);
                         if (!is_array($data)) continue;
@@ -135,14 +138,14 @@ foreach ($cities as $city) {
                         $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName($entry . '_' . $categoryEntry, $fileBase);
                         $pdfPath  = $categoryPath . '/' . $fileBase . '.pdf';
                         $pdfPathGpx = $categoryPath . '/gpx/' . $fileBase . '.pdf';
-                        $hasGpx   = file_exists($gpxPath);
-                        $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
+                        $hasGpx   = tenantAssetExists($gpxPath);
+                        $hasPdf   = tenantAssetExists($pdfPathCentral) || tenantAssetExists($pdfPath) || tenantAssetExists($pdfPathGpx);
                         $pdfFileName = null;
-                        if (file_exists($pdfPathCentral)) {
+                        if (tenantAssetExists($pdfPathCentral)) {
                             $pdfFileName = basename($pdfPathCentral);
-                        } elseif (file_exists($pdfPath)) {
+                        } elseif (tenantAssetExists($pdfPath)) {
                             $pdfFileName = basename($pdfPath);
-                        } elseif (file_exists($pdfPathGpx)) {
+                        } elseif (tenantAssetExists($pdfPathGpx)) {
                             $pdfFileName = basename($pdfPathGpx);
                         }
 
@@ -151,8 +154,8 @@ foreach ($cities as $city) {
                             'lineFolder'        => $entry,
                             'categoryFolder'    => $categoryEntry,
                             'file'              => basename($file),
-                            'jsonPath'          => $cityUrlBase . '/' . $entry . '/' . $categoryEntry . '/' . basename($file),
-                            'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase . '.gpx' : null,
+                            'jsonPath'          => tenantAssetUrl($city, $fileBase, $entry, $categoryEntry, 'json'),
+                            'gpxPath'           => $hasGpx ? tenantAssetUrl($city, $fileBase, $entry, $categoryEntry, 'gpx') : null,
                             'fileBase'          => $fileBase,
                             'id'                => $city . '/' . $entry . '/' . $categoryEntry . '/' . $fileBase,
                             'routeType'         => getOperationalRouteType($data),
@@ -187,6 +190,7 @@ foreach ($cities as $city) {
 
             $files = glob($subPath . '/*.json');
             foreach ($files as $file) {
+                if (is_link($file)) continue;
                 $content = file_get_contents($file);
                 $data    = json_decode($content, true);
                 if (!is_array($data)) continue;
@@ -197,14 +201,14 @@ foreach ($cities as $city) {
                 $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName($entry, $fileBase);
                 $pdfPath  = $subPath . '/' . $fileBase . '.pdf';
                 $pdfPathGpx = $subPath . '/gpx/' . $fileBase . '.pdf';
-                $hasGpx   = file_exists($gpxPath);
-                $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
+                $hasGpx   = tenantAssetExists($gpxPath);
+                $hasPdf   = tenantAssetExists($pdfPathCentral) || tenantAssetExists($pdfPath) || tenantAssetExists($pdfPathGpx);
                 $pdfFileName = null;
-                if (file_exists($pdfPathCentral)) {
+                if (tenantAssetExists($pdfPathCentral)) {
                     $pdfFileName = basename($pdfPathCentral);
-                } elseif (file_exists($pdfPath)) {
+                } elseif (tenantAssetExists($pdfPath)) {
                     $pdfFileName = basename($pdfPath);
-                } elseif (file_exists($pdfPathGpx)) {
+                } elseif (tenantAssetExists($pdfPathGpx)) {
                     $pdfFileName = basename($pdfPathGpx);
                 }
 
@@ -213,8 +217,8 @@ foreach ($cities as $city) {
                     'lineFolder'        => $entry,
                     'categoryFolder'    => null,
                     'file'              => basename($file),
-                    'jsonPath'          => $cityUrlBase . '/' . $entry . '/' . basename($file),
-                    'gpxPath'           => $hasGpx ? $cityUrlBase . '/' . $entry . '/' . $fileBase . '.gpx' : null,
+                    'jsonPath'          => tenantAssetUrl($city, $fileBase, $entry, null, 'json'),
+                    'gpxPath'           => $hasGpx ? tenantAssetUrl($city, $fileBase, $entry, null, 'gpx') : null,
                     'fileBase'          => $fileBase,
                     'id'                => $city . '/' . $entry . '/' . $fileBase,
                     'routeType'         => getOperationalRouteType($data),
@@ -250,6 +254,7 @@ foreach ($cities as $city) {
     // ---- Altes Format (Rückwärtskompatibel): linien/{city}/*.json ----
     $oldFiles = glob($cityDir . '/*.json');
     foreach ($oldFiles as $file) {
+        if (is_link($file)) continue;
         $content = file_get_contents($file);
         $data    = json_decode($content, true);
         if (!is_array($data)) continue;
@@ -260,14 +265,14 @@ foreach ($cities as $city) {
         $pdfPathCentral = $cityDir . '/pdf/' . buildPdfStorageFileName('', $fileBase);
         $pdfPath  = $cityDir . '/' . $fileBase . '.pdf';
         $pdfPathGpx = $cityDir . '/gpx/' . $fileBase . '.pdf';
-        $hasGpx   = file_exists($gpxPath);
-        $hasPdf   = file_exists($pdfPathCentral) || file_exists($pdfPath) || file_exists($pdfPathGpx);
+        $hasGpx   = tenantAssetExists($gpxPath);
+        $hasPdf   = tenantAssetExists($pdfPathCentral) || tenantAssetExists($pdfPath) || tenantAssetExists($pdfPathGpx);
         $pdfFileName = null;
-        if (file_exists($pdfPathCentral)) {
+        if (tenantAssetExists($pdfPathCentral)) {
             $pdfFileName = basename($pdfPathCentral);
-        } elseif (file_exists($pdfPath)) {
+        } elseif (tenantAssetExists($pdfPath)) {
             $pdfFileName = basename($pdfPath);
-        } elseif (file_exists($pdfPathGpx)) {
+        } elseif (tenantAssetExists($pdfPathGpx)) {
             $pdfFileName = basename($pdfPathGpx);
         }
 
@@ -276,8 +281,8 @@ foreach ($cities as $city) {
             'lineFolder'        => null,  // altes Format – kein Unterordner
             'categoryFolder'    => null,
             'file'              => basename($file),
-            'jsonPath'          => $cityUrlBase . '/' . basename($file),
-            'gpxPath'           => $hasGpx ? $cityUrlBase . '/gpx/' . $fileBase . '.gpx' : null,
+            'jsonPath'          => tenantAssetUrl($city, $fileBase, null, null, 'json'),
+            'gpxPath'           => $hasGpx ? tenantAssetUrl($city, $fileBase, null, null, 'gpx') : null,
             'fileBase'          => $fileBase,
             'id'                => $city . '/' . $fileBase,
             'routeType'         => getOperationalRouteType($data),

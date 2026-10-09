@@ -1,8 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_api_authorization.php';
+require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_professional_pdf.php';
-lehrfahrer_api_authorize('routes.maintain', true, true);
+$companyId = lehrfahrer_route_authorize('routes.maintain', true, true);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -511,7 +511,7 @@ function buildGpxFromLineData(array $lineData): ?string {
 }
 
 function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
-    $entries = @scandir($cityDir);
+    $entries = lehrfahrer_route_safe_entries($cityDir);
     $lines = [];
 
     if ($entries) {
@@ -520,10 +520,11 @@ function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
                 continue;
             }
             $subPath = $cityDir . '/' . $entry;
-            if (!is_dir($subPath)) {
+            if (is_link($subPath) || !is_dir($subPath)) {
                 continue;
             }
             foreach (glob($subPath . '/*.json') as $jsonFile) {
+                if (is_link($jsonFile)) continue;
                 $lines[] = [
                     'city' => $citySlug,
                     'lineFolder' => $entry,
@@ -531,15 +532,16 @@ function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
                     'fileBase' => pathinfo($jsonFile, PATHINFO_FILENAME)
                 ];
             }
-            foreach (scandir($subPath) as $categoryEntry) {
+            foreach (lehrfahrer_route_safe_entries($subPath) as $categoryEntry) {
                 if ($categoryEntry === '.' || $categoryEntry === '..') {
                     continue;
                 }
                 $categoryPath = $subPath . '/' . $categoryEntry;
-                if (!is_dir($categoryPath)) {
+                if (is_link($categoryPath) || !is_dir($categoryPath)) {
                     continue;
                 }
                 foreach (glob($categoryPath . '/*.json') as $jsonFile) {
+                    if (is_link($jsonFile)) continue;
                     $lines[] = [
                         'city' => $citySlug,
                         'lineFolder' => $entry,
@@ -553,6 +555,7 @@ function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
     }
 
     foreach (glob($cityDir . '/*.json') as $jsonFile) {
+        if (is_link($jsonFile)) continue;
         $lines[] = [
             'city' => $citySlug,
             'lineFolder' => '',
@@ -573,8 +576,8 @@ if (!is_array($input)) {
 $requestedCity = strtolower(trim((string)($input['city'] ?? '')));
 $requestedCity = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $requestedCity);
 
-$baseDir = dirname(__DIR__);
-$linienBaseDir = $baseDir . '/linien';
+$linienBaseDir = lehrfahrer_tenant_area($companyId, 'lines');
+$citiesBaseDir = lehrfahrer_tenant_area($companyId, 'cities');
 
 if (!is_dir($linienBaseDir)) {
     echo json_encode([
@@ -589,14 +592,16 @@ if (!is_dir($linienBaseDir)) {
 
 $cities = [];
 if ($requestedCity !== '') {
-    $cityDir = $linienBaseDir . '/' . $requestedCity;
-    if (is_dir($cityDir)) {
+    if (lehrfahrer_route_city_exists($companyId, $requestedCity)) {
         $cities[] = $requestedCity;
+    } else {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden']);
+        exit;
     }
 } else {
-    foreach (scandir($linienBaseDir) as $entry) {
-        if ($entry === '.' || $entry === '..') continue;
-        if (is_dir($linienBaseDir . '/' . $entry)) {
+    foreach (lehrfahrer_route_safe_entries($citiesBaseDir) as $entry) {
+        if (lehrfahrer_route_city_exists($companyId, $entry)) {
             $cities[] = $entry;
         }
     }
@@ -608,7 +613,7 @@ $generatedGpxCount = 0;
 $errors = [];
 
 foreach ($cities as $citySlug) {
-    $cityDir = $linienBaseDir . '/' . $citySlug;
+    $cityDir = lehrfahrer_route_line_city_path($companyId, $citySlug);
 
     $lineEntries = collectJsonLinesForCity($cityDir, $citySlug);
 
@@ -620,7 +625,7 @@ foreach ($cities as $citySlug) {
 
         if (!is_array($lineData)) {
             $errors[] = [
-                'file' => $entry['jsonPath'],
+                'file' => basename($entry['jsonPath']),
                 'error' => 'JSON ungültig'
             ];
             continue;
@@ -630,9 +635,8 @@ foreach ($cities as $citySlug) {
             $lineData['savedAt'] = date('c');
         }
 
-        $targetDir = dirname($entry['jsonPath']);
-        $targetPdfPath = $targetDir . '/' . $entry['fileBase'] . '.pdf';
-        $targetGpxPath = $targetDir . '/' . $entry['fileBase'] . '.gpx';
+        $targetPdfPath = lehrfahrer_route_sibling_path($companyId, $entry['jsonPath'], $entry['fileBase'] . '.pdf');
+        $targetGpxPath = lehrfahrer_route_sibling_path($companyId, $entry['jsonPath'], $entry['fileBase'] . '.gpx');
 
         try {
             $pdfBinary = buildLineOverviewPdf($lineData, $citySlug, $entry['lineFolder'] ?: '-');
@@ -640,9 +644,9 @@ foreach ($cities as $citySlug) {
             clearstatcache(true, $targetPdfPath);
             if ($writeOk === false || !is_file($targetPdfPath) || filesize($targetPdfPath) <= 0) {
                 $errors[] = [
-                    'file' => $entry['jsonPath'],
+                    'file' => basename($entry['jsonPath']),
                     'error' => 'PDF konnte nicht gespeichert werden',
-                    'target' => $targetPdfPath
+                    'target' => basename($targetPdfPath)
                 ];
                 continue;
             }
@@ -659,9 +663,9 @@ foreach ($cities as $citySlug) {
             }
         } catch (Throwable $err) {
             $errors[] = [
-                'file' => $entry['jsonPath'],
+                'file' => basename($entry['jsonPath']),
                 'error' => $err->getMessage(),
-                'target' => $targetPdfPath
+                'target' => basename($targetPdfPath)
             ];
         }
     }
