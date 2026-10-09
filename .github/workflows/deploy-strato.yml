@@ -160,3 +160,130 @@ jobs:
               -e "$SSH_CMD" \
               ./ "$TARGET"
           fi
+
+      - name: Migrate sensitive legacy data outside the webroot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REMOTE_PATH="${{ secrets.STRATO_TARGET_PATH }}"
+          REMOTE_PATH="${REMOTE_PATH#/}"
+          if [ -z "$REMOTE_PATH" ] || [ "$REMOTE_PATH" = "." ]; then
+            REMOTE_PATH="."
+          fi
+
+          cat > /tmp/lehrfahrer-private-storage-migration.sh <<'MIGRATION'
+          set -euo pipefail
+
+          remote_path="$1"
+          if [ "$remote_path" = "." ]; then
+            webroot="$(pwd -P)"
+          else
+            webroot="$(cd "./$remote_path" && pwd -P)"
+          fi
+          private_root="$(dirname "$webroot")/lehrfahrer-private"
+
+          case "$private_root/" in
+            "$webroot/"*)
+              echo "Privater Speicher darf nicht innerhalb des Webroots liegen." >&2
+              exit 1
+              ;;
+          esac
+
+          mkdir -p \
+            "$private_root/personnel" \
+            "$private_root/trainings" \
+            "$private_root/fahrerunterlagen"
+          chmod 700 \
+            "$private_root" \
+            "$private_root/personnel" \
+            "$private_root/trainings" \
+            "$private_root/fahrerunterlagen"
+
+          migrate_file() {
+            source_file="$1"
+            target_file="$2"
+            [ -f "$source_file" ] || return 0
+            mkdir -p "$(dirname "$target_file")"
+            chmod 700 "$(dirname "$target_file")"
+            if [ -e "$target_file" ]; then
+              if ! cmp -s "$source_file" "$target_file"; then
+                echo "Abweichender privater Zielbestand fuer eine sensible Altdatei." >&2
+                exit 1
+              fi
+              rm -f -- "$source_file"
+            else
+              mv -- "$source_file" "$target_file"
+            fi
+            chmod 600 "$target_file"
+          }
+
+          migrate_file \
+            "$webroot/data/drivers.json" \
+            "$private_root/personnel/drivers.json"
+
+          if [ -d "$webroot/data/trainings" ]; then
+            while IFS= read -r -d '' source_file; do
+              migrate_file \
+                "$source_file" \
+                "$private_root/trainings/$(basename "$source_file")"
+            done < <(find "$webroot/data/trainings" -maxdepth 1 -type f -name 'training_*.json' -print0)
+          fi
+
+          if [ -d "$webroot/fahrerunterlagen" ]; then
+            while IFS= read -r -d '' source_file; do
+              relative_file="${source_file#"$webroot/fahrerunterlagen/"}"
+              migrate_file \
+                "$source_file" \
+                "$private_root/fahrerunterlagen/$relative_file"
+            done < <(find "$webroot/fahrerunterlagen" -type f -print0)
+            find "$webroot/fahrerunterlagen" -depth -type d -empty -delete
+          fi
+
+          if [ -d "$webroot/linien/test" ]; then
+            find "$webroot/linien/test" -type f \
+              \( -iname 'drivers*.json' \
+                 -o -iname 'trainings*.json' \
+                 -o -iname 'training_*.json' \
+                 -o -iname 'paket.json' \
+                 -o -iname '*.pdf' \
+                 -o -iname '*.zip' \) \
+              -delete
+          fi
+
+          if [ -f "$webroot/data/drivers.json" ] \
+            || find "$webroot/data/trainings" -maxdepth 1 -type f -name 'training_*.json' -print -quit 2>/dev/null | grep -q . \
+            || find "$webroot/fahrerunterlagen" -type f -print -quit 2>/dev/null | grep -q . \
+            || find "$webroot/linien/test" -type f \
+                 \( -iname 'drivers*.json' \
+                    -o -iname 'trainings*.json' \
+                    -o -iname 'training_*.json' \
+                    -o -iname 'paket.json' \
+                    -o -iname '*.pdf' \
+                    -o -iname '*.zip' \) \
+                 -print -quit 2>/dev/null | grep -q .; then
+            echo "Sensible Altdateien sind nach der Migration im Webroot verblieben." >&2
+            exit 1
+          fi
+
+          echo "Private-Storage-Migration erfolgreich."
+          MIGRATION
+
+          printf -v QUOTED_REMOTE_PATH '%q' "$REMOTE_PATH"
+          REMOTE_COMMAND="bash -s -- $QUOTED_REMOTE_PATH"
+          SSH_BASE=(
+            ssh
+            -p "${{ secrets.STRATO_PORT }}"
+            -o UpdateHostKeys=no
+            -o StrictHostKeyChecking=accept-new
+          )
+          REMOTE_HOST="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}"
+
+          if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
+            "${SSH_BASE[@]}" -i ~/.ssh/id_rsa "$REMOTE_HOST" "$REMOTE_COMMAND" \
+              < /tmp/lehrfahrer-private-storage-migration.sh
+          else
+            export SSHPASS="${{ secrets.STRATO_PASSWORD }}"
+            sshpass -e "${SSH_BASE[@]}" "$REMOTE_HOST" "$REMOTE_COMMAND" \
+              < /tmp/lehrfahrer-private-storage-migration.sh
+          fi
