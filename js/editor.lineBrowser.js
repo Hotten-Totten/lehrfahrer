@@ -342,8 +342,9 @@ function renderLineBrowser(lines) {
         }
         if (line.hasPdf) {
           const dlPdfBtn = makeBtn("↓ PDF", "lbr-btn-download");
-          dlPdfBtn.addEventListener("click", e => {
+          dlPdfBtn.addEventListener("click", async e => {
             e.stopPropagation();
+            dlPdfBtn.disabled = true;
             const params = new URLSearchParams();
             params.set("city", line.city || "cottbus");
             params.set("line", line.fileBase || line.id || "");
@@ -353,10 +354,25 @@ function renderLineBrowser(lines) {
             if (line.categoryFolder) {
               params.set("categoryFolder", line.categoryFolder);
             }
-            const a = document.createElement("a");
-            a.href = "api/download_line_pdf.php?" + params.toString();
-            a.download = (line.fileBase || line.id || "linie") + ".pdf";
-            document.body.appendChild(a); a.click(); a.remove();
+            try {
+              const response = await fetch("api/download_line_pdf.php?" + params.toString(), {
+                headers: withApiAuthHeaders({})
+              });
+              if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result.error || "PDF konnte nicht geladen werden.");
+              }
+              const blobUrl = URL.createObjectURL(await response.blob());
+              const a = document.createElement("a");
+              a.href = blobUrl;
+              a.download = (line.fileBase || line.id || "linie") + ".pdf";
+              document.body.appendChild(a); a.click(); a.remove();
+              URL.revokeObjectURL(blobUrl);
+            } catch (error) {
+              alert(error.message || "PDF konnte nicht geladen werden.");
+            } finally {
+              dlPdfBtn.disabled = false;
+            }
           });
           actions.appendChild(dlPdfBtn);
         }

@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.read');
+
 use Lehrfahrer\Pdf\PdfBranding;
 use Lehrfahrer\Pdf\PdfHelpers;
 use Lehrfahrer\Pdf\PdfPreviewV2;

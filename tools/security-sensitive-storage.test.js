@@ -94,7 +94,9 @@ test('authentifizierte APIs migrieren und lesen Fahrer, Einweisungen und Pakete 
   fs.mkdirSync(apiDir, { recursive: true });
 
   for (const file of [
-    '_auth.php', '_private_storage.php', '_driver_packages.php', 'drivers.php',
+    '_auth.php', '_api_authorization.php', '_session_auth.php', '_runtime_info.php',
+    '_control_database.php', '_control_schema.php', '_control_passwords.php',
+    '_control_repositories.php', '_private_storage.php', '_driver_packages.php', 'drivers.php',
     'trainings.php', 'list_driver_packages.php', 'download_driver_package.php'
   ]) {
     fs.copyFileSync(path.join(projectRoot, 'api', file), path.join(apiDir, file));

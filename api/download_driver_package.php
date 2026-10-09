@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_driver_packages.php';
-lehrfahrer_require_write_auth();
+lehrfahrer_api_authorize('packages.download', false, true);
 
 $package = driverPackageFind(trim((string)($_GET['id'] ?? '')));
 if ($package === null) {

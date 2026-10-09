@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
-lehrfahrer_require_write_auth();
+require_once __DIR__ . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.import', true, true);
 
 function vbb_json_error(int $status, string $message): void {
     http_response_code($status);

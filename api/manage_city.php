@@ -1,7 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
-lehrfahrer_require_write_auth();
+require_once __DIR__ . '/_api_authorization.php';
 
 function cityManageRespond(int $status, array $payload): void {
     http_response_code($status);
@@ -175,6 +174,7 @@ if ($method !== 'POST') {
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) cityManageRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);
 $action = strtolower(trim((string)($input['action'] ?? '')));
+lehrfahrer_api_authorize('cities.manage', $action !== 'analyze', true);
 $city = cityManageSlug($input['oldName'] ?? ($input['city'] ?? ''));
 if ($city === '') cityManageRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
 

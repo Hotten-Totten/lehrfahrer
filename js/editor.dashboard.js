@@ -34,7 +34,10 @@ async function openDashboard() {
     academyFetchTrainings("running"),
     academyFetchTrainings("completed"),
     fetchDriverPackages(),
-    fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, { cache: "no-store" }).then(response => response.json())
+    fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, {
+      cache: "no-store",
+      headers: withApiAuthHeaders({})
+    }).then(response => response.json())
   ]);
 
   const drivers = driversResult.status === "fulfilled" ? driversResult.value : [];

@@ -42,7 +42,10 @@ async function openDriverDocumentsDialog(options = {}) {
   modal.classList.remove("hidden");
 
   try {
-    const response = await fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, {
+      cache: "no-store",
+      headers: withApiAuthHeaders({})
+    });
     const result = await response.json();
     if (!response.ok || !result?.ok || !Array.isArray(result.lines)) {
       throw new Error(result?.error || "Linienliste konnte nicht geladen werden.");

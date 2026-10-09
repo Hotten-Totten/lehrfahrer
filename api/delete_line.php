@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
-lehrfahrer_require_write_auth();
+require_once __DIR__ . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.delete', true, true);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -37,8 +37,6 @@ if (!$data || !is_array($data)) {
     exit;
 }
 
-$baseDir = dirname(__DIR__);
-
 $city = trim($data['city'] ?? 'cottbus');
 $city = strtolower($city);
 $city = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $city);
@@ -65,7 +63,7 @@ if ($line === '') {
     exit;
 }
 
-$cityDir  = $baseDir . '/linien/' . $city;
+$cityDir = dirname(__DIR__) . '/linien/' . $city;
 
 // Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json + .gpx
 // Zwischenformat: linien/{city}/{lineFolder}/{line}.json + .gpx

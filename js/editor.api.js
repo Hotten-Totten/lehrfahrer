@@ -563,7 +563,7 @@ async function findExistingLineEntry(city, lineFolder, categoryFolder, fileBase)
 
     const response = await fetch(
       `${API_LIST_LINES_URL}?${params.toString()}`,
-      { cache: "no-store" }
+      { cache: "no-store", headers: withApiAuthHeaders({}) }
     );
     const result = await response.json();
 
@@ -1813,7 +1813,7 @@ async function fetchLineListFromServer(cityFilter = null) {
 
     const response = await fetch(
       `${API_LIST_LINES_URL}?${params.toString()}`,
-      { cache: "no-store" }
+      { cache: "no-store", headers: withApiAuthHeaders({}) }
     );
     const rawText = await response.text();
     let result;
@@ -1870,7 +1870,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
 
     const loadRes = await fetch(
       `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(normalizedLineId)}&lineFolder=${encodeURIComponent(lineFolder || "")}&categoryFolder=${encodeURIComponent(categoryFolder || "")}`,
-      { cache: "no-store" }
+      { cache: "no-store", headers: withApiAuthHeaders({}) }
     );
 
     const rawText = await loadRes.text();
@@ -1990,7 +1990,7 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
 
     const loadRes = await fetch(
       `${API_LOAD_LINE_URL}?city=${encodeURIComponent(city)}&line=${encodeURIComponent(fileBase)}&lineFolder=${encodeURIComponent(oldLineFolder || "")}&categoryFolder=${encodeURIComponent(oldCategoryFolder || "")}`,
-      { cache: "no-store" }
+      { cache: "no-store", headers: withApiAuthHeaders({}) }
     );
     const loadResult = await loadRes.json();
 

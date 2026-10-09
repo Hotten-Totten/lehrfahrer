@@ -10,7 +10,7 @@ const listLinesSource = fs.readFileSync(path.resolve(__dirname, '../api/list_lin
 const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
 
 test('Ortsverwaltung ist authentifiziert und bietet kompakte UI-Aktionen', () => {
-  assert.ok(apiSource.includes('lehrfahrer_require_write_auth()'));
+  assert.ok(apiSource.includes("lehrfahrer_api_authorize('cities.manage'"));
   assert.match(editorHtml, /id="renameCityBtn"[^>]*>Umbenennen<\/button>/);
   assert.match(editorHtml, /id="deleteCityBtn"[^>]*>Löschen<\/button>/);
 });

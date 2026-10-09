@@ -2,6 +2,8 @@
 error_reporting(0);
 ini_set('display_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.read');
 
 $baseDir = dirname(__DIR__);
 $linienBaseDir = $baseDir . '/linien';

@@ -1,8 +1,9 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
+require_once __DIR__ . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.read');
 
 $baseDir = __DIR__ . "/../linien";
-
 if (!is_dir($baseDir)) {
     mkdir($baseDir, 0775, true);
 }
@@ -55,7 +56,6 @@ foreach ($entries as $entry) {
 
     if (!is_dir($fullPath)) continue;
 
-    // Lesefallback für versehentlich doppelt angelegte Struktur linien/linien/{city}.
     if ($entry === 'linien') {
         foreach (@scandir($fullPath) ?: [] as $nestedCity) {
             if ($nestedCity === '.' || $nestedCity === '..') continue;

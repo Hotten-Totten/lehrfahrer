@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/_api_authorization.php';
 
 $baseDir = dirname(__DIR__);
 $dataDir = $baseDir . '/data';
@@ -42,6 +43,7 @@ function citySettingsSave(string $directory, string $file, array $settings): boo
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 if ($method === 'GET') {
+    lehrfahrer_api_authorize('operations.settings.read');
     $city = citySettingsCity($_GET['city'] ?? '');
     if ($city === '') citySettingsRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
     $settings = citySettingsLoad($dataFile);
@@ -58,8 +60,7 @@ if ($method !== 'POST') {
     citySettingsRespond(405, ['ok' => false, 'error' => 'Methode nicht erlaubt.']);
 }
 
-require_once __DIR__ . '/_auth.php';
-lehrfahrer_require_write_auth();
+lehrfahrer_api_authorize('operations.settings.write', true, true);
 
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) citySettingsRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);

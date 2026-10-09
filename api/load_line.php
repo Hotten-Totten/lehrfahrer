@@ -1,5 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/_api_authorization.php';
+lehrfahrer_api_authorize('routes.read');
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(

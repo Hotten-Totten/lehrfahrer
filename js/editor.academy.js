@@ -66,7 +66,10 @@ async function openAcademyNewTrainingDialog() {
   try {
     const [drivers, linesResponse] = await Promise.all([
       fetchDrivers().catch(() => []),
-      fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, { cache: "no-store" })
+      fetch(`${API_LIST_LINES_URL}?_ts=${Date.now()}`, {
+        cache: "no-store",
+        headers: withApiAuthHeaders({})
+      })
     ]);
     const linesResult = await linesResponse.json();
     if (!linesResponse.ok || !linesResult?.ok || !Array.isArray(linesResult.lines)) {

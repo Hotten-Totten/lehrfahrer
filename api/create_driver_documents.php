@@ -1,9 +1,9 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_driver_packages.php';
 require_once __DIR__ . '/_professional_pdf.php';
-lehrfahrer_require_write_auth();
+lehrfahrer_api_authorize('packages.create', true, true);
 
 function driverDocSlug(string $value, string $fallback): string {
     $value = str_replace(

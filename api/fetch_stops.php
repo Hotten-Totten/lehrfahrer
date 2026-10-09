@@ -1,14 +1,14 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
 set_time_limit(120); // PHP-Ausführungszeit erhöhen
-require_once __DIR__ . '/_auth.php';
-lehrfahrer_require_write_auth();
+require_once __DIR__ . '/_api_authorization.php';
 
 // ---- Parameter lesen & validieren ----
 $lat    = isset($_POST["lat"])    ? (float) $_POST["lat"]    : null;
 $lon    = isset($_POST["lon"])    ? (float) $_POST["lon"]    : null;
 $radius = isset($_POST["radius"]) ? (int)   $_POST["radius"] : null;
 $save   = isset($_POST["save"])   && $_POST["save"] === "1";
+lehrfahrer_api_authorize($save ? 'stops.catalog.write' : 'stops.fetch', $save, true);
 
 if ($lat === null || $lon === null || $radius === null) {
     http_response_code(400);

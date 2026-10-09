@@ -1,8 +1,9 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_private_storage.php';
-lehrfahrer_require_write_auth();
+$driverMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+lehrfahrer_api_authorize($driverMethod === 'GET' ? 'drivers.read' : 'drivers.manage', $driverMethod !== 'GET', true);
 
 $dataDir = lehrfahrer_private_storage_directory('personnel');
 $dataFile = $dataDir . '/drivers.json';
@@ -56,7 +57,7 @@ if (!is_file($dataFile) && !saveDrivers($dataDir, $dataFile, [])) {
     exit;
 }
 $drivers = array_map('normalizeDriver', loadDrivers($dataFile));
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+if ($driverMethod === 'GET') {
     usort($drivers, static function (array $a, array $b): int {
         $left = ($a['lastName'] ?? '') . ' ' . ($a['firstName'] ?? '');
         $right = ($b['lastName'] ?? '') . ' ' . ($b['firstName'] ?? '');

@@ -1,8 +1,9 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_api_authorization.php';
 require_once __DIR__ . '/_private_storage.php';
-lehrfahrer_require_write_auth();
+$trainingMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+lehrfahrer_api_authorize($trainingMethod === 'GET' ? 'trainings.read' : 'trainings.manage', $trainingMethod !== 'GET', true);
 
 $trainingDir = lehrfahrer_private_storage_directory('trainings');
 lehrfahrer_migrate_private_files(dirname(__DIR__) . '/data/trainings', $trainingDir, 'training_*.json');
@@ -112,7 +113,7 @@ function trainingCanChangeStatus(string $current, string $target): bool {
     return in_array($target, $allowed[$current] ?? [], true);
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+if ($trainingMethod === 'GET') {
     $status = trainingText($_GET['status'] ?? '', 40);
     $trainings = trainingLoadAll($trainingDir);
     if ($status === 'running') {

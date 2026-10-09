@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lehrfahrer – Anmeldung</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f4f6f8; color: #17202a; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
+    main { width: min(420px, calc(100% - 32px)); background: #fff; padding: 28px; border-radius: 14px; box-shadow: 0 10px 30px #17202a20; }
+    h1 { margin: 0 0 20px; font-size: 1.5rem; }
+    label { display: grid; gap: 6px; margin: 14px 0; font-weight: 600; }
+    input, button { box-sizing: border-box; width: 100%; min-height: 46px; border-radius: 8px; font: inherit; }
+    input { border: 1px solid #aeb7c2; padding: 10px 12px; }
+    button { border: 0; background: #b51f2e; color: #fff; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #environment { display: inline-block; margin-bottom: 12px; padding: 4px 8px; border-radius: 999px; background: #e8edf2; font-weight: 800; }
+    #message { min-height: 24px; margin: 14px 0 0; color: #9b1c2b; }
+    #runtime { margin-top: 18px; color: #66717d; font-size: .82rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="environment">–</div>
+    <h1>Lehrfahrer-Anmeldung</h1>
+    <form id="loginForm">
+      <label>Gesellschaft<input id="company" name="company" autocomplete="organization" required></label>
+      <label>Loginname<input id="login" name="username" autocomplete="username" required></label>
+      <label>Passwort<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+      <button id="loginButton" type="submit">Anmelden</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+    <div id="runtime"></div>
+  </main>
+  <script src="js/login.js"></script>
+</body>
+</html>

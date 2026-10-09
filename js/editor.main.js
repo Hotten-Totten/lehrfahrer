@@ -529,7 +529,8 @@ async function testApiWriteAuth() {
 async function loadCitiesFromServer(selectCity = "", { throwOnError = false } = {}) {
   try {
     const response = await fetch(`${API_BASE}/list_cities.php?includeEmpty=1`, {
-      cache: "no-store"
+      cache: "no-store",
+      headers: withApiAuthHeaders({})
     });
 
     // Prüfe ob die Antwort erfolgreich ist
@@ -771,7 +772,8 @@ async function loadCityDispatchPhoneSetting() {
 
   try {
     const response = await fetch(`${API_BASE}/city_settings.php?city=${encodeURIComponent(city)}`, {
-      cache: "no-store"
+      cache: "no-store",
+      headers: withApiAuthHeaders({})
     });
     const result = await response.json();
     if (!response.ok || !result.ok) {
