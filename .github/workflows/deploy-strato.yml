@@ -277,14 +277,27 @@ jobs:
             echo "Produktiver API-Schluessel ist fuer den Smoketest nicht konfiguriert." >&2
             exit 1
           fi
-          api_token="$(php -r '$secret = include $argv[1]; echo is_array($secret) ? ($secret["LEHRFAHRER_API_TOKEN"] ?? "") : "";' "$secret_file")"
+
+          umask 077
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$smoke_dir"' EXIT
+          cat > "$smoke_dir/read-secret.php" <<'PHP'
+          <?php
+          $secret = include $argv[1];
+          echo is_array($secret) ? ($secret['LEHRFAHRER_API_TOKEN'] ?? '') : '';
+          PHP
+          cat > "$smoke_dir/validate-json.php" <<'PHP'
+          <?php
+          $data = json_decode(file_get_contents($argv[1]), true);
+          exit(is_array($data) && ($data['ok'] ?? false) === true ? 0 : 1);
+          PHP
+
+          api_token="$(php -q -f "$smoke_dir/read-secret.php" -- "$secret_file")"
           if [ -z "$api_token" ]; then
             echo "Produktiver API-Schluessel ist leer." >&2
             exit 1
           fi
 
-          smoke_dir="$(mktemp -d)"
-          trap 'rm -rf -- "$smoke_dir"' EXIT
           authenticated_json_get() {
             endpoint="$1"
             output_file="$2"
@@ -297,7 +310,7 @@ jobs:
               echo "Authentifizierter API-Smoketest fehlgeschlagen." >&2
               exit 1
             fi
-            php -r '$data = json_decode(file_get_contents($argv[1]), true); exit(is_array($data) && ($data["ok"] ?? false) === true ? 0 : 1);' "$output_file"
+            php -q -f "$smoke_dir/validate-json.php" -- "$output_file"
           }
 
           authenticated_json_get "drivers.php" "$smoke_dir/drivers.json"
