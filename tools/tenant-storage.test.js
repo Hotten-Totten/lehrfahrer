@@ -33,6 +33,8 @@ const phpString = value => JSON.stringify(String(value).replaceAll('\\', '/'));
 function runPhp(code) {
   const setup = `
     putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${phpString(privateRoot)});
+    putenv('LEHRFAHRER_DB_DRIVER=sqlite');
+    putenv('LEHRFAHRER_ENV=dev');
     $_SERVER['DOCUMENT_ROOT'] = ${phpString(webroot)};
     require ${phpString(path.join(projectRoot, 'api', '_tenant_storage.php'))};
   `;

@@ -34,6 +34,8 @@ if (!php) throw new Error('PHP ist für den Control-Datenbank-Test erforderlich.
 
 const fixtureCode = `
 putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${phpString(privateRoot)});
+putenv('LEHRFAHRER_DB_DRIVER=sqlite');
+putenv('LEHRFAHRER_ENV=dev');
 $_SERVER['DOCUMENT_ROOT'] = ${phpString(webroot)};
 require ${phpString(path.join(projectRoot, 'api', '_control_repositories.php'))};
 
@@ -118,7 +120,7 @@ echo json_encode([
     'crossTenantRead' => $users->findById($companyA['id'], $userB['id']),
     'crossTenantRoleRejected' => $crossTenantRoleRejected,
     'userACapabilities' => $roles->userCapabilities($companyA['id'], $userA['id']),
-    'sqlite' => lehrfahrer_control_sqlite_info($pdo),
+    'sqlite' => lehrfahrer_control_database_info($pdo),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 `;
 
@@ -212,6 +214,36 @@ test('SQLite aktiviert Foreign Keys und busy_timeout ohne WAL zu erzwingen', () 
   assert.equal(fixture.sqlite.foreignKeys, true);
   assert.equal(fixture.sqlite.busyTimeoutMs, 5000);
   assert.ok(['delete', 'truncate', 'persist', 'memory', 'wal', 'off'].includes(fixture.sqlite.journalMode));
+});
+
+test('SQLite wird außerhalb der expliziten DEV-Umgebung hart abgewiesen', () => {
+  const result = spawnSync(php, ['-r', `
+    putenv('LEHRFAHRER_DB_DRIVER=sqlite');
+    putenv('LEHRFAHRER_ENV=production');
+    require ${phpString(path.join(projectRoot, 'api', '_control_database.php'))};
+    lehrfahrer_control_database();
+  `], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /SQLite ist ausschliesslich als explizites DEV\/Test-Backend erlaubt/);
+});
+
+test('Fehlende MariaDB-Konfiguration fällt ohne SQLite-Fallback hart aus', () => {
+  const environment = {
+    ...process.env,
+    LEHRFAHRER_DB_DRIVER: 'mysql',
+    LEHRFAHRER_DB_DSN: '',
+    LEHRFAHRER_DB_HOST: '',
+    LEHRFAHRER_DB_NAME: '',
+    LEHRFAHRER_DB_USER: '',
+    LEHRFAHRER_DB_PASSWORD: '',
+    LEHRFAHRER_ENV: 'production'
+  };
+  const result = spawnSync(php, ['-r', `
+    require ${phpString(path.join(projectRoot, 'api', '_control_database.php'))};
+    lehrfahrer_control_database();
+  `], { env: environment, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /MariaDB-Konfiguration fehlt/);
 });
 
 function availablePort() {

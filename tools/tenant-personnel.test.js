@@ -14,7 +14,7 @@ const password = 'Phase4C-Testpasswort!';
 let php; let server; let origin; let companyA; let companyB; let sessionA; let sessionB;
 const phpString = value => JSON.stringify(String(value).replaceAll('\\', '/'));
 const env = () => ({ ...process.env, LEHRFAHRER_PRIVATE_DATA_DIR: privateRoot,
-  LEHRFAHRER_ENV: 'dev', LEHRFAHRER_PUBLIC_ORIGIN: origin,
+  LEHRFAHRER_DB_DRIVER: 'sqlite', LEHRFAHRER_ENV: 'dev', LEHRFAHRER_PUBLIC_ORIGIN: origin,
   LEHRFAHRER_API_TOKEN: 'phase4c-token', LEHRFAHRER_LEGACY_COMPANY_ID: companyA?.id || '' });
 function runPhp(code) {
   const result = spawnSync(php, ['-r', code], { cwd: root, env: env(), encoding: 'utf8' });

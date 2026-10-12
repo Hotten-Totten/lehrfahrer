@@ -71,6 +71,7 @@ function environment() {
   return {
     ...process.env,
     LEHRFAHRER_PRIVATE_DATA_DIR: privateRoot,
+    LEHRFAHRER_DB_DRIVER: 'sqlite',
     LEHRFAHRER_ENV: 'dev',
     LEHRFAHRER_PUBLIC_ORIGIN: origin,
     LEHRFAHRER_API_TOKEN: legacyToken

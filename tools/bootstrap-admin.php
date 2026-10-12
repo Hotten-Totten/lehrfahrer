@@ -32,7 +32,7 @@ if ($companySlug === '' || $companyName === '' || $login === '' || $displayName 
 
 try {
     $pdo = lehrfahrer_control_database();
-    $marker = $pdo->prepare('SELECT value FROM control_metadata WHERE key = :key');
+    $marker = $pdo->prepare('SELECT value FROM control_metadata WHERE `key` = :key');
     $marker->execute([':key' => 'bootstrap_admin_completed']);
     if ($marker->fetchColumn() !== false && !$force) {
         fwrite(STDERR, "Bootstrap wurde bereits abgeschlossen.\n");
@@ -61,16 +61,25 @@ try {
         'must_change_password' => true,
     ]);
     $roles->assignRole($company['id'], $user['id'], 'ADMIN');
-    $metadata = $pdo->prepare(
-        'INSERT INTO control_metadata (key, value, updated_at)
-         VALUES (:key, :value, :updated_at)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
-    );
-    $metadata->execute([
+    $metadataValues = [
         ':key' => 'bootstrap_admin_completed',
         ':value' => $user['id'],
         ':updated_at' => gmdate('c'),
-    ]);
+    ];
+    $metadata = $pdo->prepare(
+        'UPDATE control_metadata SET value = :value, updated_at = :updated_at WHERE `key` = :key'
+    );
+    $metadata->execute($metadataValues);
+    if ($metadata->rowCount() === 0) {
+        $exists = $pdo->prepare('SELECT 1 FROM control_metadata WHERE `key` = :key');
+        $exists->execute([':key' => $metadataValues[':key']]);
+        if ($exists->fetchColumn() === false) {
+            $metadata = $pdo->prepare(
+                'INSERT INTO control_metadata (`key`, value, updated_at) VALUES (:key, :value, :updated_at)'
+            );
+            $metadata->execute($metadataValues);
+        }
+    }
     $pdo->commit();
     fwrite(STDOUT, "Bootstrap-ADMIN wurde angelegt.\n");
 } catch (Throwable $error) {

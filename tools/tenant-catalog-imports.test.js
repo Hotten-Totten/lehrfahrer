@@ -16,7 +16,7 @@ let php; let phpArgs; let server; let vbbServer; let origin; let vbbOrigin;
 let companyA; let companyB; let sessionA; let sessionB;
 const phpString = value => JSON.stringify(String(value).replaceAll('\\', '/'));
 const env = () => ({ ...process.env, LEHRFAHRER_PRIVATE_DATA_DIR: privateRoot,
-  LEHRFAHRER_ENV: 'dev', LEHRFAHRER_PUBLIC_ORIGIN: origin,
+  LEHRFAHRER_DB_DRIVER: 'sqlite', LEHRFAHRER_ENV: 'dev', LEHRFAHRER_PUBLIC_ORIGIN: origin,
   LEHRFAHRER_API_TOKEN: 'phase4d-token', LEHRFAHRER_LEGACY_COMPANY_ID: companyA?.id || '',
   VBB_API_BASE_URL: vbbOrigin, VBB_ACCESS_ID: 'test-access' });
 function runPhp(code) {

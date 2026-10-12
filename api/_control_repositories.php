@@ -184,7 +184,7 @@ final class LehrfahrerUserRepository {
                     active, must_change_password, last_login, blocked_until, created_at, updated_at
              FROM users
              WHERE company_id = :company_id
-             ORDER BY display_name COLLATE NOCASE, id'
+             ORDER BY LOWER(display_name), id'
         );
         $statement->execute([':company_id' => $companyId]);
         return $statement->fetchAll();
@@ -225,11 +225,17 @@ final class LehrfahrerRoleRepository {
         }
 
         $statement = $this->pdo->prepare(
-            'INSERT OR IGNORE INTO user_roles (user_id, role_id)
-             SELECT :user_id, id FROM roles WHERE code = :role_code'
+            'INSERT INTO user_roles (user_id, role_id)
+             SELECT :user_id, roles.id FROM roles
+             WHERE roles.code = :role_code
+               AND NOT EXISTS (
+                   SELECT 1 FROM user_roles
+                   WHERE user_id = :existing_user_id AND role_id = roles.id
+               )'
         );
         $statement->execute([
             ':user_id' => $userId,
+            ':existing_user_id' => $userId,
             ':role_code' => strtoupper(trim($roleCode)),
         ]);
         if ($statement->rowCount() === 0 && !$this->hasRole($companyId, $userId, $roleCode)) {

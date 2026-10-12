@@ -1,93 +1,135 @@
-# Control-Datenbank – Phase 1 und 2
+# Control-Datenbank – MariaDB
 
-Schema-Version 1 enthält Gesellschaften, Benutzer, Rollen und Capabilities.
-Schema-Version 2 ergänzt die isolierte Login-/Session-Grundlage. Schema-Version
-3 synchronisiert die explizite Standardrollenmatrix für die serverseitige
-Capability-Prüfung. Schreib-Locks sind nicht aktiviert; der bisherige Tokenweg
-bleibt vorübergehend parallel verfügbar.
+Die produktive Control Plane verwendet MariaDB über PDO und `pdo_mysql`.
+SQLite ist wegen des NFS-Dateisystems des Hostings kein produktives Backend
+mehr. Es bleibt ausschließlich als explizites lokales DEV-/Test-Backend
+erhalten. Die fachlichen Datenbestände und die GTFS-SQLite-Indizes sind davon
+nicht betroffen.
 
-## Speicherort
+Das aktuelle Schema hat Version 3 und enthält `companies`, `users`, `roles`,
+`capabilities`, `role_capabilities`, `user_roles`, `sessions`,
+`control_metadata` und `schema_migrations`. MariaDB-Tabellen verwenden InnoDB,
+`utf8mb4` und `utf8mb4_unicode_ci`.
 
-Der Pfad wird ausschließlich über den bestehenden privaten Speicher aufgelöst:
+## Produktionskonfiguration
+
+Ohne `LEHRFAHRER_DB_DRIVER` wird `mysql` verwendet. Produktion und Staging
+benötigen eine serverseitige Konfiguration, die weder im Repository noch im
+DocumentRoot abgelegt und nie an Browser oder JavaScript ausgeliefert wird:
 
 ```text
-LEHRFAHRER_PRIVATE_DATA_DIR/control/lehrfahrer.sqlite
+LEHRFAHRER_DB_DRIVER=mysql
+LEHRFAHRER_DB_HOST=<interner Datenbankhost>
+LEHRFAHRER_DB_PORT=3306
+LEHRFAHRER_DB_NAME=<umgebungsspezifische Datenbank>
+LEHRFAHRER_DB_USER=<minimal berechtigter Benutzer>
+LEHRFAHRER_DB_PASSWORD=<Secret>
 ```
 
-Ohne explizite Umgebungsvariable verwendet der private Speicher weiterhin das
-bereits abgesicherte Verzeichnis außerhalb des `DocumentRoot`. Eine Lage im
-Projekt- oder Webroot wird von `_private_storage.php` abgewiesen.
+Alternativ ersetzt `LEHRFAHRER_DB_DSN` die Werte für Host, Port und
+Datenbankname, zum Beispiel:
 
-Die Datenbank wird erst erzeugt, wenn `lehrfahrer_control_database()` bewusst
-aufgerufen wird. Nur die neuen Auth-Endpunkte und das CLI-Bootstrap laden sie.
+```text
+LEHRFAHRER_DB_DSN=mysql:host=<host>;port=3306;dbname=<datenbank>;charset=utf8mb4
+```
 
-## Umgebungen
+Der Benutzer und das Passwort bleiben auch beim DSN separat erforderlich.
+Fehlende oder ungültige MariaDB-Konfiguration führt zu einem harten Fehler; es
+gibt keinen stillen Rückfall auf SQLite. `LEHRFAHRER_ENV` muss passend als
+`staging` oder `production` gesetzt sein. Jede Umgebung erhält eine eigene
+Datenbank und einen eigenen Datenbankbenutzer.
 
-`LEHRFAHRER_ENV` muss `dev`, `staging` oder `production` sein (ohne Wert gilt
-`production`). Jede Umgebung erhält einen eigenen absoluten
-`LEHRFAHRER_PRIVATE_DATA_DIR` und damit eine eigene Control-Datenbank. Die
-Datenbank speichert ihre Umgebung und verweigert eine Nutzung unter einer
-anderen Umgebung. Staging-Daten werden nicht aus Produktion kopiert.
+## TLS und Berechtigungen
 
-`LEHRFAHRER_PUBLIC_ORIGIN` legt die einzige zulässige Origin fest. In Staging
-und Produktion ist HTTPS zwingend. Der Sessioncookie ist hostgebunden und heißt
-`__Host-lehrfahrer_session`; er verwendet `Secure`, `HttpOnly`,
-`SameSite=Strict`, `Path=/` und kein Domain-Attribut.
+TLS wird aktiviert, sobald Strato eine vertrauenswürdige CA-Datei bzw. die
+vollständige Zertifikatskette für den internen Datenbankhost bereitstellt:
 
-Optionale, beim Deployment gesetzte Runtime-Werte:
+```text
+LEHRFAHRER_DB_TLS_REQUIRED=1
+LEHRFAHRER_DB_TLS_CA=<absoluter privater Pfad zur CA-Datei>
+```
 
-- `LEHRFAHRER_BUILD_COMMIT`
-- `LEHRFAHRER_BUILD_ID`
-- `LEHRFAHRER_DEPLOYED_AT`
+Die Implementierung prüft das Serverzertifikat. Eine Option zum Abschalten der
+Zertifikatsprüfung existiert bewusst nicht. Die Live-Prüfung zeigte zwar
+TLS-Unterstützung des MariaDB-Servers, die Zertifikatsprüfung mit dem lokalen
+System-Truststore war jedoch nicht erfolgreich. Vor Aktivierung in Produktion
+muss deshalb die von Strato vorgesehene CA-/Zertifikatskonfiguration bestätigt
+werden. Bis dahin darf TLS nicht durch eine unsichere Einstellung simuliert
+werden.
 
-Die Runtime-Ausgabe enthält außerdem Umgebung, Version und Schema-Version und
-führt dabei keine Shell-Befehle aus.
+Der Anwendungsbenutzer benötigt nur Verbindung, Lesen und Schreiben sowie DDL
+für die kontrollierten Schema-Migrationen in seiner eigenen Datenbank. Globale
+Rechte, `FILE`, Benutzerverwaltung und Zugriff aus dem öffentlichen Internet
+sind nicht erforderlich. Der Datenbankzugriff erfolgt ausschließlich
+serverseitig.
 
-## Sessions
+## Migrationen und Parallelität
 
-Session- und CSRF-Token werden nur gehasht in SQLite gespeichert. Der
-CSRF-Token wird kryptographisch aus dem zufälligen Session-Token abgeleitet und
-im Browser nur im Arbeitsspeicher gehalten. Eine Session läuft nach 30 Minuten
-Inaktivität und absolut nach 12 Stunden ab. Die Aktivität wird höchstens alle
-fünf Minuten persistiert. Deaktivierte Benutzer oder Gesellschaften machen eine
-Session sofort ungültig. `lehrfahrer_auth_revoke_user_sessions()` bereitet den
-späteren Widerruf aller Sessions nach Passwortänderungen vor.
+Vor jeder Migration wird ein datenbankspezifischer MariaDB-Named-Lock über
+`GET_LOCK()` bezogen und anschließend über `RELEASE_LOCK()` freigegeben. Damit
+werden parallele PHP-Prozesse serialisiert. Die DDL-Schritte sind wiederholbar
+formuliert, weil MariaDB bei DDL implizite Commits ausführt. Eine
+Schema-Version wird erst nach erfolgreichem Abschluss ihres Schritts in
+`schema_migrations` eingetragen.
 
-## Bootstrap-ADMIN
+Anwendungsoperationen verwenden normale InnoDB-Transaktionen. Foreign Keys
+sichern insbesondere Gesellschafts-, Benutzer-, Rollen- und Sessionbezüge.
+Repositories und Authentifizierung verwenden vorbereitete, weitgehend
+dialektneutrale Statements.
 
-Der erste ADMIN wird ausschließlich per CLI angelegt. Das Initialpasswort wird
-nicht als Argument, sondern aus `LEHRFAHRER_BOOTSTRAP_PASSWORD` gelesen:
+Vor einem Produktionslauf sind erforderlich:
+
+1. Datenbankbackup bzw. getesteter Restore-Punkt.
+2. Gesonderte Staging-Datenbank mit denselben Servereigenschaften.
+3. Erfolgreicher Schema- und Authentifizierungs-Smoke-Test in Staging.
+4. Verifizierte Zugangsdaten, Minimalrechte und gegebenenfalls TLS-CA.
+5. Erst danach ein separat freigegebener Bootstrap bzw. eine Bestandsmigration.
+
+## Lokales SQLite-Backend
+
+SQLite ist nur mit beiden expliziten Werten zulässig:
+
+```text
+LEHRFAHRER_ENV=dev
+LEHRFAHRER_DB_DRIVER=sqlite
+```
+
+Die Datei liegt dann unter
+`LEHRFAHRER_PRIVATE_DATA_DIR/control/lehrfahrer.sqlite`, außerhalb des
+DocumentRoot. Aktiv sind `PRAGMA foreign_keys = ON` und ein `busy_timeout` von
+5000 ms; WAL wird nicht eingeschaltet. In Staging und Produktion wird SQLite
+unabhängig vom Pfad abgewiesen.
+
+## Sessions und Bootstrap
+
+Session- und CSRF-Token werden ausschließlich gehasht gespeichert. Sessions
+laufen nach 30 Minuten Inaktivität und absolut nach 12 Stunden ab. Deaktivierte
+Benutzer oder Gesellschaften machen eine Session ungültig.
+
+Der erste ADMIN wird weiterhin nur per CLI angelegt. Das Initialpasswort wird
+aus `LEHRFAHRER_BOOTSTRAP_PASSWORD` gelesen und nicht als Argument übergeben:
 
 ```text
 php tools/bootstrap-admin.php --company-slug=betrieb --company-name="Betrieb" --login=admin --display-name="Administration"
 ```
 
-Ein Marker verhindert die erneute Ausführung. Nur eine ausdrückliche
-`--force`-Option hebt diese Sperre auf. Der Benutzer muss sein Passwort beim
-ersten späteren dafür vorgesehenen Ablauf ändern.
+Das Kommando setzt einen Bootstrap-Marker und ist erst nach gesonderter
+Freigabe gegen die jeweilige Zielumgebung auszuführen.
 
-## SQLite-Konfiguration
+## Test
 
-- `PRAGMA foreign_keys = ON`
-- `PRAGMA busy_timeout = 5000`
-- PDO-Fehlermodus `PDO::ERRMODE_EXCEPTION`
-- vorbereitete Statements ohne emulierte Prepares
-- Journal-Modus wird nicht verändert
+Der MariaDB-Integrationstest benötigt eine ausschließlich für Tests bestimmte,
+leere oder wiederverwendbare Datenbank:
 
-WAL wird ausdrücklich nicht automatisch aktiviert. Der tatsächlich bestehende
-Journal-Modus kann mit `lehrfahrer_control_sqlite_info()` diagnostiziert werden.
+```text
+LEHRFAHRER_MARIADB_TEST_DSN=mysql:host=127.0.0.1;port=3306;dbname=lehrfahrer_test;charset=utf8mb4
+LEHRFAHRER_MARIADB_TEST_USER=<testbenutzer>
+LEHRFAHRER_MARIADB_TEST_PASSWORD=<testpasswort>
+node --test tools/control-database-mariadb.test.js
+```
 
-## Vor Phase 5 auf Strato verifizieren
-
-1. `pdo_sqlite` und die verwendete SQLite-Version im Web- und SSH-PHP.
-2. Der private Pfad liegt auf einem Dateisystem mit zuverlässigen POSIX-Locks.
-3. Parallele Leser sowie konkurrierende `BEGIN IMMEDIATE`-Transaktionen.
-4. Verhalten von `busy_timeout` bei blockierter Schreibtransaktion.
-5. Crash-Recovery nach abgebrochener Transaktion.
-6. Ob WAL auf diesem Dateisystem offiziell und praktisch unterstützt wird.
-7. Schreibrechte, Dateirechte, freier Speicher und Backup/Wiederherstellung.
-8. Gleichzeitige PHP-Prozesse des realen Strato-Webservers.
-
-Falls zuverlässige SQLite-Dateisperren oder WAL auf dem Hosting nicht garantiert
-werden können, muss vor Einführung des globalen Schreib-Locks auf eine
-serverbasierte relationale Datenbank gewechselt werden.
+Ohne diese drei Testwerte wird der MariaDB-Test übersprungen. Er prüft Schema
+und Wiederholbarkeit, Gesellschaft/Benutzer/Rollen/Capabilities,
+Login-Passwort, Session/CSRF/Logout, Transaktions-Rollback, Foreign-Key-Fehler,
+parallele Verbindungen und Named Locks. Die bestehenden Tests verwenden
+weiterhin ausschließlich das explizite lokale DEV-SQLite-Backend.

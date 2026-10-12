@@ -35,6 +35,7 @@ function phpEnvironment(root = privateRoot, environment = 'dev') {
   return {
     ...process.env,
     LEHRFAHRER_PRIVATE_DATA_DIR: root,
+    LEHRFAHRER_DB_DRIVER: 'sqlite',
     LEHRFAHRER_ENV: environment,
     LEHRFAHRER_PUBLIC_ORIGIN: origin || 'http://127.0.0.1',
     LEHRFAHRER_BUILD_COMMIT: 'phase2-test-commit',
@@ -281,7 +282,7 @@ test('Aktivität verlängert den Idle-Ablauf gedrosselt, aber nie über die abso
   assert.ok(Date.parse(me.body.session.lastActivityAt) > Date.parse(oldActivity));
 });
 
-test('N: Runtime-Info ist serverseitig und Datenbanken sind an ihre Umgebung gebunden', async () => {
+test('N: Runtime-Info ist serverseitig und SQLite bleibt auf DEV begrenzt', async () => {
   const runtime = await request('/api/auth/runtime.php');
   assert.equal(runtime.response.status, 200, runtime.text);
   assert.equal(runtime.body.runtime.environment, 'dev');
@@ -293,11 +294,12 @@ test('N: Runtime-Info ist serverseitig und Datenbanken sind an ihre Umgebung geb
   const openCode = `require ${phpString(path.join(projectRoot, 'api', '_control_database.php'))};lehrfahrer_control_database();`;
   const crossEnvironment = runPhp(openCode, { environment: 'staging' });
   assert.notEqual(crossEnvironment.status, 0);
-  assert.match(crossEnvironment.stderr, /anderen Umgebung/);
+  assert.match(crossEnvironment.stderr, /SQLite ist ausschliesslich als explizites DEV\/Test-Backend erlaubt/);
   const stagingRoot = path.join(sandbox, 'staging-private');
   const isolated = runPhp(openCode, { root: stagingRoot, environment: 'staging' });
-  assert.equal(isolated.status, 0, isolated.stderr);
-  assert.ok(fs.existsSync(path.join(stagingRoot, 'control', 'lehrfahrer.sqlite')));
+  assert.notEqual(isolated.status, 0);
+  assert.match(isolated.stderr, /SQLite ist ausschliesslich als explizites DEV\/Test-Backend erlaubt/);
+  assert.equal(fs.existsSync(path.join(stagingRoot, 'control', 'lehrfahrer.sqlite')), false);
   const invalid = runPhp(openCode, { root: path.join(sandbox, 'invalid-private'), environment: 'preview' });
   assert.notEqual(invalid.status, 0);
   assert.match(invalid.stderr, /LEHRFAHRER_ENV ist ungültig/);
