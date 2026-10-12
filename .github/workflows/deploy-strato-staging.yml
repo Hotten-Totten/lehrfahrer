@@ -61,6 +61,7 @@ jobs:
         env:
           STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          STAGING_AUTH_PATH: ${{ vars.STAGING_AUTH_PATH }}
           LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
           STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
           STAGING_DB_USER: ${{ secrets.STAGING_DB_USER }}
@@ -73,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           required=(
-            STAGING_TARGET_PATH STAGING_PRIVATE_PATH LIVE_TARGET_PATH
+            STAGING_TARGET_PATH STAGING_PRIVATE_PATH STAGING_AUTH_PATH LIVE_TARGET_PATH
             STAGING_DB_DSN STAGING_DB_USER STAGING_DB_PASSWORD STAGING_DB_TLS_CA_PEM
             STAGING_API_TOKEN STAGING_ADMIN_PASSWORD
             STAGING_BASIC_AUTH_USER STAGING_BASIC_AUTH_PASSWORD
@@ -84,7 +85,7 @@ jobs:
               exit 1
             fi
           done
-          for path in "$STAGING_TARGET_PATH" "$STAGING_PRIVATE_PATH"; do
+          for path in "$STAGING_TARGET_PATH" "$STAGING_PRIVATE_PATH" "$STAGING_AUTH_PATH"; do
             case "$path" in
               /*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*)
                 echo "Unsicherer Staging-Pfad." >&2
@@ -95,6 +96,11 @@ jobs:
           normalize() { printf '%s' "${1#/}" | sed 's:/*$::'; }
           if [ "$(normalize "$STAGING_TARGET_PATH")" = "$(normalize "$LIVE_TARGET_PATH")" ]; then
             echo "Staging- und Live-DocumentRoot duerfen nicht identisch sein." >&2
+            exit 1
+          fi
+          if [ "$(normalize "$STAGING_TARGET_PATH")" = "$(normalize "$STAGING_AUTH_PATH")" ] \
+              || [ "$(normalize "$STAGING_PRIVATE_PATH")" = "$(normalize "$STAGING_AUTH_PATH")" ]; then
+            echo "Staging-Auth-Pfad muss von DocumentRoot und Private Storage getrennt sein." >&2
             exit 1
           fi
           case "$(normalize "$STAGING_PRIVATE_PATH")" in
@@ -182,8 +188,13 @@ jobs:
           );
           PHP
           printf '%s\n' "$STAGING_DB_TLS_CA_PEM" > /tmp/lehrfahrer-staging-mariadb-ca.pem
-          BASIC_HASH="$(printf '%s' "$STAGING_BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
-          printf '%s:%s\n' "$STAGING_BASIC_AUTH_USER" "$BASIC_HASH" > /tmp/lehrfahrer-staging.htpasswd
+          if ! command -v htpasswd >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y apache2-utils
+          fi
+          printf '%s' "$STAGING_BASIC_AUTH_PASSWORD" \
+            | htpasswd -n -i -B -C 12 "$STAGING_BASIC_AUTH_USER" \
+            > /tmp/lehrfahrer-staging.htpasswd
           chmod 600 \
             /tmp/lehrfahrer-staging-runtime-env.php \
             /tmp/lehrfahrer-staging-provision-secret.php \
@@ -196,6 +207,9 @@ jobs:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
           STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          STAGING_AUTH_PATH: ${{ vars.STAGING_AUTH_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
         run: |
           set -euo pipefail
           REMOTE="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}"
@@ -216,7 +230,7 @@ jobs:
           fi
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "mkdir -p -- './$STAGING_TARGET_PATH' './$STAGING_PRIVATE_PATH' && chmod 700 './$STAGING_PRIVATE_PATH'"
+            "mkdir -p -- './$STAGING_TARGET_PATH' './$STAGING_PRIVATE_PATH' './$STAGING_AUTH_PATH' && chmod 700 './$STAGING_PRIVATE_PATH'"
 
           "${RSYNC_RUN[@]}" -az --omit-dir-times --no-perms --no-owner --no-group \
             --exclude '.git/' --exclude '.github/' --exclude '.vscode/' \
@@ -231,31 +245,52 @@ jobs:
             /tmp/lehrfahrer-staging-runtime-env.php \
             /tmp/lehrfahrer-staging-provision-secret.php \
             /tmp/lehrfahrer-staging-mariadb-ca.pem \
-            /tmp/lehrfahrer-staging.htpasswd \
             tools/provision-staging-company.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
 
+          "${SCP_RUN[@]}" /tmp/lehrfahrer-staging.htpasswd \
+            "$REMOTE:./$STAGING_AUTH_PATH/"
+
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
+          staging_auth="$3"
           webroot="$(cd "./$staging_target" && pwd -P)"
           private_root="$(cd "./$staging_private" && pwd -P)"
+          auth_root="$(cd "./$staging_auth" && pwd -P)"
           case "$private_root/" in "$webroot/"*) exit 20 ;; esac
           case "$webroot/" in "$private_root/"*) exit 21 ;; esac
+          case "$auth_root/" in "$webroot/"*|"$private_root/"*) exit 22 ;; esac
+          case "$webroot/" in "$auth_root/"*) exit 23 ;; esac
+          case "$private_root/" in "$auth_root/"*) exit 24 ;; esac
 
           chmod 700 "$private_root"
           chmod 600 \
             "$private_root/lehrfahrer-staging-runtime-env.php" \
             "$private_root/lehrfahrer-staging-provision-secret.php" \
-            "$private_root/lehrfahrer-staging-mariadb-ca.pem" \
-            "$private_root/lehrfahrer-staging.htpasswd"
+            "$private_root/lehrfahrer-staging-mariadb-ca.pem"
           mv "$private_root/lehrfahrer-staging-runtime-env.php" "$private_root/runtime-env.php"
           mv "$private_root/lehrfahrer-staging-provision-secret.php" "$private_root/.provision-secret.php"
           mv "$private_root/lehrfahrer-staging-mariadb-ca.pem" "$private_root/mariadb-ca.pem"
-          mv "$private_root/lehrfahrer-staging.htpasswd" "$private_root/.htpasswd"
+
+          webroot_group_id="$(stat -c '%g' "$webroot")"
+          apache_identities="$(ps -eo user=,group=,comm= 2>/dev/null \
+            | awk '$3 ~ /^(apache2|httpd)$/ { print $1 ":" $2 }' \
+            | sort -u | paste -sd, - || true)"
+          if [ -z "$apache_identities" ]; then apache_identities=not-visible; fi
+          if chgrp "$webroot_group_id" "$auth_root" "$auth_root/lehrfahrer-staging.htpasswd"; then
+            auth_group_mode=available
+          else
+            auth_group_mode=unavailable
+          fi
+          chmod 750 "$auth_root"
+          chmod 640 "$auth_root/lehrfahrer-staging.htpasswd"
+          mv "$auth_root/lehrfahrer-staging.htpasswd" "$auth_root/.htpasswd"
+          printf 'Basic-Auth-Pruefung: apache_identitaet=%s gruppenmodus=%s verzeichnis=750 datei=640\n' \
+            "$apache_identities" "$auth_group_mode"
 
           printf 'auto_prepend_file=%s\n' "$private_root/runtime-env.php" > "$webroot/.user.ini"
           chmod 600 "$webroot/.user.ini"
@@ -268,7 +303,7 @@ jobs:
           # BEGIN LEHRFAHRER STAGING
           AuthType Basic
           AuthName "Lehrfahrer Staging"
-          AuthUserFile "$private_root/.htpasswd"
+          AuthUserFile "$auth_root/.htpasswd"
           Require valid-user
           <IfModule mod_headers.c>
             Header always set X-Robots-Tag "noindex, nofollow, noarchive"
@@ -442,6 +477,38 @@ jobs:
             "$private_root/smoke-stderr.raw"
           REMOTE_SCRIPT
 
+          origin='https://staging.lehrfahrer.de'
+          http_status() {
+            curl --silent --show-error --max-time 20 --output /dev/null \
+              --write-out '%{http_code}' "$@" || true
+          }
+          unauth_status="$(http_status "$origin/")"
+          wrong_status="$(http_status -u 'invalid-staging-user:invalid-staging-password' "$origin/")"
+          valid_status="$(http_status -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/")"
+
+          if [ "$unauth_status" = 500 ] || [ "$wrong_status" = 500 ] || [ "$valid_status" = 500 ]; then
+            echo 'Apache kann den gruppengeschuetzten Auth-Pfad nicht lesen; aktiviere eng begrenzte STRATO-Alternative.'
+            "${SSH_RUN[@]}" "$REMOTE" \
+              "chmod 711 './$STAGING_AUTH_PATH' && chmod 644 './$STAGING_AUTH_PATH/.htpasswd'"
+            unauth_status="$(http_status "$origin/")"
+            wrong_status="$(http_status -u 'invalid-staging-user:invalid-staging-password' "$origin/")"
+            valid_status="$(http_status -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/")"
+            auth_permission_mode='711/644 (separater, nicht listbarer Auth-Pfad)'
+          else
+            auth_permission_mode='750/640 (Webroot-Gruppe)'
+          fi
+
+          if [ "$unauth_status" != 401 ] || [ "$wrong_status" != 401 ]; then
+            echo "Basic-Auth verweigert anonyme oder falsche Anmeldungen nicht korrekt." >&2
+            exit 1
+          fi
+          case "$valid_status" in
+            2??|3??) ;;
+            *) echo "Gueltige Basic-Auth liefert HTTP $valid_status statt Erfolg." >&2; exit 1 ;;
+          esac
+          printf 'Basic-Auth erfolgreich: ohne=401 falsch=401 korrekt=%s rechte=%s\n' \
+            "$valid_status" "$auth_permission_mode"
+
       - name: Staging HTTP, runtime, login and session smoke test
         shell: bash
         env:
@@ -458,6 +525,9 @@ jobs:
             sleep 5
           done
           test "$ready" = 1
+          wrong_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -u 'invalid-staging-user:invalid-staging-password' "$origin/" || true)"
+          test "$wrong_status" = 401
 
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -D /tmp/staging-runtime.headers \
