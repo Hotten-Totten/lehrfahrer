@@ -295,8 +295,25 @@ jobs:
 
           cat > "$private_root/write-tenant-binding.php" <<'PHP'
           <?php
-          $data = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
-          if (!preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($data['company_id'] ?? ''))) exit(1);
+          $data = null;
+          $lines = preg_split('/\R/', (string)file_get_contents($argv[1]));
+          foreach (array_reverse($lines ?: []) as $line) {
+              try {
+                  $candidate = json_decode(trim($line), true, 512, JSON_THROW_ON_ERROR);
+              } catch (JsonException $error) {
+                  continue;
+              }
+              if (is_array($candidate)
+                  && preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($candidate['company_id'] ?? '')) === 1) {
+                  $data = $candidate;
+                  break;
+              }
+          }
+          if (!is_array($data)) exit(1);
+          file_put_contents(
+              $argv[1],
+              json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n"
+          );
           $content = "<?php\nputenv(" . var_export(
               'LEHRFAHRER_LEGACY_COMPANY_ID=' . $data['company_id'], true
           ) . ");\n";
