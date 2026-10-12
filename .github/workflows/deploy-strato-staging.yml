@@ -284,7 +284,7 @@ jobs:
           require '$private_root/.provision-secret.php';
           require '$private_root/provision-staging-company.php';
           PHP
-          php "$private_root/run-provision.php" \
+          php -q -f "$private_root/run-provision.php" -- \
             --company-name='Lehrfahrer Testgesellschaft' \
             --company-slug='lehrfahrer-test' \
             --license-status='trial' \
@@ -302,7 +302,7 @@ jobs:
           ) . ");\n";
           file_put_contents($argv[2], $content);
           PHP
-          php -f "$private_root/write-tenant-binding.php" \
+          php -q -f "$private_root/write-tenant-binding.php" -- \
             "$private_root/provision-result.json" "$private_root/tenant-binding.php"
           chmod 600 "$private_root/provision-result.json" "$private_root/tenant-binding.php"
           rm -f -- \
@@ -310,8 +310,9 @@ jobs:
             "$private_root/run-provision.php" \
             "$private_root/write-tenant-binding.php"
 
-          LEHRFAHRER_APP_ROOT="$webroot" php -d "auto_prepend_file=$private_root/runtime-env.php" \
-            "$private_root/staging-smoke.php" > "$private_root/smoke-result.json"
+          LEHRFAHRER_APP_ROOT="$webroot" php -q \
+            -d "auto_prepend_file=$private_root/runtime-env.php" \
+            -f "$private_root/staging-smoke.php" > "$private_root/smoke-result.json"
           chmod 600 "$private_root/smoke-result.json"
           cat "$private_root/smoke-result.json"
           REMOTE_SCRIPT
