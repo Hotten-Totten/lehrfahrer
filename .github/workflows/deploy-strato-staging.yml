@@ -1,0 +1,379 @@
+name: Deploy staging to Strato
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches: ["staging"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-strato-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.lehrfahrer.de
+
+    steps:
+      - name: Checkout staging commit
+        uses: actions/checkout@v5
+
+      - name: Preflight and regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "staging"
+          git diff --check
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              build/*|editor/*|backup_liniendaten/*) continue ;;
+            esac
+            node --check "$file"
+          done < <(git ls-files -z -- '*.js')
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              api/pdf/test_preview.php|api/pdf/test_preview_v2.php|api/pdf/preview_v2.php) continue ;;
+            esac
+            php -l "$file" >/dev/null
+          done < <(git ls-files -z -- '*.php')
+
+          node --test \
+            tools/company-provisioning.test.js \
+            tools/control-database.test.js \
+            tools/session-auth.test.js \
+            tools/capability-authorization.test.js \
+            tools/security-dom-xss.test.js \
+            tools/security-sensitive-storage.test.js \
+            tools/tenant-storage.test.js \
+            tools/tenant-lines-cities.test.js \
+            tools/tenant-personnel.test.js \
+            tools/tenant-catalog-imports.test.js
+
+      - name: Validate isolated staging configuration
+        shell: bash
+        env:
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
+          STAGING_DB_USER: ${{ secrets.STAGING_DB_USER }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          STAGING_DB_TLS_CA_PEM: ${{ secrets.STAGING_DB_TLS_CA_PEM }}
+          STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
+          STAGING_ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+          STAGING_BASIC_AUTH_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          STAGING_BASIC_AUTH_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          required=(
+            STAGING_TARGET_PATH STAGING_PRIVATE_PATH LIVE_TARGET_PATH
+            STAGING_DB_DSN STAGING_DB_USER STAGING_DB_PASSWORD STAGING_DB_TLS_CA_PEM
+            STAGING_API_TOKEN STAGING_ADMIN_PASSWORD
+            STAGING_BASIC_AUTH_USER STAGING_BASIC_AUTH_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Fehlende Staging-Konfiguration: $name" >&2
+              exit 1
+            fi
+          done
+          for path in "$STAGING_TARGET_PATH" "$STAGING_PRIVATE_PATH"; do
+            case "$path" in
+              /*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*)
+                echo "Unsicherer Staging-Pfad." >&2
+                exit 1
+                ;;
+            esac
+          done
+          normalize() { printf '%s' "${1#/}" | sed 's:/*$::'; }
+          if [ "$(normalize "$STAGING_TARGET_PATH")" = "$(normalize "$LIVE_TARGET_PATH")" ]; then
+            echo "Staging- und Live-DocumentRoot duerfen nicht identisch sein." >&2
+            exit 1
+          fi
+          case "$(normalize "$STAGING_PRIVATE_PATH")" in
+            lehrfahrer-private|*/lehrfahrer-private)
+              echo "Staging darf nicht den Live-Private-Storage verwenden." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Fingerprint live before staging deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in lehrfahrer.de www.lehrfahrer.de; do
+            curl --fail --silent --show-error --location "https://${host}/VERSION" \
+              | sha256sum >> /tmp/lehrfahrer-live-before.sha256
+          done
+
+      - name: Prepare SSH client
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
+            printf '%s\n' "${{ secrets.STRATO_SSH_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+          else
+            sudo apt-get update
+            sudo apt-get install -y sshpass
+          fi
+          if [ -n "${{ secrets.STRATO_KNOWN_HOSTS }}" ]; then
+            printf '%s\n' "${{ secrets.STRATO_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${{ secrets.STRATO_PORT }}" "${{ secrets.STRATO_HOST }}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Build private staging runtime files
+        shell: bash
+        env:
+          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
+          STAGING_DB_USER: ${{ secrets.STAGING_DB_USER }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          STAGING_DB_TLS_CA_PEM: ${{ secrets.STAGING_DB_TLS_CA_PEM }}
+          STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
+          STAGING_ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+          STAGING_BASIC_AUTH_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          STAGING_BASIC_AUTH_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          STAGING_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          STAGING_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export RUNTIME_OUTPUT=/tmp/lehrfahrer-staging-runtime-env.php
+          export PROVISION_SECRET_OUTPUT=/tmp/lehrfahrer-staging-provision-secret.php
+          DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export DEPLOYED_AT
+          php <<'PHP'
+          <?php
+          $values = [
+              'LEHRFAHRER_ENV' => 'staging',
+              'LEHRFAHRER_PUBLIC_ORIGIN' => 'https://staging.lehrfahrer.de',
+              'LEHRFAHRER_DB_DRIVER' => 'mysql',
+              'LEHRFAHRER_DB_DSN' => getenv('STAGING_DB_DSN'),
+              'LEHRFAHRER_DB_USER' => getenv('STAGING_DB_USER'),
+              'LEHRFAHRER_DB_PASSWORD' => getenv('STAGING_DB_PASSWORD'),
+              'LEHRFAHRER_DB_TLS_REQUIRED' => '1',
+              'LEHRFAHRER_API_TOKEN' => getenv('STAGING_API_TOKEN'),
+              'LEHRFAHRER_BUILD_COMMIT' => getenv('STAGING_BUILD_COMMIT'),
+              'LEHRFAHRER_BUILD_ID' => getenv('STAGING_BUILD_ID'),
+              'LEHRFAHRER_DEPLOYED_AT' => getenv('DEPLOYED_AT'),
+              'LEHRFAHRER_STAGING_COMPANY_SLUG' => 'lehrfahrer-test',
+          ];
+          $php = "<?php\nputenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . __DIR__);\n"
+              . "putenv('LEHRFAHRER_DB_TLS_CA=' . __DIR__ . '/mariadb-ca.pem');\n";
+          foreach ($values as $name => $value) {
+              $php .= 'putenv(' . var_export($name . '=' . $value, true) . ");\n";
+          }
+          $php .= "if (is_file(__DIR__ . '/tenant-binding.php')) require __DIR__ . '/tenant-binding.php';\n";
+          file_put_contents(getenv('RUNTIME_OUTPUT'), $php);
+          file_put_contents(
+              getenv('PROVISION_SECRET_OUTPUT'),
+              "<?php\nputenv(" . var_export(
+                  'LEHRFAHRER_STAGING_ADMIN_PASSWORD=' . getenv('STAGING_ADMIN_PASSWORD'),
+                  true
+              ) . ");\n"
+          );
+          PHP
+          printf '%s\n' "$STAGING_DB_TLS_CA_PEM" > /tmp/lehrfahrer-staging-mariadb-ca.pem
+          BASIC_HASH="$(printf '%s' "$STAGING_BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
+          printf '%s:%s\n' "$STAGING_BASIC_AUTH_USER" "$BASIC_HASH" > /tmp/lehrfahrer-staging.htpasswd
+          chmod 600 \
+            /tmp/lehrfahrer-staging-runtime-env.php \
+            /tmp/lehrfahrer-staging-provision-secret.php \
+            /tmp/lehrfahrer-staging-mariadb-ca.pem \
+            /tmp/lehrfahrer-staging.htpasswd
+
+      - name: Deploy only to isolated staging paths
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          REMOTE="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}"
+          SSH_BASE=(ssh -p "${{ secrets.STRATO_PORT }}" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          SCP_BASE=(scp -P "${{ secrets.STRATO_PORT }}" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
+            SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SCP_BASE+=(-i ~/.ssh/id_rsa)
+            RSYNC_SSH="ssh -p ${{ secrets.STRATO_PORT }} -i ~/.ssh/id_rsa -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            SSH_RUN=("${SSH_BASE[@]}")
+            SCP_RUN=("${SCP_BASE[@]}")
+            RSYNC_RUN=(rsync)
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+            SCP_RUN=(sshpass -e "${SCP_BASE[@]}")
+            RSYNC_SSH="ssh -p ${{ secrets.STRATO_PORT }} -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            RSYNC_RUN=(sshpass -e rsync)
+          fi
+
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "mkdir -p -- './$STAGING_TARGET_PATH' './$STAGING_PRIVATE_PATH' && chmod 700 './$STAGING_PRIVATE_PATH'"
+
+          "${RSYNC_RUN[@]}" -az --omit-dir-times --no-perms --no-owner --no-group \
+            --exclude '.git/' --exclude '.github/' --exclude '.vscode/' \
+            --exclude 'WorkingSystem/' --exclude 'Offlinekarten/' --exclude 'backup/' \
+            --exclude 'backup_liniendaten/' --exclude 'autosave/' --exclude 'build/' \
+            --exclude 'editor/' --exclude 'docs/' --exclude 'deploy/' --exclude 'tools/' \
+            --exclude '_linien/' --exclude 'linien/test/' --exclude 'app5/' --exclude 'app6/' \
+            --exclude 'node_modules/' --exclude '*.bak' --exclude '*.tmp' --exclude '*.log' \
+            -e "$RSYNC_SSH" ./ "$REMOTE:./$STAGING_TARGET_PATH/"
+
+          "${SCP_RUN[@]}" \
+            /tmp/lehrfahrer-staging-runtime-env.php \
+            /tmp/lehrfahrer-staging-provision-secret.php \
+            /tmp/lehrfahrer-staging-mariadb-ca.pem \
+            /tmp/lehrfahrer-staging.htpasswd \
+            tools/provision-staging-company.php \
+            tools/staging-smoke.php \
+            "$REMOTE:./$STAGING_PRIVATE_PATH/"
+
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          case "$private_root/" in "$webroot/"*) exit 20 ;; esac
+          case "$webroot/" in "$private_root/"*) exit 21 ;; esac
+
+          chmod 700 "$private_root"
+          chmod 600 \
+            "$private_root/lehrfahrer-staging-runtime-env.php" \
+            "$private_root/lehrfahrer-staging-provision-secret.php" \
+            "$private_root/lehrfahrer-staging-mariadb-ca.pem" \
+            "$private_root/lehrfahrer-staging.htpasswd"
+          mv "$private_root/lehrfahrer-staging-runtime-env.php" "$private_root/runtime-env.php"
+          mv "$private_root/lehrfahrer-staging-provision-secret.php" "$private_root/.provision-secret.php"
+          mv "$private_root/lehrfahrer-staging-mariadb-ca.pem" "$private_root/mariadb-ca.pem"
+          mv "$private_root/lehrfahrer-staging.htpasswd" "$private_root/.htpasswd"
+
+          printf 'auto_prepend_file=%s\n' "$private_root/runtime-env.php" > "$webroot/.user.ini"
+          chmod 600 "$webroot/.user.ini"
+          if [ -f "$webroot/.htaccess" ]; then
+            sed '/# BEGIN LEHRFAHRER STAGING/,/# END LEHRFAHRER STAGING/d' "$webroot/.htaccess" \
+              > "$webroot/.htaccess.staging"
+            mv "$webroot/.htaccess.staging" "$webroot/.htaccess"
+          fi
+          cat >> "$webroot/.htaccess" <<HTACCESS
+          # BEGIN LEHRFAHRER STAGING
+          AuthType Basic
+          AuthName "Lehrfahrer Staging"
+          AuthUserFile "$private_root/.htpasswd"
+          Require valid-user
+          <IfModule mod_headers.c>
+            Header always set X-Robots-Tag "noindex, nofollow, noarchive"
+          </IfModule>
+          # END LEHRFAHRER STAGING
+          HTACCESS
+          printf 'User-agent: *\nDisallow: /\n' > "$webroot/robots.txt"
+
+          cat > "$private_root/run-provision.php" <<PHP
+          <?php
+          putenv('LEHRFAHRER_APP_ROOT=$webroot');
+          require '$private_root/runtime-env.php';
+          require '$private_root/.provision-secret.php';
+          require '$private_root/provision-staging-company.php';
+          PHP
+          php "$private_root/run-provision.php" \
+            --company-name='Lehrfahrer Testgesellschaft' \
+            --company-slug='lehrfahrer-test' \
+            --license-status='trial' \
+            --license-id='staging-test' \
+            --admin-display-name='Staging Administration' \
+            --admin-login='staging-admin' \
+            > "$private_root/provision-result.json"
+
+          php -r '
+            $data = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+            if (!preg_match("/^cmp_[0-9a-f]{32}$/D", (string)($data["company_id"] ?? ""))) exit(1);
+            $content = "<?php\nputenv(" . var_export(
+                "LEHRFAHRER_LEGACY_COMPANY_ID=" . $data["company_id"], true
+            ) . ");\n";
+            file_put_contents($argv[2], $content);
+          ' "$private_root/provision-result.json" "$private_root/tenant-binding.php"
+          chmod 600 "$private_root/provision-result.json" "$private_root/tenant-binding.php"
+          rm -f -- "$private_root/.provision-secret.php" "$private_root/run-provision.php"
+
+          LEHRFAHRER_APP_ROOT="$webroot" php -d "auto_prepend_file=$private_root/runtime-env.php" \
+            "$private_root/staging-smoke.php" > "$private_root/smoke-result.json"
+          chmod 600 "$private_root/smoke-result.json"
+          cat "$private_root/smoke-result.json"
+          REMOTE_SCRIPT
+
+      - name: Staging HTTP, runtime, login and session smoke test
+        shell: bash
+        env:
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          origin='https://staging.lehrfahrer.de'
+          ready=0
+          for _ in $(seq 1 12); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$origin/" || true)"
+            if [ "$status" = 401 ]; then ready=1; break; fi
+            sleep 5
+          done
+          test "$ready" = 1
+
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -D /tmp/staging-runtime.headers \
+            "$origin/api/auth/runtime.php" > /tmp/staging-runtime.json
+          jq -e --arg commit "${{ github.sha }}" '
+            .ok == true
+            and .runtime.environment == "staging"
+            and .runtime.environmentLabel == "STAGING"
+            and .runtime.commit == $commit
+            and .runtime.databaseSchemaVersion == 4
+          ' /tmp/staging-runtime.json >/dev/null
+          grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
+
+          jq -n --arg password "$ADMIN_PASSWORD" '{
+            company: "lehrfahrer-test",
+            login: "staging-admin",
+            password: $password,
+            deviceLabel: "GitHub Staging Smoke"
+          }' > /tmp/staging-login-request.json
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -D /tmp/staging-login.headers -c /tmp/staging.cookies \
+            --data-binary @/tmp/staging-login-request.json \
+            "$origin/api/auth/login.php" > /tmp/staging-login.json
+          jq -e '.ok == true and .company.slug == "lehrfahrer-test" and (.user.roles | index("ADMIN"))' \
+            /tmp/staging-login.json >/dev/null
+          grep -Eiq '^set-cookie: __Host-lehrfahrer_session=.*;.*[Ss]ecure' /tmp/staging-login.headers
+          grep -Eiq '^set-cookie: __Host-lehrfahrer_session=.*;.*[Hh]ttp[Oo]nly' /tmp/staging-login.headers
+          grep -Eiq '^set-cookie: __Host-lehrfahrer_session=.*;.*[Ss]ame[Ss]ite=[Ss]trict' /tmp/staging-login.headers
+          if grep -Eiq '^set-cookie: __Host-lehrfahrer_session=.*;.*[Dd]omain=' /tmp/staging-login.headers; then
+            echo 'Staging-Sessioncookie darf kein Domain-Attribut besitzen.' >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging.cookies "$origin/api/auth/me.php" \
+            | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
+          csrf="$(jq -r '.csrfToken' /tmp/staging-login.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging.cookies -H "Origin: $origin" -H "X-CSRF-Token: $csrf" \
+            -X POST "$origin/api/auth/logout.php" | jq -e '.ok == true' >/dev/null
+
+      - name: Verify live public content is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in lehrfahrer.de www.lehrfahrer.de; do
+            curl --fail --silent --show-error --location "https://${host}/VERSION" \
+              | sha256sum >> /tmp/lehrfahrer-live-after.sha256
+          done
+          cmp /tmp/lehrfahrer-live-before.sha256 /tmp/lehrfahrer-live-after.sha256

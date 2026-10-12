@@ -118,6 +118,31 @@ $adminStatement->execute([
     ':company_id' => $companyA['company']['id'],
     ':user_id' => $companyA['admin']['id'],
 ]);
+$preActivationAdmin = $adminStatement->fetch();
+$activated = lehrfahrer_activate_company_admin(
+    $pdo,
+    $companyA['activation']['token'],
+    'Aktivierung-Testpasswort-2!'
+);
+$activationReuseRejected = false;
+try {
+    lehrfahrer_activate_company_admin(
+        $pdo,
+        $companyA['activation']['token'],
+        'Anderes-Testpasswort-2!'
+    );
+} catch (DomainException $error) {
+    $activationReuseRejected = true;
+}
+$activationStatement->execute([
+    ':company_id' => $companyA['company']['id'],
+    ':user_id' => $companyA['admin']['id'],
+]);
+$storedActivation = $activationStatement->fetch();
+$adminStatement->execute([
+    ':company_id' => $companyA['company']['id'],
+    ':user_id' => $companyA['admin']['id'],
+]);
 $storedAdmin = $adminStatement->fetch();
 
 $sessionStatement = $pdo->prepare('SELECT COUNT(*) FROM sessions WHERE company_id = :company_id');
@@ -145,7 +170,10 @@ echo json_encode([
         $companyA['admin']['id']
     ),
     'storedActivation' => $storedActivation,
+    'preActivationAdmin' => $preActivationAdmin,
     'storedAdmin' => $storedAdmin,
+    'activated' => $activated,
+    'activationReuseRejected' => $activationReuseRejected,
     'sessionCountA' => $sessionCountA,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 `;
@@ -233,15 +261,20 @@ function verifyProvisioning(fixture, expectedDriver) {
   assert.doesNotMatch(JSON.stringify(fixture.configA), /password|token|secret|credential/i);
 
   assert.equal(fixture.companyA.admin.company_id, fixture.companyA.company.id);
-  assert.equal(fixture.storedAdmin.active, 0);
-  assert.equal(fixture.storedAdmin.must_change_password, 1);
+  assert.equal(fixture.preActivationAdmin.active, 0);
+  assert.equal(fixture.preActivationAdmin.must_change_password, 1);
+  assert.equal(fixture.storedAdmin.active, 1);
+  assert.equal(fixture.storedAdmin.must_change_password, 0);
+  assert.equal(fixture.activated.company_id, fixture.companyA.company.id);
+  assert.equal(fixture.activationReuseRejected, true);
   assert.ok(fixture.adminRoleA.includes('users.manage'));
   assert.match(fixture.companyA.activation.token, /^[A-Za-z0-9_-]{43}$/);
   assert.notEqual(fixture.storedActivation.token_hash, fixture.companyA.activation.token);
   assert.equal(fixture.storedActivation.token_hash.length, 64);
-  assert.equal(fixture.storedActivation.used_at, null);
+  assert.ok(Date.parse(fixture.storedActivation.used_at) <= Date.now());
   assert.ok(Date.parse(fixture.storedActivation.expires_at) > Date.now());
   assert.notEqual(fixture.storedAdmin.password_hash, fixture.companyA.activation.token);
+  assert.equal(fixture.storedAdmin.password_hash.startsWith('$'), true);
 }
 
 test('DEV-Template-Provisioning erzeugt Nullbestand, Config und sicheren Erstadmin', () => {

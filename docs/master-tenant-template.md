@@ -54,11 +54,13 @@ Service zurückgegeben. In `user_activation_tokens` liegen ausschließlich sein
 SHA-256-Hash, die Zuordnung, Erzeugungszeit, Ablaufzeit und der optionale
 Verwendungszeitpunkt. Der Token läuft nach 48 Stunden ab.
 
-Ein öffentlicher Aktivierungsablauf, der Tokenverbrauch und das Setzen des
-eigenen Passworts sind noch nicht Teil dieser Phase. Bis dieser Ablauf separat
-implementiert ist, bleibt der Admin deaktiviert und kann sich nicht anmelden.
-Der Klartexttoken darf später nur einmal über einen vertrauenswürdigen Kanal
-ausgegeben und niemals protokolliert oder dauerhaft gespeichert werden.
+`lehrfahrer_activate_company_admin()` verbraucht den Token transaktional genau
+einmal, setzt ausschließlich den Passwort-Hash und aktiviert den Admin. Ein
+öffentlicher Aktivierungsdialog ist noch nicht Teil dieser Phase. Der
+Klartexttoken darf nur einmal über einen vertrauenswürdigen Kanal ausgegeben
+und niemals protokolliert oder dauerhaft gespeichert werden. Das Staging-CLI
+aktiviert den Testadmin unmittelbar mit einem ausschließlich über die
+Serverumgebung bereitgestellten Passwort und gibt weder Token noch Passwort aus.
 
 ## Tenant-Config und Updates
 

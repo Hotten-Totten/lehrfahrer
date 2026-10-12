@@ -13,6 +13,75 @@ function lehrfahrer_company_activation_token_hash(string $token): string {
     return hash('sha256', $token);
 }
 
+function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $password): array {
+    if ($pdo->inTransaction()) {
+        throw new RuntimeException('Aktivierung benoetigt eine eigene Datenbanktransaktion.');
+    }
+    if (preg_match('/^[A-Za-z0-9_-]{43}$/D', $token) !== 1) {
+        throw new InvalidArgumentException('Ungueltiger Aktivierungstoken.');
+    }
+    if (strlen($password) < 14) {
+        throw new InvalidArgumentException('Das neue Passwort muss mindestens 14 Zeichen lang sein.');
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $sql =
+            'SELECT user_activation_tokens.id, user_activation_tokens.user_id,
+                    user_activation_tokens.company_id, user_activation_tokens.expires_at,
+                    user_activation_tokens.used_at
+             FROM user_activation_tokens
+             JOIN user_roles ON user_roles.user_id = user_activation_tokens.user_id
+             JOIN roles ON roles.id = user_roles.role_id AND roles.code = :role_code
+             WHERE user_activation_tokens.token_hash = :token_hash';
+        if (lehrfahrer_control_driver($pdo) === 'mysql') $sql .= ' FOR UPDATE';
+        $statement = $pdo->prepare($sql);
+        $statement->execute([
+            ':role_code' => 'ADMIN',
+            ':token_hash' => lehrfahrer_company_activation_token_hash($token),
+        ]);
+        $activation = $statement->fetch();
+        $expiresAt = is_array($activation) ? strtotime((string)$activation['expires_at']) : false;
+        if (!is_array($activation) || $activation['used_at'] !== null
+            || $expiresAt === false || $expiresAt <= time()) {
+            throw new DomainException('Aktivierungstoken ist ungueltig, abgelaufen oder bereits verwendet.');
+        }
+
+        $now = gmdate('c');
+        $updateUser = $pdo->prepare(
+            'UPDATE users
+             SET password_hash = :password_hash, active = 1, must_change_password = 0, updated_at = :updated_at
+             WHERE id = :user_id AND company_id = :company_id AND active = 0'
+        );
+        $updateUser->execute([
+            ':password_hash' => lehrfahrer_password_hash($password),
+            ':updated_at' => $now,
+            ':user_id' => $activation['user_id'],
+            ':company_id' => $activation['company_id'],
+        ]);
+        if ($updateUser->rowCount() !== 1) {
+            throw new DomainException('Der zugehoerige Admin kann nicht aktiviert werden.');
+        }
+        $consume = $pdo->prepare(
+            'UPDATE user_activation_tokens SET used_at = :used_at
+             WHERE id = :id AND used_at IS NULL'
+        );
+        $consume->execute([':used_at' => $now, ':id' => $activation['id']]);
+        if ($consume->rowCount() !== 1) {
+            throw new DomainException('Aktivierungstoken wurde bereits verwendet.');
+        }
+        $pdo->commit();
+        return [
+            'company_id' => $activation['company_id'],
+            'user_id' => $activation['user_id'],
+            'activated_at' => $now,
+        ];
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $error;
+    }
+}
+
 function lehrfahrer_company_provision_validate(array $input): array {
     $name = trim((string)($input['name'] ?? ''));
     $slug = strtolower(trim((string)($input['slug'] ?? '')));
