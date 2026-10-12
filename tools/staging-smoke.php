@@ -1,6 +1,11 @@
 <?php
 
-if (PHP_SAPI !== 'cli') {
+function lehrfahrer_staging_smoke_error(string $message): void {
+    file_put_contents('php://stderr', $message . "\n");
+}
+
+$cgiSmoke = PHP_SAPI !== 'cli' && getenv('LEHRFAHRER_STAGING_CGI_SMOKE') === '1';
+if (PHP_SAPI !== 'cli' && !$cgiSmoke) {
     http_response_code(404);
     exit;
 }
@@ -8,19 +13,31 @@ if (PHP_SAPI !== 'cli') {
 $configuredRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT'));
 $appRoot = $configuredRoot !== '' ? realpath($configuredRoot) : dirname(__DIR__);
 if (!is_string($appRoot) || !is_file($appRoot . '/api/_company_provisioning.php')) {
-    fwrite(STDERR, "LEHRFAHRER_APP_ROOT ist ungueltig.\n");
+    lehrfahrer_staging_smoke_error('LEHRFAHRER_APP_ROOT ist ungueltig.');
     exit(2);
 }
 require_once $appRoot . '/api/_company_provisioning.php';
 
 if (lehrfahrer_environment() !== 'staging') {
-    fwrite(STDERR, "Dieser Smoketest darf nur in der Staging-Umgebung laufen.\n");
+    lehrfahrer_staging_smoke_error('Dieser Smoketest darf nur in der Staging-Umgebung laufen.');
     exit(2);
+}
+
+$resultFile = '';
+if ($cgiSmoke) {
+    $resultFile = trim((string)getenv('LEHRFAHRER_STAGING_SMOKE_RESULT_FILE'));
+    $resultDirectory = $resultFile !== '' ? realpath(dirname($resultFile)) : false;
+    $privateRoot = realpath(lehrfahrer_private_storage_root());
+    if ($resultDirectory === false || $privateRoot === false
+        || $resultDirectory !== $privateRoot || basename($resultFile) !== 'smoke-result.json') {
+        lehrfahrer_staging_smoke_error('CGI-Smoke-Ergebnisdatei liegt nicht im privaten Staging-Speicher.');
+        exit(2);
+    }
 }
 
 $expectedSlug = strtolower(trim((string)getenv('LEHRFAHRER_STAGING_COMPANY_SLUG')));
 if ($expectedSlug === '') {
-    fwrite(STDERR, "LEHRFAHRER_STAGING_COMPANY_SLUG fehlt.\n");
+    lehrfahrer_staging_smoke_error('LEHRFAHRER_STAGING_COMPANY_SLUG fehlt.');
     exit(2);
 }
 
@@ -105,7 +122,7 @@ try {
         }
     }
 
-    fwrite(STDOUT, json_encode([
+    $json = json_encode([
         'ok' => true,
         'company_id' => $company['id'],
         'slug' => $company['slug'],
@@ -116,8 +133,21 @@ try {
         'null_inventory' => true,
         'tls' => true,
         'minimal_database_scope' => true,
-    ], JSON_UNESCAPED_SLASHES) . "\n");
+    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+    if ($cgiSmoke) {
+        $temporaryResult = $resultFile . '.tmp.' . getmypid();
+        try {
+            if (file_put_contents($temporaryResult, $json, LOCK_EX) !== strlen($json)
+                || !chmod($temporaryResult, 0600) || !rename($temporaryResult, $resultFile)) {
+                throw new RuntimeException('CGI-Smoke-Ergebnisdatei konnte nicht atomar geschrieben werden.');
+            }
+        } finally {
+            if (is_file($temporaryResult)) unlink($temporaryResult);
+        }
+    } else {
+        fwrite(STDOUT, $json);
+    }
 } catch (Throwable $error) {
-    fwrite(STDERR, "Staging-Smoketest fehlgeschlagen: " . $error->getMessage() . "\n");
+    lehrfahrer_staging_smoke_error('Staging-Smoketest fehlgeschlagen: ' . $error->getMessage());
     exit(1);
 }

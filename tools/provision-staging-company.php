@@ -1,6 +1,12 @@
 <?php
 
-if (PHP_SAPI !== 'cli') {
+function lehrfahrer_staging_provision_error(string $message): void {
+    file_put_contents('php://stderr', $message . "\n");
+}
+
+$cgiProvision = PHP_SAPI !== 'cli'
+    && getenv('LEHRFAHRER_STAGING_CGI_PROVISION') === '1';
+if (PHP_SAPI !== 'cli' && !$cgiProvision) {
     http_response_code(404);
     exit;
 }
@@ -8,14 +14,26 @@ if (PHP_SAPI !== 'cli') {
 $configuredRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT'));
 $appRoot = $configuredRoot !== '' ? realpath($configuredRoot) : dirname(__DIR__);
 if (!is_string($appRoot) || !is_file($appRoot . '/api/_company_provisioning.php')) {
-    fwrite(STDERR, "LEHRFAHRER_APP_ROOT ist ungueltig.\n");
+    lehrfahrer_staging_provision_error('LEHRFAHRER_APP_ROOT ist ungueltig.');
     exit(2);
 }
 require_once $appRoot . '/api/_company_provisioning.php';
 
 if (lehrfahrer_environment() !== 'staging') {
-    fwrite(STDERR, "Dieses Werkzeug darf nur in der Staging-Umgebung laufen.\n");
+    lehrfahrer_staging_provision_error('Dieses Werkzeug darf nur in der Staging-Umgebung laufen.');
     exit(2);
+}
+
+$resultFile = '';
+if ($cgiProvision) {
+    $resultFile = trim((string)getenv('LEHRFAHRER_STAGING_PROVISION_RESULT_FILE'));
+    $resultDirectory = $resultFile !== '' ? realpath(dirname($resultFile)) : false;
+    $privateRoot = realpath(lehrfahrer_private_storage_root());
+    if ($resultDirectory === false || $privateRoot === false
+        || $resultDirectory !== $privateRoot || basename($resultFile) !== 'provision-result.json') {
+        lehrfahrer_staging_provision_error('CGI-Ergebnisdatei liegt nicht im privaten Staging-Speicher.');
+        exit(2);
+    }
 }
 
 $options = getopt('', [
@@ -29,7 +47,7 @@ $options = getopt('', [
 ]);
 $password = (string)getenv('LEHRFAHRER_STAGING_ADMIN_PASSWORD');
 if (strlen($password) < 14) {
-    fwrite(STDERR, "LEHRFAHRER_STAGING_ADMIN_PASSWORD fehlt oder ist zu kurz.\n");
+    lehrfahrer_staging_provision_error('LEHRFAHRER_STAGING_ADMIN_PASSWORD fehlt oder ist zu kurz.');
     exit(2);
 }
 
@@ -70,8 +88,24 @@ try {
             'created' => true,
         ];
     }
-    fwrite(STDOUT, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+    $json = json_encode(
+        $result,
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+    ) . "\n";
+    if ($cgiProvision) {
+        $temporaryResult = $resultFile . '.tmp.' . getmypid();
+        try {
+            if (file_put_contents($temporaryResult, $json, LOCK_EX) !== strlen($json)
+                || !chmod($temporaryResult, 0600) || !rename($temporaryResult, $resultFile)) {
+                throw new RuntimeException('CGI-Ergebnisdatei konnte nicht atomar geschrieben werden.');
+            }
+        } finally {
+            if (is_file($temporaryResult)) unlink($temporaryResult);
+        }
+    } else {
+        fwrite(STDOUT, $json);
+    }
 } catch (Throwable $error) {
-    fwrite(STDERR, "Staging-Provisioning fehlgeschlagen: " . $error->getMessage() . "\n");
+    lehrfahrer_staging_provision_error('Staging-Provisioning fehlgeschlagen: ' . $error->getMessage());
     exit(1);
 }

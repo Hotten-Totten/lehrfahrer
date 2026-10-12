@@ -280,58 +280,166 @@ jobs:
           cat > "$private_root/run-provision.php" <<PHP
           <?php
           putenv('LEHRFAHRER_APP_ROOT=$webroot');
+          putenv('LEHRFAHRER_STAGING_CGI_PROVISION=1');
+          putenv('LEHRFAHRER_STAGING_PROVISION_RESULT_FILE=$private_root/provision-result.json');
+          file_put_contents('$private_root/provision-cgi-diagnostic.json', json_encode([
+              'sapi' => PHP_SAPI,
+              'auto_prepend_configured' => trim((string)ini_get('auto_prepend_file')) !== '',
+              'stdout_constant' => defined('STDOUT'),
+              'stderr_constant' => defined('STDERR'),
+          ], JSON_UNESCAPED_SLASHES));
           require '$private_root/runtime-env.php';
           require '$private_root/.provision-secret.php';
           require '$private_root/provision-staging-company.php';
           PHP
-          php -q -f "$private_root/run-provision.php" -- \
+          set +e
+          php -q -d register_argc_argv=1 -f "$private_root/run-provision.php" -- \
             --company-name='Lehrfahrer Testgesellschaft' \
             --company-slug='lehrfahrer-test' \
             --license-status='trial' \
             --license-id='staging-test' \
             --admin-display-name='Staging Administration' \
             --admin-login='staging-admin' \
-            > "$private_root/provision-result.json"
+            > "$private_root/provision-stdout.raw" \
+            2> "$private_root/provision-stderr.raw"
+          provision_status="$?"
+          set -e
+          chmod 600 \
+            "$private_root/provision-cgi-diagnostic.json" \
+            "$private_root/provision-stdout.raw" \
+            "$private_root/provision-stderr.raw"
+
+          stdout_bytes="$(wc -c < "$private_root/provision-stdout.raw" | tr -d ' ')"
+          stderr_bytes="$(wc -c < "$private_root/provision-stderr.raw" | tr -d ' ')"
+          cgi_headers=no
+          if grep -Eiq '^(Content-Type|X-Powered-By|Status):' "$private_root/provision-stdout.raw"; then
+            cgi_headers=yes
+          fi
+          bom=no
+          if [ "$(head -c 3 "$private_root/provision-stdout.raw" | od -An -tx1 | tr -d '[:space:]')" = efbbbf ]; then
+            bom=yes
+          fi
+          warnings=no
+          if grep -Eiq '(^|[[:space:]])(warning|notice|deprecated|fatal error|parse error)(:|[[:space:]])' \
+              "$private_root/provision-stdout.raw" "$private_root/provision-stderr.raw"; then
+            warnings=yes
+          fi
+          html=no
+          if grep -Eiq '<(!doctype|html|body|br)([[:space:]>])' \
+              "$private_root/provision-stdout.raw" "$private_root/provision-stderr.raw"; then
+            html=yes
+          fi
+          printf 'Provisioning CGI: exit=%s stdout_bytes=%s stderr_bytes=%s headers=%s bom=%s warnings=%s html=%s\n' \
+            "$provision_status" "$stdout_bytes" "$stderr_bytes" "$cgi_headers" "$bom" "$warnings" "$html"
+          cat "$private_root/provision-cgi-diagnostic.json"
+          printf '\n'
+          if [ "$provision_status" -ne 0 ]; then
+            echo 'Provisionierung ist fehlgeschlagen; Roh-Ausgaben bleiben privat und werden nicht geloggt.' >&2
+            exit "$provision_status"
+          fi
 
           cat > "$private_root/write-tenant-binding.php" <<'PHP'
           <?php
-          $data = null;
-          $lines = preg_split('/\R/', (string)file_get_contents($argv[1]));
-          foreach (array_reverse($lines ?: []) as $line) {
-              try {
-                  $candidate = json_decode(trim($line), true, 512, JSON_THROW_ON_ERROR);
-              } catch (JsonException $error) {
-                  continue;
-              }
-              if (is_array($candidate)
-                  && preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($candidate['company_id'] ?? '')) === 1) {
-                  $data = $candidate;
-                  break;
-              }
+          function fail_validation(string $message): never {
+              file_put_contents('php://stderr', $message . "\n");
+              exit(1);
           }
-          if (!is_array($data)) exit(1);
-          file_put_contents(
-              $argv[1],
-              json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n"
-          );
+          $resultFile = (string)getenv('PROVISION_RESULT_FILE');
+          $bindingFile = (string)getenv('TENANT_BINDING_FILE');
+          $stdout = (string)file_get_contents((string)getenv('PROVISION_STDOUT_FILE'));
+          $stderr = (string)file_get_contents((string)getenv('PROVISION_STDERR_FILE'));
+          if (trim($stderr) !== '') fail_validation('Provisionierung schrieb unerwartet auf stderr.');
+          if (str_starts_with($stdout, "\xEF\xBB\xBF")) $stdout = substr($stdout, 3);
+          $stdout = str_replace(["\r\n", "\r"], "\n", $stdout);
+          if (preg_match('/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*\z/iD', $stdout) !== 1) {
+              fail_validation('Provisionierung schrieb unerwartete Nicht-JSON-Ausgabe auf stdout.');
+          }
+          try {
+              $rawJson = (string)file_get_contents($resultFile);
+              $data = json_decode($rawJson, true, 512, JSON_THROW_ON_ERROR);
+          } catch (Throwable $error) {
+              fail_validation('Provisionierungsergebnis ist kein valides JSON.');
+          }
+          if (!is_array($data)
+              || preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($data['company_id'] ?? '')) !== 1
+              || ($data['slug'] ?? '') !== 'lehrfahrer-test') {
+              fail_validation('Provisionierungsergebnis enthaelt nicht die erwartete Gesellschaft.');
+          }
+          if (preg_match('/password|token|secret|credential/i', $rawJson) === 1) {
+              fail_validation('Provisionierungsergebnis enthaelt einen verbotenen Secret-Hinweis.');
+          }
           $content = "<?php\nputenv(" . var_export(
               'LEHRFAHRER_LEGACY_COMPANY_ID=' . $data['company_id'], true
           ) . ");\n";
-          file_put_contents($argv[2], $content);
+          if (file_put_contents($bindingFile, $content, LOCK_EX) === false) {
+              fail_validation('Tenant-Binding konnte nicht geschrieben werden.');
+          }
           PHP
-          php -q -f "$private_root/write-tenant-binding.php" -- \
-            "$private_root/provision-result.json" "$private_root/tenant-binding.php"
+          PROVISION_RESULT_FILE="$private_root/provision-result.json" \
+          TENANT_BINDING_FILE="$private_root/tenant-binding.php" \
+          PROVISION_STDOUT_FILE="$private_root/provision-stdout.raw" \
+          PROVISION_STDERR_FILE="$private_root/provision-stderr.raw" \
+            php -q -f "$private_root/write-tenant-binding.php"
           chmod 600 "$private_root/provision-result.json" "$private_root/tenant-binding.php"
           rm -f -- \
             "$private_root/.provision-secret.php" \
             "$private_root/run-provision.php" \
-            "$private_root/write-tenant-binding.php"
+            "$private_root/write-tenant-binding.php" \
+            "$private_root/provision-cgi-diagnostic.json" \
+            "$private_root/provision-stdout.raw" \
+            "$private_root/provision-stderr.raw"
 
-          LEHRFAHRER_APP_ROOT="$webroot" php -q \
-            -d "auto_prepend_file=$private_root/runtime-env.php" \
-            -f "$private_root/staging-smoke.php" > "$private_root/smoke-result.json"
+          set +e
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_STAGING_CGI_SMOKE=1 \
+          LEHRFAHRER_STAGING_SMOKE_RESULT_FILE="$private_root/smoke-result.json" \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/staging-smoke.php" \
+              > "$private_root/smoke-stdout.raw" 2> "$private_root/smoke-stderr.raw"
+          smoke_status="$?"
+          set -e
+          chmod 600 "$private_root/smoke-stdout.raw" "$private_root/smoke-stderr.raw"
+          if [ "$smoke_status" -ne 0 ]; then
+            echo 'Staging-Smoke ist fehlgeschlagen; Roh-Ausgaben bleiben privat und werden nicht geloggt.' >&2
+            exit "$smoke_status"
+          fi
+          if [ -s "$private_root/smoke-stderr.raw" ]; then
+            echo 'Staging-Smoke schrieb unerwartet auf stderr.' >&2
+            exit 1
+          fi
+          if tr -d '\r' < "$private_root/smoke-stdout.raw" \
+              | grep -Eiv '^(Content-Type|X-Powered-By|Status):|^$' | grep -q .; then
+            echo 'Staging-Smoke schrieb unerwartete CGI-Ausgabe.' >&2
+            exit 1
+          fi
+          cat > "$private_root/validate-smoke-result.php" <<'PHP'
+          <?php
+          try {
+              $data = json_decode(
+                  (string)file_get_contents((string)getenv('SMOKE_RESULT_FILE')),
+                  true,
+                  512,
+                  JSON_THROW_ON_ERROR
+              );
+          } catch (Throwable $error) {
+              file_put_contents('php://stderr', "Staging-Smoke-Ergebnis ist kein valides JSON.\n");
+              exit(1);
+          }
+          if (!is_array($data) || ($data['ok'] ?? false) !== true
+              || ($data['slug'] ?? '') !== 'lehrfahrer-test'
+              || preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($data['company_id'] ?? '')) !== 1) {
+              file_put_contents('php://stderr', "Staging-Smoke-Ergebnis ist unvollstaendig.\n");
+              exit(1);
+          }
+          PHP
+          SMOKE_RESULT_FILE="$private_root/smoke-result.json" \
+            php -q -f "$private_root/validate-smoke-result.php"
           chmod 600 "$private_root/smoke-result.json"
           cat "$private_root/smoke-result.json"
+          rm -f -- \
+            "$private_root/validate-smoke-result.php" \
+            "$private_root/smoke-stdout.raw" \
+            "$private_root/smoke-stderr.raw"
           REMOTE_SCRIPT
 
       - name: Staging HTTP, runtime, login and session smoke test
