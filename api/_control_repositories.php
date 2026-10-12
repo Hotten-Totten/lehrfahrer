@@ -37,26 +37,38 @@ final class LehrfahrerCompanyRepository {
         $now = gmdate('c');
         $statement = $this->pdo->prepare(
             'INSERT INTO companies
-             (id, slug, name, status, license_id, license_status, created_at, updated_at)
+             (id, slug, name, status, license_id, license_status,
+              template_version_created, template_version_current, created_at, updated_at)
              VALUES
-             (:id, :slug, :name, :status, :license_id, :license_status, :created_at, :updated_at)'
+             (:id, :slug, :name, :status, :license_id, :license_status,
+              :template_version_created, :template_version_current, :created_at, :updated_at)'
         );
-        $statement->execute([
-            ':id' => $id,
-            ':slug' => $slug,
-            ':name' => $name,
-            ':status' => $status,
-            ':license_id' => ($company['license_id'] ?? null) ?: null,
-            ':license_status' => trim((string)($company['license_status'] ?? 'inactive')),
-            ':created_at' => $now,
-            ':updated_at' => $now,
-        ]);
+        try {
+            $statement->execute([
+                ':id' => $id,
+                ':slug' => $slug,
+                ':name' => $name,
+                ':status' => $status,
+                ':license_id' => ($company['license_id'] ?? null) ?: null,
+                ':license_status' => trim((string)($company['license_status'] ?? 'inactive')),
+                ':template_version_created' => $company['template_version_created'] ?? null,
+                ':template_version_current' => $company['template_version_current'] ?? null,
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ]);
+        } catch (PDOException $error) {
+            if ($error->getCode() === '23000') {
+                throw new DomainException('Gesellschafts-ID oder -Slug ist bereits vergeben.', 0, $error);
+            }
+            throw $error;
+        }
         return $this->findById($id) ?? throw new RuntimeException('Gesellschaft konnte nicht gelesen werden.');
     }
 
     public function findById(string $companyId): ?array {
         $statement = $this->pdo->prepare(
-            'SELECT id, slug, name, status, license_id, license_status, created_at, updated_at
+            'SELECT id, slug, name, status, license_id, license_status,
+                    template_version_created, template_version_current, created_at, updated_at
              FROM companies WHERE id = :company_id'
         );
         $statement->execute([':company_id' => $companyId]);
@@ -66,7 +78,8 @@ final class LehrfahrerCompanyRepository {
 
     public function findBySlug(string $slug): ?array {
         $statement = $this->pdo->prepare(
-            'SELECT id, slug, name, status, license_id, license_status, created_at, updated_at
+            'SELECT id, slug, name, status, license_id, license_status,
+                    template_version_created, template_version_current, created_at, updated_at
              FROM companies WHERE slug = :slug'
         );
         $statement->execute([':slug' => strtolower(trim($slug))]);

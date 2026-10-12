@@ -311,3 +311,49 @@ function lehrfahrer_control_apply_capability_binding_schema(PDO $pdo): void {
         }
     }
 }
+
+function lehrfahrer_control_apply_company_template_schema(PDO $pdo): void {
+    if (lehrfahrer_control_driver($pdo) === 'mysql') {
+        lehrfahrer_control_schema_exec($pdo, [
+            'ALTER TABLE companies ADD COLUMN IF NOT EXISTS template_version_created INT UNSIGNED NULL',
+            'ALTER TABLE companies ADD COLUMN IF NOT EXISTS template_version_current INT UNSIGNED NULL',
+            "CREATE TABLE IF NOT EXISTS user_activation_tokens (
+                id VARCHAR(64) NOT NULL PRIMARY KEY,
+                user_id VARCHAR(64) NOT NULL,
+                company_id VARCHAR(64) NOT NULL,
+                token_hash CHAR(64) NOT NULL UNIQUE,
+                created_at VARCHAR(35) NOT NULL,
+                expires_at VARCHAR(35) NOT NULL,
+                used_at VARCHAR(35) NULL,
+                CONSTRAINT activation_tokens_company_fk FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+                CONSTRAINT activation_tokens_user_company_fk FOREIGN KEY (user_id, company_id) REFERENCES users(id, company_id) ON DELETE CASCADE,
+                KEY activation_tokens_expiry_idx (expires_at, used_at),
+                KEY activation_tokens_user_idx (user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        ]);
+        return;
+    }
+
+    $columns = $pdo->query('PRAGMA table_info(companies)')->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('template_version_created', $columns, true)) {
+        $pdo->exec('ALTER TABLE companies ADD COLUMN template_version_created INTEGER NULL');
+    }
+    if (!in_array('template_version_current', $columns, true)) {
+        $pdo->exec('ALTER TABLE companies ADD COLUMN template_version_current INTEGER NULL');
+    }
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS user_activation_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id, company_id) REFERENCES users(id, company_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS activation_tokens_expiry_idx ON user_activation_tokens(expires_at, used_at);
+CREATE INDEX IF NOT EXISTS activation_tokens_user_idx ON user_activation_tokens(user_id);
+SQL);
+}

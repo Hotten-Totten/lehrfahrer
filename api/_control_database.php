@@ -4,7 +4,7 @@ require_once __DIR__ . '/_private_storage.php';
 require_once __DIR__ . '/_control_schema.php';
 require_once __DIR__ . '/_runtime_info.php';
 
-const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 3;
+const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 4;
 const LEHRFAHRER_CONTROL_BUSY_TIMEOUT_MS = 5000;
 const LEHRFAHRER_CONTROL_MIGRATION_LOCK_SECONDS = 15;
 
@@ -174,6 +174,7 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
             1 => 'lehrfahrer_control_apply_initial_schema',
             2 => 'lehrfahrer_control_apply_session_schema',
             3 => 'lehrfahrer_control_apply_capability_binding_schema',
+            4 => 'lehrfahrer_control_apply_company_template_schema',
         ];
         foreach ($migrations as $version => $migration) {
             if (in_array($version, $appliedVersions, true)) continue;
