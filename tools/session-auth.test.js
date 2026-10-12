@@ -16,6 +16,7 @@ let companyA;
 let companyB;
 let activeUser;
 let inactiveUser;
+let unprivilegedUser;
 
 function findPhp() {
   const candidates = [process.env.PHP_BINARY, 'php'];
@@ -122,13 +123,14 @@ $companyA=$companies->create(['slug'=>'betrieb-a','name'=>'Betrieb A','status'=>
 $companyB=$companies->create(['slug'=>'betrieb-b','name'=>'Betrieb B','status'=>'active','license_status'=>'active']);
 $active=$users->create($companyA['id'],['login'=>'admin','display_name'=>'Admin A','password'=>'Richtiges-Testpasswort-2!']);
 $inactive=$users->create($companyA['id'],['login'=>'inaktiv','display_name'=>'Inaktiv','password'=>'Richtiges-Testpasswort-2!','active'=>false]);
+$unprivileged=$users->create($companyA['id'],['login'=>'ohne-rolle','display_name'=>'Ohne Rolle','password'=>'Richtiges-Testpasswort-2!']);
 $other=$users->create($companyB['id'],['login'=>'admin','display_name'=>'Admin B','password'=>'Anderes-Testpasswort-2!']);
 $roles->assignRole($companyA['id'],$active['id'],'ADMIN');
 $roles->assignRole($companyB['id'],$other['id'],'FAHRER');
-echo json_encode(['companyA'=>$companyA,'companyB'=>$companyB,'active'=>$active,'inactive'=>$inactive]);`;
+echo json_encode(['companyA'=>$companyA,'companyB'=>$companyB,'active'=>$active,'inactive'=>$inactive,'unprivileged'=>$unprivileged]);`;
   const seeded = runPhp(seedCode);
   assert.equal(seeded.status, 0, seeded.stderr);
-  ({ companyA, companyB, active: activeUser, inactive: inactiveUser } = JSON.parse(seeded.stdout));
+  ({ companyA, companyB, active: activeUser, inactive: inactiveUser, unprivileged: unprivilegedUser } = JSON.parse(seeded.stdout));
 
   phpServer = spawn(php, ['-S', `127.0.0.1:${port}`, '-t', projectRoot], {
     cwd: projectRoot,
@@ -199,6 +201,25 @@ test('F/G: me liefert nur die serverseitig gebundene Session und verlangt einen 
   assert.equal(Object.hasOwn(valid.body.user, 'password_hash'), false);
   const missing = await request('/api/auth/me.php');
   assert.equal(missing.response.status, 401);
+});
+
+test('Root-Einstieg liefert den Editor nur mit gültiger Session und routes.read aus', async () => {
+  const anonymous = await request('/index.php');
+  assert.equal(anonymous.response.status, 302);
+  assert.equal(anonymous.response.headers.get('location'), 'login.html');
+  assert.doesNotMatch(anonymous.text, /Linien-Editor/);
+
+  const loggedIn = await login();
+  const { cookie } = sessionCookie(loggedIn.response);
+  const editor = await request('/index.php', { cookie });
+  assert.equal(editor.response.status, 200, editor.text);
+  assert.match(editor.response.headers.get('content-type') || '', /^text\/html/);
+  assert.match(editor.text, /<title>Linien-Editor<\/title>/);
+
+  const withoutRole = await login({ login: unprivilegedUser.login_normalized });
+  const denied = await request('/index.php', { cookie: sessionCookie(withoutRole.response).cookie });
+  assert.equal(denied.response.status, 403);
+  assert.doesNotMatch(denied.text, /Linien-Editor/);
 });
 
 test('H/CSRF: Logout verlangt Origin und CSRF und widerruft die Session', async () => {
@@ -349,4 +370,17 @@ test('Minimale Login-UI enthält neutrale Eingaben und speichert CSRF nicht pers
   assert.match(script, /Anmeldung nicht möglich\./);
   assert.doesNotMatch(script, /localStorage|sessionStorage|indexedDB/i);
   assert.match(script, /let csrfToken = ''/);
+  assert.match(script, /api\/auth\/me\.php/);
+  assert.match(script, /window\.location\.replace\('\.\/'\)/);
+});
+
+test('Apache-Root und direkter Legacy-Einstieg verwenden den serverseitigen Session-Gate', () => {
+  const apache = fs.readFileSync(path.join(projectRoot, '.htaccess'), 'utf8');
+  const gate = fs.readFileSync(path.join(projectRoot, 'index.php'), 'utf8');
+  assert.match(apache, /^DirectoryIndex index\.php$/m);
+  assert.match(apache, /RewriteRule \^index\\\.html\$ index\.php \[L,NC\]/);
+  assert.match(gate, /lehrfahrer_auth_current_session/);
+  assert.match(gate, /userCapabilities/);
+  assert.match(gate, /routes\.read/);
+  assert.match(gate, /Location: login\.html/);
 });

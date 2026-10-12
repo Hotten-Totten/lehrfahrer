@@ -529,6 +529,24 @@ jobs:
             -u 'invalid-staging-user:invalid-staging-password' "$origin/" || true)"
           test "$wrong_status" = 401
 
+          root_status="$(curl --silent --show-error --output /tmp/staging-root-anonymous.html \
+            --dump-header /tmp/staging-root-anonymous.headers --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/")"
+          test "$root_status" = 302
+          grep -Eiq '^location: *login\.html' /tmp/staging-root-anonymous.headers
+          if grep -q '<title>Linien-Editor</title>' /tmp/staging-root-anonymous.html; then
+            echo 'Der Editor wurde ohne Lehrfahrer-Session ausgeliefert.' >&2
+            exit 1
+          fi
+          legacy_root_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/index.html")"
+          test "$legacy_root_status" = 302
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/login.html" | grep -q 'Lehrfahrer-Anmeldung'
+          anonymous_api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/api/list_cities.php")"
+          test "$anonymous_api_status" = 401
+
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -D /tmp/staging-runtime.headers \
             "$origin/api/auth/runtime.php" > /tmp/staging-runtime.json
@@ -540,6 +558,17 @@ jobs:
             and .runtime.databaseSchemaVersion == 4
           ' /tmp/staging-runtime.json >/dev/null
           grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
+
+          jq -n '{
+            company: "lehrfahrer-test",
+            login: "staging-admin",
+            password: "ungueltiges-staging-passwort",
+            deviceLabel: "GitHub Staging Negative Smoke"
+          }' > /tmp/staging-login-wrong-request.json
+          wrong_login_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/staging-login-wrong-request.json "$origin/api/auth/login.php")"
+          test "$wrong_login_status" = 401
 
           jq -n --arg password "$ADMIN_PASSWORD" '{
             company: "lehrfahrer-test",
@@ -565,10 +594,20 @@ jobs:
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/staging.cookies "$origin/api/auth/me.php" \
             | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging.cookies -D /tmp/staging-cities.headers \
+            "$origin/api/list_cities.php" > /dev/null
+          grep -Eiq '^x-lehrfahrer-auth-mode: *session' /tmp/staging-cities.headers
           csrf="$(jq -r '.csrfToken' /tmp/staging-login.json)"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/staging.cookies -H "Origin: $origin" -H "X-CSRF-Token: $csrf" \
+            -b /tmp/staging.cookies -c /tmp/staging.cookies -H "Origin: $origin" -H "X-CSRF-Token: $csrf" \
             -X POST "$origin/api/auth/logout.php" | jq -e '.ok == true' >/dev/null
+          logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
+          test "$logged_out_status" = 302
 
       - name: Verify live public content is unchanged
         shell: bash

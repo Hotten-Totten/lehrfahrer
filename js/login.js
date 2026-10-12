@@ -22,6 +22,15 @@
     }
   }
 
+  async function continueExistingSession() {
+    try {
+      const response = await fetch('api/auth/me.php', { cache: 'no-store', credentials: 'same-origin' });
+      if (response.ok) window.location.replace('./');
+    } catch (_error) {
+      // Ohne erreichbare, gültige Session bleibt die Anmeldung sichtbar.
+    }
+  }
+
   form.addEventListener('submit', async event => {
     event.preventDefault();
     button.disabled = true;
@@ -45,6 +54,7 @@
       showRuntime(result.runtime);
       message.style.color = '#176b3a';
       message.textContent = `Angemeldet als ${result.user.displayName}.`;
+      window.location.replace('./');
     } catch (_error) {
       csrfToken = '';
       message.style.color = '#9b1c2b';
@@ -57,5 +67,6 @@
   window.lehrfahrerLoginSession = Object.freeze({
     csrfToken: () => csrfToken
   });
+  continueExistingSession();
   loadRuntime();
 })();

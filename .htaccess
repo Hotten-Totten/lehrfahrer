@@ -1,5 +1,8 @@
+DirectoryIndex index.php
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  RewriteRule ^index\.html$ index.php [L,NC]
   RewriteRule ^data/drivers\.json$ - [F,L,NC]
   RewriteRule ^data/trainings(?:/|$) - [F,L,NC]
   RewriteRule ^fahrerunterlagen(?:/|$) - [F,L,NC]
