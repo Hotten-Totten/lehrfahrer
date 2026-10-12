@@ -293,16 +293,22 @@ jobs:
             --admin-login='staging-admin' \
             > "$private_root/provision-result.json"
 
-          php -r '
-            $data = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
-            if (!preg_match("/^cmp_[0-9a-f]{32}$/D", (string)($data["company_id"] ?? ""))) exit(1);
-            $content = "<?php\nputenv(" . var_export(
-                "LEHRFAHRER_LEGACY_COMPANY_ID=" . $data["company_id"], true
-            ) . ");\n";
-            file_put_contents($argv[2], $content);
-          ' "$private_root/provision-result.json" "$private_root/tenant-binding.php"
+          cat > "$private_root/write-tenant-binding.php" <<'PHP'
+          <?php
+          $data = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+          if (!preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($data['company_id'] ?? ''))) exit(1);
+          $content = "<?php\nputenv(" . var_export(
+              'LEHRFAHRER_LEGACY_COMPANY_ID=' . $data['company_id'], true
+          ) . ");\n";
+          file_put_contents($argv[2], $content);
+          PHP
+          php -f "$private_root/write-tenant-binding.php" \
+            "$private_root/provision-result.json" "$private_root/tenant-binding.php"
           chmod 600 "$private_root/provision-result.json" "$private_root/tenant-binding.php"
-          rm -f -- "$private_root/.provision-secret.php" "$private_root/run-provision.php"
+          rm -f -- \
+            "$private_root/.provision-secret.php" \
+            "$private_root/run-provision.php" \
+            "$private_root/write-tenant-binding.php"
 
           LEHRFAHRER_APP_ROOT="$webroot" php -d "auto_prepend_file=$private_root/runtime-env.php" \
             "$private_root/staging-smoke.php" > "$private_root/smoke-result.json"
