@@ -492,3 +492,24 @@ test('Keine Fachnavigation oder Routingdatei wird durch das Werkzeug referenzier
   assert.ok(source.includes("'variants-index:BUILD_AND_VALIDATE'"));
   assert.ok(source.includes("'activation' => 'ATOMIC_TENANT_ROOT_SWAP'"));
 });
+
+test('STRATO-CGI-Apply besitzt ein separates Staging-Gate', () => {
+  const source = fs.readFileSync(tool, 'utf8');
+  assert.ok(source.includes("getenv('LEHRFAHRER_STAGING_CGI_APPLY') === '1'"));
+  assert.ok(source.includes("CGI-Apply-Gate akzeptiert ausschliesslich den Apply-Modus."));
+  assert.ok(source.includes("CGI-Apply-Gate ist ausschliesslich in Staging erlaubt."));
+  assert.ok(source.includes("($options['confirm'] ?? '') !== COTTBUS_APPLY_CONFIRMATION"));
+});
+
+test('eingebettete PHP-Helfer des Cottbus-Apply-Workflows sind syntaktisch gueltig', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
+  const step = workflow.slice(workflow.indexOf('      - name: Apply approved Cottbus migration exactly once'));
+  const blocks = [...step.matchAll(/^          cat > "\$(?:test_id_reader|validator)" <<'PHP'\r?\n([\s\S]*?)^          PHP$/gm)];
+  assert.equal(blocks.length, 2);
+  for (const [index, match] of blocks.entries()) {
+    const file = path.join(sandbox, `embedded-apply-helper-${index}.php`);
+    fs.writeFileSync(file, match[1].replace(/^          /gm, ''), 'utf8');
+    const result = spawnSync(php, ['-l', file], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  }
+});

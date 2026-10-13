@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      apply_cottbus:
+        description: Run the one-time approved Cottbus staging migration after all preflights
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging
@@ -1078,6 +1083,320 @@ jobs:
           chmod 600 "$result"
           cat "$result"
           rm -f -- "$runner" "$result"
+          REMOTE_SCRIPT
+
+      - name: Apply approved Cottbus migration exactly once
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_cottbus }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+          CREATE_RESTORE_POINT: ${{ inputs.create_control_db_restore_point }}
+        run: |
+          set -euo pipefail
+          if [ "$CREATE_RESTORE_POINT" = true ]; then
+            echo 'Apply und separater Restore-Punkt duerfen nicht im selben Lauf aktiviert werden.' >&2
+            exit 1
+          fi
+          REMOTE="$STRATO_USER@$STRATO_HOST"
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SSH_RUN=("${SSH_BASE[@]}")
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          live_target="${3#/}"
+          company_id='cmp_2ff1b82166c99988ed6f7eb51cca7b56'
+          expected_gtfs_sha256='edd76d5cb8d628cf63b81445c3a7524cb081f0652c4220f9f22f7920f8b4b035'
+          expected_backup_sha256='56e2e05c343ba2d0f9bb2af3cb17c01eeaf00857cdad3b158bc22ed47d115a39'
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_webroot="$(pwd -P)"
+          else
+            live_webroot="$(cd "./$live_target" && pwd -P)"
+          fi
+          live_private="$(dirname "$live_webroot")/lehrfahrer-private"
+          case "$private_root/" in "$webroot/"*|"$live_webroot/"*|"$live_private/"*) exit 41 ;; esac
+          case "$webroot/" in "$private_root/"*) exit 42 ;; esac
+          test "$(stat -c '%a' "$private_root")" = 700
+
+          gtfs_source="$live_webroot/gtfs/data/gtfs/latest.zip"
+          if [ ! -f "$gtfs_source" ] || [ -L "$gtfs_source" ]; then
+            echo 'Freigegebene GTFS-Quelle fehlt, ist kein regulaeres File oder ist ein Symlink.' >&2
+            exit 1
+          fi
+          actual_gtfs_sha256="$(sha256sum "$gtfs_source" | awk '{print $1}')"
+          if [ "$actual_gtfs_sha256" != "$expected_gtfs_sha256" ]; then
+            echo 'SOURCE_DRIFT unmittelbar vor Apply.' >&2
+            exit 1
+          fi
+
+          validator="$private_root/validate-cottbus-apply.php"
+          approval_file="$private_root/cottbus-apply-source-approval.txt"
+          pre_result="$private_root/cottbus-apply-preflight.json"
+          apply_result="$private_root/cottbus-apply-result.json"
+          post_result="$private_root/cottbus-apply-post-dry-run.json"
+          pre_state="$private_root/cottbus-apply-pre-state.json"
+          safe_result="$private_root/cottbus-apply-safe-result.json"
+          test_id_reader="$private_root/read-test-company-id.php"
+
+          cat > "$test_id_reader" <<'PHP'
+          <?php
+          try {
+              $data = json_decode((string)file_get_contents((string)getenv('PROVISION_RESULT')), true, 512, JSON_THROW_ON_ERROR);
+              $id = (string)($data['company_id'] ?? '');
+              if (($data['slug'] ?? '') !== 'lehrfahrer-test' || preg_match('/^cmp_[0-9a-f]{32}$/D', $id) !== 1) exit(1);
+              echo $id;
+          } catch (Throwable $error) { exit(1); }
+          PHP
+          chmod 600 "$test_id_reader"
+          test_company_id="$(PROVISION_RESULT="$private_root/provision-result.json" php -q -f "$test_id_reader")"
+          test_root="$private_root/companies/$test_company_id"
+          test -d "$test_root"
+
+          tree_fingerprint() {
+            root="$1"
+            if find "$root" -type l -print -quit | grep -q .; then return 1; fi
+            (
+              cd "$root"
+              while IFS= read -r -d '' file; do
+                relative="${file#./}"
+                size="$(stat -c '%s' "$file")"
+                sha="$(sha256sum "$file" | awk '{print $1}')"
+                printf '%s\0%s\0%s\n' "$relative" "$size" "$sha"
+              done < <(find . -type f -print0 | sort -z)
+            ) | sha256sum | awk '{print $1}'
+          }
+          test_fingerprint_before="$(tree_fingerprint "$test_root")"
+
+          cat > "$validator" <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          function apply_validation_fail(string $message): never {
+              file_put_contents('php://stderr', $message . "\n");
+              exit(1);
+          }
+
+          function apply_report(string $path): array {
+              $raw = (string)file_get_contents($path);
+              if (str_starts_with($raw, "\xEF\xBB\xBF")) $raw = substr($raw, 3);
+              $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+              if (preg_match('/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*(\{.*\})\s*\z/isD', $raw, $matches) !== 1) {
+                  apply_validation_fail('Migrationswerkzeug lieferte keine eindeutige JSON-Ausgabe.');
+              }
+              try { $data = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR); }
+              catch (Throwable $error) { apply_validation_fail('Migrationswerkzeug lieferte ungueltiges JSON.'); }
+              if (!is_array($data)) apply_validation_fail('Migrationsbericht ist unvollstaendig.');
+              return $data;
+          }
+
+          function all_status(array $status, string $expected): bool {
+              return $status !== [] && array_filter($status, static fn($value): bool => $value !== $expected) === [];
+          }
+
+          function validate_plan(array $data): void {
+              $manifest = $data['deterministic_manifest'] ?? [];
+              $expected = $manifest['expected_target'] ?? [];
+              if (($manifest['company_id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
+                  || ($expected['cities'] ?? null) !== 1 || ($expected['lines'] ?? null) !== 3
+                  || ($expected['routes'] ?? null) !== 4 || ($expected['route_files'] ?? null) !== 12
+                  || ($expected['drivers'] ?? null) !== 1 || ($expected['trainings'] ?? null) !== 1
+                  || ($expected['packages'] ?? null) !== 1 || ($expected['documents'] ?? null) !== 2
+                  || ($expected['catalog_stops'] ?? null) !== 1531 || ($expected['gtfs_agencies'] ?? null) !== 1
+                  || ($manifest['gtfs']['agency_id'] ?? '') !== '143'
+                  || ($manifest['gtfs']['counts'] ?? null) !== ['routes' => 75, 'trips' => 3686, 'stop_times' => 62227, 'used_stops' => 1531]
+                  || ($manifest['variants_index']['integrity_check'] ?? '') !== 'ok'
+                  || ($manifest['variants_index']['routes'] ?? null) !== 75
+                  || ($manifest['variants_index']['variants'] ?? null) !== 678
+                  || count($manifest['remappings'] ?? []) !== 40
+                  || ($manifest['routes']['free_stops_preserved'] ?? null) !== 21
+                  || ($manifest['routes']['geometry'] ?? '') !== 'UNCHANGED') {
+                  apply_validation_fail('Migrationsplan weicht von der fachlichen Freigabe ab.');
+              }
+          }
+
+          $phase = (string)getenv('VALIDATION_PHASE');
+          if ($phase === 'pre') {
+              $privateRoot = (string)getenv('STAGING_PRIVATE_ROOT');
+              $expectedBackup = (string)getenv('EXPECTED_BACKUP_SHA256');
+              $foundRestorePoint = false;
+              foreach (glob($privateRoot . '/backups/control-db/*', GLOB_ONLYDIR) ?: [] as $directory) {
+                  $dump = $directory . '/control.sql';
+                  $manifestPath = $directory . '/manifest.json';
+                  if (is_link($directory) || !is_file($dump) || is_link($dump) || !is_file($manifestPath) || is_link($manifestPath)) continue;
+                  if (!hash_equals($expectedBackup, (string)hash_file('sha256', $dump))) continue;
+                  try { $manifest = json_decode((string)file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR); }
+                  catch (Throwable $error) { continue; }
+                  if (!hash_equals($expectedBackup, (string)($manifest['sha256'] ?? ''))
+                      || (int)($manifest['bytes'] ?? -1) !== (int)filesize($dump)
+                      || ($manifest['schema_version'] ?? null) !== '4'
+                      || ($manifest['restore']['client_validated'] ?? false) !== true
+                      || substr(sprintf('%o', fileperms($directory)), -3) !== '700'
+                      || substr(sprintf('%o', fileperms($dump)), -3) !== '600'
+                      || substr(sprintf('%o', fileperms($manifestPath)), -3) !== '600') continue;
+                  $foundRestorePoint = true;
+              }
+              if (!$foundRestorePoint) apply_validation_fail('Freigegebener DB-Restore-Punkt fehlt oder ist ungueltig.');
+              $pre = apply_report((string)getenv('PRE_RESULT'));
+              validate_plan($pre);
+              $status = $pre['real_target']['target_status'] ?? [];
+              if (($pre['mode'] ?? '') !== 'DRY_RUN' || ($pre['READY_FOR_APPLY'] ?? '') !== 'YES'
+                  || ($pre['APPLY_ORCHESTRATION_READY'] ?? '') !== 'YES' || ($pre['BLOCKERS'] ?? null) !== []
+                  || ($pre['DB_BACKUP_CAPABLE'] ?? '') !== 'YES' || ($pre['DB_RESTORE_PATH_VALID'] ?? '') !== 'YES'
+                  || ($pre['VARIANTS_REBUILD_CAPABLE'] ?? '') !== 'YES'
+                  || ($pre['VARIANTS_VALIDATION_CAPABLE'] ?? '') !== 'YES'
+                  || !all_status($status, 'CREATE')
+                  || ($pre['real_target']['target_unchanged'] ?? false) !== true
+                  || ($pre['real_target']['other_tenants_unchanged'] ?? false) !== true
+                  || ($pre['read_only_evidence']['database_writes'] ?? -1) !== 0
+                  || ($pre['read_only_evidence']['target_writes'] ?? -1) !== 0) {
+                  apply_validation_fail('Unmittelbarer Apply-Preflight ist nicht freigegeben.');
+              }
+              $source = (string)($pre['SOURCE_FINGERPRINT'] ?? '');
+              if (preg_match('/^[0-9a-f]{64}$/D', $source) !== 1) apply_validation_fail('Source-Fingerprint fehlt.');
+              $approval = 'LIVE-COTTBUS:' . $source;
+              if (file_put_contents((string)getenv('APPROVAL_FILE'), $approval, LOCK_EX) !== strlen($approval)
+                  || !chmod((string)getenv('APPROVAL_FILE'), 0600)) {
+                  apply_validation_fail('Source-Freigabe konnte nicht privat festgehalten werden.');
+              }
+              $state = [
+                  'source_fingerprint' => $source,
+                  'target_before' => $pre['real_target']['target_fingerprint_before'],
+                  'other_tenants_before' => $pre['real_target']['other_tenants_fingerprint_before'],
+              ];
+              $encoded = json_encode($state, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+              if (file_put_contents((string)getenv('PRE_STATE'), $encoded, LOCK_EX) !== strlen($encoded)
+                  || !chmod((string)getenv('PRE_STATE'), 0600)) apply_validation_fail('Pre-State konnte nicht gespeichert werden.');
+              echo json_encode([
+                  'READY_FOR_APPLY' => 'YES', 'APPLY_ORCHESTRATION_READY' => 'YES', 'BLOCKERS' => [],
+                  'restore_point_verified' => true, 'target_status' => ['CREATE' => count($status)],
+                  'source_files_verified' => $pre['read_only_evidence']['source_files_verified_after_plan'] ?? null,
+              ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
+              exit;
+          }
+
+          if ($phase !== 'post') apply_validation_fail('Unbekannte Validierungsphase.');
+          $apply = apply_report((string)getenv('APPLY_RESULT'));
+          $post = apply_report((string)getenv('POST_RESULT'));
+          validate_plan($apply);
+          validate_plan($post);
+          try { $preState = json_decode((string)file_get_contents((string)getenv('PRE_STATE')), true, 512, JSON_THROW_ON_ERROR); }
+          catch (Throwable $error) { apply_validation_fail('Pre-State ist unlesbar.'); }
+          $applyStatus = $apply['apply_result']['target_status'] ?? [];
+          $postStatus = $post['real_target']['target_status'] ?? [];
+          if (($apply['mode'] ?? '') !== 'APPLY') { apply_validation_fail('Apply-Modus fehlt.'); }
+          if (($apply['apply_result']['result'] ?? '') !== 'APPLIED') { apply_validation_fail('Apply wurde nicht abgeschlossen.'); }
+          if (!all_status($applyStatus, 'CREATE')) { apply_validation_fail('Apply-Status ist nicht vollstaendig CREATE.'); }
+          if (($apply['apply_result']['rollback_cleanup_pending'] ?? true) !== false) { apply_validation_fail('Rollback-Bereich ist nicht bereinigt.'); }
+          if (($apply['apply_result']['db_restore_point_retained'] ?? false) !== true) { apply_validation_fail('Apply-Restore-Punkt wurde nicht erhalten.'); }
+          if (($apply['apply_result']['variants_index']['integrity_check'] ?? '') !== 'ok') { apply_validation_fail('Variantenindex ist nicht integer.'); }
+          if (($apply['apply_result']['variants_index']['routes'] ?? null) !== 75) { apply_validation_fail('Variantenindex-Routen weichen ab.'); }
+          if (($apply['apply_result']['variants_index']['variants'] ?? null) !== 678) { apply_validation_fail('Variantenanzahl weicht ab.'); }
+          if (strval($post['mode'] ?? '') !== 'DRY_RUN') { apply_validation_fail('Idempotenz-Dry-Run fehlt.'); }
+          if (strval($post['READY_FOR_APPLY'] ?? '') !== 'YES') { apply_validation_fail('Post-Dry-Run ist nicht bereit.'); }
+          if (strval($post['APPLY_ORCHESTRATION_READY'] ?? '') !== 'YES') { apply_validation_fail('Post-Dry-Run-Orchestrierung ist nicht bereit.'); }
+          if (!is_array($post['BLOCKERS'] ?? null) || count($post['BLOCKERS']) !== 0) { apply_validation_fail('Post-Dry-Run meldet Blocker.'); }
+          if (!all_status($postStatus, 'SKIP')) { apply_validation_fail('Idempotenz-Dry-Run ist nicht vollstaendig SKIP.'); }
+          if (($post['real_target']['target_unchanged'] ?? false) !== true) { apply_validation_fail('Post-Dry-Run veraenderte Cottbus.'); }
+          if (($post['real_target']['other_tenants_unchanged'] ?? false) !== true) { apply_validation_fail('Post-Dry-Run veraenderte fremde Tenants.'); }
+          if (intval($post['read_only_evidence']['database_writes'] ?? -1) !== 0) { apply_validation_fail('Post-Dry-Run schrieb in die DB.'); }
+          if (intval($post['read_only_evidence']['target_writes'] ?? -1) !== 0) { apply_validation_fail('Post-Dry-Run schrieb in den Tenant.'); }
+          $postSourceFingerprint = (string)($post['SOURCE_FINGERPRINT'] ?? '');
+          $postOtherTenants = (string)($post['real_target']['other_tenants_fingerprint_after'] ?? '');
+          if (!hash_equals((string)$preState['source_fingerprint'], $postSourceFingerprint)) { apply_validation_fail('Source-Fingerprint driftete waehrend des Apply.'); }
+          if (!hash_equals((string)$preState['other_tenants_before'], $postOtherTenants)) { apply_validation_fail('Ein anderer Tenant wurde veraendert.'); }
+          $manifest = $apply['deterministic_manifest'];
+          $safe = [
+              'apply_started' => true, 'apply_successful' => true, 'rollback_required' => false,
+              'result' => 'APPLIED', 'post_dry_run' => 'ALL_SKIP', 'BLOCKERS' => [],
+              'counts' => $manifest['expected_target'], 'gtfs_counts' => $manifest['gtfs']['counts'],
+              'variants_index' => $manifest['variants_index'],
+              'remappings' => ['total' => count($manifest['remappings']), 'EXACT' => 36, 'HIGH' => 4],
+              'free_stops_preserved' => $manifest['routes']['free_stops_preserved'],
+              'route_geometry' => $manifest['routes']['geometry'],
+              'cottbus_fingerprint_before' => $preState['target_before'],
+              'cottbus_fingerprint_after' => $post['real_target']['target_fingerprint_after'],
+              'other_tenants_unchanged' => true,
+              'apply_restore_point' => [
+                  'bytes' => $apply['apply_result']['db_restore_point']['bytes'] ?? null,
+                  'sha256' => $apply['apply_result']['db_restore_point']['sha256'] ?? null,
+                  'retained' => true,
+              ],
+          ];
+          $json = json_encode($safe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+          if (file_put_contents((string)getenv('SAFE_RESULT'), $json, LOCK_EX) !== strlen($json)
+              || !chmod((string)getenv('SAFE_RESULT'), 0600)) apply_validation_fail('Sicherer Apply-Bericht konnte nicht geschrieben werden.');
+          PHP
+          chmod 600 "$validator"
+          rm -f -- "$approval_file" "$pre_result" "$apply_result" "$post_result" "$pre_state" "$safe_result"
+
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
+            php -q -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/cottbus-migrate-staging.php" -- \
+              --dry-run --public-root="$live_webroot" --private-root="$live_private" \
+              --gtfs-zip="$gtfs_source" --company-id="$company_id" \
+              --staging-private-root="$private_root" --compact > "$pre_result"
+          chmod 600 "$pre_result"
+          VALIDATION_PHASE=pre STAGING_PRIVATE_ROOT="$private_root" \
+          EXPECTED_BACKUP_SHA256="$expected_backup_sha256" PRE_RESULT="$pre_result" \
+          APPROVAL_FILE="$approval_file" PRE_STATE="$pre_state" \
+            php -q -f "$validator"
+
+          source_approval="$(cat "$approval_file")"
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_STAGING_CGI_APPLY=1 \
+            php -q -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/cottbus-migrate-staging.php" -- \
+              --apply --confirm=APPLY-COTTBUS-STAGING \
+              --source-approval="$source_approval" \
+              --public-root="$live_webroot" --private-root="$live_private" \
+              --gtfs-zip="$gtfs_source" --company-id="$company_id" \
+              --staging-private-root="$private_root" --compact > "$apply_result"
+          chmod 600 "$apply_result"
+
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
+            php -q -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/cottbus-migrate-staging.php" -- \
+              --dry-run --public-root="$live_webroot" --private-root="$live_private" \
+              --gtfs-zip="$gtfs_source" --company-id="$company_id" \
+              --staging-private-root="$private_root" --compact > "$post_result"
+          chmod 600 "$post_result"
+
+          test_fingerprint_after="$(tree_fingerprint "$test_root")"
+          if [ "$test_fingerprint_before" != "$test_fingerprint_after" ]; then
+            echo 'lehrfahrer-test wurde durch den Apply veraendert.' >&2
+            exit 1
+          fi
+          VALIDATION_PHASE=post APPLY_RESULT="$apply_result" POST_RESULT="$post_result" \
+          PRE_STATE="$pre_state" SAFE_RESULT="$safe_result" php -q -f "$validator"
+          cat "$safe_result"
+          printf 'LEHRFAHRER_TEST_FINGERPRINT_BEFORE=%s\n' "$test_fingerprint_before"
+          printf 'LEHRFAHRER_TEST_FINGERPRINT_AFTER=%s\n' "$test_fingerprint_after"
+          rm -f -- "$validator" "$test_id_reader" "$approval_file" "$pre_result" \
+            "$apply_result" "$post_result" "$pre_state" "$safe_result"
           REMOTE_SCRIPT
 
       - name: Verify live public content is unchanged

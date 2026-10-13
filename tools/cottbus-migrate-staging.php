@@ -1595,12 +1595,13 @@ function cottbusRun(array $options): array {
 }
 
 $cgiDryRun = PHP_SAPI !== 'cli' && getenv('LEHRFAHRER_STAGING_CGI_DRY_RUN') === '1';
-if (PHP_SAPI !== 'cli' && !$cgiDryRun) {
+$cgiApply = PHP_SAPI !== 'cli' && getenv('LEHRFAHRER_STAGING_CGI_APPLY') === '1';
+if (PHP_SAPI !== 'cli' && !$cgiDryRun && !$cgiApply) {
     http_response_code(404);
     exit;
 }
 
-if (!$cgiDryRun && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
+if (!$cgiDryRun && !$cgiApply && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 
 $options = getopt('', [
     'dry-run', 'apply', 'public-root:', 'private-root:', 'gtfs-zip::', 'gtfs-directory::',
@@ -1608,6 +1609,8 @@ $options = getopt('', [
 ]);
 try {
     if ($cgiDryRun && isset($options['apply'])) cottbusFail('CGI-Ausfuehrung ist ausschliesslich fuer Dry-Run erlaubt.');
+    if ($cgiApply && !isset($options['apply'])) cottbusFail('CGI-Apply-Gate akzeptiert ausschliesslich den Apply-Modus.');
+    if ($cgiApply && (string)getenv('LEHRFAHRER_ENV') !== 'staging') cottbusFail('CGI-Apply-Gate ist ausschliesslich in Staging erlaubt.');
     $report = cottbusRun($options);
     echo json_encode(
         $report,
