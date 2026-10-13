@@ -1199,9 +1199,15 @@ jobs:
           legacy_helper_removed=NO
           if [ -e "$legacy_helper" ] || [ -L "$legacy_helper" ]; then
             legacy_helper_found=YES
+            legacy_helper_sha256=''
+            expected_helper_sha256=''
+            if [ -f "$legacy_helper" ] && [ ! -L "$legacy_helper" ]; then
+              legacy_helper_sha256="$(sha256sum "$legacy_helper" | awk '{print $1}')"
+              expected_helper_sha256="$(sha256sum "$test_id_reader" | awk '{print $1}')"
+            fi
             if [ ! -f "$legacy_helper" ] || [ -L "$legacy_helper" ] \
               || [ "$(stat -c '%a' "$legacy_helper")" != 600 ] \
-              || ! cmp -s -- "$legacy_helper" "$test_id_reader"; then
+              || [ "$legacy_helper_sha256" != "$expected_helper_sha256" ]; then
               echo 'Vorhandener read-test-company-id.php-Helfer ist nicht eindeutig diesem Workflow zuzuordnen.' >&2
               exit 1
             fi

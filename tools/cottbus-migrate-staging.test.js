@@ -526,6 +526,8 @@ test('Cottbus-Apply-Pfad vermeidet Process-Substitution und raeumt private Tempd
   assert.ok(step.includes('rm -f -- "$cleanup_file"'));
   assert.ok(step.includes('rmdir -- "$temp_root"'));
   assert.ok(step.includes('if [ "$apply_cottbus" != true ]; then'));
+  assert.equal(step.includes('cmp -s'), false);
+  assert.ok(step.includes('legacy_helper_sha256="$(sha256sum'));
   assert.ok(step.includes("-name '.cottbus-apply.*' -print -quit"));
   assert.ok(step.includes('COTTBUS_TEMP_CLEANUP=OK'));
 });
