@@ -129,6 +129,13 @@ test('isolierter Restore blockiert die Quelldatenbank und akzeptiert separates T
   assert.equal(result.stdout, 'OK');
 });
 
+test('kontrollierter PDO-Restore-Parser trennt nur echte SQL-Anweisungsgrenzen', () => {
+  const sql = "CREATE TABLE `x` (`v` varchar(20) DEFAULT 'a;b');\nINSERT INTO `x` VALUES ('c;d');\n";
+  const result = run(backupTool, `echo json_encode(cottbusSplitSqlStatements(base64_decode('${Buffer.from(sql).toString('base64')}')));`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), ["CREATE TABLE `x` (`v` varchar(20) DEFAULT 'a;b')", "INSERT INTO `x` VALUES ('c;d')"]);
+});
+
 test('atomarer Tenant-Swap stellt bei Commitfehler den Altstand wieder her', () => {
   const base = path.join(sandbox, 'swap');
   const current = path.join(base, 'company'); const next = path.join(base, 'next'); const backup = path.join(base, 'rollback');

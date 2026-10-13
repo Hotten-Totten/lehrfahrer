@@ -53,21 +53,19 @@ function cottbusDbBackupCapability(?array $configuration = null, ?string $privat
     try {
         if (!is_array($configuration)) throw new RuntimeException('Control-DB-Konfiguration fehlt.');
         cottbusControlDbIdentity(strval($configuration['dsn'] ?? ''));
-        if (!function_exists('proc_open')) throw new RuntimeException('proc_open ist nicht verfuegbar.');
         $dump = cottbusExecutable(['mariadb-dump', 'mysqldump']);
         $restore = cottbusExecutable(['mariadb', 'mysql']);
-        if ($restore === null) throw new RuntimeException('mariadb/mysql Restore-Client fehlt.');
-        if (!cottbusProbeDatabaseClient($restore)) throw new RuntimeException('MariaDB-Restore-Client ist nicht ausfuehrbar.');
         if ($privateRoot === null || !is_dir($privateRoot) || is_link($privateRoot) || !is_writable($privateRoot)) {
             throw new RuntimeException('Privater Backup-Root ist nicht sicher beschreibbar.');
         }
         $identity = cottbusControlDbIdentity(strval($configuration['dsn']));
-        $restoreArguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, false, $restore);
-        array_splice($restoreArguments, count($restoreArguments) - 1, 0, ['--execute=SELECT 1']);
-        $restoreProbe = cottbusRunDatabaseClient(array_merge([$restore], $restoreArguments), strval($configuration['password'] ?? ''), null, null);
-        if ($restoreProbe['status'] !== 0 || $restoreProbe['stderr_present']) throw new RuntimeException('Read-only MariaDB-Restore-Client-Probe ist fehlgeschlagen.');
-        if ($dump !== null && cottbusProbeDatabaseClient($dump)) {
+        if (function_exists('proc_open') && $dump !== null && $restore !== null
+            && cottbusProbeDatabaseClient($dump) && cottbusProbeDatabaseClient($restore)) {
             try {
+                $restoreArguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, false, $restore);
+                array_splice($restoreArguments, count($restoreArguments) - 1, 0, ['--execute=SELECT 1']);
+                $restoreProbe = cottbusRunDatabaseClient(array_merge([$restore], $restoreArguments), strval($configuration['password'] ?? ''), null, null);
+                if ($restoreProbe['status'] !== 0 || $restoreProbe['stderr_present']) throw new RuntimeException('Native Restore-Probe fehlgeschlagen.');
                 $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $dump);
                 array_splice($arguments, count($arguments) - 1, 0, ['--no-data']);
                 $probe = cottbusRunDatabaseClient(array_merge([$dump], $arguments), strval($configuration['password'] ?? ''), null, null);
@@ -83,8 +81,9 @@ function cottbusDbBackupCapability(?array $configuration = null, ?string $privat
         }
         cottbusPdoLogicalBackupProbe($configuration);
         return ['DB_BACKUP_CAPABLE' => 'YES', 'DB_RESTORE_PATH_VALID' => 'YES',
-            'mechanism' => 'PDO consistent logical export + ' . basename($restore),
-            'strategy' => 'pdo-consistent-logical-export', 'dump_binary' => null, 'restore_binary' => $restore];
+            'mechanism' => 'PDO consistent logical export + controlled PDO restore',
+            'strategy' => 'pdo-consistent-logical-export', 'restore_strategy' => 'pdo-controlled-logical-restore',
+            'dump_binary' => null, 'restore_binary' => null];
     } catch (Throwable $error) {
         return ['DB_BACKUP_CAPABLE' => 'NO', 'DB_RESTORE_PATH_VALID' => 'NO', 'mechanism' => null,
             'dump_binary' => null, 'restore_binary' => null, 'blocker' => $error->getMessage()];
@@ -249,7 +248,12 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
             'database' => $identity, 'schema_version' => $schemaVersion,
             'expected_tables' => COTTBUS_CONTROL_DB_EXPECTED_TABLES,
             'backup_strategy' => strval($capability['strategy'] ?? 'native-logical-dump'),
-            'restore' => ['client' => basename(strval($capability['restore_binary'])), 'mechanism' => 'stdin-logical-restore', 'client_validated' => true],
+            'restore' => [
+                'client' => ($capability['restore_strategy'] ?? '') === 'pdo-controlled-logical-restore'
+                    ? 'PDO_MYSQL' : basename(strval($capability['restore_binary'])),
+                'mechanism' => strval($capability['restore_strategy'] ?? 'stdin-logical-restore'),
+                'client_validated' => true,
+            ],
         ];
         $json = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
         $manifestHandle = fopen($manifestPath, 'x+b');
@@ -263,6 +267,44 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
     }
 }
 
+function cottbusSplitSqlStatements(string $sql): array {
+    $statements = []; $current = ''; $quote = null; $escaped = false; $length = strlen($sql);
+    for ($index = 0; $index < $length; $index++) {
+        $character = $sql[$index];
+        if ($escaped) { $current .= $character; $escaped = false; continue; }
+        if ($quote !== null && $character === '\\') { $current .= $character; $escaped = true; continue; }
+        if ($quote !== null) {
+            $current .= $character;
+            if ($character === $quote) {
+                if ($index + 1 < $length && $sql[$index + 1] === $quote && $quote !== '`') {
+                    $current .= $sql[++$index];
+                } else $quote = null;
+            }
+            continue;
+        }
+        if ($character === "'" || $character === '"' || $character === '`') { $quote = $character; $current .= $character; continue; }
+        if ($character === ';') {
+            if (trim($current) !== '') $statements[] = trim($current);
+            $current = '';
+            continue;
+        }
+        $current .= $character;
+    }
+    if ($quote !== null || trim($current) !== '') throw new RuntimeException('Logischer DB-Dump ist syntaktisch nicht abgeschlossen.');
+    return $statements;
+}
+
+function cottbusRestorePdoLogicalDump(array $configuration, string $dumpPath): void {
+    $raw = file_get_contents($dumpPath);
+    if (!is_string($raw) || $raw === '') throw new RuntimeException('PDO-Restore-Dump ist leer.');
+    $pdo = cottbusPdoConnection($configuration);
+    foreach (cottbusSplitSqlStatements($raw) as $statement) $pdo->exec($statement);
+    foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) {
+        $check = $pdo->prepare('SHOW TABLES LIKE ?'); $check->execute([$table]);
+        if ($check->fetchColumn() === false) throw new RuntimeException('PDO-Restore vermisst erwartete Tabelle: ' . $table);
+    }
+}
+
 function cottbusRestoreControlDbIsolated(array $sourceManifest, string $dumpPath, array $targetConfiguration, array $capability, ?callable $runner = null): void {
     $sourceDatabase = strval($sourceManifest['database']['database'] ?? '');
     $targetIdentity = cottbusControlDbIdentity(strval($targetConfiguration['dsn'] ?? ''));
@@ -270,9 +312,14 @@ function cottbusRestoreControlDbIsolated(array $sourceManifest, string $dumpPath
         throw new RuntimeException('Restore-Testziel muss eine andere isolierte Datenbank sein.');
     }
     if (!is_file($dumpPath) || is_link($dumpPath)) throw new RuntimeException('Restore-Testdump fehlt oder ist ein Symlink.');
-    if (($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES' || !isset($capability['restore_binary'])) {
+    if (($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES') {
         throw new RuntimeException('Restore-Client ist nicht verifiziert.');
     }
+    if (($capability['restore_strategy'] ?? '') === 'pdo-controlled-logical-restore' && $runner === null) {
+        cottbusRestorePdoLogicalDump($targetConfiguration, $dumpPath);
+        return;
+    }
+    if (!isset($capability['restore_binary'])) throw new RuntimeException('Restore-Client ist nicht verifiziert.');
     $argumentBinary = $runner === null ? strval($capability['restore_binary']) : null;
     $arguments = cottbusMysqlArguments($targetIdentity, strval($targetConfiguration['user'] ?? ''), $targetConfiguration['tls_ca'] ?? null, false, $argumentBinary);
     $runner ??= 'cottbusRunDatabaseClient';
