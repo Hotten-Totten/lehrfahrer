@@ -528,6 +528,8 @@ test('Cottbus-Apply-Pfad vermeidet Process-Substitution und raeumt private Tempd
   assert.ok(step.includes('if [ "$apply_cottbus" != true ]; then'));
   assert.equal(step.includes('cmp -s'), false);
   assert.ok(step.includes('legacy_helper_sha256="$(sha256sum'));
+  assert.ok(step.includes("($gtfsCounts['agencies'] ?? null) !== 1"));
+  assert.equal(step.includes("['routes' => 75, 'trips' => 3686"), false);
   assert.ok(step.includes("-name '.cottbus-apply.*' -print -quit"));
   assert.ok(step.includes('COTTBUS_TEMP_CLEANUP=OK'));
 });

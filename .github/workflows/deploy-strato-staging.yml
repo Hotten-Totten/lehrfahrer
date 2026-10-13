@@ -1262,6 +1262,7 @@ jobs:
           function validate_plan(array $data): void {
               $manifest = $data['deterministic_manifest'] ?? [];
               $expected = $manifest['expected_target'] ?? [];
+              $gtfsCounts = $manifest['gtfs']['counts'] ?? [];
               if (($manifest['company_id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
                   || ($expected['cities'] ?? null) !== 1 || ($expected['lines'] ?? null) !== 3
                   || ($expected['routes'] ?? null) !== 4 || ($expected['route_files'] ?? null) !== 12
@@ -1269,7 +1270,9 @@ jobs:
                   || ($expected['packages'] ?? null) !== 1 || ($expected['documents'] ?? null) !== 2
                   || ($expected['catalog_stops'] ?? null) !== 1531 || ($expected['gtfs_agencies'] ?? null) !== 1
                   || ($manifest['gtfs']['agency_id'] ?? '') !== '143'
-                  || ($manifest['gtfs']['counts'] ?? null) !== ['routes' => 75, 'trips' => 3686, 'stop_times' => 62227, 'used_stops' => 1531]
+                  || ($gtfsCounts['agencies'] ?? null) !== 1 || ($gtfsCounts['routes'] ?? null) !== 75
+                  || ($gtfsCounts['trips'] ?? null) !== 3686 || ($gtfsCounts['stop_times'] ?? null) !== 62227
+                  || ($gtfsCounts['used_stops'] ?? null) !== 1531
                   || ($manifest['variants_index']['integrity_check'] ?? '') !== 'ok'
                   || ($manifest['variants_index']['routes'] ?? null) !== 75
                   || ($manifest['variants_index']['variants'] ?? null) !== 678
