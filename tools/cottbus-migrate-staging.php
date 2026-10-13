@@ -40,6 +40,99 @@ const COTTBUS_LEGACY_STOP_MAPPING = [
 
 final class CottbusMigrationFailure extends RuntimeException {}
 
+const COTTBUS_APPLY_STAGES = [
+    'PREPARE_TARGET', 'BUILD_ROUTES', 'BUILD_DRIVERS', 'BUILD_TRAINING',
+    'BUILD_PACKAGE', 'BUILD_CATALOG', 'FILTER_GTFS', 'BUILD_VARIANTS',
+    'VALIDATE_TEMP_ROOT', 'DB_TRANSACTION', 'ROOT_SWAP', 'POST_VALIDATE', 'ROLLBACK',
+];
+
+function cottbusDiagnosticReset(?string $company = null): void {
+    $GLOBALS['cottbusMigrationDiagnostic'] = [
+        'stage' => 'PREPARE_TARGET',
+        'failed_stage' => null,
+        'operation' => 'initialize-migration',
+        'failed_operation' => null,
+        'rollback_status' => 'NOT_REQUIRED',
+        'company_id' => $company,
+    ];
+}
+
+function cottbusDiagnosticMark(string $stage, string $operation): void {
+    if (!in_array($stage, COTTBUS_APPLY_STAGES, true)) {
+        throw new LogicException('Unknown Cottbus migration diagnostic stage.');
+    }
+    if (!isset($GLOBALS['cottbusMigrationDiagnostic'])) cottbusDiagnosticReset();
+    $GLOBALS['cottbusMigrationDiagnostic']['stage'] = $stage;
+    $GLOBALS['cottbusMigrationDiagnostic']['operation'] = $operation;
+}
+
+function cottbusDiagnosticCaptureFailure(): void {
+    if (!isset($GLOBALS['cottbusMigrationDiagnostic'])) cottbusDiagnosticReset();
+    if ($GLOBALS['cottbusMigrationDiagnostic']['failed_stage'] === null) {
+        $GLOBALS['cottbusMigrationDiagnostic']['failed_stage'] = $GLOBALS['cottbusMigrationDiagnostic']['stage'];
+        $GLOBALS['cottbusMigrationDiagnostic']['failed_operation'] = $GLOBALS['cottbusMigrationDiagnostic']['operation'];
+    }
+}
+
+function cottbusDiagnosticRollback(string $status): void {
+    if (!isset($GLOBALS['cottbusMigrationDiagnostic'])) cottbusDiagnosticReset();
+    $GLOBALS['cottbusMigrationDiagnostic']['rollback_status'] = $status;
+}
+
+function cottbusShortCompanyId(?string $company): ?string {
+    if ($company === null || preg_match('/^cmp_[0-9a-f]{32}$/D', $company) !== 1) return null;
+    return substr($company, 0, 12) . '...' . substr($company, -4);
+}
+
+function cottbusSanitizeErrorMessage(string $message): string {
+    $message = trim(str_replace(["\r\n", "\r", "\n"], ' ', $message));
+    $suspicious = '/(?:password|passwd|secret|token|authorization|bearer|cookie|session|activation[_ -]?token|'
+        . '(?:mysql|pgsql|postgres(?:ql)?):[^\s]*?(?:password|passwd|pwd)=|'
+        . '(?:password|passwd|pwd|token|secret|cookie|session)\s*[:=]\s*\S+)/i';
+    if ($message === '' || preg_match($suspicious, $message) === 1) return 'REDACTED';
+    if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $message) === 1) return 'REDACTED';
+    return strlen($message) > 240 ? substr($message, 0, 237) . '...' : $message;
+}
+
+function cottbusErrorCategory(string $stage): string {
+    return match ($stage) {
+        'BUILD_ROUTES' => 'ROUTE_DATA',
+        'BUILD_DRIVERS' => 'DRIVER_DATA',
+        'BUILD_TRAINING' => 'TRAINING_DATA',
+        'BUILD_PACKAGE' => 'PACKAGE_DATA',
+        'BUILD_CATALOG' => 'CATALOG_DATA',
+        'FILTER_GTFS' => 'GTFS_DATA',
+        'BUILD_VARIANTS' => 'VARIANTS_INDEX',
+        'VALIDATE_TEMP_ROOT' => 'TEMP_ROOT_VALIDATION',
+        'DB_TRANSACTION' => 'DATABASE',
+        'ROOT_SWAP' => 'TENANT_ROOT_SWAP',
+        'POST_VALIDATE' => 'POST_VALIDATION',
+        'ROLLBACK' => 'ROLLBACK',
+        default => 'PRECONDITION',
+    };
+}
+
+function cottbusErrorSummary(Throwable $error, int $exitCode = 2): array {
+    if (!isset($GLOBALS['cottbusMigrationDiagnostic'])) cottbusDiagnosticReset();
+    cottbusDiagnosticCaptureFailure();
+    $context = $GLOBALS['cottbusMigrationDiagnostic'];
+    $stage = (string)($context['failed_stage'] ?? $context['stage'] ?? 'PREPARE_TARGET');
+    $category = cottbusErrorCategory($stage);
+    return [
+        'error_code' => 'COTTBUS_APPLY_' . $category . '_FAILED',
+        'error_stage' => $stage,
+        'error_category' => $category,
+        'sanitized_message' => cottbusSanitizeErrorMessage($error->getMessage()),
+        'exit_code' => $exitCode,
+        'rollback_status' => (string)($context['rollback_status'] ?? 'NOT_REQUIRED'),
+        'failed_operation' => (string)($context['failed_operation'] ?? $context['operation'] ?? 'unknown'),
+        'timestamp' => gmdate('c'),
+        'company_id' => cottbusShortCompanyId(is_string($context['company_id'] ?? null) ? $context['company_id'] : null),
+    ];
+}
+
+cottbusDiagnosticReset();
+
 function cottbusFail(string $message): never {
     throw new CottbusMigrationFailure($message);
 }
@@ -804,6 +897,7 @@ function cottbusApiRoutePaths(array $item): array {
 }
 
 function cottbusBuildPlan(array $options, string $company): array {
+    cottbusDiagnosticMark('PREPARE_TARGET', 'resolve-source-roots');
     $publicRoot = cottbusRoot(cottbusOption($options, 'public-root'), 'Public-Quellroot');
     $privateRoot = cottbusRoot(cottbusOption($options, 'private-root'), 'Private-Quellroot');
     if (cottbusInside($publicRoot, $privateRoot) || cottbusInside($privateRoot, $publicRoot)) {
@@ -819,6 +913,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         'browser-autosaves', 'local-routing-graphs', 'other-test-and-legacy-data',
     ];
 
+    cottbusDiagnosticMark('FILTER_GTFS', 'filter-approved-gtfs-source');
     $source = cottbusGtfsSource($options, $tracked);
     try { $gtfs = cottbusFilterGtfs($source); }
     finally { ($source['close'])(); }
@@ -839,6 +934,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         ['agency' => 'OK', 'routes' => 'OK', 'trips' => 'OK', 'stops' => 'OK'],
         [], ['variants-index:BUILD_AND_VALIDATE']
     );
+    cottbusDiagnosticMark('BUILD_VARIANTS', 'build-tenant-variants-index');
     $variantIndex = cottbusVariantIndex($gtfs['files'], $gtfsZipSha256);
     $variantTarget = cottbusTarget($company, 'imports', 'gtfs/index/variants.sqlite');
     $targetFiles[$variantTarget] = $variantIndex['bytes'];
@@ -850,6 +946,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         [], ['filtered-gtfs']
     );
 
+    cottbusDiagnosticMark('BUILD_CATALOG', 'build-tenant-stop-catalog');
     $catalog = [];
     foreach (array_keys($gtfs['used_stop_ids']) as $stopId) {
         $stop = $gtfs['stops_by_id'][$stopId];
@@ -884,6 +981,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         'expected_mode' => '0700', 'dependencies' => [],
     ];
 
+    cottbusDiagnosticMark('BUILD_ROUTES', 'build-approved-route-files');
     $routeRoot = cottbusPath($publicRoot, 'linien', 'cottbus');
     if (!is_dir($routeRoot)) cottbusFail('Cottbus-Routenroot fehlt.');
     $routeFiles = cottbusFiles($routeRoot);
@@ -984,6 +1082,7 @@ function cottbusBuildPlan(array $options, string $company): array {
     $high = count(array_filter($remappings, static fn(array $row): bool => $row['match'] === 'HIGH'));
     if ($exact !== 36 || $high !== 4) cottbusFail('Remapping-Sollbestand 36 EXACT/4 HIGH wurde nicht erreicht.');
 
+    cottbusDiagnosticMark('BUILD_DRIVERS', 'build-approved-driver-record');
     $driversPath = cottbusPath($privateRoot, 'personnel', 'drivers.json');
     cottbusTrack($tracked, $driversPath, 'private://personnel/drivers.json');
     $drivers = cottbusJson($driversPath);
@@ -999,6 +1098,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         ['id' => 'KEEP-ID', 'fields' => 'tenant-allowlist'], ['active_drivers' => 1], [], []
     );
 
+    cottbusDiagnosticMark('BUILD_TRAINING', 'build-approved-training-record');
     $trainingRoot = cottbusPath($privateRoot, 'trainings');
     $training = null;
     $trainingPath = null;
@@ -1038,6 +1138,7 @@ function cottbusBuildPlan(array $options, string $company): array {
         ['id' => 'KEEP-ID', 'paths' => 'tenant-api'], ['driver' => 'OK', 'routes' => 'OK'], [], ['drivers', 'routes']
     );
 
+    cottbusDiagnosticMark('BUILD_PACKAGE', 'build-approved-package-and-documents');
     $packageRoot = cottbusPath($privateRoot, 'fahrerunterlagen');
     $packageDirectories = [];
     foreach (cottbusFiles($packageRoot) as $path) if (basename($path) === 'paket.json') $packageDirectories[] = dirname($path);
@@ -1369,20 +1470,27 @@ function cottbusRemoveTree(string $root): void {
 }
 
 function cottbusAtomicTenantSwap(string $companyRoot, string $migrationRoot, string $backupRoot, callable $commit): mixed {
+    cottbusDiagnosticMark('ROOT_SWAP', 'activate-validated-tenant-root');
     if (!rename($companyRoot, $backupRoot)) cottbusFail('Bestehender Tenant-Root konnte nicht atomar gesichert werden.');
     if (!rename($migrationRoot, $companyRoot)) {
-        @rename($backupRoot, $companyRoot);
+        cottbusDiagnosticCaptureFailure();
+        cottbusDiagnosticMark('ROLLBACK', 'restore-tenant-root-after-activation-failure');
+        cottbusDiagnosticRollback(@rename($backupRoot, $companyRoot) ? 'TENANT_ROOT_RESTORED' : 'FAILED');
         cottbusFail('Validierter Tenant-Root konnte nicht atomar aktiviert werden.');
     }
     try {
         $result = $commit();
     } catch (Throwable $error) {
+        cottbusDiagnosticCaptureFailure();
+        cottbusDiagnosticMark('ROLLBACK', 'restore-previous-tenant-root');
         $failedRoot = dirname($backupRoot) . DIRECTORY_SEPARATOR . basename($backupRoot) . '-failed-' . bin2hex(random_bytes(4));
         if (!@rename($companyRoot, $failedRoot) || !@rename($backupRoot, $companyRoot)) {
             if (is_dir($failedRoot) && !is_dir($companyRoot)) @rename($failedRoot, $companyRoot);
+            cottbusDiagnosticRollback('FAILED');
             throw new RuntimeException('Tenant-Rollback nach fehlgeschlagenem DB-Commit ist fehlgeschlagen.', 0, $error);
         }
         cottbusRemoveTree($failedRoot);
+        cottbusDiagnosticRollback('TENANT_ROOT_RESTORED');
         throw $error;
     }
     cottbusRemoveTree($backupRoot);
@@ -1409,6 +1517,7 @@ function cottbusValidatePreparedTenantRoot(string $migrationRoot, string $compan
 }
 
 function cottbusApply(array $options, array $plan, string $company, string $stagingRoot): array {
+    cottbusDiagnosticMark('PREPARE_TARGET', 'verify-apply-preconditions-and-restore-point');
     foreach (['public_root', 'private_root'] as $sourceKey) {
         $sourceRoot = $plan[$sourceKey];
         if (cottbusInside($stagingRoot, $sourceRoot) || cottbusInside($sourceRoot, $stagingRoot)) {
@@ -1495,16 +1604,20 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             || !chmod($stagedCompanySettings, 0600)) {
             cottbusFail('Mastertemplate-Gesellschaftseinstellung konnte nicht in den Swap-Bereich uebernommen werden.');
         }
+        cottbusDiagnosticMark('VALIDATE_TEMP_ROOT', 'validate-prepared-tenant-root');
         cottbusValidatePreparedTenantRoot($migrationRoot, $company, $plan['target_files']);
         cottbusVerifyTracked($plan['tracked']);
         if (!hash_equals($sourceBefore, cottbusAggregateFingerprint($plan['tracked']))) cottbusFail('Quellfingerprint hat sich veraendert.');
         if ($testBefore !== null && $testBefore !== cottbusTreeFingerprint($testRoot)) cottbusFail('lehrfahrer-test wurde veraendert.');
         if (!hash_equals($otherTenantsBefore, cottbusOtherTenantsFingerprint($stagingRoot, $company))) cottbusFail('Fremder Tenant wurde veraendert.');
+        cottbusDiagnosticMark('DB_TRANSACTION', 'begin-control-db-transaction');
         if (!$pdo->beginTransaction()) cottbusFail('Control-DB-Transaktion konnte nicht gestartet werden.');
         cottbusAtomicTenantSwap($companyRoot, $migrationRoot, $backupRoot, static function () use (
             $pdo, $stagingRoot, $company, $plan, $testBefore, $testRoot, $otherTenantsBefore, $companyRoot
         ): void {
+            cottbusDiagnosticMark('DB_TRANSACTION', 'commit-control-db-transaction');
             if (!$pdo->commit()) cottbusFail('Control-DB-Transaktion konnte nicht abgeschlossen werden.');
+            cottbusDiagnosticMark('POST_VALIDATE', 'validate-activated-tenant-root');
             $postStatus = cottbusExistingTargetStatus($stagingRoot, $company, $plan['target_files']);
             if (array_filter($postStatus, static fn($status): bool => $status !== 'SKIP')) cottbusFail('Postcheck des aktivierten Tenant-Roots ist fehlgeschlagen.');
             lehrfahrer_gtfs_validate_variant_index(cottbusPath($companyRoot, 'imports', 'gtfs/index/variants.sqlite'), [COTTBUS_AGENCY_ID]);
@@ -1523,9 +1636,25 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             'db_restore_point_retained' => true,
         ];
     } catch (Throwable $error) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        cottbusDiagnosticCaptureFailure();
+        cottbusDiagnosticMark('ROLLBACK', 'rollback-and-clean-private-temporary-root');
+        $rollbackStatus = (string)($GLOBALS['cottbusMigrationDiagnostic']['rollback_status'] ?? 'NOT_REQUIRED');
+        $rollbackError = null;
+        if ($pdo->inTransaction()) {
+            try {
+                $rollbackStatus = $pdo->rollBack() ? 'DB_ROLLED_BACK' : 'FAILED';
+            } catch (Throwable $caughtRollbackError) {
+                $rollbackStatus = 'FAILED';
+                $rollbackError = $caughtRollbackError;
+            }
+        }
         if ($migrationRoot !== '') cottbusRemoveTree($migrationRoot);
         foreach (array_reverse($createdDirectories) as $directory) if (is_dir($directory)) @rmdir($directory);
+        if ($rollbackStatus === 'NOT_REQUIRED' && $migrationRoot !== '') $rollbackStatus = 'TEMP_ROOT_CLEANED';
+        cottbusDiagnosticRollback($rollbackStatus);
+        if ($rollbackError !== null) {
+            throw new RuntimeException('Control-DB-Rollback ist fehlgeschlagen.', 0, $error);
+        }
         throw $error;
     }
 }
@@ -1535,6 +1664,8 @@ function cottbusRun(array $options): array {
     $dryRun = isset($options['dry-run']) || !$apply;
     if ($apply && isset($options['dry-run'])) cottbusFail('--dry-run und --apply schliessen einander aus.');
     if (!$dryRun && !$apply) cottbusFail('Ungueltiger Betriebsmodus.');
+    $requestedCompany = is_string($options['company-id'] ?? null) ? $options['company-id'] : null;
+    cottbusDiagnosticReset($requestedCompany);
     [$company, $stagingRoot] = $apply
         ? cottbusApplyGate($options)
         : cottbusDryRunTargetGate($options);
@@ -1619,12 +1750,14 @@ try {
     ) . "\n";
     exit(0);
 } catch (Throwable $error) {
+    $summary = cottbusErrorSummary($error, 2);
     echo json_encode([
         'tool' => 'cottbus-migrate-staging',
         'mode' => isset($options['apply']) ? 'APPLY' : 'DRY_RUN',
         'ready_for_apply' => false,
         'READY_FOR_APPLY' => 'NO',
-        'BLOCKERS' => [$error->getMessage()],
+        'BLOCKERS' => [$summary['error_code']],
+        'error_summary' => $summary,
         'read_only_evidence' => isset($options['apply']) ? null : [
             'database_connections' => 0, 'database_writes' => 0, 'target_writes' => 0,
         ],

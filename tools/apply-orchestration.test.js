@@ -140,10 +140,15 @@ test('atomarer Tenant-Swap stellt bei Commitfehler den Altstand wieder her', () 
   const base = path.join(sandbox, 'swap');
   const current = path.join(base, 'company'); const next = path.join(base, 'next'); const backup = path.join(base, 'rollback');
   fs.mkdirSync(current, { recursive: true }); fs.mkdirSync(next); fs.writeFileSync(path.join(current, 'value'), 'old'); fs.writeFileSync(path.join(next, 'value'), 'new');
-  const result = run(migrationTool, `try { cottbusAtomicTenantSwap(${p(current)},${p(next)},${p(backup)},function(){throw new RuntimeException('commit failed');}); } catch(Throwable $e){echo $e->getMessage();}`);
+  const result = run(migrationTool, `cottbusDiagnosticReset('cmp_${'4'.repeat(32)}');try { cottbusAtomicTenantSwap(${p(current)},${p(next)},${p(backup)},function(){cottbusDiagnosticMark('DB_TRANSACTION','commit-control-db-transaction');throw new RuntimeException('commit failed');}); } catch(Throwable $e){echo json_encode(['message'=>$e->getMessage(),'summary'=>cottbusErrorSummary($e,2)]);}`);
   assert.match(result.stdout, /commit failed/);
+  const diagnostic = JSON.parse(result.stdout);
+  assert.equal(diagnostic.summary.error_stage, 'DB_TRANSACTION');
+  assert.equal(diagnostic.summary.rollback_status, 'TENANT_ROOT_RESTORED');
+  assert.equal(diagnostic.summary.exit_code, 2);
   assert.equal(fs.readFileSync(path.join(current, 'value'), 'utf8'), 'old');
   assert.equal(fs.existsSync(backup), false);
+  assert.equal(fs.existsSync(next), false);
 });
 
 test('fehlender oder beschädigter Index blockiert den Root-Swap bereits bei der Vollvalidierung', () => {

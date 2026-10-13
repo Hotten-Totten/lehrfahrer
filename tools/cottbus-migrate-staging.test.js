@@ -435,7 +435,8 @@ test('Apply-Sicherheitsgates blockieren Umgebung, Token und company_id vor jedem
   assert.match(noStaging.stdout, /ausschliesslich.*staging/);
   const noToken = spawnSync(php, base, { cwd: root, encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ENV: 'staging' } });
   assert.equal(noToken.status, 2);
-  assert.match(noToken.stdout, /Bestaetigungstoken/);
+  assert.match(noToken.stdout, /COTTBUS_APPLY_PRECONDITION_FAILED/);
+  assert.match(noToken.stdout, /"sanitized_message": "REDACTED"/);
   const invalidCompany = spawnSync(php, [...base, `--confirm=APPLY-COTTBUS-STAGING`, '--company-id=invalid'], {
     cwd: root, encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ENV: 'staging' }
   });
@@ -532,4 +533,96 @@ test('Cottbus-Apply-Pfad vermeidet Process-Substitution und raeumt private Tempd
   assert.equal(step.includes("['routes' => 75, 'trips' => 3686"), false);
   assert.ok(step.includes("-name '.cottbus-apply.*' -print -quit"));
   assert.ok(step.includes('COTTBUS_TEMP_CLEANUP=OK'));
+});
+
+test('redigierte Error-Summary klassifiziert alle freigegebenen Fehlersimulationen mit Exit 2', () => {
+  const cases = [
+    ['BUILD_ROUTES', 'build-approved-route-files', 'ROUTE_DATA'],
+    ['BUILD_PACKAGE', 'build-approved-package-and-documents', 'PACKAGE_DATA'],
+    ['FILTER_GTFS', 'filter-approved-gtfs-source', 'GTFS_DATA'],
+    ['BUILD_VARIANTS', 'build-tenant-variants-index', 'VARIANTS_INDEX'],
+    ['VALIDATE_TEMP_ROOT', 'validate-prepared-tenant-root', 'TEMP_ROOT_VALIDATION'],
+    ['DB_TRANSACTION', 'commit-control-db-transaction', 'DATABASE'],
+    ['ROOT_SWAP', 'activate-validated-tenant-root', 'TENANT_ROOT_SWAP'],
+  ];
+  for (const [stage, operation, category] of cases) {
+    const code = `cottbusDiagnosticReset('cmp_${'2'.repeat(32)}');` +
+      `cottbusDiagnosticMark('${stage}','${operation}');` +
+      `cottbusDiagnosticRollback('TEMP_ROOT_CLEANED');` +
+      `$s=cottbusErrorSummary(new RuntimeException('controlled ${category} failure'),2);` +
+      `echo json_encode($s);exit(2);`;
+    const result = runLibrary(code);
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    const summary = JSON.parse(result.stdout);
+    assert.equal(summary.error_stage, stage);
+    assert.equal(summary.error_category, category);
+    assert.equal(summary.failed_operation, operation);
+    assert.equal(summary.exit_code, 2);
+    assert.equal(summary.rollback_status, 'TEMP_ROOT_CLEANED');
+    assert.equal(summary.company_id, 'cmp_22222222...2222');
+    assert.doesNotMatch(result.stdout, new RegExp(`cmp_${'2'.repeat(32)}`));
+  }
+});
+
+test('Error-Summary redigiert Secrets und gibt nur die erlaubten Felder aus', () => {
+  const suspicious = [
+    'password=hunter2', 'passwd: hunter2', 'secret=value', 'token=abc',
+    'Authorization: Bearer abc', 'cookie=session-value',
+    'mysql:host=db;password=hunter2', 'activation token abc', 'session=private',
+  ];
+  const allowed = [
+    'error_code', 'error_stage', 'error_category', 'sanitized_message', 'exit_code',
+    'rollback_status', 'failed_operation', 'timestamp', 'company_id',
+  ].sort();
+  for (const message of suspicious) {
+    const result = runLibrary(
+      `cottbusDiagnosticReset('cmp_${'3'.repeat(32)}');` +
+      `cottbusDiagnosticMark('BUILD_PACKAGE','build-approved-package-and-documents');` +
+      `$s=cottbusErrorSummary(new RuntimeException(${phpBytes(message)}),2);echo json_encode($s);`
+    );
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const summary = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(summary).sort(), allowed);
+    assert.equal(summary.sanitized_message, 'REDACTED');
+    assert.doesNotMatch(result.stdout, /hunter2|Bearer abc|session-value|private/);
+  }
+});
+
+test('Workflow loggt die redigierte Summary vor dem Cleanup und entfernt beide Rohkanäle', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
+  const step = workflow.slice(workflow.indexOf('      - name: Preflight or apply approved Cottbus migration'));
+  assert.ok(step.includes('apply_stderr="$temp_root/cottbus-apply-stderr.log"'));
+  assert.ok(step.includes('"$apply_result" "$apply_stderr"'));
+  assert.ok(step.includes('> "$apply_result" 2> "$apply_stderr"'));
+  assert.ok(step.includes('VALIDATION_PHASE=error APPLY_RESULT="$apply_result"'));
+  assert.ok(step.includes("echo json_encode(['COTTBUS_APPLY_ERROR_SUMMARY' => $summary]"));
+  assert.equal(step.includes('cat "$apply_result"'), false);
+  assert.equal(step.includes('cat "$apply_stderr"'), false);
+  assert.ok(step.indexOf('VALIDATION_PHASE=error') < step.indexOf('exit "$apply_exit"'));
+  assert.ok(step.indexOf('exit "$apply_exit"') < step.indexOf('remote_status=$?'));
+  assert.ok(step.indexOf('remote_status=$?') < step.indexOf('COTTBUS_TEMP_CLEANUP=OK'));
+});
+
+test('Workflow-Validator redigiert auch manipulierte private Fehlerberichte erneut', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
+  const step = workflow.slice(workflow.indexOf('      - name: Preflight or apply approved Cottbus migration'));
+  const blocks = [...step.matchAll(/^          cat > "\$(?:test_id_reader|validator)" <<'PHP'\r?\n([\s\S]*?)^          PHP$/gm)];
+  const validator = path.join(sandbox, 'diagnostic-validator.php');
+  fs.writeFileSync(validator, blocks[1][1].replace(/^          /gm, ''), 'utf8');
+  const privateResult = path.join(sandbox, 'private-error-result.json');
+  fs.writeFileSync(privateResult, JSON.stringify({ error_summary: {
+    error_code: 'COTTBUS_APPLY_DATABASE_FAILED', error_stage: 'DB_TRANSACTION', error_category: 'DATABASE',
+    sanitized_message: 'password=hunter2', exit_code: 2, rollback_status: 'DB_ROLLED_BACK',
+    failed_operation: 'commit-control-db-transaction', timestamp: '2026-10-13T12:00:00+00:00',
+    company_id: 'cmp_2ff1b821...7b56'
+  }}));
+  const result = spawnSync(php, ['-f', validator], { cwd: root, encoding: 'utf8', env: {
+    ...process.env, VALIDATION_PHASE: 'error', APPLY_RESULT: privateResult,
+    APPLY_EXIT_CODE: '2', APPLY_UNEXPECTED_STDERR: '0'
+  }});
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /COTTBUS_APPLY_ERROR_SUMMARY/);
+  assert.match(result.stdout, /REDACTED/);
+  assert.doesNotMatch(result.stdout, /hunter2/);
+  assert.match(result.stdout, /COTTBUS_APPLY_ROLLBACK_STATUS=DB_ROLLED_BACK/);
 });

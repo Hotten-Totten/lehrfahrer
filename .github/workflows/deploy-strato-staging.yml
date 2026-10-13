@@ -1119,6 +1119,7 @@ jobs:
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
           fi
 
+          set +e
           "${SSH_RUN[@]}" "$REMOTE" \
             "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH' '$APPLY_COTTBUS'" <<'REMOTE_SCRIPT'
           set -euo pipefail
@@ -1151,21 +1152,29 @@ jobs:
           approval_file="$temp_root/cottbus-apply-source-approval.txt"
           pre_result="$temp_root/cottbus-apply-preflight.json"
           apply_result="$temp_root/cottbus-apply-result.json"
+          apply_stderr="$temp_root/cottbus-apply-stderr.log"
           post_result="$temp_root/cottbus-apply-post-dry-run.json"
           pre_state="$temp_root/cottbus-apply-pre-state.json"
           safe_result="$temp_root/cottbus-apply-safe-result.json"
           test_id_reader="$temp_root/read-test-company-id.php"
+          diagnostic_failure=0
           cleanup() {
             cleanup_status=$?
             trap - EXIT HUP INT TERM
             set +e
-            for cleanup_file in "$validator" "$approval_file" "$pre_result" "$apply_result" \
+            cleanup_result=OK
+            for cleanup_file in "$validator" "$approval_file" "$pre_result" "$apply_result" "$apply_stderr" \
               "$post_result" "$pre_state" "$safe_result" "$test_id_reader"; do
               if [ -e "$cleanup_file" ] || [ -L "$cleanup_file" ]; then
-                rm -f -- "$cleanup_file"
+                rm -f -- "$cleanup_file" || cleanup_result=FAILED
               fi
             done
-            rmdir -- "$temp_root" 2>/dev/null || true
+            rmdir -- "$temp_root" 2>/dev/null || cleanup_result=FAILED
+            if [ "$diagnostic_failure" -eq 1 ]; then
+              printf 'COTTBUS_APPLY_PRIVATE_TEMP_CLEANUP=%s\n' "$cleanup_result"
+              printf 'COTTBUS_APPLY_ROLLBACK_STATUS_REPORTED=YES\n'
+            fi
+            if [ "$cleanup_result" != OK ] && [ "$cleanup_status" -eq 0 ]; then cleanup_status=1; fi
             exit "$cleanup_status"
           }
           trap cleanup EXIT
@@ -1283,7 +1292,75 @@ jobs:
               }
           }
 
+          function redacted_apply_error(string $path, int $exitCode, bool $unexpectedStderr): array {
+              $fallback = [
+                  'error_code' => $unexpectedStderr
+                      ? 'COTTBUS_APPLY_UNEXPECTED_STDERR_FAILED'
+                      : 'COTTBUS_APPLY_UNREADABLE_FAILURE',
+                  'error_stage' => 'PREPARE_TARGET',
+                  'error_category' => 'DIAGNOSTIC_OUTPUT',
+                  'sanitized_message' => 'REDACTED',
+                  'exit_code' => $exitCode,
+                  'rollback_status' => 'UNKNOWN',
+                  'failed_operation' => $unexpectedStderr ? 'validate-empty-stderr' : 'parse-private-error-result',
+                  'timestamp' => gmdate('c'),
+                  'company_id' => 'cmp_2ff1b821...7b56',
+              ];
+              if ($unexpectedStderr) return $fallback;
+              $raw = @file_get_contents($path);
+              if (!is_string($raw)) return $fallback;
+              if (str_starts_with($raw, "\xEF\xBB\xBF")) $raw = substr($raw, 3);
+              $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+              if (preg_match('/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*(\{.*\})\s*\z/isD', $raw, $matches) !== 1) return $fallback;
+              try { $report = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR); }
+              catch (Throwable $error) { return $fallback; }
+              $summary = is_array($report['error_summary'] ?? null) ? $report['error_summary'] : [];
+              $allowedStages = ['PREPARE_TARGET','BUILD_ROUTES','BUILD_DRIVERS','BUILD_TRAINING','BUILD_PACKAGE',
+                  'BUILD_CATALOG','FILTER_GTFS','BUILD_VARIANTS','VALIDATE_TEMP_ROOT','DB_TRANSACTION',
+                  'ROOT_SWAP','POST_VALIDATE','ROLLBACK'];
+              $message = trim((string)($summary['sanitized_message'] ?? ''));
+              $suspicious = '/(?:password|passwd|secret|token|authorization|bearer|cookie|session|activation[_ -]?token|'
+                  . '(?:mysql|pgsql|postgres(?:ql)?):[^\s]*?(?:password|passwd|pwd)=|'
+                  . '(?:password|passwd|pwd|token|secret|cookie|session)\s*[:=]\s*\S+)/i';
+              if ($message === '' || preg_match($suspicious, $message) === 1
+                  || preg_match('/[\x00-\x1F\x7F]/', $message) === 1 || strlen($message) > 240) {
+                  $message = 'REDACTED';
+              }
+              $stage = (string)($summary['error_stage'] ?? '');
+              $code = (string)($summary['error_code'] ?? '');
+              $category = (string)($summary['error_category'] ?? '');
+              $operation = (string)($summary['failed_operation'] ?? '');
+              $rollback = (string)($summary['rollback_status'] ?? '');
+              $timestamp = (string)($summary['timestamp'] ?? '');
+              $company = $summary['company_id'] ?? null;
+              if (!in_array($stage, $allowedStages, true)
+                  || preg_match('/^COTTBUS_APPLY_[A-Z_]+_(?:FAILED|FAILURE)$/D', $code) !== 1
+                  || preg_match('/^[A-Z_]+$/D', $category) !== 1
+                  || preg_match('/^[a-z0-9-]+$/D', $operation) !== 1
+                  || preg_match('/^[A-Z_]+$/D', $rollback) !== 1
+                  || preg_match('/^\d{4}-\d{2}-\d{2}T[^\s]+$/D', $timestamp) !== 1
+                  || ($company !== null && preg_match('/^cmp_[0-9a-f]{8}\.\.\.[0-9a-f]{4}$/D', (string)$company) !== 1)) {
+                  return $fallback;
+              }
+              return [
+                  'error_code' => $code, 'error_stage' => $stage, 'error_category' => $category,
+                  'sanitized_message' => $message, 'exit_code' => $exitCode,
+                  'rollback_status' => $rollback, 'failed_operation' => $operation,
+                  'timestamp' => $timestamp, 'company_id' => $company,
+              ];
+          }
+
           $phase = (string)getenv('VALIDATION_PHASE');
+          if ($phase === 'error') {
+              $summary = redacted_apply_error(
+                  (string)getenv('APPLY_RESULT'),
+                  (int)getenv('APPLY_EXIT_CODE'),
+                  getenv('APPLY_UNEXPECTED_STDERR') === '1'
+              );
+              echo json_encode(['COTTBUS_APPLY_ERROR_SUMMARY' => $summary], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
+              echo 'COTTBUS_APPLY_ROLLBACK_STATUS=', $summary['rollback_status'], "\n";
+              exit;
+          }
           if ($phase === 'pre') {
               $privateRoot = (string)getenv('STAGING_PRIVATE_ROOT');
               $expectedBackup = (string)getenv('EXPECTED_BACKUP_SHA256');
@@ -1428,6 +1505,7 @@ jobs:
           fi
 
           source_approval="$(cat "$approval_file")"
+          set +e
           LEHRFAHRER_ENV=staging \
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
@@ -1438,8 +1516,20 @@ jobs:
               --source-approval="$source_approval" \
               --public-root="$live_webroot" --private-root="$live_private" \
               --gtfs-zip="$gtfs_source" --company-id="$company_id" \
-              --staging-private-root="$private_root" --compact > "$apply_result"
+              --staging-private-root="$private_root" --compact > "$apply_result" 2> "$apply_stderr"
+          apply_exit=$?
+          set -e
           chmod 600 "$apply_result"
+          chmod 600 "$apply_stderr"
+          if [ "$apply_exit" -ne 0 ] || [ -s "$apply_stderr" ]; then
+            diagnostic_failure=1
+            if [ "$apply_exit" -eq 0 ]; then apply_exit=70; fi
+            unexpected_stderr=0
+            if [ -s "$apply_stderr" ]; then unexpected_stderr=1; fi
+            VALIDATION_PHASE=error APPLY_RESULT="$apply_result" APPLY_EXIT_CODE="$apply_exit" \
+            APPLY_UNEXPECTED_STDERR="$unexpected_stderr" php -q -f "$validator"
+            exit "$apply_exit"
+          fi
 
           LEHRFAHRER_ENV=staging \
           LEHRFAHRER_APP_ROOT="$webroot" \
@@ -1466,6 +1556,9 @@ jobs:
           printf 'LEGACY_HELPER_REMOVED=%s\n' "$legacy_helper_removed"
           REMOTE_SCRIPT
 
+          remote_status=$?
+          set -e
+
           "${SSH_RUN[@]}" "$REMOTE" \
             "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_CLEANUP_CHECK'
           set -euo pipefail
@@ -1480,6 +1573,7 @@ jobs:
           fi
           echo 'COTTBUS_TEMP_CLEANUP=OK'
           REMOTE_CLEANUP_CHECK
+          if [ "$remote_status" -ne 0 ]; then exit "$remote_status"; fi
 
       - name: Verify live public content is unchanged
         shell: bash
