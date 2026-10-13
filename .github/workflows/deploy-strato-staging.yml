@@ -674,6 +674,30 @@ jobs:
               || ($data['read_only_evidence']['database_writes'] ?? -1) !== 0
               || ($data['read_only_evidence']['target_writes'] ?? -1) !== 0
               || preg_match('/^[0-9a-f]{64}$/D', (string)($data['SOURCE_FINGERPRINT'] ?? '')) !== 1) {
+              $safeBlockers = array_map(static function ($value): string {
+                  $message = (string)$value;
+                  return preg_match('/password|token|secret|credential|@/i', $message) === 1
+                      ? '[redigierter Blocker]' : $message;
+              }, is_array($data['BLOCKERS'] ?? null) ? $data['BLOCKERS'] : []);
+              $statusCounts = [];
+              foreach ($status as $value) $statusCounts[(string)$value] = ($statusCounts[(string)$value] ?? 0) + 1;
+              file_put_contents('php://stderr', json_encode([
+                  'mode' => $data['mode'] ?? null,
+                  'READY_FOR_APPLY' => $data['READY_FOR_APPLY'] ?? null,
+                  'APPLY_ORCHESTRATION_READY' => $data['APPLY_ORCHESTRATION_READY'] ?? null,
+                  'DB_BACKUP_CAPABLE' => $data['DB_BACKUP_CAPABLE'] ?? null,
+                  'DB_RESTORE_PATH_VALID' => $data['DB_RESTORE_PATH_VALID'] ?? null,
+                  'VARIANTS_REBUILD_CAPABLE' => $data['VARIANTS_REBUILD_CAPABLE'] ?? null,
+                  'VARIANTS_VALIDATION_CAPABLE' => $data['VARIANTS_VALIDATION_CAPABLE'] ?? null,
+                  'BLOCKERS' => $safeBlockers,
+                  'variants_index' => $data['deterministic_manifest']['variants_index'] ?? null,
+                  'expected_target_matches' => ($data['deterministic_manifest']['expected_target'] ?? null) === $expected,
+                  'target_status_counts' => $statusCounts,
+                  'target_unchanged' => $data['real_target']['target_unchanged'] ?? null,
+                  'other_tenants_unchanged' => $data['real_target']['other_tenants_unchanged'] ?? null,
+                  'database_writes' => $data['read_only_evidence']['database_writes'] ?? null,
+                  'target_writes' => $data['read_only_evidence']['target_writes'] ?? null,
+              ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
               file_put_contents('php://stderr', "Cottbus-Dry-Run-Ergebnis weicht von der Freigabe ab.\n");
               exit(1);
           }
