@@ -24,8 +24,15 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         throw new InvalidArgumentException('Das neue Passwort muss mindestens 14 Zeichen lang sein.');
     }
 
+    $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
+    $transactionOpen = false;
     try {
-        $pdo->beginTransaction();
+        if ($sqlite) {
+            $pdo->exec('BEGIN IMMEDIATE');
+        } else {
+            $pdo->beginTransaction();
+        }
+        $transactionOpen = true;
         $sql =
             'SELECT user_activation_tokens.id, user_activation_tokens.user_id,
                     user_activation_tokens.company_id, user_activation_tokens.expires_at,
@@ -62,22 +69,34 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         if ($updateUser->rowCount() !== 1) {
             throw new DomainException('Der zugehoerige Admin kann nicht aktiviert werden.');
         }
+        // The token hash and its expiry must not remain usable or stored after activation.
         $consume = $pdo->prepare(
-            'UPDATE user_activation_tokens SET used_at = :used_at
-             WHERE id = :id AND used_at IS NULL'
+            'DELETE FROM user_activation_tokens
+             WHERE id = :id AND token_hash = :token_hash AND used_at IS NULL'
         );
-        $consume->execute([':used_at' => $now, ':id' => $activation['id']]);
+        $consume->execute([
+            ':id' => $activation['id'],
+            ':token_hash' => lehrfahrer_company_activation_token_hash($token),
+        ]);
         if ($consume->rowCount() !== 1) {
             throw new DomainException('Aktivierungstoken wurde bereits verwendet.');
         }
-        $pdo->commit();
+        if ($sqlite) {
+            $pdo->exec('COMMIT');
+        } else {
+            $pdo->commit();
+        }
+        $transactionOpen = false;
         return [
             'company_id' => $activation['company_id'],
             'user_id' => $activation['user_id'],
             'activated_at' => $now,
         ];
     } catch (Throwable $error) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($transactionOpen) {
+            if ($sqlite) $pdo->exec('ROLLBACK');
+            else $pdo->rollBack();
+        }
         throw $error;
     }
 }

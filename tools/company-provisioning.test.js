@@ -109,6 +109,7 @@ $activationStatement->execute([
     ':user_id' => $companyA['admin']['id'],
 ]);
 $storedActivation = $activationStatement->fetch();
+$storedActivationBefore = $storedActivation;
 
 $adminStatement = $pdo->prepare(
     'SELECT active, must_change_password, password_hash FROM users
@@ -170,6 +171,7 @@ echo json_encode([
         $companyA['admin']['id']
     ),
     'storedActivation' => $storedActivation,
+    'storedActivationBefore' => $storedActivationBefore,
     'preActivationAdmin' => $preActivationAdmin,
     'storedAdmin' => $storedAdmin,
     'activated' => $activated,
@@ -269,10 +271,10 @@ function verifyProvisioning(fixture, expectedDriver) {
   assert.equal(fixture.activationReuseRejected, true);
   assert.ok(fixture.adminRoleA.includes('users.manage'));
   assert.match(fixture.companyA.activation.token, /^[A-Za-z0-9_-]{43}$/);
-  assert.notEqual(fixture.storedActivation.token_hash, fixture.companyA.activation.token);
-  assert.equal(fixture.storedActivation.token_hash.length, 64);
-  assert.ok(Date.parse(fixture.storedActivation.used_at) <= Date.now());
-  assert.ok(Date.parse(fixture.storedActivation.expires_at) > Date.now());
+  assert.equal(fixture.storedActivation, false);
+  assert.notEqual(fixture.storedActivationBefore.token_hash, fixture.companyA.activation.token);
+  assert.equal(fixture.storedActivationBefore.token_hash.length, 64);
+  assert.ok(Date.parse(fixture.storedActivationBefore.expires_at) > Date.now());
   assert.notEqual(fixture.storedAdmin.password_hash, fixture.companyA.activation.token);
   assert.equal(fixture.storedAdmin.password_hash.startsWith('$'), true);
 }
