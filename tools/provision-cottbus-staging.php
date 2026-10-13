@@ -49,7 +49,8 @@ function lehrfahrer_cottbus_fingerprint(PDO $pdo, array $company): string {
         'company' => $company,
         'users' => lehrfahrer_cottbus_rows(
             $pdo,
-            'SELECT id, company_id, login, display_name, email, password_hash, active,
+            'SELECT id, company_id, login_normalized AS login, display_name,
+                    email_normalized AS email, password_hash, active,
                     must_change_password, created_at, updated_at
              FROM users WHERE company_id = :company_id ORDER BY id',
             $parameters
@@ -116,7 +117,8 @@ function lehrfahrer_cottbus_validate(PDO $pdo, array $company, ?string $activati
 
     $users = lehrfahrer_cottbus_rows(
         $pdo,
-        'SELECT id, company_id, login, display_name, email, active, must_change_password
+        'SELECT id, company_id, login_normalized AS login, display_name,
+                email_normalized AS email, active, must_change_password
          FROM users WHERE company_id = :company_id ORDER BY id',
         [':company_id' => $company['id']]
     );
