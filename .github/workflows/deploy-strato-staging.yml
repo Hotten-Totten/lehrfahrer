@@ -7,6 +7,12 @@ on:
   push:
     branches: ["staging"]
   workflow_dispatch:
+    inputs:
+      create_control_db_restore_point:
+        description: Create the private Control-DB restore point after all staging preflights
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging
@@ -888,6 +894,178 @@ jobs:
           logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
+
+      - name: Create private Control-DB restore point
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_control_db_restore_point }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          REMOTE="$STRATO_USER@$STRATO_HOST"
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SSH_RUN=("${SSH_BASE[@]}")
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          live_target="${3#/}"
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_webroot="$(pwd -P)"
+          else
+            live_webroot="$(cd "./$live_target" && pwd -P)"
+          fi
+          case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
+          case "$webroot/" in "$private_root/"*) exit 32 ;; esac
+          test "$(stat -c '%a' "$private_root")" = 700
+
+          runner="$private_root/create-control-db-restore-point.php"
+          result="$private_root/control-db-restore-point-result.json"
+          cat > "$runner" <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          function fail_restore_point(string $message): never {
+              file_put_contents('php://stderr', $message . "\n");
+              exit(1);
+          }
+
+          function control_db_fingerprint(array $configuration): string {
+              $pdo = cottbusPdoConnection($configuration);
+              $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+              $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+              $hash = hash_init('sha256');
+              try {
+                  $tables = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+                  sort($tables, SORT_STRING);
+                  foreach ($tables as $table) {
+                      $table = (string)$table;
+                      $quoted = cottbusSqlIdentifier($table);
+                      $columns = $pdo->query('SHOW COLUMNS FROM ' . $quoted)->fetchAll(PDO::FETCH_ASSOC);
+                      $names = array_map(static fn(array $row): string => (string)$row['Field'], $columns);
+                      $primary = array_values(array_map(
+                          static fn(array $row): string => (string)$row['Field'],
+                          array_filter($columns, static fn(array $row): bool => (string)($row['Key'] ?? '') === 'PRI')
+                      ));
+                      $order = $primary ?: $names;
+                      $query = 'SELECT * FROM ' . $quoted;
+                      if ($order !== []) $query .= ' ORDER BY ' . implode(',', array_map('cottbusSqlIdentifier', $order));
+                      hash_update($hash, $table . "\0");
+                      foreach ($pdo->query($query, PDO::FETCH_NUM) as $row) {
+                          hash_update($hash, serialize($row) . "\0");
+                      }
+                  }
+              } finally {
+                  if ($pdo->inTransaction()) $pdo->rollBack();
+              }
+              return hash_final($hash);
+          }
+
+          try {
+              $privateRoot = (string)getenv('LEHRFAHRER_PRIVATE_DATA_DIR');
+              $appRoot = (string)getenv('LEHRFAHRER_APP_ROOT');
+              $output = (string)getenv('RESTORE_POINT_RESULT_FILE');
+              if ((string)getenv('LEHRFAHRER_ENV') !== 'staging') fail_restore_point('Restore-Punkt ist nicht in Staging.');
+              require_once $appRoot . '/api/_control_database.php';
+              require_once $privateRoot . '/_control-db-restore-point.php';
+              $configuration = lehrfahrer_control_mysql_configuration();
+              $configuration['tls_ca'] = trim((string)getenv('LEHRFAHRER_DB_TLS_CA')) ?: null;
+              $pdo = cottbusPdoConnection($configuration);
+              $environment = $pdo->prepare('SELECT value FROM control_metadata WHERE `key` = ?');
+              $environment->execute(['environment']);
+              if (!hash_equals('staging', (string)$environment->fetchColumn())) {
+                  throw new RuntimeException('Control-DB ist nicht eindeutig an Staging gebunden.');
+              }
+              $schemaVersion = (int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn();
+              if ($schemaVersion !== LEHRFAHRER_CONTROL_SCHEMA_VERSION) {
+                  throw new RuntimeException('Control-DB-Schemaversion weicht ab.');
+              }
+              $company = $pdo->prepare('SELECT slug FROM companies WHERE id = ?');
+              $company->execute(['cmp_2ff1b82166c99988ed6f7eb51cca7b56']);
+              if (!hash_equals('cottbusverkehr', (string)$company->fetchColumn())) {
+                  throw new RuntimeException('Cottbus-Zielgesellschaft stimmt nicht.');
+              }
+              $capability = cottbusDbBackupCapability($configuration, $privateRoot);
+              if (($capability['DB_BACKUP_CAPABLE'] ?? 'NO') !== 'YES'
+                  || ($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES') {
+                  throw new RuntimeException('DB-Backup-/Restore-Gate ist nicht freigegeben.');
+              }
+              $before = control_db_fingerprint($configuration);
+              $restorePoint = cottbusCreateControlDbRestorePoint(
+                  $configuration,
+                  $privateRoot,
+                  $capability,
+                  (string)LEHRFAHRER_CONTROL_SCHEMA_VERSION
+              );
+              $after = control_db_fingerprint($configuration);
+              if (!hash_equals($before, $after)) throw new RuntimeException('Control-DB hat sich beim Backup veraendert.');
+              $directory = (string)$restorePoint['directory'];
+              $dump = (string)$restorePoint['dump'];
+              $manifest = (string)$restorePoint['manifest'];
+              $metadata = $restorePoint['metadata'];
+              if (is_link($directory) || is_link($dump) || is_link($manifest)
+                  || substr(sprintf('%o', fileperms($directory)), -3) !== '700'
+                  || substr(sprintf('%o', fileperms($dump)), -3) !== '600'
+                  || substr(sprintf('%o', fileperms($manifest)), -3) !== '600'
+                  || !hash_equals((string)$metadata['sha256'], (string)hash_file('sha256', $dump))
+                  || (int)$metadata['bytes'] !== (int)filesize($dump)
+                  || ($metadata['restore']['client_validated'] ?? false) !== true) {
+                  throw new RuntimeException('Restore-Punkt hat die Sicherheitsvalidierung nicht bestanden.');
+              }
+              $safe = [
+                  'ok' => true,
+                  'restore_point_id' => basename($directory),
+                  'backup_bytes' => (int)$metadata['bytes'],
+                  'backup_sha256' => (string)$metadata['sha256'],
+                  'directory_mode' => '0700',
+                  'dump_mode' => '0600',
+                  'manifest_mode' => '0600',
+                  'schema_version' => $schemaVersion,
+                  'database_environment' => 'staging',
+                  'company_id' => 'cmp_2ff1b82166c99988ed6f7eb51cca7b56',
+                  'company_slug' => 'cottbusverkehr',
+                  'DB_BACKUP_CAPABLE' => 'YES',
+                  'DB_RESTORE_PATH_VALID' => 'YES',
+                  'backup_mechanism' => (string)$capability['mechanism'],
+                  'control_db_fingerprint_before' => $before,
+                  'control_db_fingerprint_after' => $after,
+                  'control_db_unchanged' => true,
+              ];
+              $json = json_encode($safe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+              if (file_put_contents($output, $json, LOCK_EX) !== strlen($json) || !chmod($output, 0600)) {
+                  throw new RuntimeException('Sicheres Restore-Punkt-Ergebnis konnte nicht geschrieben werden.');
+              }
+          } catch (Throwable $error) {
+              fail_restore_point('Control-DB-Restore-Punkt fehlgeschlagen: ' . $error->getMessage());
+          }
+          PHP
+          chmod 600 "$runner"
+          rm -f -- "$result"
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          RESTORE_POINT_RESULT_FILE="$result" \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" -f "$runner"
+          chmod 600 "$result"
+          cat "$result"
+          rm -f -- "$runner" "$result"
+          REMOTE_SCRIPT
 
       - name: Verify live public content is unchanged
         shell: bash
