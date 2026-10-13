@@ -156,7 +156,8 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
         if ($dumpHandle === false) throw new RuntimeException('Private DB-Backup-Datei kann nicht reserviert werden.');
         fclose($dumpHandle);
         if (!chmod($dumpPath, 0600)) throw new RuntimeException('DB-Dump-Rechte konnten nicht vorab gesetzt werden.');
-        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, strval($capability['dump_binary']));
+        $argumentBinary = $runner === null ? strval($capability['dump_binary']) : null;
+        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $argumentBinary);
         $runner ??= 'cottbusRunDatabaseClient';
         $result = $runner(array_merge([strval($capability['dump_binary'])], $arguments), strval($configuration['password'] ?? ''), null, $dumpPath);
         if ($result['status'] !== 0 || $result['stderr_present'] || !is_file($dumpPath) || filesize($dumpPath) < 1) throw new RuntimeException('Konsistenter MariaDB-Dump ist fehlgeschlagen.');
@@ -194,7 +195,8 @@ function cottbusRestoreControlDbIsolated(array $sourceManifest, string $dumpPath
     if (($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES' || !isset($capability['restore_binary'])) {
         throw new RuntimeException('Restore-Client ist nicht verifiziert.');
     }
-    $arguments = cottbusMysqlArguments($targetIdentity, strval($targetConfiguration['user'] ?? ''), $targetConfiguration['tls_ca'] ?? null, false, strval($capability['restore_binary']));
+    $argumentBinary = $runner === null ? strval($capability['restore_binary']) : null;
+    $arguments = cottbusMysqlArguments($targetIdentity, strval($targetConfiguration['user'] ?? ''), $targetConfiguration['tls_ca'] ?? null, false, $argumentBinary);
     $runner ??= 'cottbusRunDatabaseClient';
     $result = $runner(array_merge([strval($capability['restore_binary'])], $arguments), strval($targetConfiguration['password'] ?? ''), $dumpPath, null);
     if ($result['status'] !== 0 || $result['stderr_present']) throw new RuntimeException('Isolierter MariaDB-Restore-Test ist fehlgeschlagen.');
