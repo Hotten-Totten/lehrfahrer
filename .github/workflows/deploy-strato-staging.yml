@@ -149,7 +149,7 @@ jobs:
         run: |
           set -euo pipefail
           remote="$STRATO_USER@$STRATO_HOST"
-          scp_run=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          scp_run=(scp -O -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
             scp_run+=(-i ~/.ssh/id_rsa)
           else
