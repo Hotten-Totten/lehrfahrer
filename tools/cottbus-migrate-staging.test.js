@@ -270,6 +270,39 @@ test('Dry-Run ist byteidentisch, read-only und vollstaendig', () => {
   assert.equal(first.json.read_only_evidence.target_writes, 0);
 });
 
+test('Realer Staging-Tenant wird im Dry-Run nur gelesen und mit echter ID geplant', () => {
+  const company = 'cmp_' + 'c'.repeat(32);
+  const stagingRoot = path.join(sandbox, 'real-staging');
+  const companyRoot = path.join(stagingRoot, 'companies', company);
+  for (const area of ['lines', 'cities', 'drivers', 'trainings', 'packages', 'documents', 'catalogs', 'settings', 'imports']) {
+    fs.mkdirSync(path.join(companyRoot, area), { recursive: true });
+  }
+  fs.writeFileSync(path.join(companyRoot, 'settings', 'company.json'), '{}\n');
+  const before = snapshot(stagingRoot);
+  const options = `[
+    'public-root'=>${phpString(publicRoot)},
+    'private-root'=>${phpString(privateRoot)},
+    'gtfs-directory'=>${phpString(gtfsRoot)},
+    'company-id'=>${phpString(company)},
+    'staging-private-root'=>${phpString(stagingRoot)}
+  ]`;
+  const result = runLibrary(
+    `$options=${options}; $plan=cottbusBuildPlan($options,${phpString(company)});` +
+    `putenv('LEHRFAHRER_ENV=staging'); putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${phpString(stagingRoot)});` +
+    `[$checked,$root]=cottbusDryRunTargetGate($options);` +
+    `$state=cottbusDryRunTargetState($plan,$checked,$root);` +
+    `echo json_encode(['manifest'=>$plan['deterministic_manifest'],'real_target'=>$state]);`
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(snapshot(stagingRoot), before);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.manifest.company_id, company);
+  assert.equal(payload.real_target.company_id, company);
+  assert.equal(payload.real_target.target_unchanged, true);
+  assert.equal(payload.real_target.other_tenants_unchanged, true);
+  assert.ok(Object.values(payload.real_target.target_status).every(value => value === 'CREATE'));
+});
+
 test('GTFS-Filter und Katalog enthalten nur Cottbusverkehr und sind reproduzierbar', () => {
   const report = run().json;
   assert.deepEqual(report.deterministic_manifest.gtfs.counts, {

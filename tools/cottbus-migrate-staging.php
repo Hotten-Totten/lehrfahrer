@@ -1161,6 +1161,55 @@ function cottbusApplyGate(array $options): array {
     return [$company, $stagingRoot];
 }
 
+function cottbusDryRunTargetGate(array $options): array {
+    $hasCompany = isset($options['company-id']);
+    $hasRoot = isset($options['staging-private-root']);
+    if (!$hasCompany && !$hasRoot) return [COTTBUS_PLACEHOLDER_COMPANY, null];
+    if (!$hasCompany || !$hasRoot) cottbusFail('Realer Dry-Run benoetigt company_id und Staging-Private-Root gemeinsam.');
+    if ((string)getenv('LEHRFAHRER_ENV') !== 'staging') {
+        cottbusFail('Realer Tenant-Dry-Run ist ausschliesslich in LEHRFAHRER_ENV=staging erlaubt.');
+    }
+    $company = cottbusOption($options, 'company-id');
+    if (preg_match('/^cmp_[0-9a-f]{32}$/D', $company) !== 1) cottbusFail('Ziel-company_id ist nicht kanonisch.');
+    $stagingRoot = cottbusRoot(cottbusOption($options, 'staging-private-root'), 'Staging-Private-Root');
+    $configured = cottbusRoot((string)getenv('LEHRFAHRER_PRIVATE_DATA_DIR'), 'LEHRFAHRER_PRIVATE_DATA_DIR');
+    if (!cottbusSamePath($stagingRoot, $configured)) cottbusFail('Ziel ist nicht die konfigurierte Staging-Private-Root.');
+    $companyRoot = cottbusPath(cottbusPath($stagingRoot, 'companies'), $company);
+    if (!is_dir($companyRoot) || is_link($companyRoot)) {
+        cottbusFail('Provisionierter Ziel-Tenant-Root fehlt oder ist ein Symlink.');
+    }
+    return [$company, $stagingRoot];
+}
+
+function cottbusDryRunTargetState(array $plan, string $company, string $stagingRoot): array {
+    foreach (['public_root', 'private_root'] as $sourceKey) {
+        $sourceRoot = $plan[$sourceKey];
+        if (cottbusInside($stagingRoot, $sourceRoot) || cottbusInside($sourceRoot, $stagingRoot)) {
+            cottbusFail('Live-Quellroot und Staging-Private-Root duerfen nicht identisch oder verschachtelt sein.');
+        }
+    }
+    $companyRoot = cottbusPath(cottbusPath($stagingRoot, 'companies'), $company);
+    $targetBefore = cottbusTreeFingerprint($companyRoot);
+    $otherBefore = cottbusOtherTenantsFingerprint($stagingRoot, $company);
+    $status = cottbusExistingTargetStatus($stagingRoot, $company, $plan['target_files']);
+    $status += cottbusExistingDirectoryStatus($stagingRoot, $company, $plan['target_directories']);
+    cottbusVerifyTracked($plan['tracked']);
+    $targetAfter = cottbusTreeFingerprint($companyRoot);
+    $otherAfter = cottbusOtherTenantsFingerprint($stagingRoot, $company);
+    if ($targetBefore !== $targetAfter) cottbusFail('Ziel-Tenant wurde waehrend des Dry-Runs veraendert.');
+    if (!hash_equals($otherBefore, $otherAfter)) cottbusFail('Fremder Tenant wurde waehrend des Dry-Runs veraendert.');
+    return [
+        'company_id' => $company,
+        'target_fingerprint_before' => $targetBefore,
+        'target_fingerprint_after' => $targetAfter,
+        'other_tenants_fingerprint_before' => $otherBefore,
+        'other_tenants_fingerprint_after' => $otherAfter,
+        'target_status' => $status,
+        'target_unchanged' => true,
+        'other_tenants_unchanged' => true,
+    ];
+}
+
 function cottbusValidateCompanyRecord(?array $record): void {
     if (!is_array($record)) cottbusFail('Zielgesellschaft existiert nicht in der Control-DB.');
     $slug = strtolower(trim((string)($record['slug'] ?? '')));
@@ -1364,9 +1413,9 @@ function cottbusRun(array $options): array {
     $dryRun = isset($options['dry-run']) || !$apply;
     if ($apply && isset($options['dry-run'])) cottbusFail('--dry-run und --apply schliessen einander aus.');
     if (!$dryRun && !$apply) cottbusFail('Ungueltiger Betriebsmodus.');
-    $company = COTTBUS_PLACEHOLDER_COMPANY;
-    $stagingRoot = null;
-    if ($apply) [$company, $stagingRoot] = cottbusApplyGate($options);
+    [$company, $stagingRoot] = $apply
+        ? cottbusApplyGate($options)
+        : cottbusDryRunTargetGate($options);
     $plan = cottbusBuildPlan($options, $company);
     $sourceFingerprint = $plan['deterministic_manifest']['source_fingerprint'];
     if ($apply) {
@@ -1378,6 +1427,9 @@ function cottbusRun(array $options): array {
             'run_metadata' => ['generated_at' => gmdate('c')],
         ];
     }
+    $targetState = $stagingRoot === null
+        ? null
+        : cottbusDryRunTargetState($plan, $company, $stagingRoot);
     return [
         'tool' => 'cottbus-migrate-staging', 'mode' => 'DRY_RUN', 'ready_for_apply' => true,
         'READY_FOR_APPLY' => 'YES',
@@ -1390,16 +1442,19 @@ function cottbusRun(array $options): array {
         'EXPECTED_TARGET_FINGERPRINT' => $plan['deterministic_manifest']['expected_target_fingerprint'],
         'SOURCE_APPROVAL_FOR_LATER_APPLY' => 'LIVE-COTTBUS:' . $sourceFingerprint,
         'deterministic_manifest' => $plan['deterministic_manifest'],
+        'real_target' => $targetState,
         'run_metadata' => ['generated_at' => null, 'timestamp_policy' => 'separate-and-disabled-in-dry-run'],
         'read_only_evidence' => [
             'source_files_verified_after_plan' => count($plan['tracked']),
             'source_fingerprints_unchanged' => true,
             'database_connections' => 0, 'database_writes' => 0, 'target_writes' => 0,
+            'real_target_read' => $targetState !== null,
         ],
     ];
 }
 
-if (PHP_SAPI !== 'cli') {
+$cgiDryRun = PHP_SAPI !== 'cli' && getenv('LEHRFAHRER_STAGING_CGI_DRY_RUN') === '1';
+if (PHP_SAPI !== 'cli' && !$cgiDryRun) {
     http_response_code(404);
     exit;
 }
@@ -1411,6 +1466,7 @@ $options = getopt('', [
     'company-id::', 'staging-private-root::', 'confirm::', 'source-approval::', 'compact',
 ]);
 try {
+    if ($cgiDryRun && isset($options['apply'])) cottbusFail('CGI-Ausfuehrung ist ausschliesslich fuer Dry-Run erlaubt.');
     $report = cottbusRun($options);
     echo json_encode(
         $report,

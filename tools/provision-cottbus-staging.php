@@ -262,6 +262,7 @@ try {
 
     $stage = 'cottbus-validate';
     $validation = lehrfahrer_cottbus_validate($pdo, $company, $activationToken);
+    $tenantFingerprint = lehrfahrer_cottbus_fingerprint($pdo, $company);
     $stage = 'test-fingerprint-after';
     $testCompanyAfter = $companies->findBySlug('lehrfahrer-test');
     if (!is_array($testCompanyAfter)) throw new RuntimeException('Staging-Testgesellschaft fehlt nach Provisionierung.');
@@ -290,6 +291,7 @@ try {
         'test_company_fingerprint_before' => $testFingerprintBefore,
         'test_company_fingerprint_after' => $testFingerprintAfter,
         'test_company_unchanged' => true,
+        'tenant_fingerprint' => $tenantFingerprint,
     ], $validation);
     $json = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
     $activationToken = null;

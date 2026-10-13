@@ -247,6 +247,7 @@ jobs:
             /tmp/lehrfahrer-staging-mariadb-ca.pem \
             tools/provision-staging-company.php \
             tools/provision-cottbus-staging.php \
+            tools/cottbus-migrate-staging.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
 
@@ -254,14 +255,22 @@ jobs:
             "$REMOTE:./$STAGING_AUTH_PATH/"
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '${{ secrets.STRATO_TARGET_PATH }}'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
           staging_auth="$3"
+          live_target="${4#/}"
           webroot="$(cd "./$staging_target" && pwd -P)"
           private_root="$(cd "./$staging_private" && pwd -P)"
           auth_root="$(cd "./$staging_auth" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_webroot="$(pwd -P)"
+          else
+            live_webroot="$(cd "./$live_target" && pwd -P)"
+          fi
+          live_private="$(dirname "$live_webroot")/lehrfahrer-private"
+          test -d "$live_private"
           case "$private_root/" in "$webroot/"*) exit 20 ;; esac
           case "$webroot/" in "$private_root/"*) exit 21 ;; esac
           case "$auth_root/" in "$webroot/"*|"$private_root/"*) exit 22 ;; esac
@@ -534,6 +543,7 @@ jobs:
               || ($data['admin_active'] ?? true) !== false
               || ($data['admin_roles'] ?? []) !== ['ADMIN']
               || ($data['activation_hash_only'] ?? false) !== true
+              || preg_match('/^[0-9a-f]{64}$/D', (string)($data['tenant_fingerprint'] ?? '')) !== 1
               || ($data['test_company_unchanged'] ?? false) !== true
               || !hash_equals(
                   (string)($data['test_company_fingerprint_before'] ?? ''),
@@ -544,16 +554,116 @@ jobs:
               file_put_contents('php://stderr', "Cottbus-Provisionierungsergebnis ist unvollstaendig.\n");
               exit(1);
           }
+          echo $data['tenant_fingerprint'], "\n", $data['test_company_fingerprint_after'], "\n";
           PHP
-          COTTBUS_RESULT_FILE="$private_root/cottbus-provision-result.json" \
-            php -q -f "$private_root/validate-cottbus-result.php"
+          cottbus_fingerprints_before="$(
+            COTTBUS_RESULT_FILE="$private_root/cottbus-provision-result.json" \
+              php -q -f "$private_root/validate-cottbus-result.php"
+          )"
           chmod 600 "$private_root/cottbus-provision-result.json"
           cat "$private_root/cottbus-provision-result.json"
+
+          set +e
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
+            php -q -d register_argc_argv=1 -f "$private_root/cottbus-migrate-staging.php" -- \
+              --dry-run \
+              --public-root="$live_webroot" \
+              --private-root="$live_private" \
+              --gtfs-zip="$live_webroot/gtfs/latest.zip" \
+              --company-id='cmp_2ff1b82166c99988ed6f7eb51cca7b56' \
+              --staging-private-root="$private_root" \
+              --compact \
+              > "$private_root/cottbus-dry-run-result.json" \
+              2> "$private_root/cottbus-dry-run-stderr.raw"
+          dry_run_status="$?"
+          set -e
+          chmod 600 "$private_root/cottbus-dry-run-result.json" "$private_root/cottbus-dry-run-stderr.raw"
+          if [ "$dry_run_status" -ne 0 ] || [ -s "$private_root/cottbus-dry-run-stderr.raw" ]; then
+            echo 'Realer Cottbus-Dry-Run ist fehlgeschlagen; Details bleiben privat.' >&2
+            exit 1
+          fi
+          cat > "$private_root/validate-cottbus-dry-run.php" <<'PHP'
+          <?php
+          try {
+              $data = json_decode(
+                  (string)file_get_contents((string)getenv('COTTBUS_DRY_RUN_RESULT')),
+                  true,
+                  512,
+                  JSON_THROW_ON_ERROR
+              );
+          } catch (Throwable $error) {
+              file_put_contents('php://stderr', "Cottbus-Dry-Run-Ergebnis ist kein valides JSON.\n");
+              exit(1);
+          }
+          $expected = [
+              'cities' => 1, 'lines' => 3, 'routes' => 4, 'route_files' => 12,
+              'drivers' => 1, 'trainings' => 1, 'packages' => 1, 'documents' => 2,
+              'catalog_stops' => 1531, 'gtfs_agencies' => 1,
+              'variants_index' => ['action' => 'REBUILD', 'agencyIds' => ['143']],
+          ];
+          $status = $data['real_target']['target_status'] ?? [];
+          if (($data['mode'] ?? '') !== 'DRY_RUN' || ($data['READY_FOR_APPLY'] ?? '') !== 'YES'
+              || ($data['BLOCKERS'] ?? null) !== []
+              || ($data['deterministic_manifest']['company_id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
+              || ($data['deterministic_manifest']['expected_target'] ?? null) !== $expected
+              || ($data['WOULD_REMAP'] ?? null) !== ['EXACT' => 36, 'HIGH' => 4, 'MANUAL' => 0, 'UNRESOLVED' => 0]
+              || ($data['real_target']['target_unchanged'] ?? false) !== true
+              || ($data['real_target']['other_tenants_unchanged'] ?? false) !== true
+              || $status === [] || count(array_filter($status, static fn($value) => $value !== 'CREATE')) !== 0
+              || ($data['read_only_evidence']['database_writes'] ?? -1) !== 0
+              || ($data['read_only_evidence']['target_writes'] ?? -1) !== 0
+              || preg_match('/^[0-9a-f]{64}$/D', (string)($data['SOURCE_FINGERPRINT'] ?? '')) !== 1) {
+              file_put_contents('php://stderr', "Cottbus-Dry-Run-Ergebnis weicht von der Freigabe ab.\n");
+              exit(1);
+          }
+          echo json_encode([
+              'mode' => $data['mode'],
+              'READY_FOR_APPLY' => $data['READY_FOR_APPLY'],
+              'SOURCE_FINGERPRINT' => $data['SOURCE_FINGERPRINT'],
+              'TARGET_FINGERPRINT' => $data['real_target']['target_fingerprint_after'],
+              'WOULD_MIGRATE' => $expected,
+              'WOULD_EXCLUDE' => $data['WOULD_EXCLUDE'],
+              'WOULD_REMAP' => $data['WOULD_REMAP'],
+              'BLOCKERS' => $data['BLOCKERS'],
+              'source_files_verified' => $data['read_only_evidence']['source_files_verified_after_plan'],
+              'target_unchanged' => true,
+              'other_tenants_unchanged' => true,
+              'database_writes' => 0,
+              'target_writes' => 0,
+          ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
+          PHP
+          COTTBUS_DRY_RUN_RESULT="$private_root/cottbus-dry-run-result.json" \
+            php -q -f "$private_root/validate-cottbus-dry-run.php"
+
+          set +e
+          php -q -f "$private_root/run-cottbus-provision.php" \
+            > "$private_root/cottbus-provision-stdout.raw" \
+            2> "$private_root/cottbus-provision-stderr.raw"
+          cottbus_post_status="$?"
+          set -e
+          if [ "$cottbus_post_status" -ne 0 ] || [ -s "$private_root/cottbus-provision-stderr.raw" ]; then
+            echo 'Cottbus-Nachpruefung ist fehlgeschlagen; Details bleiben privat.' >&2
+            exit 1
+          fi
+          cottbus_fingerprints_after="$(
+            COTTBUS_RESULT_FILE="$private_root/cottbus-provision-result.json" \
+              php -q -f "$private_root/validate-cottbus-result.php"
+          )"
+          if [ "$cottbus_fingerprints_before" != "$cottbus_fingerprints_after" ]; then
+            echo 'Cottbus- oder Testgesellschaft wurde durch den Dry-Run veraendert.' >&2
+            exit 1
+          fi
+          printf 'Cottbus- und Testgesellschaft vor/nach Dry-Run unveraendert.\n'
           rm -f -- \
             "$private_root/run-cottbus-provision.php" \
             "$private_root/validate-cottbus-result.php" \
             "$private_root/cottbus-provision-stdout.raw" \
-            "$private_root/cottbus-provision-stderr.raw"
+            "$private_root/cottbus-provision-stderr.raw" \
+            "$private_root/validate-cottbus-dry-run.php" \
+            "$private_root/cottbus-dry-run-result.json" \
+            "$private_root/cottbus-dry-run-stderr.raw"
           REMOTE_SCRIPT
 
           origin='https://staging.lehrfahrer.de'
