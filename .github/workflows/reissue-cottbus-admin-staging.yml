@@ -106,6 +106,11 @@ jobs:
           test ! -e "$delivery"
           after="$(eval "$state")"
           test "$before" = "$after"
+          if test -d "$private_root/.cottbus-admin-reissue-once"; then
+            echo 'ONCE_MARKER_PRESENT=YES'
+          else
+            echo 'ONCE_MARKER_PRESENT=NO'
+          fi
           REMOTE
           echo 'PRIVATE_CHANNEL_DRY_RUN=OK'
 
@@ -152,8 +157,17 @@ jobs:
           nonce="$(openssl rand -hex 16)"
           printf '%s' "$nonce" > "$RUNNER_TEMP/reissue-nonce"
           delivery="$private/activation-link-$nonce.txt"
-          state_command="LEHRFAHRER_APP_ROOT='$webroot' php -q -d register_argc_argv=1 -f '$private/staging-reissue-state.php'"
-          "${SSH_RUN[@]}" "$remote" "$state_command" > "$RUNNER_TEMP/reissue-before.raw"
+          read_state() {
+            "${SSH_RUN[@]}" "$remote" \
+              "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          LEHRFAHRER_APP_ROOT="$webroot" \
+            php -q -d register_argc_argv=1 -f "$private_root/staging-reissue-state.php"
+          REMOTE
+          }
+          read_state > "$RUNNER_TEMP/reissue-before.raw"
           sed -n '/^{/p' "$RUNNER_TEMP/reissue-before.raw" > "$RUNNER_TEMP/reissue-before.json"
           jq -e '.admin_active == 0 and .admin_must_change_password == 1
             and .token_used_at == null and (.token_hash | test("^[0-9a-f]{64}$"))' \
@@ -184,7 +198,7 @@ jobs:
           test "$(wc -l < "$private_root/activation-link-$3.txt")" = 1
           REMOTE
 
-          "${SSH_RUN[@]}" "$remote" "$state_command" > "$RUNNER_TEMP/reissue-after.raw"
+          read_state > "$RUNNER_TEMP/reissue-after.raw"
           sed -n '/^{/p' "$RUNNER_TEMP/reissue-after.raw" > "$RUNNER_TEMP/reissue-after.json"
           jq -e --slurpfile before "$RUNNER_TEMP/reissue-before.json" \
             '.admin_active == 0 and .admin_must_change_password == 1
