@@ -1459,7 +1459,7 @@ if (PHP_SAPI !== 'cli' && !$cgiDryRun) {
     exit;
 }
 
-if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
+if (!$cgiDryRun && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 
 $options = getopt('', [
     'dry-run', 'apply', 'public-root:', 'private-root:', 'gtfs-zip::', 'gtfs-directory::',
