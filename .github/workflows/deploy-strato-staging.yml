@@ -592,12 +592,17 @@ jobs:
           cat > "$private_root/validate-cottbus-dry-run.php" <<'PHP'
           <?php
           try {
-              $data = json_decode(
-                  (string)file_get_contents((string)getenv('COTTBUS_DRY_RUN_RESULT')),
-                  true,
-                  512,
-                  JSON_THROW_ON_ERROR
-              );
+              $raw = (string)file_get_contents((string)getenv('COTTBUS_DRY_RUN_RESULT'));
+              if (str_starts_with($raw, "\xEF\xBB\xBF")) $raw = substr($raw, 3);
+              $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+              if (preg_match(
+                  '/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*(\{.*\})\s*\z/isD',
+                  $raw,
+                  $matches
+              ) !== 1) {
+                  throw new RuntimeException('Unerwartete CGI-Ausgabe.');
+              }
+              $data = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
           } catch (Throwable $error) {
               file_put_contents('php://stderr', "Cottbus-Dry-Run-Ergebnis ist kein valides JSON.\n");
               exit(1);
