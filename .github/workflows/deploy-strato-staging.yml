@@ -495,7 +495,10 @@ jobs:
             "$private_root/cottbus-provision-stdout.raw" \
             "$private_root/cottbus-provision-stderr.raw"
           if [ "$cottbus_status" -ne 0 ]; then
-            echo 'Cottbus-Provisionierung ist fehlgeschlagen; Roh-Ausgaben bleiben privat.' >&2
+            if ! grep -E '^Cottbus-Staging-Provisioning fehlgeschlagen \[[a-z-]+\]\.$' \
+                "$private_root/cottbus-provision-stderr.raw" >&2; then
+              echo 'Cottbus-Provisionierung ist fehlgeschlagen; Roh-Ausgaben bleiben privat.' >&2
+            fi
             exit "$cottbus_status"
           fi
           if [ -s "$private_root/cottbus-provision-stderr.raw" ]; then

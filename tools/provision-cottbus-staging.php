@@ -217,27 +217,33 @@ function lehrfahrer_cottbus_validate(PDO $pdo, array $company, ?string $activati
     ];
 }
 
+$stage = 'database';
 try {
     $pdo = lehrfahrer_control_database();
     if (lehrfahrer_control_driver($pdo) !== 'mysql') {
         throw new RuntimeException('Staging-Control-DB ist nicht MariaDB.');
     }
+    $stage = 'tls';
     $tlsStatus = $pdo->query("SHOW STATUS LIKE 'Ssl_cipher'")->fetch();
     if (!is_array($tlsStatus) || trim((string)($tlsStatus['Value'] ?? '')) === '') {
         throw new RuntimeException('MariaDB-Verbindung verwendet kein TLS.');
     }
 
+    $stage = 'test-company';
     $companies = new LehrfahrerCompanyRepository($pdo);
     $testCompany = $companies->findBySlug('lehrfahrer-test');
     if (!is_array($testCompany)) {
         throw new RuntimeException('Staging-Testgesellschaft fehlt.');
     }
+    $stage = 'test-fingerprint-before';
     $testFingerprintBefore = lehrfahrer_cottbus_fingerprint($pdo, $testCompany);
 
+    $stage = 'cottbus-lookup';
     $company = $companies->findBySlug('cottbusverkehr');
     $created = false;
     $activationToken = null;
     if ($company === null) {
+        $stage = 'cottbus-create';
         $provisioned = lehrfahrer_create_company_from_template($pdo, [
             'name' => 'Cottbusverkehr',
             'slug' => 'cottbusverkehr',
@@ -252,19 +258,23 @@ try {
         $created = true;
     }
 
+    $stage = 'cottbus-validate';
     $validation = lehrfahrer_cottbus_validate($pdo, $company, $activationToken);
+    $stage = 'test-fingerprint-after';
     $testCompanyAfter = $companies->findBySlug('lehrfahrer-test');
     if (!is_array($testCompanyAfter)) throw new RuntimeException('Staging-Testgesellschaft fehlt nach Provisionierung.');
     $testFingerprintAfter = lehrfahrer_cottbus_fingerprint($pdo, $testCompanyAfter);
     if (!hash_equals($testFingerprintBefore, $testFingerprintAfter)) {
         throw new RuntimeException('Staging-Testgesellschaft wurde waehrend der Provisionierung veraendert.');
     }
+    $stage = 'cottbus-uniqueness';
     $duplicateCount = $pdo->prepare('SELECT COUNT(*) FROM companies WHERE slug = :slug');
     $duplicateCount->execute([':slug' => 'cottbusverkehr']);
     if ((int)$duplicateCount->fetchColumn() !== 1) {
         throw new RuntimeException('Cottbus-Gesellschaft ist nicht eindeutig.');
     }
 
+    $stage = 'result';
     $result = array_merge([
         'ok' => true,
         'company_id' => $company['id'],
@@ -297,6 +307,6 @@ try {
         fwrite(STDOUT, $json);
     }
 } catch (Throwable $error) {
-    lehrfahrer_cottbus_provision_error('Cottbus-Staging-Provisioning fehlgeschlagen: ' . $error->getMessage());
+    lehrfahrer_cottbus_provision_error('Cottbus-Staging-Provisioning fehlgeschlagen [' . $stage . '].');
     exit(1);
 }
