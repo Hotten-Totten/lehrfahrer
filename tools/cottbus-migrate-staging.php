@@ -226,12 +226,12 @@ function cottbusCanonicalCsv(array $header, array $rows, array $sortColumns): st
 
 function cottbusScanCsvStream($stream, string $name, callable $consumer): array {
     if (!is_resource($stream)) cottbusFail('GTFS-Tabelle konnte nicht geoeffnet werden: ' . $name);
-    $header = fgetcsv($stream);
+    $header = fgetcsv($stream, null, ',', '"', '');
     if (!is_array($header)) cottbusFail('GTFS-Tabelle besitzt keinen Header: ' . $name);
     $header = array_map(static fn($value): string => trim((string)$value), $header);
     if (isset($header[0])) $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]) ?? $header[0];
     if (count($header) !== count(array_unique($header))) cottbusFail('Doppelte GTFS-Spalte: ' . $name);
-    while (($values = fgetcsv($stream)) !== false) {
+    while (($values = fgetcsv($stream, null, ',', '"', '')) !== false) {
         if ($values === [null] || $values === []) continue;
         if (count($values) !== count($header)) cottbusFail('Ungueltige GTFS-Zeile in ' . $name);
         $row = array_combine($header, array_map(static fn($value): string => (string)$value, $values));

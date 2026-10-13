@@ -244,6 +244,7 @@ function run(extra = [], env = {}) {
   return { ...result, json: JSON.parse(result.stdout) };
 }
 function phpString(value) { return JSON.stringify(String(value).replaceAll('\\', '/')); }
+function phpBytes(value) { return `base64_decode('${Buffer.from(String(value)).toString('base64')}')`; }
 function runLibrary(code) {
   return spawnSync(php, ['-r', `require ${phpString(tool)}; ${code}`], {
     cwd: root, encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ENV: 'dev' }
@@ -321,6 +322,34 @@ test('Streaming-Filter bleibt im begrenzten PHP-Speicher lauffaehig', () => {
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(JSON.parse(result.stdout).deterministic_manifest.gtfs.counts.stop_times, 62227);
+});
+
+test('GTFS-CSV liest RFC-Quotes, BOM, CRLF, leere und zusaetzliche Felder strikt', () => {
+  const valid = '\ufefftrip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,x_extension\r\n' +
+    'c-trip,08:00:00,08:00:00,c-stop,1,"Central, Platform \\",,0,cottbus\r\n' +
+    'foreign-trip,,,foreign-stop,1,"Foreign, Terminus \\",,,foreign\r\n';
+  const malformed = 'trip_id,stop_id,stop_sequence\nmalformed-trip,only-two\n';
+  const code =
+    `$stream=fopen('php://temp','r+'); fwrite($stream,${phpBytes(valid)}); rewind($stream);` +
+    `$included=[]; $foreign=0; $header=cottbusScanCsvStream($stream,'stop_times.txt',` +
+    `function($row) use (&$included,&$foreign) {` +
+    `if ($row['trip_id']==='c-trip') $included[]=$row; else $foreign++; }); fclose($stream);` +
+    `$bad=fopen('php://temp','r+'); fwrite($bad,${phpBytes(malformed)}); rewind($bad);` +
+    `$blocked=false; try { cottbusScanCsvStream($bad,'stop_times.txt',static function($row){}); }` +
+    `catch (Throwable $error) { $blocked=str_contains($error->getMessage(),'Ungueltige GTFS-Zeile'); } fclose($bad);` +
+    `echo json_encode(['header'=>$header,'included'=>$included,'foreign'=>$foreign,'malformed_blocked'=>$blocked]);`;
+  const result = runLibrary(code);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.header[0], 'trip_id');
+  assert.equal(payload.header.length, 9);
+  assert.equal(payload.header.at(-1), 'x_extension');
+  assert.equal(payload.included.length, 1);
+  assert.equal(payload.included[0].stop_headsign, 'Central, Platform \\');
+  assert.equal(payload.included[0].pickup_type, '');
+  assert.equal(payload.included[0].x_extension, 'cottbus');
+  assert.equal(payload.foreign, 1);
+  assert.equal(payload.malformed_blocked, true);
 });
 
 test('Deterministischer ZIP-Writer normalisiert Reihenfolge und Metadaten', () => {
