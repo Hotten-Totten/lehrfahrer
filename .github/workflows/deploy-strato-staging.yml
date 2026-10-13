@@ -54,7 +54,9 @@ jobs:
             tools/tenant-storage.test.js \
             tools/tenant-lines-cities.test.js \
             tools/tenant-personnel.test.js \
-            tools/tenant-catalog-imports.test.js
+            tools/tenant-catalog-imports.test.js \
+            tools/cottbus-migrate-staging.test.js \
+            tools/apply-orchestration.test.js
 
       - name: Validate isolated staging configuration
         shell: bash
@@ -253,6 +255,7 @@ jobs:
             tools/provision-staging-company.php \
             tools/provision-cottbus-staging.php \
             tools/cottbus-migrate-staging.php \
+            tools/_control-db-restore-point.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
 
@@ -286,7 +289,12 @@ jobs:
           chmod 600 \
             "$private_root/lehrfahrer-staging-runtime-env.php" \
             "$private_root/lehrfahrer-staging-provision-secret.php" \
-            "$private_root/lehrfahrer-staging-mariadb-ca.pem"
+            "$private_root/lehrfahrer-staging-mariadb-ca.pem" \
+            "$private_root/provision-staging-company.php" \
+            "$private_root/provision-cottbus-staging.php" \
+            "$private_root/cottbus-migrate-staging.php" \
+            "$private_root/_control-db-restore-point.php" \
+            "$private_root/staging-smoke.php"
           mv "$private_root/lehrfahrer-staging-runtime-env.php" "$private_root/runtime-env.php"
           mv "$private_root/lehrfahrer-staging-provision-secret.php" "$private_root/.provision-secret.php"
           mv "$private_root/lehrfahrer-staging-mariadb-ca.pem" "$private_root/mariadb-ca.pem"
@@ -593,9 +601,11 @@ jobs:
           PHP
           set +e
           LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
           LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-            php -q -d register_argc_argv=1 -f "$private_root/cottbus-migrate-staging.php" -- \
+            php -q -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/cottbus-migrate-staging.php" -- \
               --dry-run \
               --public-root="$live_webroot" \
               --private-root="$live_private" \
@@ -636,13 +646,27 @@ jobs:
               'cities' => 1, 'lines' => 3, 'routes' => 4, 'route_files' => 12,
               'drivers' => 1, 'trainings' => 1, 'packages' => 1, 'documents' => 2,
               'catalog_stops' => 1531, 'gtfs_agencies' => 1,
-              'variants_index' => ['action' => 'REBUILD', 'agencyIds' => ['143']],
+              'variants_index' => ['action' => 'BUILD_AND_VALIDATE', 'agencyIds' => ['143'],
+                  'schema_version' => 3,
+                  'routes' => $data['deterministic_manifest']['variants_index']['routes'] ?? null,
+                  'variants' => $data['deterministic_manifest']['variants_index']['variants'] ?? null],
           ];
           $status = $data['real_target']['target_status'] ?? [];
           if (($data['mode'] ?? '') !== 'DRY_RUN' || ($data['READY_FOR_APPLY'] ?? '') !== 'YES'
+              || ($data['APPLY_ORCHESTRATION_READY'] ?? '') !== 'YES'
+              || ($data['DB_BACKUP_CAPABLE'] ?? '') !== 'YES'
+              || ($data['DB_RESTORE_PATH_VALID'] ?? '') !== 'YES'
+              || ($data['VARIANTS_REBUILD_CAPABLE'] ?? '') !== 'YES'
+              || ($data['VARIANTS_VALIDATION_CAPABLE'] ?? '') !== 'YES'
               || ($data['BLOCKERS'] ?? null) !== []
               || ($data['deterministic_manifest']['company_id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
               || ($data['deterministic_manifest']['expected_target'] ?? null) !== $expected
+              || ($data['deterministic_manifest']['variants_index']['schema_version'] ?? null) !== 3
+              || ($data['deterministic_manifest']['variants_index']['agency_ids'] ?? null) !== ['143']
+              || ($data['deterministic_manifest']['variants_index']['routes'] ?? null) !== 75
+              || ($data['deterministic_manifest']['variants_index']['variants'] ?? 0) < 1
+              || ($data['deterministic_manifest']['variants_index']['integrity_check'] ?? '') !== 'ok'
+              || preg_match('/^[0-9a-f]{64}$/D', (string)($data['deterministic_manifest']['variants_index']['sha256'] ?? '')) !== 1
               || ($data['WOULD_REMAP'] ?? null) !== ['EXACT' => 36, 'HIGH' => 4, 'MANUAL' => 0, 'UNRESOLVED' => 0]
               || ($data['real_target']['target_unchanged'] ?? false) !== true
               || ($data['real_target']['other_tenants_unchanged'] ?? false) !== true
@@ -656,6 +680,12 @@ jobs:
           echo json_encode([
               'mode' => $data['mode'],
               'READY_FOR_APPLY' => $data['READY_FOR_APPLY'],
+              'APPLY_ORCHESTRATION_READY' => $data['APPLY_ORCHESTRATION_READY'],
+              'DB_BACKUP_CAPABLE' => $data['DB_BACKUP_CAPABLE'],
+              'DB_RESTORE_PATH_VALID' => $data['DB_RESTORE_PATH_VALID'],
+              'VARIANTS_REBUILD_CAPABLE' => $data['VARIANTS_REBUILD_CAPABLE'],
+              'VARIANTS_VALIDATION_CAPABLE' => $data['VARIANTS_VALIDATION_CAPABLE'],
+              'apply_orchestration' => $data['apply_orchestration'],
               'SOURCE_FINGERPRINT' => $data['SOURCE_FINGERPRINT'],
               'TARGET_FINGERPRINT' => $data['real_target']['target_fingerprint_after'],
               'WOULD_MIGRATE' => $expected,
@@ -671,6 +701,7 @@ jobs:
           PHP
           COTTBUS_DRY_RUN_RESULT="$private_root/cottbus-dry-run-result.json" \
             php -q -f "$private_root/validate-cottbus-dry-run.php"
+          printf 'APPLY_ORCHESTRATION_READY=YES\n'
 
           set +e
           php -q -f "$private_root/run-cottbus-provision.php" \

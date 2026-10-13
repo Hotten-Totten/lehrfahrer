@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+$cottbusAppRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT'));
+if ($cottbusAppRoot === '') $cottbusAppRoot = dirname(__DIR__);
+require_once $cottbusAppRoot . '/api/_gtfs_variant_index.php';
+require_once __DIR__ . '/_control-db-restore-point.php';
+
+function cottbusAppRoot(): string {
+    $configured = trim((string)getenv('LEHRFAHRER_APP_ROOT'));
+    return $configured !== '' ? rtrim($configured, '/\\') : dirname(__DIR__);
+}
+
 const COTTBUS_MIGRATION_VERSION = 1;
 const COTTBUS_MIGRATION_TOOL_VERSION = '1.0.0';
 const COTTBUS_AGENCY_ID = '143';
@@ -675,6 +685,29 @@ function cottbusDeterministicZip(array $files): string {
     );
 }
 
+function cottbusVariantIndex(array $gtfsFiles, string $gtfsZipSha256): array {
+    $temporary = tempnam(sys_get_temp_dir(), 'lehrfahrer-variants-');
+    if ($temporary === false) cottbusFail('Temporärer Variantenindex-Pfad kann nicht reserviert werden.');
+    @unlink($temporary);
+    try {
+        $validation = lehrfahrer_gtfs_build_variant_index(
+            $gtfsFiles,
+            $temporary,
+            [COTTBUS_AGENCY_ID],
+            ['source_sha256' => $gtfsZipSha256, 'created_at' => '1970-01-01T00:00:00Z']
+        );
+        if (($validation['routes'] ?? 0) !== COTTBUS_EXPECTED_COUNTS['routes']) {
+            cottbusFail('Variantenindex enthaelt nicht genau 75 Cottbusverkehr-Routen.');
+        }
+        $bytes = cottbusRead($temporary);
+        if (!hash_equals(strval($validation['sha256']), hash('sha256', $bytes))) cottbusFail('Variantenindex-Fingerprint ist inkonsistent.');
+        return ['bytes' => $bytes, 'validation' => $validation];
+    } finally {
+        @unlink($temporary);
+        @unlink($temporary . '-journal');
+    }
+}
+
 function cottbusNormalizedStopName(string $name): string {
     $name = trim($name);
     $name = preg_replace('/^cottbus\s*,\s*/iu', '', $name) ?? $name;
@@ -796,6 +829,7 @@ function cottbusBuildPlan(array $options, string $company): array {
     }
     if (($gtfs['counts']['agencies'] ?? 0) !== 1) cottbusFail('Gefiltertes GTFS enthaelt nicht genau eine Agency.');
     $gtfsZip = cottbusDeterministicZip($gtfs['files']);
+    $gtfsZipSha256 = hash('sha256', $gtfsZip);
     $gtfsTarget = cottbusTarget($company, 'imports', 'gtfs/latest.zip');
     $targetFiles[$gtfsTarget] = $gtfsZip;
     $manifest[] = cottbusManifestItem(
@@ -803,7 +837,17 @@ function cottbusBuildPlan(array $options, string $company): array {
         'filtered-gtfs', $gtfsTarget, $gtfsZip, 'A', 'INCLUDE',
         ['agency_id' => COTTBUS_AGENCY_ID, 'strategy' => 'FILTERED_REFERENTIAL_CLOSURE'],
         ['agency' => 'OK', 'routes' => 'OK', 'trips' => 'OK', 'stops' => 'OK'],
-        [], ['variants-index:REBUILD']
+        [], ['variants-index:BUILD_AND_VALIDATE']
+    );
+    $variantIndex = cottbusVariantIndex($gtfs['files'], $gtfsZipSha256);
+    $variantTarget = cottbusTarget($company, 'imports', 'gtfs/index/variants.sqlite');
+    $targetFiles[$variantTarget] = $variantIndex['bytes'];
+    $manifest[] = cottbusManifestItem(
+        'generated://filtered-gtfs/agency-143', 'variants-index', $variantTarget,
+        $variantIndex['bytes'], 'A', 'INCLUDE',
+        ['builder' => 'shared-gtfs-index-schema-v3', 'agency_ids' => [COTTBUS_AGENCY_ID]],
+        ['integrity_check' => 'OK', 'foreign_agencies' => 0, 'routes' => $variantIndex['validation']['routes'], 'variants' => $variantIndex['validation']['variants']],
+        [], ['filtered-gtfs']
     );
 
     $catalog = [];
@@ -1125,13 +1169,16 @@ function cottbusBuildPlan(array $options, string $company): array {
                 'cities' => 1, 'lines' => 3, 'routes' => 4, 'route_files' => 12,
                 'drivers' => 1, 'trainings' => 1, 'packages' => 1, 'documents' => 2,
                 'catalog_stops' => 1531, 'gtfs_agencies' => 1,
-                'variants_index' => ['action' => 'REBUILD', 'agencyIds' => [COTTBUS_AGENCY_ID]],
+                'variants_index' => ['action' => 'BUILD_AND_VALIDATE', 'agencyIds' => [COTTBUS_AGENCY_ID],
+                    'schema_version' => LEHRFAHRER_GTFS_INDEX_SCHEMA_VERSION,
+                    'routes' => $variantIndex['validation']['routes'], 'variants' => $variantIndex['validation']['variants']],
             ],
             'gtfs' => [
                 'agency_id' => COTTBUS_AGENCY_ID, 'agency_name' => COTTBUS_AGENCY_NAME,
-                'counts' => $gtfs['counts'], 'zip_sha256' => hash('sha256', $gtfsZip),
+                'counts' => $gtfs['counts'], 'zip_sha256' => $gtfsZipSha256,
                 'foreign_agencies' => 0, 'reproducible_zip' => true,
             ],
+            'variants_index' => $variantIndex['validation'],
             'catalog' => ['count' => count($catalog), 'id_strategy' => 'GTFS stop_id', 'foreign_stops' => 0],
             'remappings' => $remappings,
             'routes' => ['count' => 4, 'lines' => 3, 'free_stops_preserved' => $freeStops, 'geometry' => 'UNCHANGED'],
@@ -1142,7 +1189,7 @@ function cottbusBuildPlan(array $options, string $company): array {
             'would_create' => [
                 'company_data_area', 'city:cottbus', 'lines:3', 'routes:4', 'driver:1',
                 'training:training_000004', 'package:1', 'documents:2', 'catalog:1531',
-                'gtfs:agency-143', 'variants-index:REBUILD',
+                'gtfs:agency-143', 'variants-index:BUILD_AND_VALIDATE',
             ],
             'would_exclude' => $excludes,
             'manifest' => $manifest,
@@ -1159,6 +1206,33 @@ function cottbusApplyGate(array $options): array {
     $configured = cottbusRoot((string)getenv('LEHRFAHRER_PRIVATE_DATA_DIR'), 'LEHRFAHRER_PRIVATE_DATA_DIR');
     if (!cottbusSamePath($stagingRoot, $configured)) cottbusFail('Ziel ist nicht die konfigurierte Staging-Private-Root.');
     return [$company, $stagingRoot];
+}
+
+function cottbusApplyOrchestrationCapabilities(?string $stagingRoot): array {
+    $variantCapable = class_exists('PDO') && in_array('sqlite', PDO::getAvailableDrivers(), true);
+    $temporaryWritable = is_dir(sys_get_temp_dir()) && is_writable(sys_get_temp_dir());
+    $variantCapable = $variantCapable && $temporaryWritable;
+    $databaseCapability = ['DB_BACKUP_CAPABLE' => 'YES', 'DB_RESTORE_PATH_VALID' => 'YES', 'mechanism' => 'ISOLATED_TEST_DOUBLE'];
+    if ($stagingRoot !== null && (string)getenv('LEHRFAHRER_ENV') === 'staging') {
+        require_once cottbusAppRoot() . '/api/_control_database.php';
+        try {
+            $configuration = lehrfahrer_control_mysql_configuration();
+            $configuration['tls_ca'] = trim((string)getenv('LEHRFAHRER_DB_TLS_CA')) ?: null;
+            $databaseCapability = cottbusDbBackupCapability($configuration, $stagingRoot);
+        } catch (Throwable $error) {
+            $databaseCapability = ['DB_BACKUP_CAPABLE' => 'NO', 'DB_RESTORE_PATH_VALID' => 'NO', 'mechanism' => null, 'blocker' => $error->getMessage()];
+        }
+    }
+    return $databaseCapability + [
+        'VARIANTS_REBUILD_CAPABLE' => $variantCapable ? 'YES' : 'NO',
+        'VARIANTS_VALIDATION_CAPABLE' => $variantCapable ? 'YES' : 'NO',
+        'runtime' => [
+            'pdo_sqlite' => in_array('sqlite', PDO::getAvailableDrivers(), true),
+            'temporary_storage_writable' => $temporaryWritable,
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => (int)ini_get('max_execution_time'),
+        ],
+    ];
 }
 
 function cottbusDryRunTargetGate(array $options): array {
@@ -1294,6 +1368,46 @@ function cottbusRemoveTree(string $root): void {
     @rmdir($root);
 }
 
+function cottbusAtomicTenantSwap(string $companyRoot, string $migrationRoot, string $backupRoot, callable $commit): mixed {
+    if (!rename($companyRoot, $backupRoot)) cottbusFail('Bestehender Tenant-Root konnte nicht atomar gesichert werden.');
+    if (!rename($migrationRoot, $companyRoot)) {
+        @rename($backupRoot, $companyRoot);
+        cottbusFail('Validierter Tenant-Root konnte nicht atomar aktiviert werden.');
+    }
+    try {
+        $result = $commit();
+    } catch (Throwable $error) {
+        $failedRoot = dirname($backupRoot) . DIRECTORY_SEPARATOR . basename($backupRoot) . '-failed-' . bin2hex(random_bytes(4));
+        if (!@rename($companyRoot, $failedRoot) || !@rename($backupRoot, $companyRoot)) {
+            if (is_dir($failedRoot) && !is_dir($companyRoot)) @rename($failedRoot, $companyRoot);
+            throw new RuntimeException('Tenant-Rollback nach fehlgeschlagenem DB-Commit ist fehlgeschlagen.', 0, $error);
+        }
+        cottbusRemoveTree($failedRoot);
+        throw $error;
+    }
+    cottbusRemoveTree($backupRoot);
+    return $result;
+}
+
+function cottbusValidatePreparedTenantRoot(string $migrationRoot, string $company, array $targetFiles): void {
+    $prefix = 'companies/' . $company . '/';
+    $indexSeen = false;
+    foreach ($targetFiles as $logical => $content) {
+        if (!str_starts_with($logical, $prefix)) cottbusFail('Vorbereitetes Ziel verlaesst die Gesellschaftsgrenze.');
+        $relative = substr($logical, strlen($prefix));
+        $path = $migrationRoot;
+        foreach (explode('/', $relative) as $segment) $path = cottbusPath($path, $segment);
+        if (!is_file($path) || is_link($path)) cottbusFail('Datei fehlt im vorbereiteten Tenant-Root: ' . $relative);
+        if (!hash_equals(hash('sha256', $content), strval(hash_file('sha256', $path)))) cottbusFail('Datei im vorbereiteten Tenant-Root ist beschaedigt: ' . $relative);
+        if ($relative === 'imports/gtfs/index/variants.sqlite') {
+            $validation = lehrfahrer_gtfs_validate_variant_index($path, [COTTBUS_AGENCY_ID]);
+            if (($validation['routes'] ?? 0) !== COTTBUS_EXPECTED_COUNTS['routes']) cottbusFail('Vorbereiteter Variantenindex besitzt nicht den erwarteten Tenant-Umfang.');
+            $indexSeen = true;
+        }
+    }
+    if (!$indexSeen) cottbusFail('Variantenindex fehlt im vorbereiteten Tenant-Root.');
+}
+
 function cottbusApply(array $options, array $plan, string $company, string $stagingRoot): array {
     foreach (['public_root', 'private_root'] as $sourceKey) {
         $sourceRoot = $plan[$sourceKey];
@@ -1305,15 +1419,24 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
     if (!hash_equals($expectedApproval, (string)($options['source-approval'] ?? ''))) {
         cottbusFail('Quellroot ist nicht mit seinem exakten Live-Fingerprint freigegeben.');
     }
-    $appRoot = dirname(__DIR__);
+    $appRoot = cottbusAppRoot();
     require_once $appRoot . '/api/_control_repositories.php';
+    $configuration = lehrfahrer_control_mysql_configuration();
+    $configuration['tls_ca'] = trim((string)getenv('LEHRFAHRER_DB_TLS_CA')) ?: null;
+    $capability = cottbusDbBackupCapability($configuration, $stagingRoot);
+    if (($capability['DB_BACKUP_CAPABLE'] ?? 'NO') !== 'YES' || ($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES') {
+        cottbusFail('Apply blockiert: verifizierter Control-DB-Restore-Punkt ist nicht moeglich.');
+    }
+    $restorePoint = cottbusCreateControlDbRestorePoint(
+        $configuration,
+        $stagingRoot,
+        $capability,
+        strval(LEHRFAHRER_CONTROL_SCHEMA_VERSION)
+    );
     $pdo = lehrfahrer_control_database();
-    if (!$pdo->beginTransaction()) cottbusFail('Control-DB-Transaktion konnte nicht gestartet werden.');
     $createdDirectories = [];
     $migrationRoot = '';
     $backupRoot = '';
-    $originalMoved = false;
-    $swapped = false;
     try {
         $companies = new LehrfahrerCompanyRepository($pdo);
         $record = $companies->findById($company);
@@ -1338,8 +1461,8 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             if ($testBefore !== null && $testBefore !== cottbusTreeFingerprint($testRoot)) cottbusFail('lehrfahrer-test wurde veraendert.');
             if (!hash_equals($otherTenantsBefore, cottbusOtherTenantsFingerprint($stagingRoot, $company))) cottbusFail('Fremder Tenant wurde veraendert.');
             if (is_dir($backupRoot) && !is_link($backupRoot)) cottbusRemoveTree($backupRoot);
-            $pdo->commit();
-            return ['result' => 'ALREADY_MIGRATED', 'target_status' => $targetStatus, 'created' => 0, 'skipped' => count($targetStatus)];
+            return ['result' => 'ALREADY_MIGRATED', 'target_status' => $targetStatus, 'created' => 0, 'skipped' => count($targetStatus),
+                'db_restore_point' => $restorePoint['metadata'], 'db_restore_point_retained' => true];
         }
         if (file_exists($backupRoot) || is_link($backupRoot)) cottbusFail('Rollback-Bereich eines frueheren Apply ist nicht eindeutig aufgeloest.');
         cottbusEnsureDirectory($migrationBase, $createdDirectories);
@@ -1372,16 +1495,22 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             || !chmod($stagedCompanySettings, 0600)) {
             cottbusFail('Mastertemplate-Gesellschaftseinstellung konnte nicht in den Swap-Bereich uebernommen werden.');
         }
+        cottbusValidatePreparedTenantRoot($migrationRoot, $company, $plan['target_files']);
         cottbusVerifyTracked($plan['tracked']);
         if (!hash_equals($sourceBefore, cottbusAggregateFingerprint($plan['tracked']))) cottbusFail('Quellfingerprint hat sich veraendert.');
         if ($testBefore !== null && $testBefore !== cottbusTreeFingerprint($testRoot)) cottbusFail('lehrfahrer-test wurde veraendert.');
         if (!hash_equals($otherTenantsBefore, cottbusOtherTenantsFingerprint($stagingRoot, $company))) cottbusFail('Fremder Tenant wurde veraendert.');
-        if (!rename($companyRoot, $backupRoot)) cottbusFail('Bestehender Tenant-Root konnte nicht atomar gesichert werden.');
-        $originalMoved = true;
-        if (!rename($migrationRoot, $companyRoot)) cottbusFail('Validierter Tenant-Root konnte nicht atomar aktiviert werden.');
-        $swapped = true;
-        if (!$pdo->commit()) cottbusFail('Control-DB-Transaktion konnte nicht abgeschlossen werden.');
-        cottbusRemoveTree($backupRoot);
+        if (!$pdo->beginTransaction()) cottbusFail('Control-DB-Transaktion konnte nicht gestartet werden.');
+        cottbusAtomicTenantSwap($companyRoot, $migrationRoot, $backupRoot, static function () use (
+            $pdo, $stagingRoot, $company, $plan, $testBefore, $testRoot, $otherTenantsBefore, $companyRoot
+        ): void {
+            if (!$pdo->commit()) cottbusFail('Control-DB-Transaktion konnte nicht abgeschlossen werden.');
+            $postStatus = cottbusExistingTargetStatus($stagingRoot, $company, $plan['target_files']);
+            if (array_filter($postStatus, static fn($status): bool => $status !== 'SKIP')) cottbusFail('Postcheck des aktivierten Tenant-Roots ist fehlgeschlagen.');
+            lehrfahrer_gtfs_validate_variant_index(cottbusPath($companyRoot, 'imports', 'gtfs/index/variants.sqlite'), [COTTBUS_AGENCY_ID]);
+            if ($testBefore !== null && $testBefore !== cottbusTreeFingerprint($testRoot)) cottbusFail('lehrfahrer-test wurde im Postcheck veraendert.');
+            if (!hash_equals($otherTenantsBefore, cottbusOtherTenantsFingerprint($stagingRoot, $company))) cottbusFail('Fremder Tenant wurde im Postcheck veraendert.');
+        });
         @rmdir($migrationBase);
         return [
             'result' => 'APPLIED', 'target_status' => $targetStatus,
@@ -1389,19 +1518,12 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             'skipped' => count(array_filter($targetStatus, static fn($value): bool => $value === 'SKIP')),
             'activation' => 'ATOMIC_TENANT_ROOT_SWAP',
             'rollback_cleanup_pending' => is_dir($backupRoot),
-            'variants_index' => ['action' => 'REBUILD', 'agencyIds' => [COTTBUS_AGENCY_ID]],
+            'variants_index' => $plan['deterministic_manifest']['variants_index'],
+            'db_restore_point' => $restorePoint['metadata'],
+            'db_restore_point_retained' => true,
         ];
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        if ($swapped && is_dir($companyRoot) && is_dir($backupRoot)) {
-            $failedRoot = $migrationBase . DIRECTORY_SEPARATOR . 'cottbus-' . $company . '-failed-' . bin2hex(random_bytes(4));
-            if (@rename($companyRoot, $failedRoot)) {
-                if (@rename($backupRoot, $companyRoot)) cottbusRemoveTree($failedRoot);
-                else @rename($failedRoot, $companyRoot);
-            }
-        } elseif ($originalMoved && !is_dir($companyRoot) && is_dir($backupRoot)) {
-            @rename($backupRoot, $companyRoot);
-        }
         if ($migrationRoot !== '') cottbusRemoveTree($migrationRoot);
         foreach (array_reverse($createdDirectories) as $directory) if (is_dir($directory)) @rmdir($directory);
         throw $error;
@@ -1418,7 +1540,14 @@ function cottbusRun(array $options): array {
         : cottbusDryRunTargetGate($options);
     $plan = cottbusBuildPlan($options, $company);
     $sourceFingerprint = $plan['deterministic_manifest']['source_fingerprint'];
+    $capabilities = cottbusApplyOrchestrationCapabilities($stagingRoot);
+    $blockers = [];
+    foreach (['DB_BACKUP_CAPABLE', 'DB_RESTORE_PATH_VALID', 'VARIANTS_REBUILD_CAPABLE', 'VARIANTS_VALIDATION_CAPABLE'] as $gate) {
+        if (($capabilities[$gate] ?? 'NO') !== 'YES') $blockers[] = $gate . '=NO';
+    }
+    if (isset($capabilities['blocker'])) $blockers[] = 'DB_BACKUP: ' . $capabilities['blocker'];
     if ($apply) {
+        if ($blockers) cottbusFail('Apply-Orchestrierung ist nicht bereit: ' . implode('; ', $blockers));
         $applyResult = cottbusApply($options, $plan, $company, $stagingRoot);
         return [
             'tool' => 'cottbus-migrate-staging', 'mode' => 'APPLY', 'ready_for_apply' => true,
@@ -1431,13 +1560,25 @@ function cottbusRun(array $options): array {
         ? null
         : cottbusDryRunTargetState($plan, $company, $stagingRoot);
     return [
-        'tool' => 'cottbus-migrate-staging', 'mode' => 'DRY_RUN', 'ready_for_apply' => true,
-        'READY_FOR_APPLY' => 'YES',
+        'tool' => 'cottbus-migrate-staging', 'mode' => 'DRY_RUN', 'ready_for_apply' => $blockers === [],
+        'READY_FOR_APPLY' => $blockers === [] ? 'YES' : 'NO',
+        'APPLY_ORCHESTRATION_READY' => $blockers === [] ? 'YES' : 'NO',
+        'DB_BACKUP_CAPABLE' => $capabilities['DB_BACKUP_CAPABLE'],
+        'DB_RESTORE_PATH_VALID' => $capabilities['DB_RESTORE_PATH_VALID'],
+        'VARIANTS_REBUILD_CAPABLE' => $capabilities['VARIANTS_REBUILD_CAPABLE'],
+        'VARIANTS_VALIDATION_CAPABLE' => $capabilities['VARIANTS_VALIDATION_CAPABLE'],
+        'apply_orchestration' => [
+            'backup_mechanism' => $capabilities['mechanism'] ?? null,
+            'runtime' => $capabilities['runtime'] ?? null,
+            'backup_location' => 'private://backups/control-db/<restore-point-id>',
+            'tenant_activation' => 'ATOMIC_TENANT_ROOT_SWAP_AFTER_VALIDATION',
+            'db_restore_point_created_on_dry_run' => false,
+        ],
         'WOULD_CREATE' => $plan['deterministic_manifest']['would_create'],
         'WOULD_SKIP' => [],
         'WOULD_EXCLUDE' => $plan['deterministic_manifest']['would_exclude'],
         'WOULD_REMAP' => ['EXACT' => 36, 'HIGH' => 4, 'MANUAL' => 0, 'UNRESOLVED' => 0],
-        'BLOCKERS' => [],
+        'BLOCKERS' => $blockers,
         'SOURCE_FINGERPRINT' => $sourceFingerprint,
         'EXPECTED_TARGET_FINGERPRINT' => $plan['deterministic_manifest']['expected_target_fingerprint'],
         'SOURCE_APPROVAL_FOR_LATER_APPLY' => 'LIVE-COTTBUS:' . $sourceFingerprint,

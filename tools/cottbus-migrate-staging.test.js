@@ -314,6 +314,11 @@ test('GTFS-Filter und Katalog enthalten nur Cottbusverkehr und sind reproduzierb
   assert.equal(report.deterministic_manifest.catalog.count, 1531);
   assert.equal(report.deterministic_manifest.catalog.foreign_stops, 0);
   assert.match(report.deterministic_manifest.gtfs.zip_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(report.deterministic_manifest.variants_index.schema_version, 3);
+  assert.deepEqual(report.deterministic_manifest.variants_index.agency_ids, ['143']);
+  assert.equal(report.deterministic_manifest.variants_index.routes, 75);
+  assert.ok(report.deterministic_manifest.variants_index.variants > 0);
+  assert.equal(report.deterministic_manifest.variants_index.integrity_check, 'ok');
 });
 
 test('Streaming-Filter bleibt im begrenzten PHP-Speicher lauffaehig', () => {
@@ -484,6 +489,6 @@ test('Keine Fachnavigation oder Routingdatei wird durch das Werkzeug referenzier
   const source = fs.readFileSync(tool, 'utf8');
   assert.doesNotMatch(source, /(?:navigation|routinggraph|off-route|curve|arrow)/i);
   assert.ok(source.includes("'geometry' => 'UNCHANGED'"));
-  assert.ok(source.includes("'variants-index:REBUILD'"));
+  assert.ok(source.includes("'variants-index:BUILD_AND_VALIDATE'"));
   assert.ok(source.includes("'activation' => 'ATOMIC_TENANT_ROOT_SWAP'"));
 });

@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_gtfs_variant_index.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -618,16 +619,7 @@ function gtfs_index_import_table(
 }
 
 function gtfs_via_names(array $stopNames): array {
-    $count = count($stopNames);
-    if ($count <= 2) return [];
-    $via = [];
-    for ($step = 1; $step <= 4; $step++) {
-        $index = (int)round(($count - 1) * $step / 5);
-        if ($index <= 0 || $index >= $count - 1) continue;
-        $name = trim(strval($stopNames[$index] ?? ''));
-        if ($name !== '' && !in_array($name, $via, true)) $via[] = $name;
-    }
-    return $via;
+    return lehrfahrer_gtfs_index_via_names($stopNames);
 }
 
 function gtfs_open_valid_index(): ?PDO {
@@ -730,24 +722,7 @@ function gtfs_clear_index_job_files(): void {
 }
 
 function gtfs_create_batch_schema(PDO $pdo): void {
-    $pdo->exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=NORMAL; PRAGMA temp_store=FILE;');
-    $pdo->exec('PRAGMA auto_vacuum=FULL; VACUUM;');
-    $pdo->exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
-    $pdo->exec('CREATE TABLE agencies (agency_id TEXT PRIMARY KEY, agency_name TEXT NOT NULL)');
-    $pdo->exec('CREATE TABLE routes (route_id TEXT PRIMARY KEY, agency_id TEXT, short_name TEXT, long_name TEXT, route_type TEXT)');
-    $pdo->exec('CREATE TABLE stops (stop_pk INTEGER PRIMARY KEY, stop_id TEXT NOT NULL UNIQUE, stop_name TEXT, lat REAL, lon REAL, parent_station TEXT)');
-    $pdo->exec('CREATE TABLE trips (trip_pk INTEGER PRIMARY KEY, trip_id TEXT NOT NULL UNIQUE, route_id TEXT NOT NULL, direction_id TEXT, headsign TEXT)');
-    $pdo->exec('CREATE TABLE stop_times (
-        trip_pk INTEGER NOT NULL, stop_sequence INTEGER NOT NULL, stop_pk INTEGER NOT NULL,
-        PRIMARY KEY (trip_pk, stop_sequence)
-    ) WITHOUT ROWID');
-    $pdo->exec('CREATE TABLE variants (
-        route_id TEXT NOT NULL, variant_id TEXT NOT NULL, signature TEXT NOT NULL, direction_id TEXT,
-        trip_headsign TEXT, stop_count INTEGER NOT NULL, start_stop_name TEXT, end_stop_name TEXT,
-        via_stops_json TEXT NOT NULL, stops_json TEXT NOT NULL,
-        route_short_name TEXT, route_long_name TEXT, agency_name TEXT, route_type TEXT,
-        PRIMARY KEY (route_id, variant_id)
-    ) WITHOUT ROWID');
+    lehrfahrer_gtfs_index_create_schema($pdo);
 }
 
 function gtfs_sqlite_diagnostics(PDO $pdo, string $label, ?string $databasePath = null): array {
