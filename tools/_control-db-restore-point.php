@@ -56,27 +56,99 @@ function cottbusDbBackupCapability(?array $configuration = null, ?string $privat
         if (!function_exists('proc_open')) throw new RuntimeException('proc_open ist nicht verfuegbar.');
         $dump = cottbusExecutable(['mariadb-dump', 'mysqldump']);
         $restore = cottbusExecutable(['mariadb', 'mysql']);
-        if ($dump === null) throw new RuntimeException('mariadb-dump/mysqldump fehlt.');
         if ($restore === null) throw new RuntimeException('mariadb/mysql Restore-Client fehlt.');
-        if (!cottbusProbeDatabaseClient($dump) || !cottbusProbeDatabaseClient($restore)) throw new RuntimeException('MariaDB-Dump-/Restore-Client ist nicht ausfuehrbar.');
+        if (!cottbusProbeDatabaseClient($restore)) throw new RuntimeException('MariaDB-Restore-Client ist nicht ausfuehrbar.');
         if ($privateRoot === null || !is_dir($privateRoot) || is_link($privateRoot) || !is_writable($privateRoot)) {
             throw new RuntimeException('Privater Backup-Root ist nicht sicher beschreibbar.');
         }
         $identity = cottbusControlDbIdentity(strval($configuration['dsn']));
-        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $dump);
-        array_splice($arguments, count($arguments) - 1, 0, ['--no-data']);
-        $probe = cottbusRunDatabaseClient(array_merge([$dump], $arguments), strval($configuration['password'] ?? ''), null, null);
-        if ($probe['status'] !== 0 || $probe['stderr_present']) throw new RuntimeException('Read-only MariaDB-Dump-Probe ist fehlgeschlagen.');
-        foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) {
-            if (!preg_match('/CREATE TABLE\s+`?' . preg_quote($table, '/') . '`?/i', $probe['stdout'])) {
-                throw new RuntimeException('Read-only Dump-Probe findet erwartete Tabelle nicht: ' . $table);
+        $restoreArguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, false, $restore);
+        array_splice($restoreArguments, count($restoreArguments) - 1, 0, ['--execute=SELECT 1']);
+        $restoreProbe = cottbusRunDatabaseClient(array_merge([$restore], $restoreArguments), strval($configuration['password'] ?? ''), null, null);
+        if ($restoreProbe['status'] !== 0 || $restoreProbe['stderr_present']) throw new RuntimeException('Read-only MariaDB-Restore-Client-Probe ist fehlgeschlagen.');
+        if ($dump !== null && cottbusProbeDatabaseClient($dump)) {
+            try {
+                $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $dump);
+                array_splice($arguments, count($arguments) - 1, 0, ['--no-data']);
+                $probe = cottbusRunDatabaseClient(array_merge([$dump], $arguments), strval($configuration['password'] ?? ''), null, null);
+                if ($probe['status'] !== 0 || $probe['stderr_present']) throw new RuntimeException('Native Dump-Probe fehlgeschlagen.');
+                foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) {
+                    if (!preg_match('/CREATE TABLE\s+`?' . preg_quote($table, '/') . '`?/i', $probe['stdout'])) throw new RuntimeException('Tabelle fehlt im nativen Dump-Probe.');
+                }
+                return ['DB_BACKUP_CAPABLE' => 'YES', 'DB_RESTORE_PATH_VALID' => 'YES', 'mechanism' => basename($dump) . ' + ' . basename($restore),
+                    'strategy' => 'native-logical-dump', 'dump_binary' => $dump, 'restore_binary' => $restore];
+            } catch (Throwable $_nativeError) {
+                // STRATO-Clients koennen trotz vorhandener Binary wegen Optionen oder Rechten ungeeignet sein.
             }
         }
-        return ['DB_BACKUP_CAPABLE' => 'YES', 'DB_RESTORE_PATH_VALID' => 'YES', 'mechanism' => basename($dump) . ' + ' . basename($restore),
-            'dump_binary' => $dump, 'restore_binary' => $restore];
+        cottbusPdoLogicalBackupProbe($configuration);
+        return ['DB_BACKUP_CAPABLE' => 'YES', 'DB_RESTORE_PATH_VALID' => 'YES',
+            'mechanism' => 'PDO consistent logical export + ' . basename($restore),
+            'strategy' => 'pdo-consistent-logical-export', 'dump_binary' => null, 'restore_binary' => $restore];
     } catch (Throwable $error) {
         return ['DB_BACKUP_CAPABLE' => 'NO', 'DB_RESTORE_PATH_VALID' => 'NO', 'mechanism' => null,
             'dump_binary' => null, 'restore_binary' => null, 'blocker' => $error->getMessage()];
+    }
+}
+
+function cottbusPdoConnection(array $configuration): PDO {
+    return new PDO(strval($configuration['dsn']), strval($configuration['user'] ?? ''), strval($configuration['password'] ?? ''),
+        is_array($configuration['options'] ?? null) ? $configuration['options'] : [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+}
+
+function cottbusPdoLogicalBackupProbe(array $configuration): void {
+    $pdo = cottbusPdoConnection($configuration);
+    $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+    try {
+        $tables = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+        foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) if (!in_array($table, $tables, true)) throw new RuntimeException('PDO-Backup-Probe findet erwartete Tabelle nicht: ' . $table);
+    } finally {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+    }
+}
+
+function cottbusSqlIdentifier(string $identifier): string {
+    if (preg_match('/^[A-Za-z0-9_]+$/D', $identifier) !== 1) throw new RuntimeException('Ungueltiger MariaDB-Bezeichner im Backup.');
+    return '`' . $identifier . '`';
+}
+
+function cottbusWritePdoLogicalDump(array $configuration, string $dumpPath): void {
+    $pdo = cottbusPdoConnection($configuration);
+    $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+    $handle = fopen($dumpPath, 'wb');
+    if ($handle === false) throw new RuntimeException('PDO-Backup-Datei kann nicht geoeffnet werden.');
+    $write = static function (string $bytes) use ($handle): void {
+        if (fwrite($handle, $bytes) !== strlen($bytes)) throw new RuntimeException('PDO-Backup-Datei konnte nicht vollstaendig geschrieben werden.');
+    };
+    try {
+        $tables = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+        sort($tables, SORT_STRING);
+        foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) if (!in_array($table, $tables, true)) throw new RuntimeException('PDO-Backup enthaelt erwartete Tabelle nicht: ' . $table);
+        $write("SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\nSTART TRANSACTION;\n");
+        foreach ($tables as $table) {
+            $table = strval($table); $quotedTable = cottbusSqlIdentifier($table);
+            $createRow = $pdo->query('SHOW CREATE TABLE ' . $quotedTable)->fetch(PDO::FETCH_NUM);
+            if (!is_array($createRow) || !isset($createRow[1])) throw new RuntimeException('SHOW CREATE TABLE ist fehlgeschlagen: ' . $table);
+            $write("DROP TABLE IF EXISTS {$quotedTable};\n" . strval($createRow[1]) . ";\n");
+            $columns = $pdo->query('SHOW COLUMNS FROM ' . $quotedTable)->fetchAll(PDO::FETCH_ASSOC);
+            $names = array_map(static fn(array $row): string => strval($row['Field']), $columns);
+            $primary = array_values(array_map(static fn(array $row): string => strval($row['Field']),
+                array_filter($columns, static fn(array $row): bool => strval($row['Key'] ?? '') === 'PRI')));
+            $order = $primary ?: $names;
+            $query = 'SELECT * FROM ' . $quotedTable . ($order ? ' ORDER BY ' . implode(',', array_map('cottbusSqlIdentifier', $order)) : '');
+            $columnSql = implode(',', array_map('cottbusSqlIdentifier', $names));
+            foreach ($pdo->query($query, PDO::FETCH_ASSOC) as $row) {
+                $values = [];
+                foreach ($names as $name) $values[] = $row[$name] === null ? 'NULL' : $pdo->quote(strval($row[$name]));
+                $write("INSERT INTO {$quotedTable} ({$columnSql}) VALUES (" . implode(',', $values) . ");\n");
+            }
+        }
+        $write("COMMIT;\nSET FOREIGN_KEY_CHECKS=1;\n");
+    } finally {
+        fclose($handle);
+        if ($pdo->inTransaction()) $pdo->rollBack();
     }
 }
 
@@ -156,11 +228,16 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
         if ($dumpHandle === false) throw new RuntimeException('Private DB-Backup-Datei kann nicht reserviert werden.');
         fclose($dumpHandle);
         if (!chmod($dumpPath, 0600)) throw new RuntimeException('DB-Dump-Rechte konnten nicht vorab gesetzt werden.');
-        $argumentBinary = $runner === null ? strval($capability['dump_binary']) : null;
-        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $argumentBinary);
-        $runner ??= 'cottbusRunDatabaseClient';
-        $result = $runner(array_merge([strval($capability['dump_binary'])], $arguments), strval($configuration['password'] ?? ''), null, $dumpPath);
-        if ($result['status'] !== 0 || $result['stderr_present'] || !is_file($dumpPath) || filesize($dumpPath) < 1) throw new RuntimeException('Konsistenter MariaDB-Dump ist fehlgeschlagen.');
+        if (($capability['strategy'] ?? 'native-logical-dump') === 'pdo-consistent-logical-export' && $runner === null) {
+            cottbusWritePdoLogicalDump($configuration, $dumpPath);
+        } else {
+            $argumentBinary = $runner === null ? strval($capability['dump_binary']) : null;
+            $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $argumentBinary);
+            $runner ??= 'cottbusRunDatabaseClient';
+            $result = $runner(array_merge([strval($capability['dump_binary'])], $arguments), strval($configuration['password'] ?? ''), null, $dumpPath);
+            if ($result['status'] !== 0 || $result['stderr_present']) throw new RuntimeException('Konsistenter MariaDB-Dump ist fehlgeschlagen.');
+        }
+        if (!is_file($dumpPath) || filesize($dumpPath) < 1) throw new RuntimeException('Konsistenter MariaDB-Dump ist leer.');
         $dump = file_get_contents($dumpPath);
         foreach (COTTBUS_CONTROL_DB_EXPECTED_TABLES as $table) {
             if (!preg_match('/CREATE TABLE\s+`?' . preg_quote($table, '/') . '`?/i', strval($dump))) throw new RuntimeException('DB-Dump enthaelt erwartete Tabelle nicht: ' . $table);
@@ -171,6 +248,7 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
             'bytes' => (int)filesize($dumpPath), 'sha256' => hash_file('sha256', $dumpPath),
             'database' => $identity, 'schema_version' => $schemaVersion,
             'expected_tables' => COTTBUS_CONTROL_DB_EXPECTED_TABLES,
+            'backup_strategy' => strval($capability['strategy'] ?? 'native-logical-dump'),
             'restore' => ['client' => basename(strval($capability['restore_binary'])), 'mechanism' => 'stdin-logical-restore', 'client_validated' => true],
         ];
         $json = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
