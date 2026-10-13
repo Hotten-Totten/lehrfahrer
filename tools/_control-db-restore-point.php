@@ -63,7 +63,7 @@ function cottbusDbBackupCapability(?array $configuration = null, ?string $privat
             throw new RuntimeException('Privater Backup-Root ist nicht sicher beschreibbar.');
         }
         $identity = cottbusControlDbIdentity(strval($configuration['dsn']));
-        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true);
+        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, $dump);
         array_splice($arguments, count($arguments) - 1, 0, ['--no-data']);
         $probe = cottbusRunDatabaseClient(array_merge([$dump], $arguments), strval($configuration['password'] ?? ''), null, null);
         if ($probe['status'] !== 0 || $probe['stderr_present']) throw new RuntimeException('Read-only MariaDB-Dump-Probe ist fehlgeschlagen.');
@@ -80,7 +80,17 @@ function cottbusDbBackupCapability(?array $configuration = null, ?string $privat
     }
 }
 
-function cottbusMysqlArguments(array $identity, string $user, ?string $tlsCa, bool $dump): array {
+function cottbusDatabaseClientHelp(string $binary): string {
+    $process = proc_open([$binary, '--help'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+    if (!is_resource($process)) throw new RuntimeException('MariaDB-Client-Hilfe ist nicht lesbar.');
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    if (proc_close($process) !== 0) throw new RuntimeException('MariaDB-Client-Hilfe ist fehlgeschlagen.');
+    return strtolower(strval($stdout) . "\n" . strval($stderr));
+}
+
+function cottbusMysqlArguments(array $identity, string $user, ?string $tlsCa, bool $dump, ?string $binary = null): array {
     $arguments = [];
     if (($identity['host'] ?? null) !== null) $arguments[] = '--host=' . $identity['host'];
     if (($identity['port'] ?? null) !== null) $arguments[] = '--port=' . $identity['port'];
@@ -89,9 +99,15 @@ function cottbusMysqlArguments(array $identity, string $user, ?string $tlsCa, bo
     $arguments[] = '--default-character-set=utf8mb4';
     if ($tlsCa !== null && $tlsCa !== '') {
         $arguments[] = '--ssl-ca=' . $tlsCa;
-        $arguments[] = '--ssl-verify-server-cert';
+        $help = $binary !== null ? cottbusDatabaseClientHelp($binary) : '';
+        if (str_contains($help, 'ssl-verify-server-cert')) $arguments[] = '--ssl-verify-server-cert';
+        elseif (str_contains($help, 'ssl-mode')) $arguments[] = '--ssl-mode=VERIFY_CA';
+        else throw new RuntimeException('MariaDB-Client bietet keine pruefbare TLS-Servervalidierung.');
     }
-    if ($dump) array_push($arguments, '--single-transaction', '--skip-lock-tables', '--hex-blob', '--routines', '--events', '--triggers', '--no-tablespaces');
+    if ($dump) {
+        array_push($arguments, '--single-transaction', '--skip-lock-tables', '--hex-blob');
+        if ($binary !== null && str_contains(cottbusDatabaseClientHelp($binary), 'no-tablespaces')) $arguments[] = '--no-tablespaces';
+    }
     $arguments[] = strval($identity['database']);
     return $arguments;
 }
@@ -140,7 +156,7 @@ function cottbusCreateControlDbRestorePoint(array $configuration, string $privat
         if ($dumpHandle === false) throw new RuntimeException('Private DB-Backup-Datei kann nicht reserviert werden.');
         fclose($dumpHandle);
         if (!chmod($dumpPath, 0600)) throw new RuntimeException('DB-Dump-Rechte konnten nicht vorab gesetzt werden.');
-        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true);
+        $arguments = cottbusMysqlArguments($identity, strval($configuration['user'] ?? ''), $configuration['tls_ca'] ?? null, true, strval($capability['dump_binary']));
         $runner ??= 'cottbusRunDatabaseClient';
         $result = $runner(array_merge([strval($capability['dump_binary'])], $arguments), strval($configuration['password'] ?? ''), null, $dumpPath);
         if ($result['status'] !== 0 || $result['stderr_present'] || !is_file($dumpPath) || filesize($dumpPath) < 1) throw new RuntimeException('Konsistenter MariaDB-Dump ist fehlgeschlagen.');
@@ -178,7 +194,7 @@ function cottbusRestoreControlDbIsolated(array $sourceManifest, string $dumpPath
     if (($capability['DB_RESTORE_PATH_VALID'] ?? 'NO') !== 'YES' || !isset($capability['restore_binary'])) {
         throw new RuntimeException('Restore-Client ist nicht verifiziert.');
     }
-    $arguments = cottbusMysqlArguments($targetIdentity, strval($targetConfiguration['user'] ?? ''), $targetConfiguration['tls_ca'] ?? null, false);
+    $arguments = cottbusMysqlArguments($targetIdentity, strval($targetConfiguration['user'] ?? ''), $targetConfiguration['tls_ca'] ?? null, false, strval($capability['restore_binary']));
     $runner ??= 'cottbusRunDatabaseClient';
     $result = $runner(array_merge([strval($capability['restore_binary'])], $arguments), strval($targetConfiguration['password'] ?? ''), $dumpPath, null);
     if ($result['status'] !== 0 || $result['stderr_present']) throw new RuntimeException('Isolierter MariaDB-Restore-Test ist fehlgeschlagen.');
