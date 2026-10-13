@@ -155,7 +155,7 @@ jobs:
           else
             scp_run=(sshpass -e "${scp_run[@]}")
           fi
-          live_zip='/mnt/web223/b3/15/5576715/htdocs/lehrfahrer/gtfs/data/gtfs/latest.zip'
+          live_zip='./lehrfahrer/gtfs/data/gtfs/latest.zip'
           "${scp_run[@]}" "$remote:$live_zip" /tmp/lehrfahrer-live-gtfs.zip
           test "$(stat -c %s /tmp/lehrfahrer-live-gtfs.zip)" = '250380748'
           printf '%s  %s\n' \
