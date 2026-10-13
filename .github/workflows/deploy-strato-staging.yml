@@ -191,13 +191,13 @@ jobs:
               printf 'EXISTS=YES\nTYPE=REGULAR\n'
               ls -ld -- "$candidate"
               stat -c 'MODE=%A OCTAL=%a OWNER=%U GROUP=%G SIZE=%s' -- "$candidate"
-              file -b -- "$candidate"
+              if command -v file >/dev/null 2>&1; then file -b -- "$candidate"; else printf 'FILE_TOOL=UNAVAILABLE\n'; fi
               sha256sum -- "$candidate"
             elif [ -e "$candidate" ]; then
               printf 'EXISTS=YES\nTYPE=OTHER\n'
               ls -ld -- "$candidate"
               stat -c 'MODE=%A OCTAL=%a OWNER=%U GROUP=%G SIZE=%s' -- "$candidate"
-              file -b -- "$candidate"
+              if command -v file >/dev/null 2>&1; then file -b -- "$candidate"; else printf 'FILE_TOOL=UNAVAILABLE\n'; fi
             else
               printf 'EXISTS=NO\n'
             fi
