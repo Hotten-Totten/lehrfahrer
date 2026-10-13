@@ -606,7 +606,7 @@ jobs:
           }
           PHP
           gtfs_source="$live_webroot/gtfs/data/gtfs/latest.zip"
-          expected_gtfs_sha256='edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035'
+          expected_gtfs_sha256='edd76d5cb8d628cf63b81445c3a7524cb081f0652c4220f9f22f7920f8b4b035'
           if [ ! -f "$gtfs_source" ] || [ -L "$gtfs_source" ]; then
             echo 'Freigegebene GTFS-Quelle fehlt, ist kein regulaeres File oder ist ein Symlink.' >&2
             exit 1
