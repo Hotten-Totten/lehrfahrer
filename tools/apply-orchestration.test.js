@@ -151,6 +151,75 @@ test('atomarer Tenant-Swap stellt bei Commitfehler den Altstand wieder her', () 
   assert.equal(fs.existsSync(next), false);
 });
 
+test('sicherer Pfadhelper akzeptiert nur einzelne Segmente', () => {
+  const result = run(migrationTool, `
+    $root=${p(sandbox)};
+    $valid=cottbusPath($root,'gtfs','index','variants.sqlite');
+    $blocked=[];
+    foreach ([['gtfs/index/variants.sqlite'],['..'],['/absolute'],['C:\\\\absolute']] as $segments) {
+      try { cottbusPath($root,...$segments); $blocked[]=false; }
+      catch(Throwable $e) { $blocked[]=str_contains($e->getMessage(),'Pfadsegment'); }
+    }
+    echo json_encode(['valid'=>$valid,'blocked'=>$blocked]);`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const paths = JSON.parse(result.stdout);
+  assert.equal(paths.valid.replaceAll('\\', '/'), path.join(sandbox, 'gtfs', 'index', 'variants.sqlite').replaceAll('\\', '/'));
+  assert.deepEqual(paths.blocked, [true, true, true, true]);
+});
+
+test('Symlink im Tenant-Root bleibt blockiert', t => {
+  const companyRoot = path.join(sandbox, 'symlink-company');
+  fs.mkdirSync(companyRoot);
+  const link = path.join(companyRoot, 'escape');
+  try { fs.symlinkSync(sandbox, link, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip(`Symlink/Junction nicht verfuegbar: ${error.code}`); return; }
+  const result = run(migrationTool, `try { cottbusFiles(${p(companyRoot)}); } catch(Throwable $e) { echo $e->getMessage(); }`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Symlink|Junction|Unbekannter Dateityp/);
+});
+
+test('Fixture-Apply durchlaeuft vorbereitete Validierung, Root-Swap und echten Postcheck', () => {
+  const staging = path.join(sandbox, 'fixture-staging');
+  const company = 'cmp_' + 'a'.repeat(32);
+  const current = path.join(staging, 'companies', company);
+  const next = path.join(staging, 'migrations', 'fixture-next');
+  const backup = path.join(staging, 'migrations', 'fixture-backup');
+  const index = path.join(next, 'imports', 'gtfs', 'index', 'variants.sqlite');
+  const logical = `companies/${company}/imports/gtfs/index/variants.sqlite`;
+  fs.mkdirSync(current, { recursive: true });
+  fs.mkdirSync(path.dirname(index), { recursive: true });
+  fs.writeFileSync(path.join(current, 'settings.json'), 'old');
+  const routes = Array.from({ length: 75 }, (_, i) => `r${i + 1},143,${i + 1},Route ${i + 1},3`).join('\n');
+  const trips = Array.from({ length: 75 }, (_, i) => `r${i + 1},svc,t${i + 1},0,Ziel`).join('\n');
+  const stopTimes = Array.from({ length: 75 }, (_, i) => `t${i + 1},s1,1\nt${i + 1},s2,2`).join('\n');
+  const files = {
+    'agency.txt': 'agency_id,agency_name\n143,Cottbusverkehr\n',
+    'routes.txt': `route_id,agency_id,route_short_name,route_long_name,route_type\n${routes}\n`,
+    'stops.txt': 'stop_id,stop_name,stop_lat,stop_lon,parent_station\ns1,Start,51.1,14.1,\ns2,Ziel,51.2,14.2,\n',
+    'trips.txt': `route_id,service_id,trip_id,direction_id,trip_headsign\n${trips}\n`,
+    'stop_times.txt': `trip_id,stop_id,stop_sequence\n${stopTimes}\n`,
+  };
+  const encoded = Buffer.from(JSON.stringify(files)).toString('base64');
+  let result = run(indexTool, `$files=json_decode(base64_decode('${encoded}'),true); echo json_encode(lehrfahrer_gtfs_build_variant_index($files,${p(index)},['143']));`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(JSON.parse(result.stdout).routes, 75);
+  result = run(migrationTool, `
+    $targets=[${p(logical)}=>file_get_contents(${p(index)})];
+    cottbusValidatePreparedTenantRoot(${p(next)},${p(company)},$targets);
+    cottbusDiagnosticReset(${p(company)});
+    cottbusAtomicTenantSwap(${p(current)},${p(next)},${p(backup)},function() use($targets) {
+      cottbusDiagnosticMark('POST_VALIDATE','validate-activated-tenant-root');
+      cottbusValidateActivatedTenantRoot(${p(staging)},${p(company)},$targets);
+    });
+    echo json_encode(['postvalidate'=>'OK','index'=>lehrfahrer_gtfs_validate_variant_index(cottbusPath(${p(current)},'imports','gtfs','index','variants.sqlite'),['143'])]);`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(JSON.parse(result.stdout).index.integrity_check, 'ok');
+  assert.equal(fs.existsSync(backup), false);
+  assert.equal(fs.existsSync(next), false);
+  assert.equal(fs.existsSync(path.join(current, 'settings.json')), false);
+  assert.equal(fs.existsSync(path.join(current, 'imports', 'gtfs', 'index', 'variants.sqlite')), true);
+});
+
 test('fehlender oder beschädigter Index blockiert den Root-Swap bereits bei der Vollvalidierung', () => {
   const base = path.join(sandbox, 'pre-swap'); const company = 'cmp_' + '9'.repeat(32);
   fs.mkdirSync(base, { recursive: true });

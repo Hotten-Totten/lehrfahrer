@@ -1516,6 +1516,13 @@ function cottbusValidatePreparedTenantRoot(string $migrationRoot, string $compan
     if (!$indexSeen) cottbusFail('Variantenindex fehlt im vorbereiteten Tenant-Root.');
 }
 
+function cottbusValidateActivatedTenantRoot(string $stagingRoot, string $company, array $targetFiles): void {
+    $postStatus = cottbusExistingTargetStatus($stagingRoot, $company, $targetFiles);
+    if (array_filter($postStatus, static fn($status): bool => $status !== 'SKIP')) cottbusFail('Postcheck des aktivierten Tenant-Roots ist fehlgeschlagen.');
+    $companyRoot = cottbusPath(cottbusPath($stagingRoot, 'companies'), $company);
+    lehrfahrer_gtfs_validate_variant_index(cottbusPath($companyRoot, 'imports', 'gtfs', 'index', 'variants.sqlite'), [COTTBUS_AGENCY_ID]);
+}
+
 function cottbusApply(array $options, array $plan, string $company, string $stagingRoot): array {
     cottbusDiagnosticMark('PREPARE_TARGET', 'verify-apply-preconditions-and-restore-point');
     foreach (['public_root', 'private_root'] as $sourceKey) {
@@ -1618,9 +1625,7 @@ function cottbusApply(array $options, array $plan, string $company, string $stag
             cottbusDiagnosticMark('DB_TRANSACTION', 'commit-control-db-transaction');
             if (!$pdo->commit()) cottbusFail('Control-DB-Transaktion konnte nicht abgeschlossen werden.');
             cottbusDiagnosticMark('POST_VALIDATE', 'validate-activated-tenant-root');
-            $postStatus = cottbusExistingTargetStatus($stagingRoot, $company, $plan['target_files']);
-            if (array_filter($postStatus, static fn($status): bool => $status !== 'SKIP')) cottbusFail('Postcheck des aktivierten Tenant-Roots ist fehlgeschlagen.');
-            lehrfahrer_gtfs_validate_variant_index(cottbusPath($companyRoot, 'imports', 'gtfs/index/variants.sqlite'), [COTTBUS_AGENCY_ID]);
+            cottbusValidateActivatedTenantRoot($stagingRoot, $company, $plan['target_files']);
             if ($testBefore !== null && $testBefore !== cottbusTreeFingerprint($testRoot)) cottbusFail('lehrfahrer-test wurde im Postcheck veraendert.');
             if (!hash_equals($otherTenantsBefore, cottbusOtherTenantsFingerprint($stagingRoot, $company))) cottbusFail('Fremder Tenant wurde im Postcheck veraendert.');
         });
