@@ -112,6 +112,33 @@ jobs:
             echo 'ONCE_MARKER_PRESENT=NO'
           fi
           REMOTE
+          "${SSH_RUN[@]}" "$remote" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" \
+            > "$RUNNER_TEMP/synthetic-before.raw" <<'REMOTE'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          LEHRFAHRER_APP_ROOT="$webroot" \
+            php -q -d register_argc_argv=1 -f "$private_root/staging-reissue-state.php"
+          REMOTE
+          sed -n '/^{/p' "$RUNNER_TEMP/synthetic-before.raw" > "$RUNNER_TEMP/synthetic-before.json"
+          test -s "$RUNNER_TEMP/synthetic-before.json"
+          jq -e '.admin_active == 0 and .admin_must_change_password == 1
+            and .token_used_at == null and (.token_hash | test("^[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/synthetic-before.json" >/dev/null
+          expiry="$(date -u -d '+48 hours' '+%Y-%m-%dT%H:%M:%S+00:00')"
+          jq --arg expiry "$expiry" '.token_hash = ("f" * 64)
+            | .token_expires_at = $expiry' \
+            "$RUNNER_TEMP/synthetic-before.json" > "$RUNNER_TEMP/synthetic-after.json"
+          jq -e --slurpfile before "$RUNNER_TEMP/synthetic-before.json" \
+            '.admin_active == 0 and .admin_must_change_password == 1
+              and .token_used_at == null and .token_hash != $before[0].token_hash
+              and .cottbus_files == $before[0].cottbus_files
+              and .test_state == $before[0].test_state
+              and ((.token_expires_at | sub("\\+00:00$"; "Z") | fromdateiso8601) > now + 47 * 3600)
+              and ((.token_expires_at | sub("\\+00:00$"; "Z") | fromdateiso8601) < now + 49 * 3600)' \
+            "$RUNNER_TEMP/synthetic-after.json" >/dev/null
+          echo 'READ_ONLY_POSTCHECK_FILTER=OK'
           echo 'PRIVATE_CHANNEL_DRY_RUN=OK'
 
       - name: Execute exactly one private staging reissue
@@ -169,6 +196,7 @@ jobs:
           }
           read_state > "$RUNNER_TEMP/reissue-before.raw"
           sed -n '/^{/p' "$RUNNER_TEMP/reissue-before.raw" > "$RUNNER_TEMP/reissue-before.json"
+          test -s "$RUNNER_TEMP/reissue-before.json"
           jq -e '.admin_active == 0 and .admin_must_change_password == 1
             and .token_used_at == null and (.token_hash | test("^[0-9a-f]{64}$"))' \
             "$RUNNER_TEMP/reissue-before.json" >/dev/null
