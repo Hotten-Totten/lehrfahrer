@@ -273,6 +273,7 @@ jobs:
             tools/provision-staging-company.php \
             tools/provision-cottbus-staging.php \
             tools/reissue-first-admin-activation.php \
+            tools/staging-reissue-state.php \
             tools/cottbus-migrate-staging.php \
             tools/_control-db-restore-point.php \
             tools/staging-smoke.php \
@@ -312,6 +313,7 @@ jobs:
             "$private_root/provision-staging-company.php" \
             "$private_root/provision-cottbus-staging.php" \
             "$private_root/reissue-first-admin-activation.php" \
+            "$private_root/staging-reissue-state.php" \
             "$private_root/cottbus-migrate-staging.php" \
             "$private_root/_control-db-restore-point.php" \
             "$private_root/staging-smoke.php"

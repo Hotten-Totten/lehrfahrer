@@ -103,10 +103,23 @@ test('Operator-Weg ist privat, nicht HTTP oder Workflow-Ausfuehrung; kein Klarte
   assert.match(workflow, /\$private_root\/reissue-first-admin-activation\.php/);
   assert.doesNotMatch(workflow, /php[^\n]*-f[^\n]*reissue-first-admin-activation\.php/);
   assert.match(script, /fopen\('\/dev\/tty', 'w'\)/);
+  assert.match(script, /fopen\(\$deliveryFile, 'x'\)/);
+  assert.match(script, /chmod\(\$deliveryFile, 0600\)/);
   assert.match(script, /getenv\('REQUEST_METHOD'\)/);
   assert.doesNotMatch(script, /echo\s+\$result|file_put_contents\([^)]*\$result/);
   const attempted = spawnSync(php, [path.join(root, 'tools/reissue-first-admin-activation.php')],
     { cwd: root, env, encoding: 'utf8' });
   assert.notEqual(attempted.status, 0);
   assert.equal(attempted.stdout, '');
+});
+
+test('Manueller Workflow hat einmaliges Gate und speichert nur verschluesseltes Artefakt', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/reissue-cottbus-admin-staging.yml'), 'utf8');
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(workflow, /REISSUE_COTTBUS_ADMIN_ONCE/);
+  assert.match(workflow, /mkdir "\$private_root\/\.cottbus-admin-reissue-once"/);
+  assert.match(workflow, /openssl pkeyutl -encrypt/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /rm -- "\$delivery"/);
+  assert.doesNotMatch(workflow, /(?:cat|echo|printf)[^\n]*\$result\['token'\]/);
 });

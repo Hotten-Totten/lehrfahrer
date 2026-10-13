@@ -1,0 +1,244 @@
+name: One-time Cottbus admin activation reissue
+
+on:
+  push:
+    branches: ["staging"]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: DELIVERY_TEST_ONLY or REISSUE_COTTBUS_ADMIN_ONCE
+        required: true
+        type: string
+      recipient_public_key_b64:
+        description: Base64-encoded RSA public PEM for encrypted operator delivery
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cottbus-first-admin-reissue-once
+  cancel-in-progress: false
+
+jobs:
+  reissue:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate one-time request and recipient
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RECIPIENT_PUBLIC_KEY_B64: ${{ inputs.recipient_public_key_b64 }}
+        run: |
+          set -euo pipefail
+          case "$CONFIRMATION" in
+            DELIVERY_TEST_ONLY|REISSUE_COTTBUS_ADMIN_ONCE) ;;
+            *) exit 2 ;;
+          esac
+          test "${GITHUB_REF_NAME}" = staging
+          umask 077
+          printf '%s' "$RECIPIENT_PUBLIC_KEY_B64" | base64 -d > "$RUNNER_TEMP/reissue-public.pem"
+          openssl pkey -pubin -in "$RUNNER_TEMP/reissue-public.pem" -noout
+          test "$(openssl pkey -pubin -in "$RUNNER_TEMP/reissue-public.pem" -text -noout | head -n 1)" = 'Public-Key: (3072 bit)'
+
+      - name: Prepare encrypted delivery test without touching staging
+        if: inputs.confirmation == 'DELIVERY_TEST_ONLY'
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'DELIVERY_TEST_ONLY_NO_REAL_TOKEN' \
+            | openssl pkeyutl -encrypt -pubin -inkey "$RUNNER_TEMP/reissue-public.pem" \
+                -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+                -out "$RUNNER_TEMP/cottbus-activation-link.enc"
+
+      - name: Check private server channel without issuing a token
+        if: inputs.confirmation == 'DELIVERY_TEST_ONLY'
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STRATO_KNOWN_HOSTS: ${{ secrets.STRATO_KNOWN_HOSTS }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          for path in "$STAGING_TARGET_PATH" "$STAGING_PRIVATE_PATH"; do
+            case "$path" in
+              ''|/*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*) exit 2 ;;
+            esac
+          done
+          mkdir -p ~/.ssh
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            printf '%s\n' "$STRATO_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            SSH_RUN=(ssh -p "$STRATO_PORT" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes)
+          else
+            sudo apt-get update >/dev/null
+            sudo apt-get install -y sshpass >/dev/null
+            SSH_RUN=(sshpass -e ssh -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+          fi
+          if [ -n "$STRATO_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$STRATO_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$STRATO_PORT" "$STRATO_HOST" >> ~/.ssh/known_hosts
+          fi
+          remote="$STRATO_USER@$STRATO_HOST"
+          "${SSH_RUN[@]}" "$remote" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          state="LEHRFAHRER_APP_ROOT='$webroot' php -q -d register_argc_argv=1 -f '$private_root/staging-reissue-state.php'"
+          before="$(eval "$state")"
+          nonce="$(openssl rand -hex 16)"
+          delivery="$private_root/activation-link-$nonce.txt"
+          if LEHRFAHRER_APP_ROOT="$webroot" LEHRFAHRER_REISSUE_CONFIRM=1 \
+              LEHRFAHRER_REISSUE_COMPANY_ID=cmp_2ff1b82166c99988ed6f7eb51cca7b56 \
+              LEHRFAHRER_REISSUE_ADMIN_LOGIN=nonexistent-reissue-test \
+              LEHRFAHRER_REISSUE_DELIVERY_FILE="$delivery" \
+                php -q -d register_argc_argv=1 -f "$private_root/reissue-first-admin-activation.php" \
+                >/dev/null 2>&1; then
+            exit 2
+          fi
+          test ! -e "$delivery"
+          after="$(eval "$state")"
+          test "$before" = "$after"
+          REMOTE
+          echo 'PRIVATE_CHANNEL_DRY_RUN=OK'
+
+      - name: Execute exactly one private staging reissue
+        if: inputs.confirmation == 'REISSUE_COTTBUS_ADMIN_ONCE'
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STRATO_KNOWN_HOSTS: ${{ secrets.STRATO_KNOWN_HOSTS }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for path in "$STAGING_TARGET_PATH" "$STAGING_PRIVATE_PATH"; do
+            case "$path" in
+              ''|/*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*) exit 2 ;;
+            esac
+          done
+          test "$STAGING_TARGET_PATH" != "$STAGING_PRIVATE_PATH"
+          test "$STAGING_TARGET_PATH" != "${LIVE_TARGET_PATH#/}"
+          mkdir -p ~/.ssh
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            printf '%s\n' "$STRATO_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            SSH_RUN=(ssh -p "$STRATO_PORT" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes)
+          else
+            sudo apt-get update >/dev/null
+            sudo apt-get install -y sshpass >/dev/null
+            SSH_RUN=(sshpass -e ssh -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+          fi
+          if [ -n "$STRATO_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$STRATO_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$STRATO_PORT" "$STRATO_HOST" >> ~/.ssh/known_hosts
+          fi
+          remote="$STRATO_USER@$STRATO_HOST"
+          webroot="./$STAGING_TARGET_PATH"
+          private="./$STAGING_PRIVATE_PATH"
+          nonce="$(openssl rand -hex 16)"
+          printf '%s' "$nonce" > "$RUNNER_TEMP/reissue-nonce"
+          delivery="$private/activation-link-$nonce.txt"
+          state_command="LEHRFAHRER_APP_ROOT='$webroot' php -q -d register_argc_argv=1 -f '$private/staging-reissue-state.php'"
+          "${SSH_RUN[@]}" "$remote" "$state_command" > "$RUNNER_TEMP/reissue-before.raw"
+          sed -n '/^{/p' "$RUNNER_TEMP/reissue-before.raw" > "$RUNNER_TEMP/reissue-before.json"
+          jq -e '.admin_active == 0 and .admin_must_change_password == 1
+            and .token_used_at == null and (.token_hash | test("^[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/reissue-before.json" >/dev/null
+          curl --fail --silent --show-error --location https://lehrfahrer.de/VERSION | sha256sum > "$RUNNER_TEMP/live-before.sha256"
+          curl --fail --silent --show-error --location https://www.lehrfahrer.de/VERSION | sha256sum >> "$RUNNER_TEMP/live-before.sha256"
+
+          # Atomic mkdir is the irreversible once-only gate. A failed run must
+          # be investigated, never automatically retried or rerun.
+          "${SSH_RUN[@]}" "$remote" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$nonce'" <<'REMOTE'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          case "$private_root/" in "$webroot/"*) exit 2 ;; esac
+          test -f "$private_root/reissue-first-admin-activation.php"
+          test -f "$private_root/runtime-env.php"
+          test ! -e "$private_root/activation-link-$3.txt"
+          mkdir "$private_root/.cottbus-admin-reissue-once"
+          chmod 700 "$private_root/.cottbus-admin-reissue-once"
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_REISSUE_CONFIRM=1 \
+          LEHRFAHRER_REISSUE_COMPANY_ID=cmp_2ff1b82166c99988ed6f7eb51cca7b56 \
+          LEHRFAHRER_REISSUE_ADMIN_LOGIN=cottbus-admin \
+          LEHRFAHRER_REISSUE_DELIVERY_FILE="$private_root/activation-link-$3.txt" \
+            php -q -d register_argc_argv=1 -f "$private_root/reissue-first-admin-activation.php"
+          test "$(stat -c '%a' "$private_root/activation-link-$3.txt")" = 600
+          test "$(wc -l < "$private_root/activation-link-$3.txt")" = 1
+          REMOTE
+
+          "${SSH_RUN[@]}" "$remote" "$state_command" > "$RUNNER_TEMP/reissue-after.raw"
+          sed -n '/^{/p' "$RUNNER_TEMP/reissue-after.raw" > "$RUNNER_TEMP/reissue-after.json"
+          jq -e --slurpfile before "$RUNNER_TEMP/reissue-before.json" \
+            '.admin_active == 0 and .admin_must_change_password == 1
+              and .token_used_at == null and .token_hash != $before[0].token_hash
+              and .cottbus_files == $before[0].cottbus_files
+              and .test_state == $before[0].test_state
+              and ((.token_expires_at | sub("\\+00:00$"; "Z") | fromdateiso8601) > now + 47 * 3600)
+              and ((.token_expires_at | sub("\\+00:00$"; "Z") | fromdateiso8601) < now + 49 * 3600)' \
+            "$RUNNER_TEMP/reissue-after.json" >/dev/null
+          curl --fail --silent --show-error --location https://lehrfahrer.de/VERSION | sha256sum > "$RUNNER_TEMP/live-after.sha256"
+          curl --fail --silent --show-error --location https://www.lehrfahrer.de/VERSION | sha256sum >> "$RUNNER_TEMP/live-after.sha256"
+          cmp "$RUNNER_TEMP/live-before.sha256" "$RUNNER_TEMP/live-after.sha256"
+
+          # Plaintext crosses only this protected SSH-to-OpenSSL pipe in memory.
+          # The runner stores only RSA-OAEP ciphertext, never the link itself.
+          "${SSH_RUN[@]}" "$remote" "cat -- '$delivery'" \
+            | openssl pkeyutl -encrypt -pubin -inkey "$RUNNER_TEMP/reissue-public.pem" \
+                -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+                -out "$RUNNER_TEMP/cottbus-activation-link.enc"
+          test "$(stat -c '%s' "$RUNNER_TEMP/cottbus-activation-link.enc")" = 384
+          echo 'REISSUE_READ_ONLY_POSTCHECK=OK'
+
+      - name: Upload ciphertext only
+        uses: actions/upload-artifact@v4
+        with:
+          name: cottbus-activation-link-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/cottbus-activation-link.enc
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Delete plaintext staging handoff after encrypted upload
+        if: always() && inputs.confirmation == 'REISSUE_COTTBUS_ADMIN_ONCE'
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_RUN=(ssh -p "$STRATO_PORT" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes)
+          else
+            SSH_RUN=(sshpass -e ssh -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+          fi
+          test -f "$RUNNER_TEMP/reissue-nonce" || exit 0
+          nonce="$(cat "$RUNNER_TEMP/reissue-nonce")"
+          [[ "$nonce" =~ ^[0-9a-f]{32}$ ]]
+          "${SSH_RUN[@]}" "$STRATO_USER@$STRATO_HOST" \
+            "bash -s -- '$STAGING_PRIVATE_PATH' '$nonce'" <<'REMOTE'
+          set -euo pipefail
+          private_root="$(cd "./$1" && pwd -P)"
+          delivery="$private_root/activation-link-$2.txt"
+          if test -f "$delivery"; then rm -- "$delivery"; fi
+          REMOTE
+          echo 'PLAINTEXT_HANDOFF_REMOVED=OK'

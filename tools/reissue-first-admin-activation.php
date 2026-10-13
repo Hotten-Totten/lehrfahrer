@@ -30,23 +30,43 @@ try {
         throw new RuntimeException('Reissue-Ziel fehlt oder ist ungueltig.');
     }
 
-    // /dev/tty bypasses stdout, pipes, CI logs and redirection. If unavailable,
-    // refuse before touching the database; plaintext must not enter artifacts.
-    $terminal = @fopen('/dev/tty', 'w');
-    if ($terminal === false) {
-        throw new RuntimeException('Sicheres Operator-Terminal fehlt.');
+    $deliveryFile = (string)getenv('LEHRFAHRER_REISSUE_DELIVERY_FILE');
+    $fileMode = $deliveryFile !== '';
+    if ($fileMode) {
+        if (realpath(dirname($deliveryFile)) !== $privateRoot
+            || preg_match('/^activation-link-[0-9a-f]{32}\.txt$/D', basename($deliveryFile)) !== 1
+            || file_exists($deliveryFile) || is_link($deliveryFile)) {
+            throw new RuntimeException('Privater Uebergabepfad ist ungueltig.');
+        }
+        $delivery = @fopen($deliveryFile, 'x');
+        if ($delivery === false || !@chmod($deliveryFile, 0600)) {
+            if (is_resource($delivery)) fclose($delivery);
+            if (is_file($deliveryFile)) @unlink($deliveryFile);
+            throw new RuntimeException('Private Uebergabe konnte nicht vorbereitet werden.');
+        }
+    } else {
+        // /dev/tty bypasses stdout, pipes, CI logs and redirection.
+        $delivery = @fopen('/dev/tty', 'w');
+        if ($delivery === false) {
+            throw new RuntimeException('Sicheres Operator-Terminal fehlt.');
+        }
     }
+    $delivered = false;
     try {
         $result = lehrfahrer_reissue_company_admin_activation(
             lehrfahrer_control_database(), $companyId, $login
         );
-        $output = "Neuer Aktivierungstoken (nur diese Ausgabe):\n"
-            . $result['token'] . "\nGueltig bis: " . $result['expires_at'] . "\n";
-        if (fwrite($terminal, $output) !== strlen($output)) {
+        $output = $fileMode
+            ? 'https://staging.lehrfahrer.de/activate.php#token=' . $result['token'] . "\n"
+            : "Neuer Aktivierungstoken (nur diese Ausgabe):\n"
+                . $result['token'] . "\nGueltig bis: " . $result['expires_at'] . "\n";
+        if (fwrite($delivery, $output) !== strlen($output) || !fflush($delivery)) {
             throw new RuntimeException('Operator-Ausgabe fehlgeschlagen.');
         }
+        $delivered = true;
     } finally {
-        fclose($terminal);
+        fclose($delivery);
+        if ($fileMode && !$delivered && is_file($deliveryFile)) @unlink($deliveryFile);
     }
 } catch (Throwable $error) {
     file_put_contents('php://stderr', "Reissue nicht durchgefuehrt oder Ausgabe fehlgeschlagen.\n");
