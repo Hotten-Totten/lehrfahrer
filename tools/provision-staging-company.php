@@ -68,7 +68,7 @@ try {
     $companyCount = (int)$pdo->query('SELECT COUNT(*) FROM companies')->fetchColumn();
     $existing = $companies->findBySlug($input['slug']);
     if ($existing !== null) {
-        if ($companyCount !== 1 || $existing['name'] !== $input['name']) {
+        if ($existing['name'] !== $input['name']) {
             throw new RuntimeException('Staging enthaelt einen unerwarteten Gesellschaftsbestand.');
         }
         $admin = $users->findAuthenticationRecordByLogin($existing['id'], $input['admin_login']);

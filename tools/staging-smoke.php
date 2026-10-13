@@ -45,7 +45,7 @@ try {
     $pdo = lehrfahrer_control_database();
     $companies = new LehrfahrerCompanyRepository($pdo);
     $company = $companies->findBySlug($expectedSlug);
-    if (!is_array($company) || (int)$pdo->query('SELECT COUNT(*) FROM companies')->fetchColumn() !== 1) {
+    if (!is_array($company)) {
         throw new RuntimeException('Staging-Testgesellschaft ist nicht eindeutig.');
     }
     $configFile = lehrfahrer_tenant_path($company['id'], 'settings', 'company.json');

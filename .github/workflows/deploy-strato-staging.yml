@@ -246,6 +246,7 @@ jobs:
             /tmp/lehrfahrer-staging-provision-secret.php \
             /tmp/lehrfahrer-staging-mariadb-ca.pem \
             tools/provision-staging-company.php \
+            tools/provision-cottbus-staging.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
 
@@ -475,6 +476,81 @@ jobs:
             "$private_root/validate-smoke-result.php" \
             "$private_root/smoke-stdout.raw" \
             "$private_root/smoke-stderr.raw"
+
+          cat > "$private_root/run-cottbus-provision.php" <<PHP
+          <?php
+          putenv('LEHRFAHRER_APP_ROOT=$webroot');
+          putenv('LEHRFAHRER_STAGING_CGI_PROVISION=1');
+          putenv('LEHRFAHRER_STAGING_PROVISION_RESULT_FILE=$private_root/cottbus-provision-result.json');
+          require '$private_root/runtime-env.php';
+          require '$private_root/provision-cottbus-staging.php';
+          PHP
+          set +e
+          php -q -f "$private_root/run-cottbus-provision.php" \
+            > "$private_root/cottbus-provision-stdout.raw" \
+            2> "$private_root/cottbus-provision-stderr.raw"
+          cottbus_status="$?"
+          set -e
+          chmod 600 \
+            "$private_root/cottbus-provision-stdout.raw" \
+            "$private_root/cottbus-provision-stderr.raw"
+          if [ "$cottbus_status" -ne 0 ]; then
+            echo 'Cottbus-Provisionierung ist fehlgeschlagen; Roh-Ausgaben bleiben privat.' >&2
+            exit "$cottbus_status"
+          fi
+          if [ -s "$private_root/cottbus-provision-stderr.raw" ]; then
+            echo 'Cottbus-Provisionierung schrieb unerwartet auf stderr.' >&2
+            exit 1
+          fi
+          if tr -d '\r' < "$private_root/cottbus-provision-stdout.raw" \
+              | grep -Eiv '^(Content-Type|X-Powered-By|Status):|^$' | grep -q .; then
+            echo 'Cottbus-Provisionierung schrieb unerwartete CGI-Ausgabe.' >&2
+            exit 1
+          fi
+          cat > "$private_root/validate-cottbus-result.php" <<'PHP'
+          <?php
+          try {
+              $raw = (string)file_get_contents((string)getenv('COTTBUS_RESULT_FILE'));
+              $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+          } catch (Throwable $error) {
+              file_put_contents('php://stderr', "Cottbus-Provisionierungsergebnis ist kein valides JSON.\n");
+              exit(1);
+          }
+          $zero = array_fill_keys(
+              ['cities', 'lines', 'routes', 'drivers', 'trainings', 'packages', 'documents',
+               'catalog_entries', 'gtfs', 'variants_index'],
+              0
+          );
+          if (!is_array($data) || ($data['ok'] ?? false) !== true
+              || ($data['slug'] ?? '') !== 'cottbusverkehr'
+              || ($data['name'] ?? '') !== 'Cottbusverkehr'
+              || ($data['license_status'] ?? '') !== 'active'
+              || ($data['license_id'] ?? null) !== null
+              || preg_match('/^cmp_[0-9a-f]{32}$/D', (string)($data['company_id'] ?? '')) !== 1
+              || ($data['admin_login'] ?? '') !== 'cottbus-admin'
+              || ($data['admin_active'] ?? true) !== false
+              || ($data['admin_roles'] ?? []) !== ['ADMIN']
+              || ($data['activation_hash_only'] ?? false) !== true
+              || ($data['test_company_unchanged'] ?? false) !== true
+              || !hash_equals(
+                  (string)($data['test_company_fingerprint_before'] ?? ''),
+                  (string)($data['test_company_fingerprint_after'] ?? '')
+              )
+              || ($data['null_inventory'] ?? null) !== $zero
+              || preg_match('/password|token_hash|activation_token"|secret|credential/i', $raw) === 1) {
+              file_put_contents('php://stderr', "Cottbus-Provisionierungsergebnis ist unvollstaendig.\n");
+              exit(1);
+          }
+          PHP
+          COTTBUS_RESULT_FILE="$private_root/cottbus-provision-result.json" \
+            php -q -f "$private_root/validate-cottbus-result.php"
+          chmod 600 "$private_root/cottbus-provision-result.json"
+          cat "$private_root/cottbus-provision-result.json"
+          rm -f -- \
+            "$private_root/run-cottbus-provision.php" \
+            "$private_root/validate-cottbus-result.php" \
+            "$private_root/cottbus-provision-stdout.raw" \
+            "$private_root/cottbus-provision-stderr.raw"
           REMOTE_SCRIPT
 
           origin='https://staging.lehrfahrer.de'
