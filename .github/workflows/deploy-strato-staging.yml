@@ -2,6 +2,7 @@ name: Deploy staging to Strato
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LIVE_GTFS_PROBE_ONLY: "1"
 
 on:
   push:
@@ -137,7 +138,85 @@ jobs:
             ssh-keyscan -p "${{ secrets.STRATO_PORT }}" "${{ secrets.STRATO_HOST }}" >> ~/.ssh/known_hosts
           fi
 
+      - name: Verify live GTFS source read-only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_run=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_run+=(-i ~/.ssh/id_rsa)
+          else
+            ssh_run=(sshpass -e "${ssh_run[@]}")
+          fi
+          "${ssh_run[@]}" "$remote" bash -s -- "$LIVE_TARGET_PATH" <<'REMOTE'
+          set -eu
+          live_target="$1"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_root="$(pwd -P)"
+          else
+            live_root="$(cd "./$live_target" && pwd -P)"
+          fi
+          printf 'LIVE_ROOT=%s\n' "$live_root"
+          if [ "$live_root" != '/mnt/web223/b3/15/5576715/htdocs/lehrfahrer' ]; then
+            printf 'LIVE_ROOT_MATCH=NO\n'
+            exit 1
+          fi
+          printf 'LIVE_ROOT_MATCH=YES\n'
+
+          inspect_path() {
+            candidate="$1"
+            printf 'GTFS_CANDIDATE=%s\n' "$candidate"
+            if [ -L "$candidate" ]; then
+              printf 'EXISTS=YES\nTYPE=SYMLINK\n'
+              ls -ld -- "$candidate"
+              stat -c 'MODE=%A OCTAL=%a OWNER=%U GROUP=%G SIZE=%s' -- "$candidate"
+              printf 'LINK_TARGET=%s\n' "$(readlink -- "$candidate")"
+              resolved="$(readlink -f -- "$candidate" 2>/dev/null || true)"
+              printf 'LINK_RESOLVED=%s\n' "$resolved"
+              if [ -n "$resolved" ] && [ -e "$resolved" ]; then
+                printf 'LINK_TARGET_EXISTS=YES\n'
+                case "$resolved" in "$live_root"/*) printf 'LINK_TARGET_IN_LIVE_ROOT=YES\n' ;; *) printf 'LINK_TARGET_IN_LIVE_ROOT=NO\n' ;; esac
+              else
+                printf 'LINK_TARGET_EXISTS=NO\nLINK_TARGET_IN_LIVE_ROOT=NO\n'
+              fi
+            elif [ -f "$candidate" ]; then
+              printf 'EXISTS=YES\nTYPE=REGULAR\n'
+              ls -ld -- "$candidate"
+              stat -c 'MODE=%A OCTAL=%a OWNER=%U GROUP=%G SIZE=%s' -- "$candidate"
+              file -b -- "$candidate"
+              sha256sum -- "$candidate"
+            elif [ -e "$candidate" ]; then
+              printf 'EXISTS=YES\nTYPE=OTHER\n'
+              ls -ld -- "$candidate"
+              stat -c 'MODE=%A OCTAL=%a OWNER=%U GROUP=%G SIZE=%s' -- "$candidate"
+              file -b -- "$candidate"
+            else
+              printf 'EXISTS=NO\n'
+            fi
+          }
+
+          inspect_path "$live_root/gtfs/latest.zip"
+          inspect_path "$live_root/gtfs/data/gtfs/latest.zip"
+          inspect_path "$live_root/gtfs/imports/latest.zip"
+          inspect_path "$live_root/gtfs/imports/gtfs/latest.zip"
+          find "$live_root" -path '*/gtfs/latest.zip' -print | sort | while IFS= read -r candidate; do
+            case "$candidate" in
+              "$live_root/gtfs/latest.zip"|"$live_root/gtfs/data/gtfs/latest.zip"|"$live_root/gtfs/imports/gtfs/latest.zip") continue ;;
+            esac
+            inspect_path "$candidate"
+          done
+          REMOTE
+
       - name: Build private staging runtime files
+        if: env.LIVE_GTFS_PROBE_ONLY != '1'
         shell: bash
         env:
           STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
@@ -202,6 +281,7 @@ jobs:
             /tmp/lehrfahrer-staging.htpasswd
 
       - name: Deploy only to isolated staging paths
+        if: env.LIVE_GTFS_PROBE_ONLY != '1'
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -735,6 +815,7 @@ jobs:
             "$valid_status" "$auth_permission_mode"
 
       - name: Staging HTTP, runtime, login and session smoke test
+        if: env.LIVE_GTFS_PROBE_ONLY != '1'
         shell: bash
         env:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
@@ -835,6 +916,7 @@ jobs:
           test "$logged_out_status" = 302
 
       - name: Verify live public content is unchanged
+        if: env.LIVE_GTFS_PROBE_ONLY != '1'
         shell: bash
         run: |
           set -euo pipefail
