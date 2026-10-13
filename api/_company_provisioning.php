@@ -13,6 +13,79 @@ function lehrfahrer_company_activation_token_hash(string $token): string {
     return hash('sha256', $token);
 }
 
+// Internal provisioning operation only. Callers must be trusted server-side operators;
+// never expose this function through an HTTP endpoint or log its returned token.
+function lehrfahrer_reissue_company_admin_activation(PDO $pdo, string $companyId, string $login): array {
+    if ($pdo->inTransaction()) {
+        throw new RuntimeException('Reissue benoetigt eine eigene Datenbanktransaktion.');
+    }
+    if (preg_match('/^cmp_[0-9a-f]{32}$/D', $companyId) !== 1
+        || $login === '' || lehrfahrer_control_normalize_login($login) !== $login) {
+        throw new InvalidArgumentException('Ungueltige Reissue-Zuordnung.');
+    }
+
+    $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
+    $transactionOpen = false;
+    try {
+        if ($sqlite) $pdo->exec('BEGIN IMMEDIATE');
+        else $pdo->beginTransaction();
+        $transactionOpen = true;
+
+        $sql = 'SELECT users.id, users.active, users.must_change_password
+            FROM users JOIN user_roles ON user_roles.user_id = users.id
+            JOIN roles ON roles.id = user_roles.role_id AND roles.code = :role_code
+            WHERE users.company_id = :company_id AND users.login_normalized = :login';
+        if (!$sqlite) $sql .= ' FOR UPDATE';
+        $user = $pdo->prepare($sql);
+        $user->execute([
+            ':role_code' => 'ADMIN', ':company_id' => $companyId, ':login' => $login,
+        ]);
+        $admins = $user->fetchAll();
+        if (count($admins) !== 1 || (int)$admins[0]['active'] !== 0
+            || (int)$admins[0]['must_change_password'] !== 1) {
+            throw new DomainException('Reissue nicht zulaessig.');
+        }
+
+        $sql = 'SELECT id, token_hash, used_at FROM user_activation_tokens
+            WHERE company_id = :company_id AND user_id = :user_id';
+        if (!$sqlite) $sql .= ' FOR UPDATE';
+        $existing = $pdo->prepare($sql);
+        $existing->execute([':company_id' => $companyId, ':user_id' => $admins[0]['id']]);
+        $records = $existing->fetchAll();
+        if (count($records) !== 1 || $records[0]['used_at'] !== null) {
+            throw new DomainException('Reissue nicht zulaessig.');
+        }
+
+        $token = lehrfahrer_company_activation_token();
+        $now = gmdate('c');
+        $expiresAt = gmdate('c', time() + LEHRFAHRER_COMPANY_ACTIVATION_TTL_SECONDS);
+        $replace = $pdo->prepare('UPDATE user_activation_tokens
+            SET token_hash = :new_hash, created_at = :created_at, expires_at = :expires_at
+            WHERE id = :id AND company_id = :company_id AND user_id = :user_id
+                AND token_hash = :old_hash AND used_at IS NULL');
+        $replace->execute([
+            ':new_hash' => lehrfahrer_company_activation_token_hash($token),
+            ':created_at' => $now, ':expires_at' => $expiresAt,
+            ':id' => $records[0]['id'], ':company_id' => $companyId,
+            ':user_id' => $admins[0]['id'], ':old_hash' => $records[0]['token_hash'],
+        ]);
+        if ($replace->rowCount() !== 1) {
+            throw new RuntimeException('Reissue konnte nicht atomar abgeschlossen werden.');
+        }
+
+        if ($sqlite) $pdo->exec('COMMIT');
+        else $pdo->commit();
+        $transactionOpen = false;
+        return ['token' => $token, 'expires_at' => $expiresAt];
+    } catch (Throwable $error) {
+        if ($transactionOpen) {
+            if ($sqlite) $pdo->exec('ROLLBACK');
+            else $pdo->rollBack();
+        }
+        throw $error;
+    }
+}
+
 function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $password): array {
     if ($pdo->inTransaction()) {
         throw new RuntimeException('Aktivierung benoetigt eine eigene Datenbanktransaktion.');

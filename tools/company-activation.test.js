@@ -110,13 +110,14 @@ before(async () => {
 require ${phpString(path.join(projectRoot, 'api', '_company_provisioning.php'))};
 $pdo=lehrfahrer_control_database();
 $cases=[];
-foreach (['success','expired','active','mismatch','short','race','rollback'] as $name) {
+foreach (['success','expired','active','mismatch','short','race','rollback','reissue'] as $name) {
     $result=lehrfahrer_create_company_from_template($pdo,[
         'name'=>'Test '.$name, 'slug'=>'activation-'.$name,
         'license_status'=>'active', 'admin_display_name'=>'Test Admin',
         'admin_login'=>'test-admin'
     ]);
     $cases[$name]=['company'=>$result['company']['slug'],
+        'companyId'=>$result['company']['id'],
         'user'=>$result['admin']['id'], 'token'=>$result['activation']['token']];
 }
 $expired=$pdo->prepare('UPDATE user_activation_tokens SET expires_at=:expiry WHERE user_id=:id');
@@ -179,6 +180,20 @@ test('falscher und abgelaufener Token sowie aktiver Benutzer werden abgelehnt', 
   assert.equal(state('expired').user.active, 0);
   assert.equal(state('expired').tokens, 1);
   assert.equal(state('active').tokens, 1);
+});
+
+test('Reissue: alter Token wird vom bestehenden HTTP-Endpunkt abgelehnt, neuer aktiviert', async () => {
+  const oldToken = cases.reissue.token;
+  const output = runPhp(`require ${phpString(path.join(projectRoot, 'api', '_company_provisioning.php'))};`
+    + `$result=lehrfahrer_reissue_company_admin_activation(lehrfahrer_control_database(),`
+    + `${phpString(cases.reissue.companyId)},'test-admin'); echo json_encode($result);`);
+  const replacement = JSON.parse(output);
+  assert.equal((await request('/api/auth/activate.php', activation('reissue'))).response.status, 400);
+  assert.equal((await request('/api/auth/activate.php', activation('reissue', { token: replacement.token }))).response.status, 200);
+  assert.equal(state('reissue').user.active, 1);
+  assert.equal(state('reissue').tokens, 0);
+  assert.equal(logs.includes(oldToken), false);
+  assert.equal(logs.includes(replacement.token), false);
 });
 
 test('Passwortbestätigung und Mindestlänge werden geprüft; ohne Origin kein POST', async () => {
