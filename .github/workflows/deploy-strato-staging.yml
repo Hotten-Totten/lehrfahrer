@@ -612,6 +612,7 @@ jobs:
             exit 1
           fi
           actual_gtfs_sha256="$(sha256sum "$gtfs_source" | awk '{print $1}')"
+          printf 'ACTUAL_GTFS_SOURCE_SHA256=%s\n' "$actual_gtfs_sha256"
           if [ "$actual_gtfs_sha256" != "$expected_gtfs_sha256" ]; then
             echo 'SOURCE_DRIFT: GTFS-SHA-256 weicht vom freigegebenen Stand ab.' >&2
             exit 1
