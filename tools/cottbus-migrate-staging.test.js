@@ -503,7 +503,7 @@ test('STRATO-CGI-Apply besitzt ein separates Staging-Gate', () => {
 
 test('eingebettete PHP-Helfer des Cottbus-Apply-Workflows sind syntaktisch gueltig', () => {
   const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
-  const step = workflow.slice(workflow.indexOf('      - name: Apply approved Cottbus migration exactly once'));
+  const step = workflow.slice(workflow.indexOf('      - name: Preflight or apply approved Cottbus migration'));
   const blocks = [...step.matchAll(/^          cat > "\$(?:test_id_reader|validator)" <<'PHP'\r?\n([\s\S]*?)^          PHP$/gm)];
   assert.equal(blocks.length, 2);
   for (const [index, match] of blocks.entries()) {
@@ -512,4 +512,20 @@ test('eingebettete PHP-Helfer des Cottbus-Apply-Workflows sind syntaktisch guelt
     const result = spawnSync(php, ['-l', file], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }
+});
+
+test('Cottbus-Apply-Pfad vermeidet Process-Substitution und raeumt private Tempdateien auf', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
+  const step = workflow.slice(workflow.indexOf('      - name: Preflight or apply approved Cottbus migration'));
+  assert.equal(/<\(|>\(|\/dev\/fd/.test(step), false);
+  assert.ok(step.includes('mktemp -d "$private_root/.cottbus-apply.XXXXXX"'));
+  assert.ok(step.includes('chmod 700 "$temp_root"'));
+  assert.ok(step.includes('chmod 600 "$test_id_reader"'));
+  assert.ok(step.includes('trap cleanup EXIT'));
+  assert.ok(step.includes("trap 'exit 143' TERM"));
+  assert.ok(step.includes('rm -f -- "$cleanup_file"'));
+  assert.ok(step.includes('rmdir -- "$temp_root"'));
+  assert.ok(step.includes('if [ "$apply_cottbus" != true ]; then'));
+  assert.ok(step.includes("-name '.cottbus-apply.*' -print -quit"));
+  assert.ok(step.includes('COTTBUS_TEMP_CLEANUP=OK'));
 });

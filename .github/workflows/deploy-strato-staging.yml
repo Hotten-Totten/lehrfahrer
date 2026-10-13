@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      preflight_cottbus:
+        description: Run the complete Cottbus staging preflight without applying the migration
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging
@@ -1085,8 +1090,8 @@ jobs:
           rm -f -- "$runner" "$result"
           REMOTE_SCRIPT
 
-      - name: Apply approved Cottbus migration exactly once
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_cottbus }}
+      - name: Preflight or apply approved Cottbus migration
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.preflight_cottbus || inputs.apply_cottbus) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -1098,6 +1103,7 @@ jobs:
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
           LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
           CREATE_RESTORE_POINT: ${{ inputs.create_control_db_restore_point }}
+          APPLY_COTTBUS: ${{ inputs.apply_cottbus }}
         run: |
           set -euo pipefail
           if [ "$CREATE_RESTORE_POINT" = true ]; then
@@ -1114,11 +1120,12 @@ jobs:
           fi
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH' '$APPLY_COTTBUS'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
           live_target="${3#/}"
+          apply_cottbus="$4"
           company_id='cmp_2ff1b82166c99988ed6f7eb51cca7b56'
           expected_gtfs_sha256='edd76d5cb8d628cf63b81445c3a7524cb081f0652c4220f9f22f7920f8b4b035'
           expected_backup_sha256='56e2e05c343ba2d0f9bb2af3cb17c01eeaf00857cdad3b158bc22ed47d115a39'
@@ -1134,6 +1141,38 @@ jobs:
           case "$webroot/" in "$private_root/"*) exit 42 ;; esac
           test "$(stat -c '%a' "$private_root")" = 700
 
+          umask 077
+          temp_root="$(mktemp -d "$private_root/.cottbus-apply.XXXXXX")"
+          case "$temp_root/" in "$private_root/"*) ;; *) exit 43 ;; esac
+          test -d "$temp_root" && test ! -L "$temp_root"
+          chmod 700 "$temp_root"
+
+          validator="$temp_root/validate-cottbus-apply.php"
+          approval_file="$temp_root/cottbus-apply-source-approval.txt"
+          pre_result="$temp_root/cottbus-apply-preflight.json"
+          apply_result="$temp_root/cottbus-apply-result.json"
+          post_result="$temp_root/cottbus-apply-post-dry-run.json"
+          pre_state="$temp_root/cottbus-apply-pre-state.json"
+          safe_result="$temp_root/cottbus-apply-safe-result.json"
+          test_id_reader="$temp_root/read-test-company-id.php"
+          cleanup() {
+            cleanup_status=$?
+            trap - EXIT HUP INT TERM
+            set +e
+            for cleanup_file in "$validator" "$approval_file" "$pre_result" "$apply_result" \
+              "$post_result" "$pre_state" "$safe_result" "$test_id_reader"; do
+              if [ -e "$cleanup_file" ] || [ -L "$cleanup_file" ]; then
+                rm -f -- "$cleanup_file"
+              fi
+            done
+            rmdir -- "$temp_root" 2>/dev/null || true
+            exit "$cleanup_status"
+          }
+          trap cleanup EXIT
+          trap 'exit 129' HUP
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
           gtfs_source="$live_webroot/gtfs/data/gtfs/latest.zip"
           if [ ! -f "$gtfs_source" ] || [ -L "$gtfs_source" ]; then
             echo 'Freigegebene GTFS-Quelle fehlt, ist kein regulaeres File oder ist ein Symlink.' >&2
@@ -1145,15 +1184,6 @@ jobs:
             exit 1
           fi
 
-          validator="$private_root/validate-cottbus-apply.php"
-          approval_file="$private_root/cottbus-apply-source-approval.txt"
-          pre_result="$private_root/cottbus-apply-preflight.json"
-          apply_result="$private_root/cottbus-apply-result.json"
-          post_result="$private_root/cottbus-apply-post-dry-run.json"
-          pre_state="$private_root/cottbus-apply-pre-state.json"
-          safe_result="$private_root/cottbus-apply-safe-result.json"
-          test_id_reader="$private_root/read-test-company-id.php"
-
           cat > "$test_id_reader" <<'PHP'
           <?php
           try {
@@ -1164,6 +1194,20 @@ jobs:
           } catch (Throwable $error) { exit(1); }
           PHP
           chmod 600 "$test_id_reader"
+          legacy_helper="$private_root/read-test-company-id.php"
+          legacy_helper_found=NO
+          legacy_helper_removed=NO
+          if [ -e "$legacy_helper" ] || [ -L "$legacy_helper" ]; then
+            legacy_helper_found=YES
+            if [ ! -f "$legacy_helper" ] || [ -L "$legacy_helper" ] \
+              || [ "$(stat -c '%a' "$legacy_helper")" != 600 ] \
+              || ! cmp -s -- "$legacy_helper" "$test_id_reader"; then
+              echo 'Vorhandener read-test-company-id.php-Helfer ist nicht eindeutig diesem Workflow zuzuordnen.' >&2
+              exit 1
+            fi
+            rm -f -- "$legacy_helper"
+            legacy_helper_removed=YES
+          fi
           test_company_id="$(PROVISION_RESULT="$private_root/provision-result.json" php -q -f "$test_id_reader")"
           test_root="$private_root/companies/$test_company_id"
           test -d "$test_root"
@@ -1173,12 +1217,12 @@ jobs:
             if find "$root" -type l -print -quit | grep -q .; then return 1; fi
             (
               cd "$root"
-              while IFS= read -r -d '' file; do
-                relative="${file#./}"
-                size="$(stat -c '%s' "$file")"
-                sha="$(sha256sum "$file" | awk '{print $1}')"
-                printf '%s\0%s\0%s\n' "$relative" "$size" "$sha"
-              done < <(find . -type f -print0 | sort -z)
+              find . -type f -print0 | sort -z | while IFS= read -r -d '' file; do
+                  relative="${file#./}"
+                  size="$(stat -c '%s' "$file")"
+                  sha="$(sha256sum "$file" | awk '{print $1}')"
+                  printf '%s\0%s\0%s\n' "$relative" "$size" "$sha"
+                done
             ) | sha256sum | awk '{print $1}'
           }
           test_fingerprint_before="$(tree_fingerprint "$test_root")"
@@ -1285,6 +1329,8 @@ jobs:
               echo json_encode([
                   'READY_FOR_APPLY' => 'YES', 'APPLY_ORCHESTRATION_READY' => 'YES', 'BLOCKERS' => [],
                   'restore_point_verified' => true, 'target_status' => ['CREATE' => count($status)],
+                  'cottbus_fingerprint_before' => $pre['real_target']['target_fingerprint_before'] ?? null,
+                  'source_fingerprint' => $source,
                   'source_files_verified' => $pre['read_only_evidence']['source_files_verified_after_plan'] ?? null,
               ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
               exit;
@@ -1343,8 +1389,6 @@ jobs:
               || !chmod((string)getenv('SAFE_RESULT'), 0600)) apply_validation_fail('Sicherer Apply-Bericht konnte nicht geschrieben werden.');
           PHP
           chmod 600 "$validator"
-          rm -f -- "$approval_file" "$pre_result" "$apply_result" "$post_result" "$pre_state" "$safe_result"
-
           LEHRFAHRER_ENV=staging \
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
@@ -1359,6 +1403,20 @@ jobs:
           EXPECTED_BACKUP_SHA256="$expected_backup_sha256" PRE_RESULT="$pre_result" \
           APPROVAL_FILE="$approval_file" PRE_STATE="$pre_state" \
             php -q -f "$validator"
+
+          if [ "$apply_cottbus" != true ]; then
+            test_fingerprint_after="$(tree_fingerprint "$test_root")"
+            if [ "$test_fingerprint_before" != "$test_fingerprint_after" ]; then
+              echo 'lehrfahrer-test wurde durch den Preflight veraendert.' >&2
+              exit 1
+            fi
+            printf 'COTTBUS_PREFLIGHT_ONLY=YES\n'
+            printf 'LEHRFAHRER_TEST_FINGERPRINT_BEFORE=%s\n' "$test_fingerprint_before"
+            printf 'LEHRFAHRER_TEST_FINGERPRINT_AFTER=%s\n' "$test_fingerprint_after"
+            printf 'LEGACY_HELPER_FOUND=%s\n' "$legacy_helper_found"
+            printf 'LEGACY_HELPER_REMOVED=%s\n' "$legacy_helper_removed"
+            exit 0
+          fi
 
           source_approval="$(cat "$approval_file")"
           LEHRFAHRER_ENV=staging \
@@ -1395,9 +1453,24 @@ jobs:
           cat "$safe_result"
           printf 'LEHRFAHRER_TEST_FINGERPRINT_BEFORE=%s\n' "$test_fingerprint_before"
           printf 'LEHRFAHRER_TEST_FINGERPRINT_AFTER=%s\n' "$test_fingerprint_after"
-          rm -f -- "$validator" "$test_id_reader" "$approval_file" "$pre_result" \
-            "$apply_result" "$post_result" "$pre_state" "$safe_result"
+          printf 'LEGACY_HELPER_FOUND=%s\n' "$legacy_helper_found"
+          printf 'LEGACY_HELPER_REMOVED=%s\n' "$legacy_helper_removed"
           REMOTE_SCRIPT
+
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_CLEANUP_CHECK'
+          set -euo pipefail
+          private_root="$(cd "./$1" && pwd -P)"
+          if find "$private_root" -maxdepth 1 -name '.cottbus-apply.*' -print -quit | grep -q .; then
+            echo 'Privater Cottbus-Arbeitsbereich wurde nicht vollstaendig entfernt.' >&2
+            exit 1
+          fi
+          if [ -e "$private_root/read-test-company-id.php" ] || [ -L "$private_root/read-test-company-id.php" ]; then
+            echo 'Alter read-test-company-id.php-Helfer ist noch vorhanden.' >&2
+            exit 1
+          fi
+          echo 'COTTBUS_TEMP_CLEANUP=OK'
+          REMOTE_CLEANUP_CHECK
 
       - name: Verify live public content is unchanged
         shell: bash
