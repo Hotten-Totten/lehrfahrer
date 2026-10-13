@@ -568,6 +568,29 @@ jobs:
           chmod 600 "$private_root/cottbus-provision-result.json"
           cat "$private_root/cottbus-provision-result.json"
 
+          cat > "$private_root/report-cottbus-dry-run-error.php" <<'PHP'
+          <?php
+          $raw = (string)file_get_contents((string)getenv('COTTBUS_DRY_RUN_RESULT'));
+          if (str_starts_with($raw, "\xEF\xBB\xBF")) $raw = substr($raw, 3);
+          $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+          if (preg_match('/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*(\{.*\})\s*\z/isD', $raw, $matches) !== 1) {
+              file_put_contents('php://stderr', "Cottbus-Dry-Run lieferte keine klassifizierbare JSON-Ausgabe.\n");
+              exit;
+          }
+          try {
+              $data = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
+              $blockers = is_array($data['BLOCKERS'] ?? null) ? $data['BLOCKERS'] : [];
+              foreach ($blockers as $blocker) {
+                  $message = (string)$blocker;
+                  if (preg_match('/password|token|secret|credential|@/i', $message) === 1) {
+                      $message = '[redigierter Blocker]';
+                  }
+                  file_put_contents('php://stderr', 'Cottbus-Dry-Run-Blocker: ' . $message . "\n");
+              }
+          } catch (Throwable $error) {
+              file_put_contents('php://stderr', "Cottbus-Dry-Run-Blocker konnte nicht gelesen werden.\n");
+          }
+          PHP
           set +e
           LEHRFAHRER_ENV=staging \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
@@ -586,6 +609,8 @@ jobs:
           set -e
           chmod 600 "$private_root/cottbus-dry-run-result.json" "$private_root/cottbus-dry-run-stderr.raw"
           if [ "$dry_run_status" -ne 0 ] || [ -s "$private_root/cottbus-dry-run-stderr.raw" ]; then
+            COTTBUS_DRY_RUN_RESULT="$private_root/cottbus-dry-run-result.json" \
+              php -q -f "$private_root/report-cottbus-dry-run-error.php" >&2
             echo 'Realer Cottbus-Dry-Run ist fehlgeschlagen; Details bleiben privat.' >&2
             exit 1
           fi
@@ -671,6 +696,7 @@ jobs:
             "$private_root/validate-cottbus-result.php" \
             "$private_root/cottbus-provision-stdout.raw" \
             "$private_root/cottbus-provision-stderr.raw" \
+            "$private_root/report-cottbus-dry-run-error.php" \
             "$private_root/validate-cottbus-dry-run.php" \
             "$private_root/cottbus-dry-run-result.json" \
             "$private_root/cottbus-dry-run-stderr.raw"
