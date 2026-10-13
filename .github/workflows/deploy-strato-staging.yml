@@ -149,14 +149,14 @@ jobs:
         run: |
           set -euo pipefail
           remote="$STRATO_USER@$STRATO_HOST"
-          scp_run=(scp -O -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          ssh_run=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
-            scp_run+=(-i ~/.ssh/id_rsa)
+            ssh_run+=(-i ~/.ssh/id_rsa)
           else
-            scp_run=(sshpass -e "${scp_run[@]}")
+            ssh_run=(sshpass -e "${ssh_run[@]}")
           fi
-          live_zip='./lehrfahrer/gtfs/data/gtfs/latest.zip'
-          "${scp_run[@]}" "$remote:$live_zip" /tmp/lehrfahrer-live-gtfs.zip
+          live_zip='/mnt/web223/b3/15/5576715/htdocs/lehrfahrer/gtfs/data/gtfs/latest.zip'
+          "${ssh_run[@]}" "$remote" cat -- "$live_zip" > /tmp/lehrfahrer-live-gtfs.zip
           test "$(stat -c %s /tmp/lehrfahrer-live-gtfs.zip)" = '250380748'
           printf '%s  %s\n' \
             'edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035' \
