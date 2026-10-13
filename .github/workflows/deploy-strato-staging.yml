@@ -205,27 +205,32 @@ jobs:
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
           STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
           STAGING_AUTH_PATH: ${{ vars.STAGING_AUTH_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
         run: |
           set -euo pipefail
-          REMOTE="${{ secrets.STRATO_USER }}@${{ secrets.STRATO_HOST }}"
-          SSH_BASE=(ssh -p "${{ secrets.STRATO_PORT }}" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
-          SCP_BASE=(scp -P "${{ secrets.STRATO_PORT }}" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
-          if [ -n "${{ secrets.STRATO_SSH_KEY }}" ]; then
+          REMOTE="$STRATO_USER@$STRATO_HOST"
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          SCP_BASE=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
             SSH_BASE+=(-i ~/.ssh/id_rsa)
             SCP_BASE+=(-i ~/.ssh/id_rsa)
-            RSYNC_SSH="ssh -p ${{ secrets.STRATO_PORT }} -i ~/.ssh/id_rsa -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            RSYNC_SSH="ssh -p $STRATO_PORT -i ~/.ssh/id_rsa -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
             SSH_RUN=("${SSH_BASE[@]}")
             SCP_RUN=("${SCP_BASE[@]}")
             RSYNC_RUN=(rsync)
           else
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
             SCP_RUN=(sshpass -e "${SCP_BASE[@]}")
-            RSYNC_SSH="ssh -p ${{ secrets.STRATO_PORT }} -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            RSYNC_SSH="ssh -p $STRATO_PORT -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
             RSYNC_RUN=(sshpass -e rsync)
           fi
 
@@ -255,7 +260,7 @@ jobs:
             "$REMOTE:./$STAGING_AUTH_PATH/"
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '${{ secrets.STRATO_TARGET_PATH }}'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
