@@ -159,8 +159,12 @@ jobs:
           "${ssh_run[@]}" "$remote" cat -- "$live_zip" > /tmp/lehrfahrer-live-gtfs.zip
           test "$(stat -c %s /tmp/lehrfahrer-live-gtfs.zip)" = '250380748'
           actual_hash="$(sha256sum /tmp/lehrfahrer-live-gtfs.zip | cut -d ' ' -f 1)"
-          test "$actual_hash" = 'edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035'
-          printf 'SOURCE_HASH_MATCH=YES\n'
+          printf 'SOURCE_SHA256=%s\n' "$actual_hash"
+          if [ "$actual_hash" = 'edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035' ]; then
+            printf 'SOURCE_HASH_MATCH=YES\n'
+          else
+            printf 'SOURCE_HASH_MATCH=NO\n'
+          fi
 
           python <<'PY'
           import csv, hashlib, io, json, zipfile
