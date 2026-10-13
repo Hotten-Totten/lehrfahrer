@@ -2,6 +2,7 @@ name: Deploy staging to Strato
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  STOP_TIMES_PROBE_ONLY: "1"
 
 on:
   push:
@@ -137,7 +138,179 @@ jobs:
             ssh-keyscan -p "${{ secrets.STRATO_PORT }}" "${{ secrets.STRATO_HOST }}" >> ~/.ssh/known_hosts
           fi
 
+      - name: Analyze live stop_times read-only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          remote="$STRATO_USER@$STRATO_HOST"
+          scp_run=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            scp_run+=(-i ~/.ssh/id_rsa)
+          else
+            scp_run=(sshpass -e "${scp_run[@]}")
+          fi
+          live_zip='/mnt/web223/b3/15/5576715/htdocs/lehrfahrer/gtfs/data/gtfs/latest.zip'
+          "${scp_run[@]}" "$remote:$live_zip" /tmp/lehrfahrer-live-gtfs.zip
+          test "$(stat -c %s /tmp/lehrfahrer-live-gtfs.zip)" = '250380748'
+          printf '%s  %s\n' \
+            'edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035' \
+            /tmp/lehrfahrer-live-gtfs.zip | sha256sum --check --status
+
+          python <<'PY'
+          import csv, hashlib, io, json, zipfile
+          from collections import Counter
+
+          archive = '/tmp/lehrfahrer-live-gtfs.zip'
+          members = ('stop_times.txt', 'trips.txt', 'routes.txt')
+          paths = {name: '/tmp/' + name for name in members}
+          with zipfile.ZipFile(archive) as source:
+              for name, path in paths.items():
+                  with source.open(name) as src, open(path, 'wb') as dst:
+                      while chunk := src.read(1024 * 1024):
+                          dst.write(chunk)
+
+          raw_counts = {'crlf': 0, 'bare_lf': 0, 'bare_cr': 0, 'quotes': 0}
+          previous_cr = False
+          first = True
+          bom = False
+          with open(paths['stop_times.txt'], 'rb') as stream:
+              while chunk := stream.read(1024 * 1024):
+                  if first:
+                      bom = chunk.startswith(b'\xef\xbb\xbf')
+                      first = False
+                  raw_counts['quotes'] += chunk.count(b'"')
+                  crlf = chunk.count(b'\r\n')
+                  if previous_cr and chunk.startswith(b'\n'):
+                      crlf += 1
+                  raw_counts['crlf'] += crlf
+                  raw_counts['bare_lf'] += chunk.count(b'\n') - crlf
+                  raw_counts['bare_cr'] += chunk.count(b'\r') - crlf
+                  previous_cr = chunk.endswith(b'\r')
+
+          def table(path):
+              with open(path, 'r', encoding='utf-8-sig', newline='') as stream:
+                  reader = csv.DictReader(stream, strict=True)
+                  return list(reader)
+
+          routes = {row.get('route_id', ''): row.get('agency_id', '') for row in table(paths['routes.txt'])}
+          trips = {row.get('trip_id', ''): row.get('route_id', '') for row in table(paths['trips.txt'])}
+          field_counts = Counter()
+          bad = []
+          blank_rows = 0
+          empty_fields = False
+          embedded_commas = False
+          quoted_fields = raw_counts['quotes'] > 0
+          with open(paths['stop_times.txt'], 'r', encoding='utf-8-sig', newline='') as stream:
+              reader = csv.reader(stream, strict=True)
+              header = next(reader)
+              expected = len(header)
+              trip_index = header.index('trip_id') if 'trip_id' in header else None
+              stop_index = header.index('stop_id') if 'stop_id' in header else None
+              sequence_index = header.index('stop_sequence') if 'stop_sequence' in header else None
+              record = 1
+              while True:
+                  try:
+                      row = next(reader)
+                  except StopIteration:
+                      break
+                  except csv.Error as error:
+                      bad.append({'record': record + 1, 'physical_line': reader.line_num,
+                                  'parsed_fields': None, 'error': str(error), 'agency_id': None})
+                      record += 1
+                      continue
+                  record += 1
+                  if not row:
+                      blank_rows += 1
+                      continue
+                  field_counts[len(row)] += 1
+                  empty_fields = empty_fields or any(value == '' for value in row)
+                  embedded_commas = embedded_commas or any(',' in value for value in row)
+                  if len(row) != expected:
+                      def value_at(index):
+                          return row[index] if index is not None and index < len(row) else None
+                      trip_id = value_at(trip_index)
+                      route_id = trips.get(trip_id or '')
+                      agency_id = routes.get(route_id or '')
+                      bad.append({
+                          'record': record,
+                          'physical_line': reader.line_num,
+                          'expected_fields': expected,
+                          'parsed_fields': len(row),
+                          'trip_id': trip_id,
+                          'stop_id': value_at(stop_index),
+                          'stop_sequence': value_at(sequence_index),
+                          'route_id': route_id,
+                          'agency_id': agency_id,
+                          'cottbus_relevant': agency_id == '143',
+                      })
+
+          standard = {
+              'trip_id', 'arrival_time', 'departure_time', 'stop_id', 'location_group_id',
+              'location_id', 'stop_sequence', 'stop_headsign', 'start_pickup_drop_off_window',
+              'end_pickup_drop_off_window', 'pickup_type', 'drop_off_type',
+              'continuous_pickup', 'continuous_drop_off', 'shape_dist_traveled', 'timepoint',
+              'pickup_booking_rule_id', 'drop_off_booking_rule_id'
+          }
+          summary = {
+              'encoding': 'UTF-8', 'bom': bom, 'line_endings': raw_counts,
+              'delimiter': ',', 'header': header, 'expected_fields': expected,
+              'unknown_extension_columns': [name for name in header if name not in standard],
+              'quoted_fields_present': quoted_fields, 'embedded_commas_present': embedded_commas,
+              'empty_fields_present': empty_fields, 'blank_rows': blank_rows,
+              'field_count_distribution': dict(sorted(field_counts.items())),
+              'problem_rows': len(bad),
+              'cottbus_relevant_problem_rows': sum(item.get('cottbus_relevant') is True for item in bad),
+              'foreign_problem_rows': sum(item.get('cottbus_relevant') is False for item in bad),
+              'unresolved_problem_rows': sum(item.get('cottbus_relevant') is None for item in bad),
+              'details': bad[:20],
+              'details_truncated': len(bad) > 20,
+          }
+          print('RFC_CSV_ANALYSIS=' + json.dumps(summary, ensure_ascii=True, sort_keys=True))
+          PY
+
+          php <<'PHP'
+          <?php
+          function scan(string $path, bool $explicitEscape): array {
+              $stream = fopen($path, 'rb');
+              $header = $explicitEscape ? fgetcsv($stream, null, ',', '"', '') : fgetcsv($stream);
+              $expected = count($header);
+              $tripIndex = array_search('trip_id', $header, true);
+              $record = 1;
+              $bad = [];
+              $counts = [];
+              while (($row = $explicitEscape ? fgetcsv($stream, null, ',', '"', '') : fgetcsv($stream)) !== false) {
+                  $record++;
+                  if ($row === [null] || $row === []) continue;
+                  $count = count($row);
+                  $counts[$count] = ($counts[$count] ?? 0) + 1;
+                  if ($count !== $expected) {
+                      $bad[] = [
+                          'record' => $record,
+                          'byte_after_record' => ftell($stream),
+                          'expected_fields' => $expected,
+                          'parsed_fields' => $count,
+                          'trip_id' => is_int($tripIndex) && isset($row[$tripIndex]) ? $row[$tripIndex] : null,
+                      ];
+                  }
+              }
+              fclose($stream);
+              ksort($counts, SORT_NUMERIC);
+              return ['expected_fields' => $expected, 'field_count_distribution' => $counts,
+                  'problem_rows' => count($bad), 'details' => array_slice($bad, 0, 20),
+                  'details_truncated' => count($bad) > 20];
+          }
+          echo 'PHP_DEFAULT_ESCAPE=' . json_encode(scan('/tmp/stop_times.txt', false), JSON_UNESCAPED_SLASHES) . "\n";
+          echo 'PHP_RFC_ESCAPE=' . json_encode(scan('/tmp/stop_times.txt', true), JSON_UNESCAPED_SLASHES) . "\n";
+          PHP
+
       - name: Build private staging runtime files
+        if: env.STOP_TIMES_PROBE_ONLY != '1'
         shell: bash
         env:
           STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
@@ -202,6 +375,7 @@ jobs:
             /tmp/lehrfahrer-staging.htpasswd
 
       - name: Deploy only to isolated staging paths
+        if: env.STOP_TIMES_PROBE_ONLY != '1'
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -735,6 +909,7 @@ jobs:
             "$valid_status" "$auth_permission_mode"
 
       - name: Staging HTTP, runtime, login and session smoke test
+        if: env.STOP_TIMES_PROBE_ONLY != '1'
         shell: bash
         env:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
@@ -835,6 +1010,7 @@ jobs:
           test "$logged_out_status" = 302
 
       - name: Verify live public content is unchanged
+        if: env.STOP_TIMES_PROBE_ONLY != '1'
         shell: bash
         run: |
           set -euo pipefail
