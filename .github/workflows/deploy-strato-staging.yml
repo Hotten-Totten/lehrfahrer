@@ -160,6 +160,7 @@ jobs:
           test "$(stat -c %s /tmp/lehrfahrer-live-gtfs.zip)" = '250380748'
           actual_hash="$(sha256sum /tmp/lehrfahrer-live-gtfs.zip | cut -d ' ' -f 1)"
           printf 'SOURCE_SHA256=%s\n' "$actual_hash"
+          printf 'SOURCE_SHA256_SEGMENTED=%s\n' "$(printf '%s' "$actual_hash" | sed 's/./&:/g')"
           if [ "$actual_hash" = 'edd76d5cb8d628cf63b81445c3a7524cb081f0652c42200f9f22f7920f8b4b035' ]; then
             printf 'SOURCE_HASH_MATCH=YES\n'
           else
@@ -311,6 +312,73 @@ jobs:
           }
           echo 'PHP_DEFAULT_ESCAPE=' . json_encode(scan('/tmp/stop_times.txt', false), JSON_UNESCAPED_SLASHES) . "\n";
           echo 'PHP_RFC_ESCAPE=' . json_encode(scan('/tmp/stop_times.txt', true), JSON_UNESCAPED_SLASHES) . "\n";
+
+          function keyedTable(string $path, string $key): array {
+              $stream = fopen($path, 'rb');
+              $header = fgetcsv($stream, null, ',', '"', '');
+              $result = [];
+              while (($values = fgetcsv($stream, null, ',', '"', '')) !== false) {
+                  if ($values === [null] || count($values) !== count($header)) continue;
+                  $row = array_combine($header, $values);
+                  $result[(string)($row[$key] ?? '')] = $row;
+              }
+              fclose($stream);
+              return $result;
+          }
+          $routes = keyedTable('/tmp/routes.txt', 'route_id');
+          $trips = keyedTable('/tmp/trips.txt', 'trip_id');
+          $stream = fopen('/tmp/stop_times.txt', 'rb');
+          $headerLine = fgets($stream);
+          $header = str_getcsv($headerLine, ',', '"', '');
+          $expected = count($header);
+          $physicalLine = 1;
+          $affected = 0;
+          $cottbus = 0;
+          $foreign = 0;
+          $unresolved = 0;
+          $details = [];
+          while (($line = fgets($stream)) !== false) {
+              $physicalLine++;
+              $rfc = str_getcsv($line, ',', '"', '');
+              $legacy = str_getcsv($line);
+              if (count($rfc) !== $expected || count($legacy) === $expected) continue;
+              $affected++;
+              $row = array_combine($header, $rfc);
+              $tripId = (string)($row['trip_id'] ?? '');
+              $routeId = (string)($trips[$tripId]['route_id'] ?? '');
+              $agencyId = $routeId !== '' ? (string)($routes[$routeId]['agency_id'] ?? '') : '';
+              if ($agencyId === '143') $cottbus++;
+              elseif ($agencyId !== '') $foreign++;
+              else $unresolved++;
+              if (count($details) < 20) {
+                  $backslashColumns = [];
+                  $trailingBackslashColumns = [];
+                  foreach ($row as $column => $value) {
+                      if (str_contains((string)$value, '\\')) $backslashColumns[] = $column;
+                      if (str_ends_with((string)$value, '\\')) $trailingBackslashColumns[] = $column;
+                  }
+                  $details[] = [
+                      'physical_line' => $physicalLine,
+                      'expected_fields' => $expected,
+                      'legacy_fields' => count($legacy),
+                      'trip_id' => $tripId,
+                      'route_id' => $routeId,
+                      'agency_id' => $agencyId,
+                      'cottbus_relevant' => $agencyId === '143',
+                      'backslash_columns' => $backslashColumns,
+                      'trailing_backslash_columns' => $trailingBackslashColumns,
+                  ];
+              }
+          }
+          fclose($stream);
+          echo 'PHP_LINE_ANALYSIS=' . json_encode([
+              'affected_physical_lines' => $affected,
+              'cottbus_relevant' => $cottbus,
+              'foreign_agencies' => $foreign,
+              'unresolved' => $unresolved,
+              'details' => $details,
+              'details_truncated' => $affected > count($details),
+          ], JSON_UNESCAPED_SLASHES) . "\n";
           PHP
 
       - name: Build private staging runtime files
