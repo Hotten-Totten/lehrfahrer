@@ -123,3 +123,11 @@ test('Manueller Workflow hat einmaliges Gate und speichert nur verschluesseltes 
   assert.match(workflow, /rm -- "\$delivery"/);
   assert.doesNotMatch(workflow, /(?:cat|echo|printf)[^\n]*\$result\['token'\]/);
 });
+
+test('Aktivierungsseite erlaubt den geschuetzten Same-Origin-POST trotz restriktiver CSP', () => {
+  const page = fs.readFileSync(path.join(root, 'activate.php'), 'utf8');
+  const client = fs.readFileSync(path.join(root, 'js/activate.js'), 'utf8');
+  assert.match(page, /Content-Security-Policy:[^\n]*connect-src 'self'/);
+  assert.match(client, /fetch\('api\/auth\/activate\.php'/);
+  assert.match(client, /credentials: 'same-origin'/);
+});
