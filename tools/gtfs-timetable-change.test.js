@@ -294,3 +294,14 @@ test('Q: Fahrer-App fordert explizit nur freigegebene Routen an', () => {
   assert.match(editor, /Alle Varianten vorbereiten|workPrepareAll/);
   assert.match(editor, /buildStreetRouteFromStops\(\)/);
 });
+
+test('R: einmalige Staging-Vorbereitung ist hart auf Umgebung, Bestand und 75\/678 begrenzt', () => {
+  const tool = fs.readFileSync(path.join(root, 'tools', 'prepare-cottbus-gtfs-work-staging.php'), 'utf8');
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'prepare-cottbus-gtfs-work-staging.yml'), 'utf8');
+  assert.match(tool, /LEHRFAHRER_ENV[\s\S]*staging/);
+  assert.match(tool, /routes'\] !== 75|routes'\]\s*!==\s*75/);
+  assert.match(tool, /variants'\] !== 678|variants'\]\s*!==\s*678/);
+  assert.match(tool, /protected_data_unchanged/);
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /live_before[\s\S]*live_after/);
+});

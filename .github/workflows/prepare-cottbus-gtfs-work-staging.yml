@@ -1,0 +1,93 @@
+name: Prepare Cottbus GTFS work inventory on staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-cottbus-gtfs-work-staging
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+      STRATO_USER: ${{ secrets.STRATO_USER }}
+      STRATO_HOST: ${{ secrets.STRATO_HOST }}
+      STRATO_PORT: ${{ secrets.STRATO_PORT }}
+      STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+      STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+      STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+      LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - name: Validate staging-only request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = staging
+          test -n "$STAGING_TARGET_PATH"
+          test -n "$STAGING_PRIVATE_PATH"
+          test "$STAGING_TARGET_PATH" != "$LIVE_TARGET_PATH"
+
+      - name: Prepare SSH client
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            printf '%s\n' "$STRATO_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y sshpass >/dev/null
+          fi
+          if [ -n "${{ secrets.STRATO_KNOWN_HOSTS }}" ]; then
+            printf '%s\n' "${{ secrets.STRATO_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$STRATO_PORT" "$STRATO_HOST" >> ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Prepare exactly the current Cottbus inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          scp_base=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_run=("${ssh_base[@]}" -i ~/.ssh/id_rsa)
+            scp_run=("${scp_base[@]}" -i ~/.ssh/id_rsa)
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+            scp_run=(sshpass -e "${scp_base[@]}")
+          fi
+          "${scp_run[@]}" tools/prepare-cottbus-gtfs-work-staging.php "$remote:./$STAGING_PRIVATE_PATH/"
+          "${ssh_run[@]}" "$remote" "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          live_target="${3#/}"
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then live_root="$(pwd -P)"; else live_root="$(cd "./$live_target" && pwd -P)"; fi
+          test "$webroot" != "$live_root"
+          test "$private_root" != "$live_root"
+          live_before="$(find "$live_root" -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum)"
+          cleanup() { rm -f -- "$private_root/prepare-cottbus-gtfs-work-staging.php"; }
+          trap cleanup EXIT
+          LEHRFAHRER_APP_ROOT="$webroot" php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+            -f "$private_root/prepare-cottbus-gtfs-work-staging.php"
+          live_after="$(find "$live_root" -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum)"
+          test "$live_before" = "$live_after"
+          printf 'Live unveraendert: JA\n'
+          REMOTE
