@@ -396,6 +396,14 @@ function updateApiTokenStatusUI() {
   const el = document.getElementById("apiTokenStatus");
   if (!el) return;
 
+  if (getSessionCsrfToken()) {
+    el.classList.add("token-status-on");
+    el.classList.remove("token-status-off");
+    el.textContent = "Sitzung: aktiv";
+    el.title = "Schreibzugriff über die aktuelle Anmeldung";
+    return;
+  }
+
   const token = getApiToken();
   const active = !!token;
 
@@ -471,8 +479,8 @@ async function testApiWriteAuth() {
 
     if (response.status === 403) {
       showInfoPopup({
-        title: "Schreibzugriff gesperrt, Token überprüfen",
-        message: "Der gespeicherte API-Token fehlt oder passt nicht zum Server.",
+        title: "Schreibzugriff gesperrt",
+        message: "Die aktuelle Anmeldung besitzt keinen gültigen Schreibzugriff.",
         level: "error"
       });
 
@@ -486,7 +494,7 @@ async function testApiWriteAuth() {
         return;
       }
 
-      setStatus("Schreibzugriff gesperrt: Token fehlt oder ist ungültig.", "error");
+      setStatus("Schreibzugriff gesperrt: Sitzung oder Berechtigung ungültig.", "error");
       return;
     }
 
@@ -494,7 +502,7 @@ async function testApiWriteAuth() {
       setStatus("Schreibzugriff ok: Authentifizierung erfolgreich.", "success");
       showInfoPopup({
         title: "Schreibzugriff ok",
-        message: "Der API-Token wurde akzeptiert. Schreibzugriffe sind authentifiziert.",
+        message: "Die aktuelle Sitzung ist für Schreibzugriffe authentifiziert.",
         level: "success"
       });
       return;
@@ -504,7 +512,7 @@ async function testApiWriteAuth() {
       setStatus("API-Test erfolgreich.", "success");
       showInfoPopup({
         title: "Schreibzugriff ok",
-        message: "Der API-Token wurde akzeptiert.",
+        message: "Die aktuelle Sitzung wurde akzeptiert.",
         level: "success"
       });
       return;

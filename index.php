@@ -49,6 +49,26 @@ header('X-Content-Type-Options: nosniff');
 if ($method === 'HEAD') exit;
 
 $editor = __DIR__ . '/index.html';
-if (!is_file($editor) || readfile($editor) === false) {
+if (!is_file($editor)) {
     lehrfahrer_editor_response(500, 'Oberfläche konnte nicht geladen werden.');
 }
+
+$editorHtml = file_get_contents($editor);
+if ($editorHtml === false) {
+    lehrfahrer_editor_response(500, 'Oberfläche konnte nicht geladen werden.');
+}
+
+$csrfToken = lehrfahrer_auth_csrf_token((string)$session['_session_token']);
+$csrfMeta = '<meta name="lehrfahrer-csrf-token" content="'
+    . htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+$editorHtml = str_replace(
+    '<meta name="lehrfahrer-csrf-token" content="">',
+    $csrfMeta,
+    $editorHtml,
+    $csrfPlaceholderCount
+);
+if ($csrfPlaceholderCount !== 1) {
+    lehrfahrer_editor_response(500, 'Oberfläche konnte nicht sicher initialisiert werden.');
+}
+
+echo $editorHtml;

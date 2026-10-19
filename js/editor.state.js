@@ -191,11 +191,19 @@ function clearApiToken() {
   }
 }
 
+function getSessionCsrfToken() {
+  const meta = document.querySelector('meta[name="lehrfahrer-csrf-token"]');
+  return meta ? String(meta.content || "").trim() : "";
+}
+
 function withApiAuthHeaders(baseHeaders = {}) {
   const headers = { ...baseHeaders };
-  const token = getApiToken();
-  if (token) {
-    headers["X-Api-Token"] = token;
+  const csrfToken = getSessionCsrfToken();
+  if (csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  } else {
+    const token = getApiToken();
+    if (token) headers["X-Api-Token"] = token;
   }
   return headers;
 }

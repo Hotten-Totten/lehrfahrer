@@ -215,6 +215,8 @@ test('Root-Einstieg liefert den Editor nur mit gültiger Session und routes.read
   assert.equal(editor.response.status, 200, editor.text);
   assert.match(editor.response.headers.get('content-type') || '', /^text\/html/);
   assert.match(editor.text, /<title>Linien-Editor<\/title>/);
+  assert.match(editor.text, new RegExp(`<meta name="lehrfahrer-csrf-token" content="${loggedIn.body.csrfToken}">`));
+  assert.doesNotMatch(editor.text, /<meta name="lehrfahrer-csrf-token" content="">/);
 
   const withoutRole = await login({ login: unprivilegedUser.login_normalized });
   const denied = await request('/index.php', { cookie: sessionCookie(withoutRole.response).cookie });
@@ -383,4 +385,13 @@ test('Apache-Root und direkter Legacy-Einstieg verwenden den serverseitigen Sess
   assert.match(gate, /userCapabilities/);
   assert.match(gate, /routes\.read/);
   assert.match(gate, /Location: login\.html/);
+  assert.match(gate, /lehrfahrer_auth_csrf_token/);
+});
+
+test('Editor sendet Session-CSRF bei Schreibzugriffen und nutzt den Legacy-Token nur als Fallback', () => {
+  const html = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+  const state = fs.readFileSync(path.join(projectRoot, 'js', 'editor.state.js'), 'utf8');
+  assert.match(html, /<meta name="lehrfahrer-csrf-token" content="">/);
+  assert.match(state, /headers\["X-CSRF-Token"\] = csrfToken/);
+  assert.match(state, /else \{\s*const token = getApiToken\(\)/);
 });

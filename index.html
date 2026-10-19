@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Linien-Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="lehrfahrer-csrf-token" content="">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
@@ -12,7 +13,7 @@
 
 <link rel="stylesheet" href="editor.css?v=V2.1.063">
 </head>
-<body data-editor-version="V2.1.063">
+<body data-editor-version="V2.1.064">
 
   <div id="menubar">
 
@@ -30,9 +31,7 @@
           <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="Fertigen oder abgebrochenen GTFS-Turboindex auf Variantenanzahl und Speicherbedarf untersuchen">GTFS-Index analysieren</button>
           <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
-          <button type="button" class="menu-item" onclick="setApiTokenViaPrompt()" title="API-Token lokal im Browser speichern, damit Schreib-APIs auf dem Server authentifiziert werden">API-Token setzen …</button>
-          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft, ob Schreibzugriff mit aktuellem API-Token funktioniert">API-Token testen</button>
-          <button type="button" class="menu-item" onclick="clearApiTokenViaPrompt()" title="Löscht den lokal gespeicherten API-Token im Browser">API-Token löschen</button>
+          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft den Schreibzugriff der aktuellen Sitzung">Schreibzugriff testen</button>
           <button type="button" class="menu-item" onclick="importLineFromVbbPrompt()" title="Linienvarianten suchen und ihre Haltestellenfolge in den Editor laden">VBB-Haltestellenfolge importieren …</button>
           <button type="button" class="menu-item" onclick="setVbbAccessIdViaPrompt()" title="VBB Access-ID lokal im Browser speichern, damit sie beim Import nicht neu eingegeben werden muss">VBB Access-ID setzen …</button>
           <button type="button" class="menu-item" onclick="clearVbbAccessIdViaPrompt()" title="Löscht die lokal gespeicherte VBB Access-ID">VBB Access-ID löschen</button>
@@ -198,13 +197,13 @@
 
       <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
 
-<span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.063</span>
-      <span id="apiTokenStatus" class="token-status token-status-off" title="Status des lokal gespeicherten API-Tokens">API-Token: aus</span>
+<span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.064</span>
+      <span id="apiTokenStatus" class="token-status token-status-on" title="Schreibzugriff über die aktuelle Anmeldung">Sitzung: aktiv</span>
       <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
       <span
         class="token-help"
-        title="Wofür ist der API-Token?&#10;Der Token schützt Schreibaktionen (Speichern, Löschen, Orte anlegen) auf dem Server.&#10;Nur wer den Token kennt, darf Änderungen an den Linien-Daten vornehmen.&#10;Der Token wird lokal in diesem Browser gespeichert und bei API-Anfragen mitgesendet."
-        aria-label="Hilfe zum API-Token"
+        title="Schreibaktionen werden über die aktuelle Anmeldung, Rollen und Berechtigungen geschützt."
+        aria-label="Hilfe zum Schreibzugriff"
       >?</span>
     </div>
 
@@ -740,8 +739,14 @@
       if (typeof window.withApiAuthHeaders !== "function") {
         window.withApiAuthHeaders = function (baseHeaders) {
           var headers = Object.assign({}, baseHeaders || {});
-          var token = window.getApiToken();
-          if (token) headers["X-Api-Token"] = token;
+          var csrfMeta = document.querySelector('meta[name="lehrfahrer-csrf-token"]');
+          var csrfToken = csrfMeta ? String(csrfMeta.content || "").trim() : "";
+          if (csrfToken) {
+            headers["X-CSRF-Token"] = csrfToken;
+          } else {
+            var token = window.getApiToken();
+            if (token) headers["X-Api-Token"] = token;
+          }
           return headers;
         };
       }
@@ -751,7 +756,7 @@
   <script>window.stopCatalog = [];</script>
   <script src="js/editor.map-adapter.js?v=V2.1.063"></script>
 
-  <script src="js/editor.state.js?v=V2.1.063"></script>
+  <script src="js/editor.state.js?v=V2.1.064"></script>
   <script src="js/editor.dom.js?v=V2.1.063"></script>
   <script src="js/editor.debug.js?v=V2.1.063"></script>
   <script src="js/editor.ui.js?v=V2.1.063"></script>
@@ -769,7 +774,7 @@
   <script src="js/editor.help.js?v=V2.1.063"></script>
   <script src="js/editor.history.js?v=V2.1.063"></script>
   <script src="js/editor.linelogic.js?v=V2.1.063"></script>
-  <script src="js/editor.main.js?v=V2.1.063"></script>
+  <script src="js/editor.main.js?v=V2.1.064"></script>
   <script src="js/editor.events.js?v=V2.1.063"></script>
   <script src="js/editor.fetchStops.js?v=V2.1.063"></script>
   <script>
