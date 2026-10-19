@@ -1799,6 +1799,29 @@ async function openGtfsWorkInventory() {
   try {
     const result = await postGtfsImport({ action: "workInventory" });
     renderGtfsWorkInventory(result.inventory);
+    const box = document.getElementById("gtfsVersionInfo");
+    if (box) {
+      box.textContent = "Wird geladen …";
+      try {
+        const { version } = await postGtfsImport({ action: "serverInfo" });
+        const fields = [
+          `Stand/Datum: ${version.stand} (${version.standBasis})`,
+          `Importdatum: ${version.importedAt || version.importDateNote}`,
+          `Quelle: ${version.source}${version.sourceUrl ? ` (${version.sourceUrl})` : ""}`,
+          `Dateiname: ${version.filename}`,
+          `Dateigröße: ${Number(version.sizeBytes).toLocaleString("de-DE")} Byte`,
+          `SHA-256: ${version.sha256}`,
+          `Linien/Varianten im Index: ${version.lineCount ?? "?"}/${version.variantCount ?? "?"}`
+        ];
+        box.replaceChildren(...fields.map(value => {
+          const row = document.createElement("div");
+          row.textContent = value;
+          return row;
+        }));
+      } catch (err) {
+        box.textContent = err.message || "GTFS-Versionsinfo konnte nicht geladen werden.";
+      }
+    }
   } catch (err) {
     setStatus(err.message || "GTFS-Arbeitsvorrat konnte nicht geladen werden.", "error");
   }

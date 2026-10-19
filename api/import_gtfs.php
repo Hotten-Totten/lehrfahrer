@@ -4,6 +4,7 @@ require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_gtfs_version.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -1464,6 +1465,7 @@ try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
+    if ($action === 'serverinfo') gtfs_reply(['ok' => true, 'version' => lehrfahrer_gtfs_version_info(gtfs_server_zip_path(), gtfs_index_path())]);
     if ($action === 'indexagencies') gtfs_handle_index_agencies();
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
