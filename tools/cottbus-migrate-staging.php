@@ -31,6 +31,7 @@ const COTTBUS_TENANT_AREAS = [
     'lines', 'cities', 'drivers', 'trainings', 'packages',
     'documents', 'catalogs', 'settings', 'imports',
 ];
+const COTTBUS_CITY_MANAGEMENT_LOCK = '.city-management.lock';
 const COTTBUS_LEGACY_STOP_MAPPING = [
     'hst_3065' => ['target' => '333542', 'name' => 'südeck', 'max_distance_m' => 10.0],
     'hst_697' => ['target' => '59738', 'name' => 'sportzentrum', 'max_distance_m' => 10.0],
@@ -184,6 +185,13 @@ function cottbusPath(string $root, string ...$segments): string {
     return $path;
 }
 
+function cottbusExistingEntryPath(string $root, string $segment): string {
+    if ($segment !== COTTBUS_CITY_MANAGEMENT_LOCK) return cottbusPath($root, $segment);
+    $path = $root . DIRECTORY_SEPARATOR . COTTBUS_CITY_MANAGEMENT_LOCK;
+    if (!cottbusInside($root, $path)) cottbusFail('Pfad verlaesst die erlaubte Root-Grenze.');
+    return $path;
+}
+
 function cottbusRelative(string $root, string $path): string {
     if (!cottbusInside($root, $path)) cottbusFail('Pfad verlaesst die erlaubte Root-Grenze.');
     return ltrim(substr(cottbusNormalizePath($path), strlen(cottbusNormalizePath($root))), '/');
@@ -200,7 +208,7 @@ function cottbusFiles(string $root): array {
         if ($entries === false) cottbusFail('Verzeichnis konnte nicht gelesen werden.');
         foreach ($entries as $entry) {
             if ($entry === '.' || $entry === '..') continue;
-            $path = cottbusPath($directory, $entry);
+            $path = cottbusExistingEntryPath($directory, $entry);
             if (is_link($path)) cottbusFail('Symlink/Junction erkannt: ' . $entry);
             if (is_dir($path)) $pending[] = $path;
             elseif (is_file($path)) $files[] = $path;
@@ -1399,7 +1407,10 @@ function cottbusValidateCompanyRecord(?array $record): void {
 function cottbusExistingTargetStatus(string $stagingRoot, string $company, array $targetFiles): array {
     $prefix = 'companies/' . $company . '/';
     $companyRoot = cottbusPath(cottbusPath($stagingRoot, 'companies'), $company);
-    $knownTemplate = ['settings/company.json' => true];
+    $knownTemplate = [
+        'settings/company.json' => true,
+        'settings/' . COTTBUS_CITY_MANAGEMENT_LOCK => true,
+    ];
     $knownTargets = [];
     $status = [];
     foreach ($targetFiles as $logical => $content) {
