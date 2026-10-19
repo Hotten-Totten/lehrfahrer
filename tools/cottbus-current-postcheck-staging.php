@@ -43,7 +43,9 @@ try {
     $settingsRaw = (string)file_get_contents($settingsPath);
     $settingsObject = json_decode($settingsRaw, false, 512, JSON_THROW_ON_ERROR);
     $settings = json_decode($settingsRaw, true, 512, JSON_THROW_ON_ERROR);
-    if (!$settingsObject instanceof stdClass || !is_array($settings)) throw new RuntimeException('Cottbus-Einstellungen sind kein gueltiges Stadt-Objekt.');
+    if (!is_array($settings) || (!$settingsObject instanceof stdClass && $settingsObject !== [])) {
+        throw new RuntimeException('Cottbus-Einstellungen sind kein gueltiger Stadt-Katalog (JSON-Typ: ' . get_debug_type($settingsObject) . ').');
+    }
     foreach ($settings as $city => $entry) {
         if (!is_string($city) || preg_match('/^[a-z0-9_-]+$/D', $city) !== 1 || !is_array($entry)
             || (isset($entry['dispatchPhone']) && !is_string($entry['dispatchPhone']))) {
