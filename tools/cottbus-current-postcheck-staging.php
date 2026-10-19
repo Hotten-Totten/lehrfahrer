@@ -22,7 +22,11 @@ try {
     $validated = lehrfahrer_gtfs_validate_variant_index($index, [$agencyId]);
     if ($validated['routes'] !== 75 || $validated['variants'] !== 678) throw new RuntimeException('Cottbus-Index ist nicht 75/678.');
     $version = lehrfahrer_gtfs_version_info($zip, $index, LEHRFAHRER_GTFS_COTTBUS_NAME);
-    if ($version['indexMatchesZip'] !== true) throw new RuntimeException('GTFS-ZIP und Index passen nicht zusammen.');
+    if (preg_match('/^[a-f0-9]{64}$/D', strval($version['sha256'] ?? '')) !== 1
+        || preg_match('/^[a-f0-9]{64}$/D', strval($version['indexSourceSha256'] ?? '')) !== 1
+        || $version['indexMatchesZip'] !== true) {
+        throw new RuntimeException('GTFS-ZIP- und Index-Quell-SHA fehlen oder passen nicht zusammen.');
+    }
     if (!is_file($inventoryPath) || is_link($inventoryPath)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
     $inventory = json_decode((string)file_get_contents($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
     $complete = $inventory['completeness'] ?? [];

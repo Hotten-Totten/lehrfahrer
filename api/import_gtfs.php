@@ -1008,12 +1008,15 @@ function gtfs_start_index_job(bool $restart, array $requestedAgencyIds): void {
     gtfs_create_batch_schema($pdo);
     $pdo = null;
     $signature = gtfs_feed_signature($zipPath);
+    $sourceSha256 = hash_file('sha256', $zipPath);
+    if (!is_string($sourceSha256)) gtfs_error(500, 'GTFS-Quell-SHA kann nicht berechnet werden.');
     $job = [
         'version' => 3,
         'phase' => 'extract',
         'step' => 'ZIP-Dateien vorbereiten',
         'feedSize' => $signature['size'],
         'feedMtime' => $signature['mtime'],
+        'sourceSha256' => $sourceSha256,
         'agencyIds' => $agencyIds,
         'agencyCount' => count($agencyIds),
         'agencyFingerprint' => $agencyFingerprint,
@@ -1252,6 +1255,12 @@ function gtfs_finalize_batch_index(array $job): array {
         }
         gtfs_error(500, 'GTFS-Zwischenindex fehlt und konnte nicht wiederhergestellt werden.');
     }
+    $sourceSha256 = strval($job['sourceSha256'] ?? '');
+    $actualSourceSha256 = hash_file('sha256', gtfs_server_zip_path());
+    if (preg_match('/^[a-f0-9]{64}$/D', $sourceSha256) !== 1 || !is_string($actualSourceSha256)
+        || !hash_equals($sourceSha256, $actualSourceSha256)) {
+        gtfs_error(409, 'GTFS-Quell-ZIP ist nicht mehr identisch; Indexjob neu starten.');
+    }
     $pdo = new PDO('sqlite:' . gtfs_index_building_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec('PRAGMA temp_store=FILE');
     $metaInsert = $pdo->prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)');
@@ -1259,6 +1268,7 @@ function gtfs_finalize_batch_index(array $job): array {
         'schema_version' => '3',
         'feed_size' => $job['feedSize'],
         'feed_mtime' => $job['feedMtime'],
+        'source_sha256' => $sourceSha256,
         'agency_ids' => json_encode($job['agencyIds'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'agency_fingerprint' => $job['agencyFingerprint'],
         'index_fingerprint' => $job['indexFingerprint'],

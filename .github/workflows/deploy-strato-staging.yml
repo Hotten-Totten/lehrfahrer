@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      stamp_cottbus_source_sha:
+        description: Verify unchanged Cottbus index against staging ZIP, then stamp source SHA
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging
@@ -275,6 +280,7 @@ jobs:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
           PREPARE_GTFS_WORK: ${{ github.event_name == 'workflow_dispatch' && inputs.preflight_cottbus }}
+          STAMP_COTTBUS_SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.stamp_cottbus_source_sha }}
         run: |
           set -euo pipefail
           REMOTE="$STRATO_USER@$STRATO_HOST"
@@ -316,6 +322,7 @@ jobs:
             tools/staging-reissue-state.php \
             tools/cottbus-migrate-staging.php \
             tools/cottbus-current-postcheck-staging.php \
+            tools/stamp-cottbus-source-sha-staging.php \
             tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
             tools/staging-smoke.php \
@@ -325,13 +332,14 @@ jobs:
             "$REMOTE:./$STAGING_AUTH_PATH/"
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH' '$PREPARE_GTFS_WORK'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH' '$PREPARE_GTFS_WORK' '$STAMP_COTTBUS_SOURCE_SHA'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
           staging_auth="$3"
           live_target="${4#/}"
           prepare_gtfs_work="$5"
+          stamp_cottbus_source_sha="$6"
           webroot="$(cd "./$staging_target" && pwd -P)"
           private_root="$(cd "./$staging_private" && pwd -P)"
           auth_root="$(cd "./$staging_auth" && pwd -P)"
@@ -358,6 +366,7 @@ jobs:
             "$private_root/reissue-first-admin-activation.php" \
             "$private_root/staging-reissue-state.php" \
             "$private_root/cottbus-migrate-staging.php" \
+            "$private_root/stamp-cottbus-source-sha-staging.php" \
             "$private_root/prepare-cottbus-gtfs-work-staging.php" \
             "$private_root/_control-db-restore-point.php" \
             "$private_root/staging-smoke.php"
@@ -578,6 +587,14 @@ jobs:
             printf 'GTFS-Arbeitsvorrat vorbereitet; Live unveraendert.\n'
           fi
 
+          if [ "$stamp_cottbus_source_sha" = "true" ]; then
+            LEHRFAHRER_ENV=staging \
+            LEHRFAHRER_APP_ROOT="$webroot" \
+            LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+              php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+                -f "$private_root/stamp-cottbus-source-sha-staging.php"
+          fi
+
           cottbus_zip="$private_root/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/latest.zip"
           if [ -e "$cottbus_zip" ] || [ -L "$cottbus_zip" ]; then
             if [ ! -f "$cottbus_zip" ] || [ -L "$cottbus_zip" ]; then
@@ -589,7 +606,7 @@ jobs:
           <?php
           require (string)getenv('GTFS_VERSION_HELPER');
           echo 'STAGING_GTFS_VERSION=', json_encode(
-              lehrfahrer_gtfs_version_info((string)getenv('GTFS_VERSION_ZIP'), (string)getenv('GTFS_VERSION_INDEX')),
+              lehrfahrer_gtfs_version_info((string)getenv('GTFS_VERSION_ZIP'), (string)getenv('GTFS_VERSION_INDEX'), LEHRFAHRER_GTFS_COTTBUS_NAME),
               JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
           ), PHP_EOL;
           PHP
