@@ -236,6 +236,7 @@ jobs:
           LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          PREPARE_GTFS_WORK: ${{ github.event_name == 'workflow_dispatch' && inputs.preflight_cottbus }}
         run: |
           set -euo pipefail
           REMOTE="$STRATO_USER@$STRATO_HOST"
@@ -276,6 +277,7 @@ jobs:
             tools/reissue-first-admin-activation.php \
             tools/staging-reissue-state.php \
             tools/cottbus-migrate-staging.php \
+            tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
@@ -284,12 +286,13 @@ jobs:
             "$REMOTE:./$STAGING_AUTH_PATH/"
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH' '$PREPARE_GTFS_WORK'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
           staging_auth="$3"
           live_target="${4#/}"
+          prepare_gtfs_work="$5"
           webroot="$(cd "./$staging_target" && pwd -P)"
           private_root="$(cd "./$staging_private" && pwd -P)"
           auth_root="$(cd "./$staging_auth" && pwd -P)"
@@ -316,6 +319,7 @@ jobs:
             "$private_root/reissue-first-admin-activation.php" \
             "$private_root/staging-reissue-state.php" \
             "$private_root/cottbus-migrate-staging.php" \
+            "$private_root/prepare-cottbus-gtfs-work-staging.php" \
             "$private_root/_control-db-restore-point.php" \
             "$private_root/staging-smoke.php"
           mv "$private_root/lehrfahrer-staging-runtime-env.php" "$private_root/runtime-env.php"
@@ -521,6 +525,19 @@ jobs:
             "$private_root/validate-smoke-result.php" \
             "$private_root/smoke-stdout.raw" \
             "$private_root/smoke-stderr.raw"
+
+          if [ "$prepare_gtfs_work" = "true" ]; then
+            live_work_hash_before="$(find "$live_webroot" -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum)"
+            LEHRFAHRER_APP_ROOT="$webroot" \
+              php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+                -f "$private_root/prepare-cottbus-gtfs-work-staging.php"
+            live_work_hash_after="$(find "$live_webroot" -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum)"
+            if [ "$live_work_hash_before" != "$live_work_hash_after" ]; then
+              echo 'Live wurde bei der GTFS-Arbeitsvorrat-Vorbereitung veraendert.' >&2
+              exit 1
+            fi
+            printf 'GTFS-Arbeitsvorrat vorbereitet; Live unveraendert.\n'
+          fi
 
           cottbus_zip="$private_root/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/latest.zip"
           if [ -e "$cottbus_zip" ] || [ -L "$cottbus_zip" ]; then
