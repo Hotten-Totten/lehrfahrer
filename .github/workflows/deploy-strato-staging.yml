@@ -589,6 +589,7 @@ jobs:
 
           if [ "$stamp_cottbus_source_sha" = "true" ]; then
             LEHRFAHRER_ENV=staging \
+            LEHRFAHRER_STAGING_CGI_SHA_STAMP=1 \
             LEHRFAHRER_APP_ROOT="$webroot" \
             LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
               php -q -d "auto_prepend_file=$private_root/runtime-env.php" \

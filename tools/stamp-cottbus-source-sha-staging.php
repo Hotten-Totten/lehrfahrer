@@ -55,7 +55,10 @@ function stamp_inventory_matches(PDO $index, array $inventory): void {
 }
 
 try {
-    if (PHP_SAPI !== 'cli' || getenv('LEHRFAHRER_ENV') !== 'staging') stamp_fail('Nur Staging-CLI erlaubt.');
+    $stagingCgi = PHP_SAPI === 'cgi-fcgi' && getenv('LEHRFAHRER_STAGING_CGI_SHA_STAMP') === '1';
+    if ((PHP_SAPI !== 'cli' && !$stagingCgi) || getenv('LEHRFAHRER_ENV') !== 'staging') {
+        stamp_fail('Nur Staging-CLI oder expliziter privater Staging-CGI-Lauf erlaubt.');
+    }
     $appRoot = strval(getenv('LEHRFAHRER_APP_ROOT'));
     if ($appRoot === '' || !is_dir($appRoot)) stamp_fail('Staging-App-Root fehlt.');
     require_once $appRoot . '/api/_tenant_storage.php';
