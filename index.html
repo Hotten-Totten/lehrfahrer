@@ -11,9 +11,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.063">
+<link rel="stylesheet" href="editor.css?v=V2.1.065">
 </head>
-<body data-editor-version="V2.1.064">
+<body data-editor-version="V2.1.065">
 
   <div id="menubar">
 
@@ -28,7 +28,7 @@
         <div class="menu-dropdown">
           <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP aus dem privaten Importbereich dieser Gesellschaft laden">GTFS vom Server laden</button>
           <button type="button" class="menu-item" onclick="rebuildGtfsServerIndex()" title="Privaten Variantenindex dieser Gesellschaft neu erstellen">GTFS-Index neu erstellen</button>
-          <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="Fertigen oder abgebrochenen GTFS-Turboindex auf Variantenanzahl und Speicherbedarf untersuchen">GTFS-Index analysieren</button>
+          <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="GTFS-Turboindex und Änderungen zum vorherigen Fahrplanstand analysieren">GTFS-Index analysieren</button>
           <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
           <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft den Schreibzugriff der aktuellen Sitzung">Schreibzugriff testen</button>
@@ -197,7 +197,7 @@
 
       <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
 
-<span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.064</span>
+<span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.065</span>
       <span id="apiTokenStatus" class="token-status token-status-on" title="Schreibzugriff über die aktuelle Anmeldung">Sitzung: aktiv</span>
       <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
       <span
@@ -672,6 +672,39 @@
     </div>
   </div>
 
+  <div id="gtfsChangeModal" class="modal-overlay hidden" aria-live="polite">
+    <div class="gtfs-change-box">
+      <div class="gtfs-change-header">
+        <div>
+          <h3>GTFS-Fahrplanwechsel</h3>
+          <div id="gtfsChangeBaseline" class="gtfs-change-baseline"></div>
+        </div>
+        <button id="gtfsChangeCloseBtn" type="button">Schließen</button>
+      </div>
+      <div id="gtfsChangeSummary" class="gtfs-change-summary"></div>
+      <div class="gtfs-change-toolbar" aria-label="Änderungen filtern">
+        <button type="button" data-gtfs-filter="ALLE" class="active">Alle</button>
+        <button type="button" data-gtfs-filter="NEU">Nur neu</button>
+        <button type="button" data-gtfs-filter="GEAENDERT">Nur geändert</button>
+        <button type="button" data-gtfs-filter="ENTFALLEN">Nur entfallen</button>
+        <button type="button" data-gtfs-filter="UNVERAENDERT">Nur unverändert</button>
+      </div>
+      <div id="gtfsChangeList" class="gtfs-change-list"></div>
+      <div class="gtfs-change-adoption">
+        <div>
+          <strong>Arbeitsgrundlage übernehmen</strong>
+          <span>Bestehende Lehrfahrer-Routen und manuelle Editor-Daten bleiben unverändert.</span>
+        </div>
+        <div class="gtfs-change-actions">
+          <button type="button" data-gtfs-adopt="new">Nur neue Linien übernehmen</button>
+          <button type="button" data-gtfs-adopt="new_changed">Neue + geänderte übernehmen</button>
+          <button type="button" data-gtfs-adopt="all" class="gtfs-change-primary">ALLE Linien übernehmen</button>
+        </div>
+      </div>
+      <div id="gtfsChangeReport" class="gtfs-change-report hidden"></div>
+    </div>
+  </div>
+
   <div id="debugPanel" class="debug-panel hidden">
     <div class="debug-panel-header">
       <span>Debug-Panel</span>
@@ -766,7 +799,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.063"></script>
-  <script src="js/editor.api.js?v=V2.1.063"></script>
+  <script src="js/editor.api.js?v=V2.1.065"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>

@@ -2,12 +2,15 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_variant_index.php';
+require_once __DIR__ . '/_gtfs_timetable_change.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
 const GTFS_MAX_UPLOAD_BYTES = 262144000;
 const GTFS_MAX_FILTERED_ROUTES = 5000;
 const GTFS_SESSION_TTL_SECONDS = 7200;
+const GTFS_COTTBUS_COMPANY_ID = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
+const GTFS_COTTBUS_AGENCY_ID = '143';
 
 function gtfs_reply(array $payload, int $status = 200): void {
     http_response_code($status);
@@ -550,6 +553,66 @@ function gtfs_index_path(): string {
     return gtfs_index_file('variants.sqlite');
 }
 
+function gtfs_previous_index_path(): string {
+    return gtfs_index_file('variants.sqlite.previous');
+}
+
+function gtfs_require_cottbus_change_scope(): void {
+    if (LEHRFAHRER_GTFS_COMPANY_ID !== GTFS_COTTBUS_COMPANY_ID) {
+        gtfs_error(403, 'Fahrplanwechsel V1 ist nur fuer Cottbusverkehr freigegeben.');
+    }
+}
+
+function gtfs_timetable_change_analysis(): array {
+    gtfs_require_cottbus_change_scope();
+    $analysis = lehrfahrer_gtfs_compare_indexes(
+        gtfs_index_path(),
+        is_file(gtfs_previous_index_path()) ? gtfs_previous_index_path() : null,
+        [GTFS_COTTBUS_AGENCY_ID]
+    );
+    $reviewLines = [];
+    foreach ($analysis['lines'] as $line) {
+        if (!in_array($line['status'], ['GEAENDERT', 'ENTFALLEN'], true)) continue;
+        $name = strtolower(trim(preg_replace('/^linie\s+/i', '', strval($line['line']))));
+        if ($name !== '') $reviewLines[$name] = true;
+    }
+    $matchingRouteFiles = 0;
+    $linesRoot = lehrfahrer_tenant_area(LEHRFAHRER_GTFS_COMPANY_ID, 'lines');
+    if ($reviewLines !== [] && is_dir($linesRoot) && !is_link($linesRoot)) {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($linesRoot, FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if ($file->isLink() || !$file->isFile() || strtolower($file->getExtension()) !== 'json') continue;
+            $route = json_decode(strval(@file_get_contents($file->getPathname())), true);
+            if (!is_array($route)) continue;
+            $lineName = strtolower(trim(preg_replace('/^linie\s+/i', '', strval($route['lineName'] ?? ($route['line']['lineName'] ?? '')))));
+            if ($lineName !== '' && isset($reviewLines[$lineName])) $matchingRouteFiles++;
+        }
+    }
+    $analysis['existingRoutesReviewRequired'] = $matchingRouteFiles;
+    return $analysis;
+}
+
+function gtfs_adopt_timetable_working_set(string $scope): void {
+    $analysis = gtfs_timetable_change_analysis();
+    $workingSet = lehrfahrer_gtfs_working_set($analysis, $scope);
+    lehrfahrer_gtfs_write_working_set(gtfs_index_file('working-set.json'), $workingSet);
+    gtfs_reply([
+        'ok' => true,
+        'scope' => $scope,
+        'summary' => [
+            'checkedRoutes' => $analysis['current']['routeCount'],
+            'checkedVariants' => $analysis['current']['variantCount'],
+            'lineCounts' => $analysis['lineCounts'],
+            'variantCounts' => $analysis['variantCounts'],
+            'reviewRequiredLineCount' => $analysis['reviewRequiredLineCount'],
+            'existingRoutesReviewRequired' => $analysis['existingRoutesReviewRequired'],
+        ],
+        'completeness' => $workingSet['completeness'],
+        'warning' => $workingSet['warning'],
+        'routesProtected' => true,
+    ]);
+}
+
 function gtfs_require_sqlite(): void {
     if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers(), true)) {
         gtfs_error(501, 'GTFS-Turboindex benötigt PHP PDO_SQLite.');
@@ -837,6 +900,10 @@ function gtfs_analyze_server_index(): void {
     if ($hasTrips) $tripCount = (int)$pdo->query('SELECT COUNT(*) FROM trips')->fetchColumn();
     $diagnostics = gtfs_sqlite_diagnostics($pdo, 'manual_index_analysis', $databasePath);
     $pdo = null;
+    $changeAnalysis = null;
+    if ($databasePath === $finalPath && LEHRFAHRER_GTFS_COMPANY_ID === GTFS_COTTBUS_COMPANY_ID) {
+        $changeAnalysis = gtfs_timetable_change_analysis();
+    }
 
     gtfs_reply([
         'ok' => true,
@@ -863,6 +930,7 @@ function gtfs_analyze_server_index(): void {
         'variantsByRoute' => $variantsByRoute,
         'topRoutes' => $topRoutes,
         'sqlite' => $diagnostics,
+        'changeAnalysis' => $changeAnalysis,
     ]);
 }
 
@@ -1171,7 +1239,7 @@ function gtfs_finalize_batch_index(array $job): array {
     $pdo = null;
 
     $finalPath = gtfs_index_path();
-    $backupPath = gtfs_index_file('variants.sqlite.previous');
+    $backupPath = gtfs_previous_index_path();
     @unlink($backupPath);
     if (is_file($finalPath) && !@rename($finalPath, $backupPath)) {
         gtfs_error(500, 'Alter GTFS-Index kann nicht für Austausch vorbereitet werden.');
@@ -1180,7 +1248,6 @@ function gtfs_finalize_batch_index(array $job): array {
         if (is_file($backupPath)) @rename($backupPath, $finalPath);
         gtfs_error(500, 'Neuer GTFS-Index kann nicht aktiviert werden.');
     }
-    @unlink($backupPath);
     foreach (glob(gtfs_index_extracted_dir() . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
         if (is_link($file)) continue;
         if (is_file($file)) @unlink(gtfs_index_file('extracted/' . basename($file)));
@@ -1367,6 +1434,7 @@ try {
     if ($action === 'indexagencies') gtfs_handle_index_agencies();
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
+    if ($action === 'indexadopt') gtfs_adopt_timetable_working_set(strtolower(trim(strval($_POST['scope'] ?? ''))));
     if ($action === 'indexstart') {
         $agencyIds = json_decode(strval($_POST['agencyIds'] ?? '[]'), true);
         if (!is_array($agencyIds)) gtfs_error(400, 'agencyIds muss eine JSON-Liste sein.');

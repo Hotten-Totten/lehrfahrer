@@ -1557,6 +1557,143 @@ async function rebuildGtfsServerIndex() {
   }
 }
 
+function gtfsChangeStatusLabel(status) {
+  return ({ NEU: "NEU", GEAENDERT: "GEÄNDERT", ENTFALLEN: "ENTFALLEN", UNVERAENDERT: "UNVERÄNDERT" })[status] || status;
+}
+
+function gtfsChangeElement(tag, className = "", text = "") {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== "") element.textContent = text;
+  return element;
+}
+
+function gtfsChangeDiffText(variant) {
+  const diff = variant.diff || {};
+  const parts = [];
+  if (diff.addedStops?.length) parts.push(`Neu: ${diff.addedStops.join(", ")}`);
+  if (diff.removedStops?.length) parts.push(`Entfallen: ${diff.removedStops.join(", ")}`);
+  if (diff.orderChanged) parts.push("Reihenfolge geändert");
+  if (diff.headsignChanged) parts.push(`Zieltext geändert: ${diff.previousHeadsign || "–"} → ${variant.headsign || "–"}`);
+  if (diff.stopCountChanged) parts.push(`Stopanzahl: ${Number(diff.previousStopCount || 0)} → ${Number(variant.stopCount || 0)}`);
+  return parts.join(" · ");
+}
+
+function renderGtfsChangeAnalysis(analysis) {
+  const modal = document.getElementById("gtfsChangeModal");
+  const baseline = document.getElementById("gtfsChangeBaseline");
+  const summary = document.getElementById("gtfsChangeSummary");
+  const list = document.getElementById("gtfsChangeList");
+  const report = document.getElementById("gtfsChangeReport");
+  if (!modal || !baseline || !summary || !list || !report) return;
+
+  baseline.textContent = analysis.baselineAvailable
+    ? "Änderungen seit dem vorherigen Fahrplanstand"
+    : "Erster Vergleichsstand: alle Linien und Varianten gelten als neu";
+  summary.replaceChildren();
+  const stats = [
+    [analysis.current?.routeCount, "Linien geprüft"],
+    [analysis.current?.variantCount, "Varianten geprüft"],
+    [analysis.lineCounts?.NEU, "Linien neu"],
+    [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
+    [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"]
+  ];
+  stats.forEach(([value, label]) => {
+    const card = gtfsChangeElement("div", "gtfs-change-stat");
+    card.append(gtfsChangeElement("strong", "", String(Number(value || 0))), gtfsChangeElement("span", "", label));
+    summary.appendChild(card);
+  });
+
+  list.replaceChildren();
+  (analysis.lines || []).forEach(line => {
+    const card = gtfsChangeElement("details", "gtfs-change-line");
+    card.dataset.status = line.status;
+    const heading = document.createElement("summary");
+    heading.append(
+      gtfsChangeElement("span", "gtfs-change-line-title", `Linie ${line.line || line.routeId}`),
+      gtfsChangeElement("span", "gtfs-change-line-meta", `${Number(line.variantCount || 0)} Varianten${line.status === "GEAENDERT" ? " · Prüfung erforderlich" : ""}`),
+      gtfsChangeElement("span", "gtfs-change-badge", gtfsChangeStatusLabel(line.status))
+    );
+    const variants = gtfsChangeElement("div", "gtfs-change-variants");
+    (line.variants || []).forEach(variant => {
+      const row = gtfsChangeElement("div", "gtfs-change-variant");
+      const head = gtfsChangeElement("div", "gtfs-change-variant-head");
+      head.append(
+        gtfsChangeElement("span", "", gtfsChangeStatusLabel(variant.status)),
+        gtfsChangeElement("span", "", `Richtung ${variant.directionId || "–"}`),
+        gtfsChangeElement("span", "", variant.headsign || variant.destination || "ohne Zieltext"),
+        gtfsChangeElement("span", "", `${Number(variant.stopCount || 0)} Stops`)
+      );
+      row.appendChild(head);
+      row.appendChild(gtfsChangeElement("div", "gtfs-change-variant-stops", (variant.stopNames || []).join(" → ")));
+      const diffText = gtfsChangeDiffText(variant);
+      if (diffText) row.appendChild(gtfsChangeElement("div", "gtfs-change-diff", diffText));
+      variants.appendChild(row);
+    });
+    card.append(heading, variants);
+    list.appendChild(card);
+  });
+
+  report.className = "gtfs-change-report hidden";
+  report.textContent = "";
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-busy", "false");
+
+  const filterButtons = [...modal.querySelectorAll("[data-gtfs-filter]")];
+  filterButtons.forEach(button => {
+    button.onclick = () => {
+      filterButtons.forEach(item => item.classList.toggle("active", item === button));
+      const filter = button.dataset.gtfsFilter;
+      [...list.children].forEach(card => card.classList.toggle("hidden", filter !== "ALLE" && card.dataset.status !== filter));
+    };
+  });
+
+  const close = () => modal.classList.add("hidden");
+  document.getElementById("gtfsChangeCloseBtn").onclick = close;
+  modal.onclick = event => { if (event.target === modal) close(); };
+
+  const adoptionButtons = [...modal.querySelectorAll("[data-gtfs-adopt]")];
+  adoptionButtons.forEach(button => {
+    button.onclick = async () => {
+      const scope = button.dataset.gtfsAdopt;
+      if (scope === "all" && !confirm("Alle Linien und Varianten als neue GTFS-Arbeitsgrundlage übernehmen? Bestehende Lehrfahrer-Routen werden nicht überschrieben.")) return;
+      adoptionButtons.forEach(item => { item.disabled = true; });
+      modal.setAttribute("aria-busy", "true");
+      try {
+        const result = await postGtfsImport({ action: "indexAdopt", scope });
+        const complete = result.completeness || {};
+        const counts = result.summary?.lineCounts || {};
+        const variantCounts = result.summary?.variantCounts || {};
+        report.className = `gtfs-change-report${complete.complete ? "" : " warn"}`;
+        report.textContent = [
+          "Fahrplanwechsel abgeschlossen",
+          "",
+          `${Number(result.summary?.checkedRoutes || 0)} Linien geprüft`,
+          `${Number(result.summary?.checkedVariants || 0)} Varianten geprüft`,
+          `Neu: ${Number(counts.NEU || 0)} Linien / ${Number(variantCounts.NEU || 0)} Varianten`,
+          `Geändert: ${Number(counts.GEAENDERT || 0)} Linien / ${Number(variantCounts.GEAENDERT || 0)} Varianten`,
+          `Entfallen: ${Number(counts.ENTFALLEN || 0)} Linien / ${Number(variantCounts.ENTFALLEN || 0)} Varianten`,
+          `Unverändert: ${Number(counts.UNVERAENDERT || 0)} Linien`,
+          `Übernommen: ${Number(complete.adoptedRouteCount || 0)}/${Number(complete.expectedRouteCount || 0)} Linien`,
+          `${Number(complete.adoptedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten`,
+          `Lehrfahrer-Routen mit Prüfbedarf: ${Number(result.summary?.existingRoutesReviewRequired || 0)}`,
+          complete.complete ? "Vollständigkeit: OK" : (result.warning || "Nicht alle Linien/Varianten wurden übernommen.")
+        ].join("\n");
+        report.classList.remove("hidden");
+        setStatus(complete.complete ? "Alle GTFS-Linien und Varianten vollständig übernommen." : "GTFS-Teilübernahme gespeichert; Vollständigkeitswarnung beachten.", complete.complete ? "success" : "warn");
+      } catch (err) {
+        report.className = "gtfs-change-report warn";
+        report.textContent = err.message || "GTFS-Übernahme fehlgeschlagen.";
+        report.classList.remove("hidden");
+        setStatus(err.message || "GTFS-Übernahme fehlgeschlagen.", "error");
+      } finally {
+        adoptionButtons.forEach(item => { item.disabled = false; });
+        modal.setAttribute("aria-busy", "false");
+      }
+    };
+  });
+}
+
 async function analyzeGtfsServerIndex() {
   showVbbImportProgressPopup("", "GTFS-Indexanalyse");
   updateVbbImportProgressPopup("Turboindex wird schreibgeschützt ausgewertet ...", {
@@ -1595,6 +1732,10 @@ async function analyzeGtfsServerIndex() {
       allowClose: true,
       subtitle: "Analyse abgeschlossen"
     });
+    if (result.changeAnalysis) {
+      closeVbbImportProgressPopup();
+      renderGtfsChangeAnalysis(result.changeAnalysis);
+    }
     debug("GTFS-Indexanalyse", result);
     setStatus(`GTFS-Index analysiert: ${Number(summary.variantCount || 0)} Varianten.`, "success");
   } catch (err) {
