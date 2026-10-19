@@ -79,6 +79,7 @@ function readOperationalRouteFields(source = {}) {
 }
 
 const state = {
+  gtfsWork: null,
   stops: [],
   routePoints: [],
   simplifiedRoutePoints: [],

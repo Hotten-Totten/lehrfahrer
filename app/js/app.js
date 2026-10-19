@@ -1114,7 +1114,7 @@ function renderLineDataStatus(state, count = 0) {
 }
 
 async function fetchLinesCatalogFromServer() {
-  const response = await fetch(`${API_BASE}/list_lines.php?_ts=${Date.now()}`, { cache: 'no-store' });
+  const response = await fetch(`${API_BASE}/list_lines.php?scope=driver&_ts=${Date.now()}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Linienkatalog HTTP ${response.status}`);
   const result = await response.json();
   if (!result?.ok || !Array.isArray(result.lines) || result.lines.length === 0) {
@@ -1125,7 +1125,7 @@ async function fetchLinesCatalogFromServer() {
 
 async function fetchLineRecordFromServer(line) {
   const fileBase = String(line.fileBase || line.file || '').replace(/\.json$/i, '').trim();
-  let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
+  let url = `${API_BASE}/load_line.php?scope=driver&city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
   if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
   if (line.categoryFolder) url += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
 

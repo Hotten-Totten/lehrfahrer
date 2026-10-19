@@ -276,7 +276,8 @@ const stops = state.stops.map((stop, index) => ({
     meta: {
       formatVersion: "1.2",
       exportedAt: new Date().toISOString(),
-      source: "Lehrfahrer Linien-Editor"
+      source: "Lehrfahrer Linien-Editor",
+      ...(state.gtfsWork ? { gtfsWork: { ...state.gtfsWork } } : {})
     },
 
     line: {
@@ -1694,6 +1695,113 @@ function renderGtfsChangeAnalysis(analysis) {
   });
 }
 
+function gtfsWorkStatusLabel(status) {
+  return ({
+    UNGEPRUEFT: "UNGEPRÜFT",
+    IN_BEARBEITUNG: "IN BEARBEITUNG",
+    GEPRUEFT: "GEPRÜFT",
+    FREIGEGEBEN: "FREIGEGEBEN"
+  })[status] || status;
+}
+
+function renderGtfsWorkInventory(inventory) {
+  const modal = document.getElementById("gtfsWorkModal");
+  const completeness = document.getElementById("gtfsWorkCompleteness");
+  const list = document.getElementById("gtfsWorkList");
+  const report = document.getElementById("gtfsWorkReport");
+  if (!modal || !completeness || !list || !report) return;
+  const complete = inventory.completeness || {};
+  completeness.textContent = `${Number(complete.capturedLineCount || 0)}/${Number(complete.expectedLineCount || 0)} Linien erfasst · ${Number(complete.capturedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten erfasst`;
+  list.replaceChildren();
+
+  (inventory.entries || []).forEach(entry => {
+    const row = gtfsChangeElement("div", "gtfs-work-row");
+    row.dataset.status = entry.status;
+    row.dataset.timetableStatus = entry.timetableStatus || "";
+    row.append(
+      gtfsChangeElement("span", "", entry.line || entry.routeId),
+      gtfsChangeElement("span", "", [entry.directionId ? `Richtung ${entry.directionId}` : "", entry.destination || "ohne Zieltext"].filter(Boolean).join(" · ")),
+      gtfsChangeElement("span", "", entry.variantId),
+      gtfsChangeElement("span", "", String(Number(entry.stopCount || 0)))
+    );
+    const status = document.createElement("select");
+    ["UNGEPRUEFT", "IN_BEARBEITUNG", "GEPRUEFT", "FREIGEGEBEN"].forEach(value => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = gtfsWorkStatusLabel(value);
+      status.appendChild(option);
+    });
+    status.value = entry.status;
+    status.disabled = entry.timetableStatus === "ENTFALLEN";
+    status.onchange = async () => {
+      status.disabled = true;
+      try {
+        const result = await postGtfsImport({ action: "workStatus", routeId: entry.routeId, variantId: entry.variantId, status: status.value });
+        renderGtfsWorkInventory(result.inventory);
+      } catch (err) {
+        status.value = entry.status;
+        status.disabled = false;
+        report.className = "gtfs-change-report warn";
+        report.textContent = err.message || "Status konnte nicht gespeichert werden.";
+      }
+    };
+    const create = document.createElement("button");
+    create.type = "button";
+    create.textContent = entry.draftPrepared ? "Route öffnen" : "Lehrfahrer-Route erstellen";
+    create.disabled = entry.timetableStatus === "ENTFALLEN";
+    create.onclick = async () => {
+      create.disabled = true;
+      try {
+        const result = await postGtfsImport({ action: "workOpen", routeId: entry.routeId, variantId: entry.variantId });
+        loadLineFromData(result.line);
+        modal.classList.add("hidden");
+        await buildStreetRouteFromStops();
+      } catch (err) {
+        create.disabled = false;
+        report.className = "gtfs-change-report warn";
+        report.textContent = err.message || "Lehrfahrer-Route konnte nicht erstellt werden.";
+      }
+    };
+    row.append(status, create);
+    list.appendChild(row);
+  });
+
+  const filters = [...modal.querySelectorAll("[data-work-filter]")];
+  filters.forEach(button => {
+    button.onclick = () => {
+      filters.forEach(item => item.classList.toggle("active", item === button));
+      [...list.children].forEach(row => row.classList.toggle("hidden", button.dataset.workFilter !== "ALLE" && row.dataset.status !== button.dataset.workFilter));
+    };
+  });
+  document.getElementById("gtfsWorkCloseBtn").onclick = () => modal.classList.add("hidden");
+  document.getElementById("gtfsWorkPrepareAllBtn").onclick = async event => {
+    if (!confirm("Alle aktuellen GTFS-Varianten als Entwürfe vorbereiten? Vorhandene Entwürfe und Lehrfahrer-Routen bleiben unverändert.")) return;
+    event.currentTarget.disabled = true;
+    try {
+      const result = await postGtfsImport({ action: "workPrepareAll" });
+      report.className = "gtfs-change-report";
+      report.textContent = `${Number(result.preparedCount || 0)} Varianten sind als Arbeitsentwürfe vorbereitet. Keine Route wurde freigegeben.`;
+      renderGtfsWorkInventory(result.inventory);
+      report.classList.remove("hidden");
+    } catch (err) {
+      report.className = "gtfs-change-report warn";
+      report.textContent = err.message || "Arbeitsentwürfe konnten nicht vorbereitet werden.";
+    } finally {
+      event.currentTarget.disabled = false;
+    }
+  };
+  modal.classList.remove("hidden");
+}
+
+async function openGtfsWorkInventory() {
+  try {
+    const result = await postGtfsImport({ action: "workInventory" });
+    renderGtfsWorkInventory(result.inventory);
+  } catch (err) {
+    setStatus(err.message || "GTFS-Arbeitsvorrat konnte nicht geladen werden.", "error");
+  }
+}
+
 async function analyzeGtfsServerIndex() {
   showVbbImportProgressPopup("", "GTFS-Indexanalyse");
   updateVbbImportProgressPopup("Turboindex wird schreibgeschützt ausgewertet ...", {
@@ -2238,7 +2346,11 @@ function loadLineFromData(data) {
     pushHistorySnapshot("Linie geladen");
   }
 
+  const loadedGtfsWork = data.meta?.gtfsWork && typeof data.meta.gtfsWork === "object"
+    ? { ...data.meta.gtfsWork }
+    : null;
   clearEditorData();
+  state.gtfsWork = loadedGtfsWork;
 
   // Unterstützt sowohl neues Exportformat (1.2) als auch altes Format
   const lineBlock = data.line || data;

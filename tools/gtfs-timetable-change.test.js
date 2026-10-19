@@ -216,3 +216,81 @@ test('N: der alte Vergleichsstand bleibt bei Analyse und Uebernahme unveraendert
   assert.match(source, /rename\(\$finalPath, \$backupPath\)/);
   assert.doesNotMatch(source, /rename\(gtfs_index_building_path\(\), \$finalPath\)[\s\S]{0,160}@unlink\(\$backupPath\)/);
 });
+
+test('O: Arbeitsvorrat erfasst jede aktuelle Variante und bereitet nur private Entwuerfe vor', () => {
+  const privateRoot = path.join(sandbox, 'work-private');
+  const company = 'cmp_11111111111111111111111111111111';
+  const current = path.join(privateRoot, 'companies', company, 'imports', 'gtfs', 'index', 'variants.sqlite');
+  const previous = path.join(path.dirname(current), 'variants.sqlite.previous');
+  fs.mkdirSync(path.dirname(current), { recursive: true });
+  fs.copyFileSync(indexes.identical, current);
+  fs.copyFileSync(indexes.base, previous);
+  const output = runPhp(`putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${phpString(privateRoot)});`
+    + `require ${phpString(path.join(root, 'api', '_tenant_storage.php'))};`
+    + `require ${phpString(path.join(root, 'api', '_gtfs_timetable_change.php'))};`
+    + `require ${phpString(path.join(root, 'api', '_gtfs_work_inventory.php'))};`
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);`
+    + `$n=lehrfahrer_gtfs_work_prepare_all(${phpString(company)},${phpString(current)},$i);`
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);`
+    + `echo json_encode(['inventory'=>$i,'prepared'=>$n]);`);
+  const result = JSON.parse(output);
+  assert.deepEqual(result.inventory.completeness, {
+    expectedLineCount: 2, capturedLineCount: 2, expectedVariantCount: 3, capturedVariantCount: 3, complete: true
+  });
+  assert.equal(result.prepared, 3);
+  assert.equal(result.inventory.entries.every(entry => entry.status === 'UNGEPRUEFT' && entry.draftPrepared), true);
+  assert.equal(fs.existsSync(path.join(privateRoot, 'companies', company, 'lines')), false);
+  const drafts = fs.readdirSync(path.join(privateRoot, 'companies', company, 'imports', 'gtfs', 'work-routes'));
+  assert.equal(drafts.length, 3);
+  const draft = JSON.parse(fs.readFileSync(path.join(privateRoot, 'companies', company, 'imports', 'gtfs', 'work-routes', drafts[0]), 'utf8'));
+  assert.ok(draft.stops.length >= 2);
+  assert.deepEqual(draft.routePoints, []);
+  assert.ok(draft.meta.gtfsWork.routeId && draft.meta.gtfsWork.variantId);
+});
+
+test('P: unveraenderter Status bleibt, geaenderte Variante wird pruefpflichtig und entfallene bleibt markiert', () => {
+  const privateRoot = path.join(sandbox, 'transition-private');
+  const company = 'cmp_22222222222222222222222222222222';
+  const current = path.join(privateRoot, 'companies', company, 'imports', 'gtfs', 'index', 'variants.sqlite');
+  const previous = path.join(path.dirname(current), 'variants.sqlite.previous');
+  fs.mkdirSync(path.dirname(current), { recursive: true });
+  fs.copyFileSync(indexes.base, current);
+  fs.copyFileSync(indexes.base, previous);
+  const prelude = `putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${phpString(privateRoot)});`
+    + `require ${phpString(path.join(root, 'api', '_tenant_storage.php'))};`
+    + `require ${phpString(path.join(root, 'api', '_gtfs_timetable_change.php'))};`
+    + `require ${phpString(path.join(root, 'api', '_gtfs_work_inventory.php'))};`;
+  const seeded = JSON.parse(runPhp(prelude
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);`
+    + `$e=$i['entries'][0];lehrfahrer_gtfs_work_set_status(${phpString(company)},$e['routeId'],$e['variantId'],'IN_BEARBEITUNG');`
+    + `echo json_encode($e);`));
+  const stable = JSON.parse(runPhp(prelude
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);echo json_encode($i);`));
+  assert.equal(stable.entries.find(entry => entry.routeId === seeded.routeId && entry.variantId === seeded.variantId).status, 'IN_BEARBEITUNG');
+
+  fs.copyFileSync(indexes['changed-stops'], current);
+  const changed = JSON.parse(runPhp(prelude
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);echo json_encode($i);`));
+  const review = changed.entries.find(entry => entry.timetableStatus === 'GEAENDERT');
+  assert.ok(review);
+  assert.equal(review.status, 'UNGEPRUEFT');
+  assert.equal(review.reviewRequired, true);
+
+  fs.copyFileSync(indexes['removed-variant'], current);
+  const removed = JSON.parse(runPhp(prelude
+    + `$i=lehrfahrer_gtfs_work_reconcile(${phpString(company)},${phpString(current)},['143']);echo json_encode($i);`));
+  assert.ok(removed.entries.some(entry => entry.timetableStatus === 'ENTFALLEN'));
+});
+
+test('Q: Fahrer-App fordert explizit nur freigegebene Routen an', () => {
+  const app = fs.readFileSync(path.join(root, 'app', 'js', 'app.js'), 'utf8');
+  const list = fs.readFileSync(path.join(root, 'api', 'list_lines.php'), 'utf8');
+  const load = fs.readFileSync(path.join(root, 'api', 'load_line.php'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  assert.match(app, /list_lines\.php\?scope=driver/);
+  assert.match(app, /load_line\.php\?scope=driver/);
+  assert.match(list, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
+  assert.match(load, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
+  assert.match(editor, /Alle Varianten vorbereiten|workPrepareAll/);
+  assert.match(editor, /buildStreetRouteFromStops\(\)/);
+});

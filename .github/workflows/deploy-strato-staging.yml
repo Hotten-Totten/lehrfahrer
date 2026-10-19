@@ -73,6 +73,7 @@ jobs:
             tools/tenant-lines-cities.test.js \
             tools/tenant-personnel.test.js \
             tools/tenant-catalog-imports.test.js \
+            tools/gtfs-timetable-change.test.js \
             tools/cottbus-migrate-staging.test.js \
             tools/apply-orchestration.test.js
 

@@ -129,6 +129,7 @@ function exportAutosaveFile() {
 // Löscht alle Editor-Daten (Stops, Routen, Marker) von der Karte
 // Wird vor dem Laden einer neuen Linie oder beim Zurücksetzen aufgerufen
 function clearEditorData() {
+  state.gtfsWork = null;
   // Alle Stop-Marker von der Karte entfernen
   if (Array.isArray(state.stops)) {
     state.stops.forEach(stop => {

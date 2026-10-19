@@ -3,7 +3,11 @@ error_reporting(0);
 ini_set('display_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
-$companyId = lehrfahrer_route_authorize('routes.read');
+require_once __DIR__ . '/_gtfs_work_inventory.php';
+$authContext = lehrfahrer_api_authorize('routes.read');
+$companyId = lehrfahrer_route_company_id($authContext);
+$driverOnly = strtolower(trim(strval($_GET['scope'] ?? ''))) === 'driver';
+$includeUnreleased = !$driverOnly && lehrfahrer_auth_has_capability($authContext, 'routes.write');
 
 $linienBaseDir = lehrfahrer_tenant_area($companyId, 'lines');
 $citiesBaseDir = lehrfahrer_tenant_area($companyId, 'cities');
@@ -130,7 +134,7 @@ foreach ($cities as $city) {
                         if (is_link($file)) continue;
                         $content = file_get_contents($file);
                         $data    = json_decode($content, true);
-                        if (!is_array($data)) continue;
+                        if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
 
                         $fileBase = pathinfo($file, PATHINFO_FILENAME);
                         $fileMtime = @filemtime($file);
@@ -193,7 +197,7 @@ foreach ($cities as $city) {
                 if (is_link($file)) continue;
                 $content = file_get_contents($file);
                 $data    = json_decode($content, true);
-                if (!is_array($data)) continue;
+                if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
 
                 $fileBase = pathinfo($file, PATHINFO_FILENAME);
                 $fileMtime = @filemtime($file);
@@ -257,7 +261,7 @@ foreach ($cities as $city) {
         if (is_link($file)) continue;
         $content = file_get_contents($file);
         $data    = json_decode($content, true);
-        if (!is_array($data)) continue;
+        if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
 
         $fileBase = pathinfo($file, PATHINFO_FILENAME);
         $fileMtime = @filemtime($file);

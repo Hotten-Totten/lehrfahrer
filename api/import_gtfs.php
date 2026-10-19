@@ -3,6 +3,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_timetable_change.php';
+require_once __DIR__ . '/_gtfs_work_inventory.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -611,6 +612,38 @@ function gtfs_adopt_timetable_working_set(string $scope): void {
         'warning' => $workingSet['warning'],
         'routesProtected' => true,
     ]);
+}
+
+function gtfs_work_inventory_response(bool $prepareAll = false): void {
+    gtfs_require_cottbus_change_scope();
+    $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+    $prepared = null;
+    if ($prepareAll) {
+        $prepared = lehrfahrer_gtfs_work_prepare_all(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), $inventory);
+        $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+    }
+    gtfs_reply(['ok' => true, 'inventory' => $inventory, 'preparedCount' => $prepared]);
+}
+
+function gtfs_work_open(): void {
+    gtfs_require_cottbus_change_scope();
+    $routeId = trim(strval($_POST['routeId'] ?? ''));
+    $variantId = trim(strval($_POST['variantId'] ?? ''));
+    if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
+    lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+    $line = lehrfahrer_gtfs_work_prepare(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), $routeId, $variantId);
+    $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, 'IN_BEARBEITUNG');
+    gtfs_reply(['ok' => true, 'line' => $line, 'inventory' => $inventory]);
+}
+
+function gtfs_work_status(): void {
+    gtfs_require_cottbus_change_scope();
+    $routeId = trim(strval($_POST['routeId'] ?? ''));
+    $variantId = trim(strval($_POST['variantId'] ?? ''));
+    $status = strtoupper(trim(strval($_POST['status'] ?? '')));
+    if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
+    $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, $status);
+    gtfs_reply(['ok' => true, 'inventory' => $inventory]);
 }
 
 function gtfs_require_sqlite(): void {
@@ -1435,6 +1468,10 @@ try {
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
     if ($action === 'indexadopt') gtfs_adopt_timetable_working_set(strtolower(trim(strval($_POST['scope'] ?? ''))));
+    if ($action === 'workinventory') gtfs_work_inventory_response(false);
+    if ($action === 'workprepareall') gtfs_work_inventory_response(true);
+    if ($action === 'workopen') gtfs_work_open();
+    if ($action === 'workstatus') gtfs_work_status();
     if ($action === 'indexstart') {
         $agencyIds = json_decode(strval($_POST['agencyIds'] ?? '[]'), true);
         if (!is_array($agencyIds)) gtfs_error(400, 'agencyIds muss eine JSON-Liste sein.');

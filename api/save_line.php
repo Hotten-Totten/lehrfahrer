@@ -2,6 +2,8 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_professional_pdf.php';
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_gtfs_timetable_change.php';
+require_once __DIR__ . '/_gtfs_work_inventory.php';
 $companyId = lehrfahrer_route_authorize('routes.write', true, true);
 
 function sanitizeForFilesystem(string $value): string {
@@ -668,6 +670,12 @@ try {
 } catch (Throwable $pdfException) {
     $pdfError = $pdfException->getMessage();
 }
+
+lehrfahrer_gtfs_work_mark_saved(
+    $companyId,
+    $data,
+    $city . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json'
+);
 
 echo json_encode([
     'ok' => true,

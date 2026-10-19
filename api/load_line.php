@@ -1,7 +1,11 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
-$companyId = lehrfahrer_route_authorize('routes.read');
+require_once __DIR__ . '/_gtfs_work_inventory.php';
+$authContext = lehrfahrer_api_authorize('routes.read');
+$companyId = lehrfahrer_route_company_id($authContext);
+$driverOnly = strtolower(trim(strval($_GET['scope'] ?? ''))) === 'driver';
+$includeUnreleased = !$driverOnly && lehrfahrer_auth_has_capability($authContext, 'routes.write');
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -76,6 +80,11 @@ if (!$data || !is_array($data)) {
         'ok' => false,
         'error' => 'Dateiinhalt ist ungültig'
     ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data)) {
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'Linie nicht gefunden'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

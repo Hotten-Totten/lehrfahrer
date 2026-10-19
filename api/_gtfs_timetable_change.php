@@ -141,6 +141,7 @@ function lehrfahrer_gtfs_change_public_variant(array $variant, string $status, ?
         'stopIds' => $variant['stopIds'],
         'stopNames' => $variant['stopNames'],
         'diff' => null,
+        'previousVariantId' => $previous !== null ? strval($previous['variantId'] ?? '') : null,
     ];
     if ($previous !== null) $result['diff'] = lehrfahrer_gtfs_change_variant_diff($variant, $previous);
     return $result;
