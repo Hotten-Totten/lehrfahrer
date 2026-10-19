@@ -545,10 +545,21 @@ jobs:
               echo 'Migrierter Cottbus-GTFS-Bestand ist ungueltig.' >&2
               exit 1
             fi
+            gtfs_version_report="$(mktemp "$private_root/.gtfs-version.XXXXXX")"
+            cat > "$gtfs_version_report" <<'PHP'
+          <?php
+          require (string)getenv('GTFS_VERSION_HELPER');
+          echo 'STAGING_GTFS_VERSION=', json_encode(
+              lehrfahrer_gtfs_version_info((string)getenv('GTFS_VERSION_ZIP'), (string)getenv('GTFS_VERSION_INDEX')),
+              JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+          ), PHP_EOL;
+          PHP
+            chmod 600 "$gtfs_version_report"
             GTFS_VERSION_HELPER="$webroot/api/_gtfs_version.php" \
             GTFS_VERSION_ZIP="$cottbus_zip" \
             GTFS_VERSION_INDEX="$private_root/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/index/variants.sqlite" \
-              php -r 'require getenv("GTFS_VERSION_HELPER"); echo "STAGING_GTFS_VERSION=", json_encode(lehrfahrer_gtfs_version_info(getenv("GTFS_VERSION_ZIP"), getenv("GTFS_VERSION_INDEX")), JSON_UNESCAPED_SLASHES), PHP_EOL;'
+              php -q -f "$gtfs_version_report"
+            rm -f -- "$gtfs_version_report"
             post_result="$(mktemp "$private_root/.cottbus-postcheck.XXXXXX")"
             post_validator="$(mktemp "$private_root/.cottbus-postvalidate.XXXXXX")"
             trap 'rm -f -- "$post_result" "$post_validator"' EXIT
