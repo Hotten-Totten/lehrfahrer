@@ -84,7 +84,7 @@ def main(index_path, zip_path):
         line16_route_id = new[line16_key[0]][0]
         line16_trip_ids = {trip for trip, (key, _) in trips.items() if key == line16_key[0]}
         names = {row["stop_id"]: row.get("stop_name", "") for row in rows(archive, "stops.txt")}
-        ends_uhland = any(names.get(seq[-1][1], "").casefold().endswith("uhlandstraße")
+        ends_uhland = any(names.get(seq[-1][1], "").casefold().endswith("uhlandstraße".casefold())
                            for trip, seq in sequences.items() if trip in line16_trip_ids and seq)
         changed_lines = sum(old[key][1] != value[1] for key, value in new.items() if key in old)
         print(json.dumps({"oldAgencyId": old_id, "newAgencyId": new_id,
