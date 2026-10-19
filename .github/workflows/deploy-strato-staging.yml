@@ -238,19 +238,19 @@ jobs:
         run: |
           set -euo pipefail
           REMOTE="$STRATO_USER@$STRATO_HOST"
-          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20)
           SCP_BASE=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
             SSH_BASE+=(-i ~/.ssh/id_rsa)
             SCP_BASE+=(-i ~/.ssh/id_rsa)
-            RSYNC_SSH="ssh -p $STRATO_PORT -i ~/.ssh/id_rsa -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            RSYNC_SSH="ssh -p $STRATO_PORT -i ~/.ssh/id_rsa -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20"
             SSH_RUN=("${SSH_BASE[@]}")
             SCP_RUN=("${SCP_BASE[@]}")
             RSYNC_RUN=(rsync)
           else
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
             SCP_RUN=(sshpass -e "${SCP_BASE[@]}")
-            RSYNC_SSH="ssh -p $STRATO_PORT -o UpdateHostKeys=no -o StrictHostKeyChecking=yes"
+            RSYNC_SSH="ssh -p $STRATO_PORT -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20"
             RSYNC_RUN=(sshpass -e rsync)
           fi
 
