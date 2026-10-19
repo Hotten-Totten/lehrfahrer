@@ -261,7 +261,7 @@ test('Editor und App verwenden die API-Pfade der Tenant-Testlinie', () => {
   const app = fs.readFileSync(path.join(root, 'app', 'js', 'app.js'), 'utf8');
   assert.ok(editor.includes('downloadTenantAsset(line.jsonPath'));
   assert.ok(editor.includes('downloadTenantAsset(line.gpxPath'));
-  assert.ok(app.includes('load_line.php?city='));
+  assert.ok(app.includes('load_line.php?scope=driver&city='));
   assert.ok(app.includes('buildAppRelativeAssetUrl(jsonPath)'));
 });
 
