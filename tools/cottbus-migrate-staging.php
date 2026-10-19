@@ -1404,14 +1404,21 @@ function cottbusValidateCompanyRecord(?array $record): void {
     }
 }
 
+function cottbusKnownRuntimeTargetFile(string $relative): bool {
+    if ($relative === 'settings/' . COTTBUS_CITY_MANAGEMENT_LOCK
+        || $relative === 'imports/gtfs/index/index_diagnostics.log') {
+        return true;
+    }
+    return preg_match(
+        '#^imports/gtfs/sessions/[0-9a-f]{32}/(?:source|routes|selection|variants_[0-9a-f]{40})\.json$#D',
+        $relative
+    ) === 1;
+}
+
 function cottbusExistingTargetStatus(string $stagingRoot, string $company, array $targetFiles): array {
     $prefix = 'companies/' . $company . '/';
     $companyRoot = cottbusPath(cottbusPath($stagingRoot, 'companies'), $company);
-    $knownTemplate = [
-        'settings/company.json' => true,
-        'settings/' . COTTBUS_CITY_MANAGEMENT_LOCK => true,
-        'imports/gtfs/index/index_diagnostics.log' => true,
-    ];
+    $knownTemplate = ['settings/company.json' => true];
     $knownTargets = [];
     $status = [];
     foreach ($targetFiles as $logical => $content) {
@@ -1430,7 +1437,8 @@ function cottbusExistingTargetStatus(string $stagingRoot, string $company, array
     }
     foreach (cottbusFiles($companyRoot) as $path) {
         $relative = cottbusRelative($companyRoot, $path);
-        if (!isset($knownTargets[$relative]) && !isset($knownTemplate[$relative])) {
+        if (!isset($knownTargets[$relative]) && !isset($knownTemplate[$relative])
+            && !cottbusKnownRuntimeTargetFile($relative)) {
             cottbusFail('Unbekannte Datei im Ziel-Tenant blockiert Apply: ' . $relative);
         }
     }

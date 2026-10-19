@@ -282,6 +282,10 @@ test('Realer Staging-Tenant wird im Dry-Run nur gelesen und mit echter ID geplan
   fs.writeFileSync(path.join(companyRoot, 'settings', '.city-management.lock'), '');
   fs.mkdirSync(path.join(companyRoot, 'imports', 'gtfs', 'index'), { recursive: true });
   fs.writeFileSync(path.join(companyRoot, 'imports', 'gtfs', 'index', 'index_diagnostics.log'), 'runtime diagnostic\n');
+  const sessionRoot = path.join(companyRoot, 'imports', 'gtfs', 'sessions', '1'.repeat(32));
+  fs.mkdirSync(sessionRoot, { recursive: true });
+  fs.writeFileSync(path.join(sessionRoot, 'source.json'), '{}\n');
+  fs.writeFileSync(path.join(sessionRoot, `variants_${'2'.repeat(40)}.json`), '{}\n');
   const before = snapshot(stagingRoot);
   const options = `[
     'public-root'=>${phpString(publicRoot)},
@@ -487,6 +491,19 @@ test('Idempotenz unterscheidet CREATE, SKIP, abweichend und unbekannte Datei', (
   fs.writeFileSync(path.join(companyRoot, 'drivers', 'unknown.json'), '{}');
   result = runLibrary(`${codePrefix} try { cottbusExistingTargetStatus($root,$company,$files); } catch(Throwable $e) { echo $e->getMessage(); }`);
   assert.match(result.stdout, /Unbekannte Datei/);
+});
+
+test('Staging-Laufzeitdateien sind eng erlaubt und Traversal bleibt blockiert', () => {
+  const result = runLibrary(`echo json_encode([
+    cottbusKnownRuntimeTargetFile('settings/.city-management.lock'),
+    cottbusKnownRuntimeTargetFile('imports/gtfs/index/index_diagnostics.log'),
+    cottbusKnownRuntimeTargetFile('imports/gtfs/sessions/${'1'.repeat(32)}/source.json'),
+    cottbusKnownRuntimeTargetFile('imports/gtfs/sessions/${'1'.repeat(32)}/variants_${'2'.repeat(40)}.json'),
+    cottbusKnownRuntimeTargetFile('imports/gtfs/sessions/../source.json'),
+    cottbusKnownRuntimeTargetFile('imports/gtfs/sessions/${'1'.repeat(32)}/secret.json')
+  ]);`);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), [true, true, true, true, false, false]);
 });
 
 test('Keine Fachnavigation oder Routingdatei wird durch das Werkzeug referenziert', () => {
