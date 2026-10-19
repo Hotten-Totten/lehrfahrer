@@ -280,6 +280,8 @@ test('Realer Staging-Tenant wird im Dry-Run nur gelesen und mit echter ID geplan
   }
   fs.writeFileSync(path.join(companyRoot, 'settings', 'company.json'), '{}\n');
   fs.writeFileSync(path.join(companyRoot, 'settings', '.city-management.lock'), '');
+  fs.mkdirSync(path.join(companyRoot, 'imports', 'gtfs', 'index'), { recursive: true });
+  fs.writeFileSync(path.join(companyRoot, 'imports', 'gtfs', 'index', 'index_diagnostics.log'), 'runtime diagnostic\n');
   const before = snapshot(stagingRoot);
   const options = `[
     'public-root'=>${phpString(publicRoot)},

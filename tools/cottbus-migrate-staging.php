@@ -1410,6 +1410,7 @@ function cottbusExistingTargetStatus(string $stagingRoot, string $company, array
     $knownTemplate = [
         'settings/company.json' => true,
         'settings/' . COTTBUS_CITY_MANAGEMENT_LOCK => true,
+        'imports/gtfs/index/index_diagnostics.log' => true,
     ];
     $knownTargets = [];
     $status = [];
