@@ -321,3 +321,14 @@ test('S: GTFS-Betreiberwahl aktiviert Schliessen und entfernt das Modal-Overlay'
   assert.match(closeSource, /refs\.modal\.classList\.add\("hidden"\)/);
   assert.match(closeSource, /refs\.modal\.setAttribute\("aria-busy", "false"\)/);
 });
+
+test('T: Fahrplanwechsel zeigt die vorhandene GTFS-Versionsinfo oben an', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const modal = html.slice(html.indexOf('id="gtfsChangeModal"'), html.indexOf('id="gtfsWorkModal"'));
+  assert.match(modal, /id="gtfsChangeVersionInfo"[\s\S]*id="gtfsChangeSummary"/);
+  assert.match(editor, /renderGtfsChangeAnalysis[\s\S]*loadGtfsVersionInfo\("gtfsChangeVersionInfo", true\)/);
+  assert.match(editor, /postGtfsImport\(\{ action: "serverInfo" \}\)/);
+  assert.match(editor, /Aktueller GTFS-Stand: \$\{version\.stand\}/);
+  assert.match(editor, /Importiert: \$\{version\.importedAt \|\| version\.importDateNote\}/);
+});

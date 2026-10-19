@@ -1641,6 +1641,7 @@ function renderGtfsChangeAnalysis(analysis) {
   report.textContent = "";
   modal.classList.remove("hidden");
   modal.setAttribute("aria-busy", "false");
+  void loadGtfsVersionInfo("gtfsChangeVersionInfo", true);
 
   const filterButtons = [...modal.querySelectorAll("[data-gtfs-filter]")];
   filterButtons.forEach(button => {
@@ -1795,34 +1796,43 @@ function renderGtfsWorkInventory(inventory) {
   modal.classList.remove("hidden");
 }
 
+async function loadGtfsVersionInfo(boxId, compact = false) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  box.textContent = "Aktueller GTFS-Stand: Wird geladen …";
+  try {
+    const { version } = await postGtfsImport({ action: "serverInfo" });
+    const fields = compact ? [
+      `Aktueller GTFS-Stand: ${version.stand} (${version.standBasis})`,
+      `Quelle: ${version.source}`,
+      `Importiert: ${version.importedAt || version.importDateNote}`,
+      `Datei: ${version.filename}`,
+      `SHA-256: ${String(version.sha256 || "").slice(0, 12)}…`
+    ] : [
+      `Stand/Datum: ${version.stand} (${version.standBasis})`,
+      `Importdatum: ${version.importedAt || version.importDateNote}`,
+      `Quelle: ${version.source}${version.sourceUrl ? ` (${version.sourceUrl})` : ""}`,
+      `Dateiname: ${version.filename}`,
+      `Feed-Version: ${version.feedInfo?.feed_version || "nicht enthalten"} (keine Datumsangabe)`,
+      `Dateigröße: ${Number(version.sizeBytes).toLocaleString("de-DE")} Byte`,
+      `SHA-256: ${version.sha256}`,
+      `Linien/Varianten im Index: ${version.lineCount ?? "?"}/${version.variantCount ?? "?"}`
+    ];
+    box.replaceChildren(...fields.map(value => {
+      const row = document.createElement("div");
+      row.textContent = value;
+      return row;
+    }));
+  } catch (err) {
+    box.textContent = err.message || "GTFS-Versionsinfo konnte nicht geladen werden.";
+  }
+}
+
 async function openGtfsWorkInventory() {
   try {
     const result = await postGtfsImport({ action: "workInventory" });
     renderGtfsWorkInventory(result.inventory);
-    const box = document.getElementById("gtfsVersionInfo");
-    if (box) {
-      box.textContent = "Wird geladen …";
-      try {
-        const { version } = await postGtfsImport({ action: "serverInfo" });
-        const fields = [
-          `Stand/Datum: ${version.stand} (${version.standBasis})`,
-          `Importdatum: ${version.importedAt || version.importDateNote}`,
-          `Quelle: ${version.source}${version.sourceUrl ? ` (${version.sourceUrl})` : ""}`,
-          `Dateiname: ${version.filename}`,
-          `Feed-Version: ${version.feedInfo?.feed_version || "nicht enthalten"} (keine Datumsangabe)`,
-          `Dateigröße: ${Number(version.sizeBytes).toLocaleString("de-DE")} Byte`,
-          `SHA-256: ${version.sha256}`,
-          `Linien/Varianten im Index: ${version.lineCount ?? "?"}/${version.variantCount ?? "?"}`
-        ];
-        box.replaceChildren(...fields.map(value => {
-          const row = document.createElement("div");
-          row.textContent = value;
-          return row;
-        }));
-      } catch (err) {
-        box.textContent = err.message || "GTFS-Versionsinfo konnte nicht geladen werden.";
-      }
-    }
+    void loadGtfsVersionInfo("gtfsVersionInfo");
   } catch (err) {
     setStatus(err.message || "GTFS-Arbeitsvorrat konnte nicht geladen werden.", "error");
   }
