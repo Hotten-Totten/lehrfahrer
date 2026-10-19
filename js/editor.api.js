@@ -1809,6 +1809,7 @@ async function openGtfsWorkInventory() {
           `Importdatum: ${version.importedAt || version.importDateNote}`,
           `Quelle: ${version.source}${version.sourceUrl ? ` (${version.sourceUrl})` : ""}`,
           `Dateiname: ${version.filename}`,
+          `Feed-Version: ${version.feedInfo?.feed_version || "nicht enthalten"} (keine Datumsangabe)`,
           `Dateigröße: ${Number(version.sizeBytes).toLocaleString("de-DE")} Byte`,
           `SHA-256: ${version.sha256}`,
           `Linien/Varianten im Index: ${version.lineCount ?? "?"}/${version.variantCount ?? "?"}`
