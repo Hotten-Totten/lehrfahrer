@@ -295,7 +295,7 @@ function lehrfahrer_gtfs_working_set(array $analysis, string $scope): array {
         ];
         $variantCount += count($variantIds);
     }
-    usort($routes, static fn(array $a, array $b): int => strnatcasecmp($a['routeId'], $b['routeId']));
+    usort($routes, static fn(array $a, array $b): int => strnatcasecmp(strval($a['routeId']), strval($b['routeId'])));
     $expectedRoutes = (int)$analysis['current']['routeCount'];
     $expectedVariants = (int)$analysis['current']['variantCount'];
     return [

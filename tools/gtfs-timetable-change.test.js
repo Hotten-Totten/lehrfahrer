@@ -95,6 +95,7 @@ before(() => {
   const changedStops = clone(base); changedStops[0].variants[0].stops = ['a', 'x', 'b', 'c']; build('changed-stops', changedStops);
   const reordered = clone(base); reordered[0].variants[0].stops = ['a', 'c', 'b']; build('reordered', reordered);
   const headsign = clone(base); headsign[0].variants[0].headsign = 'Neues Zentrum'; build('headsign', headsign);
+  build('numeric-routes', [route('10', '10', [{ direction: '0', headsign: 'Zentrum', stops: ['a', 'b'] }])]);
   build('foreign', base, '999');
 });
 
@@ -157,6 +158,15 @@ test('I: ALLE uebernimmt jede aktuelle Linie und Variante vollstaendig', () => {
   assert.equal(result.completeness.complete, true);
   assert.equal(result.completeness.missingRouteCount, 0);
   assert.equal(result.completeness.missingVariantCount, 0);
+});
+
+test('I2: numerische GTFS-route_id wird bei ALLE typsicher uebernommen', () => {
+  const analysis = compare('numeric-routes');
+  const encoded = Buffer.from(JSON.stringify(analysis)).toString('base64');
+  const result = JSON.parse(runPhp(`require ${phpString(path.join(root, 'api', '_gtfs_timetable_change.php'))};`
+    + `$a=json_decode(base64_decode(${phpString(encoded)}),true);echo json_encode(lehrfahrer_gtfs_working_set($a,'all'));`));
+  assert.equal(result.completeness.complete, true);
+  assert.equal(String(result.routes[0].routeId), '10');
 });
 
 test('J: Teiluebernahme liefert eine sichtbare Vollstaendigkeitswarnung', () => {
