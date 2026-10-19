@@ -785,6 +785,7 @@ function closeVbbImportProgressPopup() {
 
   hideVbbCandidatePicker();
   hideVbbSearchOptions();
+  refs.modal.setAttribute("aria-busy", "false");
   refs.modal.classList.add("hidden");
 }
 
@@ -1093,6 +1094,7 @@ function chooseGtfsAgenciesInPopup(agencies, options = {}) {
     return Promise.resolve(null);
   }
 
+  refs.closeBtn.disabled = false;
   refs.picker.classList.remove("hidden");
   refs.pickerList.innerHTML = "";
   refs.pickerList.setAttribute("role", "group");

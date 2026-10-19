@@ -307,3 +307,17 @@ test('R: einmalige Staging-Vorbereitung ist hart auf Umgebung, Bestand und 75\/6
   assert.match(workflow, /PREPARE_GTFS_WORK[\s\S]*inputs\.preflight_cottbus/);
   assert.match(workflow, /live_work_hash_before[\s\S]*live_work_hash_after/);
 });
+
+test('S: GTFS-Betreiberwahl aktiviert Schliessen und entfernt das Modal-Overlay', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const chooseStart = editor.indexOf('function chooseGtfsAgenciesInPopup');
+  const chooseEnd = editor.indexOf('async function postGtfsImport', chooseStart);
+  const chooseSource = editor.slice(chooseStart, chooseEnd);
+  const closeStart = editor.indexOf('function closeVbbImportProgressPopup');
+  const closeEnd = editor.indexOf('function showVbbImportProgressPopup', closeStart);
+  const closeSource = editor.slice(closeStart, closeEnd);
+  assert.match(chooseSource, /refs\.closeBtn\.disabled = false/);
+  assert.match(chooseSource, /refs\.closeBtn\.onclick = \(\) => \{[\s\S]*finish\(null\)[\s\S]*closeVbbImportProgressPopup\(\)/);
+  assert.match(closeSource, /refs\.modal\.classList\.add\("hidden"\)/);
+  assert.match(closeSource, /refs\.modal\.setAttribute\("aria-busy", "false"\)/);
+});
