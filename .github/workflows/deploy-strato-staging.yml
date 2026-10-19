@@ -534,7 +534,7 @@ jobs:
             LEHRFAHRER_APP_ROOT="$webroot" \
             LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
             LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-              php -q -d max_execution_time=0 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+              php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
                 -f "$private_root/cottbus-migrate-staging.php" -- \
                 --dry-run --public-root="$live_webroot" --private-root="$live_private" \
                 --gtfs-zip="$live_webroot/gtfs/data/gtfs/latest.zip" \
@@ -738,7 +738,7 @@ jobs:
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
           LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-            php -q -d max_execution_time=0 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+            php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/cottbus-migrate-staging.php" -- \
               --dry-run \
               --public-root="$live_webroot" \
@@ -1594,7 +1594,7 @@ jobs:
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
           LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-            php -q -d max_execution_time=0 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+            php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/cottbus-migrate-staging.php" -- \
               --dry-run --public-root="$live_webroot" --private-root="$live_private" \
               --gtfs-zip="$gtfs_source" --company-id="$company_id" \
@@ -1625,7 +1625,7 @@ jobs:
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
           LEHRFAHRER_STAGING_CGI_APPLY=1 \
-            php -q -d max_execution_time=0 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+            php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/cottbus-migrate-staging.php" -- \
               --apply --confirm=APPLY-COTTBUS-STAGING \
               --source-approval="$source_approval" \
@@ -1650,7 +1650,7 @@ jobs:
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
           LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-            php -q -d max_execution_time=0 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
+            php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/cottbus-migrate-staging.php" -- \
               --dry-run --public-root="$live_webroot" --private-root="$live_private" \
               --gtfs-zip="$gtfs_source" --company-id="$company_id" \
