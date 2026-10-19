@@ -1071,8 +1071,13 @@ async function restoreActiveDriveState() {
   const state = readActiveDriveState();
   if (!state) return false;
 
-  applyActiveDriveSelection(state);
   const selection = state.selection;
+  const stillReleased = availableLinesCatalog.some(line => lineStorageIdCandidates(line).includes(selection?.lineStorageId));
+  if (!stillReleased) {
+    clearActiveDriveState();
+    return false;
+  }
+  applyActiveDriveSelection(state);
   const loadedRoute = await loadAndShowRoute(
     selection.city,
     selection.fileBase,
@@ -1117,8 +1122,8 @@ async function fetchLinesCatalogFromServer() {
   const response = await fetch(`${API_BASE}/list_lines.php?scope=driver&_ts=${Date.now()}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Linienkatalog HTTP ${response.status}`);
   const result = await response.json();
-  if (!result?.ok || !Array.isArray(result.lines) || result.lines.length === 0) {
-    throw new Error('Linienkatalog ist leer oder ungültig.');
+  if (!result?.ok || !Array.isArray(result.lines)) {
+    throw new Error('Linienkatalog ist ungültig.');
   }
   return deduplicateLinesCatalog(result.lines);
 }
@@ -1218,14 +1223,13 @@ async function initializePersistentLineData() {
     renderLineDataStatus('none');
   }
 
-  await restoreActiveDriveState();
-
   try {
     await refreshPersistentLineData();
   } catch (err) {
     console.warn('Online-Aktualisierung der Liniendaten fehlgeschlagen; lokaler Stand bleibt aktiv:', err);
     renderLineDataStatus(cachedCatalog.length ? 'offline' : 'none', cachedRecords.length);
   }
+  await restoreActiveDriveState();
 }
 
 async function fetchAndCacheLinesCatalog() {
@@ -1268,7 +1272,7 @@ async function downloadLineWithGPX(lineId) {
 
     // Lade von der API
     const fileBase = (line.fileBase || String(line.file || '').replace(/\.json$/i, '')).trim();
-    let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
+    let url = `${API_BASE}/load_line.php?scope=driver&city=${encodeURIComponent(line.city)}&line=${encodeURIComponent(fileBase)}`;
     if (line.lineFolder) url += `&lineFolder=${encodeURIComponent(line.lineFolder)}`;
     if (line.categoryFolder) url += `&categoryFolder=${encodeURIComponent(line.categoryFolder)}`;
 
@@ -2047,7 +2051,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
   // 3. Dann Server versuchen
   if (!data) {
     try {
-      let url = `${API_BASE}/load_line.php?city=${encodeURIComponent(city)}&line=${encodeURIComponent(cleanFileBase)}`;
+      let url = `${API_BASE}/load_line.php?scope=driver&city=${encodeURIComponent(city)}&line=${encodeURIComponent(cleanFileBase)}`;
       if (lineFolder) url += `&lineFolder=${encodeURIComponent(lineFolder)}`;
       if (categoryFolder) url += `&categoryFolder=${encodeURIComponent(categoryFolder)}`;
 

@@ -289,6 +289,8 @@ test('Q: Fahrer-App fordert explizit nur freigegebene Routen an', () => {
   const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
   assert.match(app, /list_lines\.php\?scope=driver/);
   assert.match(app, /load_line\.php\?scope=driver/);
+  assert.doesNotMatch(app, /load_line\.php\?city=/);
+  assert.doesNotMatch(app, /result\.lines\.length === 0/);
   assert.match(list, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
   assert.match(load, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
   assert.match(editor, /Alle Varianten vorbereiten|workPrepareAll/);
