@@ -1807,18 +1807,20 @@ async function loadGtfsVersionInfo(boxId, compact = false) {
       `Quelle: ${version.source}`,
       `Importiert: ${version.importedAt || version.importDateNote}`,
       `Datei: ${version.filename}`,
+      version.agencyId ? `Cottbusverkehr Agency-ID (dieser Feed): ${version.agencyId}` : null,
       `SHA-256: ${String(version.sha256 || "").slice(0, 12)}…`
     ] : [
       `Stand/Datum: ${version.stand} (${version.standBasis})`,
       `Importdatum: ${version.importedAt || version.importDateNote}`,
       `Quelle: ${version.source}${version.sourceUrl ? ` (${version.sourceUrl})` : ""}`,
       `Dateiname: ${version.filename}`,
+      version.agencyId ? `Cottbusverkehr Agency-ID (dieser Feed): ${version.agencyId}` : null,
       `Feed-Version: ${version.feedInfo?.feed_version || "nicht enthalten"} (keine Datumsangabe)`,
       `Dateigröße: ${Number(version.sizeBytes).toLocaleString("de-DE")} Byte`,
       `SHA-256: ${version.sha256}`,
       `Linien/Varianten im Index: ${version.lineCount ?? "?"}/${version.variantCount ?? "?"}`
     ];
-    box.replaceChildren(...fields.map(value => {
+    box.replaceChildren(...fields.filter(Boolean).map(value => {
       const row = document.createElement("div");
       row.textContent = value;
       return row;

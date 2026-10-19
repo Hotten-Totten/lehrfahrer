@@ -56,7 +56,7 @@ function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, ar
     $previousKeys = [];
     $previousPath = dirname($indexPath) . DIRECTORY_SEPARATOR . 'variants.sqlite.previous';
     if (is_file($previousPath)) {
-        $analysis = lehrfahrer_gtfs_compare_indexes($indexPath, $previousPath, $agencyIds);
+        $analysis = lehrfahrer_gtfs_compare_operator_indexes($indexPath, $previousPath);
         foreach ($analysis['lines'] as $line) {
             foreach ($line['variants'] as $variant) {
                 if (($variant['status'] ?? '') === 'ENTFALLEN') continue;
@@ -64,7 +64,7 @@ function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, ar
                 $comparisonStatuses[$currentKey] = strval($variant['status']);
                 $previousVariantId = trim(strval($variant['previousVariantId'] ?? ''));
                 if ($previousVariantId !== '') {
-                    $previousKeys[$currentKey] = lehrfahrer_gtfs_work_key(strval($line['routeId']), $previousVariantId);
+                    $previousKeys[$currentKey] = lehrfahrer_gtfs_work_key(strval($line['previousRouteId'] ?? $line['routeId']), $previousVariantId);
                 }
             }
         }
@@ -145,7 +145,7 @@ function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, ar
 }
 
 function lehrfahrer_gtfs_work_variant_row(string $indexPath, string $routeId, string $variantId): array {
-    $pdo = lehrfahrer_gtfs_change_open_index($indexPath, ['143']);
+    $pdo = lehrfahrer_gtfs_change_open_index($indexPath, [lehrfahrer_gtfs_operator_id_from_index($indexPath)]);
     $statement = $pdo->prepare('SELECT v.*, r.short_name, r.long_name FROM variants v JOIN routes r ON r.route_id=v.route_id WHERE v.route_id=? AND v.variant_id=?');
     $statement->execute([$routeId, $variantId]);
     $row = $statement->fetch(PDO::FETCH_ASSOC);

@@ -9,6 +9,7 @@ try {
     if ($appRoot === '' || !is_dir($appRoot)) throw new RuntimeException('Staging-App-Root fehlt.');
     require_once $appRoot . '/api/_tenant_storage.php';
     require_once $appRoot . '/api/_gtfs_variant_index.php';
+    require_once $appRoot . '/api/_gtfs_timetable_change.php';
     require_once $appRoot . '/api/_gtfs_version.php';
     require_once $appRoot . '/api/_control_repositories.php';
 
@@ -17,15 +18,16 @@ try {
     $baseline = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/variants.sqlite.previous');
     $inventoryPath = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/work-inventory.json');
     if (!is_file($baseline) || is_link($baseline) || !is_readable($baseline)) throw new RuntimeException('GTFS-Baseline fehlt.');
-    $validated = lehrfahrer_gtfs_validate_variant_index($index, ['143']);
+    $agencyId = lehrfahrer_gtfs_operator_id_from_index($index);
+    $validated = lehrfahrer_gtfs_validate_variant_index($index, [$agencyId]);
     if ($validated['routes'] !== 75 || $validated['variants'] !== 678) throw new RuntimeException('Cottbus-Index ist nicht 75/678.');
-    $version = lehrfahrer_gtfs_version_info($zip, $index);
+    $version = lehrfahrer_gtfs_version_info($zip, $index, LEHRFAHRER_GTFS_COTTBUS_NAME);
     if ($version['indexMatchesZip'] !== true) throw new RuntimeException('GTFS-ZIP und Index passen nicht zusammen.');
     if (!is_file($inventoryPath) || is_link($inventoryPath)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
     $inventory = json_decode((string)file_get_contents($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
     $complete = $inventory['completeness'] ?? [];
     if (!is_array($inventory) || ($inventory['sourceIndexSha256'] ?? '') !== $validated['sha256']
-        || ($inventory['agencyIds'] ?? []) !== ['143']
+        || ($inventory['agencyIds'] ?? []) !== [$agencyId]
         || ($complete['complete'] ?? false) !== true
         || ($complete['capturedLineCount'] ?? null) !== 75
         || ($complete['capturedVariantCount'] ?? null) !== 678) {

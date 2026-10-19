@@ -2,6 +2,71 @@
 declare(strict_types=1);
 
 const LEHRFAHRER_GTFS_CHANGE_VERSION = 1;
+const LEHRFAHRER_GTFS_COTTBUS_NAME = 'Cottbusverkehr';
+
+function lehrfahrer_gtfs_operator_id_from_rows(array $rows, string $operatorName = LEHRFAHRER_GTFS_COTTBUS_NAME): string {
+    $matches = [];
+    foreach ($rows as $row) {
+        if (strcasecmp(trim(strval($row['agency_name'] ?? '')), $operatorName) !== 0) continue;
+        $id = trim(strval($row['agency_id'] ?? ''));
+        if ($id === '') throw new RuntimeException('GTFS-Betreiber hat keine Agency-ID.');
+        $matches[] = $id;
+    }
+    if (count($matches) !== 1) throw new RuntimeException('Cottbusverkehr ist im GTFS nicht eindeutig identifizierbar.');
+    return $matches[0];
+}
+
+function lehrfahrer_gtfs_operator_id_from_zip(ZipArchive $zip,
+    string $operatorName = LEHRFAHRER_GTFS_COTTBUS_NAME): string {
+    $matches = 0;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        if ($zip->getNameIndex($i) === 'agency.txt') $matches++;
+    }
+    if ($matches !== 1) throw new RuntimeException('GTFS-agency.txt ist nicht eindeutig.');
+    $entry = $zip->statName('agency.txt');
+    if (!is_array($entry) || (int)($entry['size'] ?? 0) > 1048576) {
+        throw new RuntimeException('GTFS-agency.txt fehlt oder ist zu gross.');
+    }
+    $stream = $zip->getStream('agency.txt');
+    if ($stream === false) throw new RuntimeException('GTFS-agency.txt ist nicht lesbar.');
+    try {
+        $header = fgetcsv($stream, null, ',', '"', '');
+        if (!is_array($header)) throw new RuntimeException('GTFS-Agency-Header fehlt.');
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', strval($header[0]));
+        if (!in_array('agency_id', $header, true) || !in_array('agency_name', $header, true)) {
+            throw new RuntimeException('GTFS-Agency-Pflichtfelder fehlen.');
+        }
+        $rows = [];
+        while (($values = fgetcsv($stream, null, ',', '"', '')) !== false) {
+            if (count($values) !== count($header)) throw new RuntimeException('GTFS-Agency-Zeile ist ungueltig.');
+            $rows[] = array_combine($header, $values);
+        }
+        return lehrfahrer_gtfs_operator_id_from_rows($rows, $operatorName);
+    } finally {
+        fclose($stream);
+    }
+}
+
+function lehrfahrer_gtfs_operator_id_from_index(string $path): string {
+    if (!is_file($path) || is_link($path) || !is_readable($path)
+        || file_get_contents($path, false, null, 0, 16) !== "SQLite format 3\0") {
+        throw new RuntimeException('GTFS-Betreiberindex ist nicht lesbar.');
+    }
+    $pdo = new PDO('sqlite:file:' . $path . '?mode=ro', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec('PRAGMA query_only=ON;');
+    $rows = $pdo->query('SELECT agency_id, agency_name FROM agencies')->fetchAll(PDO::FETCH_ASSOC);
+    $id = lehrfahrer_gtfs_operator_id_from_rows($rows);
+    $meta = $pdo->query("SELECT value FROM meta WHERE key='agency_ids'")->fetchColumn();
+    if (json_decode(strval($meta), true) !== [$id]) {
+        throw new RuntimeException('GTFS-Index enthaelt nicht ausschliesslich Cottbusverkehr.');
+    }
+    $foreignRoutes = $pdo->prepare('SELECT COUNT(*) FROM routes WHERE agency_id <> ?');
+    $foreignRoutes->execute([$id]);
+    if ((int)$foreignRoutes->fetchColumn() !== 0) {
+        throw new RuntimeException('GTFS-Index enthaelt Linien eines fremden Betreibers.');
+    }
+    return $id;
+}
 
 function lehrfahrer_gtfs_change_open_index(string $path, array $expectedAgencyIds): PDO {
     if (!is_file($path) || is_link($path) || !is_readable($path)) {
@@ -204,12 +269,36 @@ function lehrfahrer_gtfs_compare_route(array $current, array $previous): array {
     return ['status' => $status, 'variants' => $variants, 'metadataChanged' => $metadataChanged];
 }
 
-function lehrfahrer_gtfs_compare_indexes(string $currentPath, ?string $previousPath, array $expectedAgencyIds): array {
+function lehrfahrer_gtfs_routes_by_identity(array $routes): array {
+    $result = [];
+    foreach ($routes as $route) {
+        $name = strtolower(trim(strval($route['shortName'])));
+        if ($name === '') throw new RuntimeException('GTFS-Linie ohne eindeutigen Liniennamen.');
+        $key = $name . "\0" . strval($route['routeType']);
+        if (isset($result[$key])) throw new RuntimeException('GTFS-Linienidentitaet ist mehrdeutig.');
+        $result[$key] = $route;
+    }
+    return $result;
+}
+
+function lehrfahrer_gtfs_compare_operator_indexes(string $currentPath, ?string $previousPath): array {
+    $currentId = lehrfahrer_gtfs_operator_id_from_index($currentPath);
+    $previousId = $previousPath !== null && is_file($previousPath)
+        ? lehrfahrer_gtfs_operator_id_from_index($previousPath) : $currentId;
+    return lehrfahrer_gtfs_compare_indexes($currentPath, $previousPath, [$currentId], [$previousId], true);
+}
+
+function lehrfahrer_gtfs_compare_indexes(string $currentPath, ?string $previousPath, array $expectedAgencyIds,
+    ?array $previousAgencyIds = null, bool $matchByLine = false): array {
     $current = lehrfahrer_gtfs_change_read_index($currentPath, $expectedAgencyIds);
     $previousAvailable = $previousPath !== null && is_file($previousPath);
     $previous = $previousAvailable
-        ? lehrfahrer_gtfs_change_read_index($previousPath, $expectedAgencyIds)
+        ? lehrfahrer_gtfs_change_read_index($previousPath, $previousAgencyIds ?? $expectedAgencyIds)
         : ['sha256' => null, 'createdAt' => '', 'routes' => []];
+    if ($matchByLine) {
+        $current['routes'] = lehrfahrer_gtfs_routes_by_identity($current['routes']);
+        $previous['routes'] = lehrfahrer_gtfs_routes_by_identity($previous['routes']);
+    }
     $routeIds = array_values(array_unique(array_merge(array_keys($current['routes']), array_keys($previous['routes']))));
     sort($routeIds, SORT_NATURAL | SORT_FLAG_CASE);
     $lines = [];
@@ -238,8 +327,9 @@ function lehrfahrer_gtfs_compare_indexes(string $currentPath, ?string $previousP
         $lineCounts[$status]++;
         foreach ($variants as $variant) $variantCounts[$variant['status']]++;
         $lines[] = [
-            'routeId' => $routeId,
-            'line' => $route['shortName'] !== '' ? $route['shortName'] : $routeId,
+            'routeId' => $route['routeId'],
+            'previousRouteId' => $old !== null ? $old['routeId'] : null,
+            'line' => $route['shortName'] !== '' ? $route['shortName'] : $route['routeId'],
             'longName' => $route['longName'],
             'routeType' => $route['routeType'],
             'status' => $status,
@@ -253,6 +343,7 @@ function lehrfahrer_gtfs_compare_indexes(string $currentPath, ?string $previousP
         'version' => LEHRFAHRER_GTFS_CHANGE_VERSION,
         'baselineAvailable' => $previousAvailable,
         'agencyIds' => array_values($expectedAgencyIds),
+        'previousAgencyIds' => array_values($previousAgencyIds ?? $expectedAgencyIds),
         'current' => [
             'sha256' => $current['sha256'],
             'createdAt' => $current['createdAt'],

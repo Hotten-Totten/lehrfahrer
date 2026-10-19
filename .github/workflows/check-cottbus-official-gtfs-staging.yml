@@ -1,0 +1,49 @@
+name: Read-only Cottbus official GTFS check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read staging index and official feed without changing either
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          case "$STAGING_PRIVATE_PATH" in
+            ''|/*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*) exit 1 ;;
+          esac
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            printf '%s\n' "$STRATO_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            SCP_RUN=(scp -i ~/.ssh/id_rsa -P "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+            SCP_RUN=(sshpass -e scp -P "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+          fi
+          ssh-keyscan -p "$STRATO_PORT" "$STRATO_HOST" >> ~/.ssh/known_hosts
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$temp_dir"' EXIT
+          remote_path="./${STAGING_PRIVATE_PATH#/}/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/index/variants.sqlite"
+          "${SCP_RUN[@]}" "$STRATO_USER@$STRATO_HOST:$remote_path" "$temp_dir/current.sqlite"
+          curl --fail --location --silent --show-error --max-time 360 \
+            --output "$temp_dir/official.zip" https://download.gtfs.de/germany/nv_free/latest.zip
+          size="$(stat -c %s "$temp_dir/official.zip")"
+          if [ "$size" -lt 50000000 ] || [ "$size" -gt 500000000 ]; then
+            echo 'Official GTFS size outside plausible range' >&2
+            exit 1
+          fi
+          python3 tools/gtfs-official-readonly-check.py "$temp_dir/current.sqlite" "$temp_dir/official.zip"

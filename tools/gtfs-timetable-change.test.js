@@ -97,6 +97,10 @@ before(() => {
   const headsign = clone(base); headsign[0].variants[0].headsign = 'Neues Zentrum'; build('headsign', headsign);
   build('numeric-routes', [route('10', '10', [{ direction: '0', headsign: 'Zentrum', stops: ['a', 'b'] }])]);
   build('foreign', base, '999');
+  build('renumbered', [route('NEW10', '10', [
+    { direction: '0', headsign: 'Uhlandstraße', stops: ['a', 'b', 'c', 'u'] },
+    { direction: '1', headsign: 'Bahnhof', stops: ['c', 'b', 'a'] }
+  ]), route('NEW20', '20', [{ direction: '0', headsign: 'Nord', stops: ['d', 'e'] }])], '287');
 });
 
 after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
@@ -202,6 +206,25 @@ test('M: Tenant-/Agency-Isolation lehnt einen fremden Betreiber ab', () => {
   const code = `require ${phpString(path.join(root, 'api', '_gtfs_timetable_change.php'))};`
     + `try{lehrfahrer_gtfs_compare_indexes(${phpString(indexes.foreign)},null,['143']);exit(9);}catch(Throwable $e){echo 'blocked';}`;
   assert.equal(runPhp(code), 'blocked');
+});
+
+test('M2: Betreiberidentitaet statt Agency- und Route-ID, geaenderte Stopfolge erkannt', () => {
+  const result = JSON.parse(runPhp(`require ${phpString(path.join(root, 'api', '_gtfs_timetable_change.php'))};`
+    + `$r=lehrfahrer_gtfs_compare_operator_indexes(${phpString(indexes.renumbered)},${phpString(indexes.base)});echo json_encode($r);`));
+  assert.deepEqual(result.agencyIds, ['287']);
+  assert.deepEqual(result.previousAgencyIds, ['143']);
+  assert.equal(result.lineCounts.GEAENDERT, 1);
+  assert.equal(result.lineCounts.UNVERAENDERT, 1);
+  assert.equal(result.lines.find(line => line.line === '10').routeId, 'NEW10');
+});
+
+test('M3: fehlender oder mehrdeutiger Betreiber wird abgelehnt', () => {
+  const helper = phpString(path.join(root, 'api', '_gtfs_timetable_change.php'));
+  for (const rows of [[], [{ agency_id: '143', agency_name: 'Fremdbetrieb' }],
+    [{ agency_id: '143', agency_name: 'Cottbusverkehr' }, { agency_id: '287', agency_name: 'Cottbusverkehr' }]]) {
+    const encoded = Buffer.from(JSON.stringify(rows)).toString('base64');
+    assert.equal(runPhp(`require ${helper};try{lehrfahrer_gtfs_operator_id_from_rows(json_decode(base64_decode(${phpString(encoded)}),true));echo 'bad';}catch(Throwable $e){echo 'blocked';}`), 'blocked');
+  }
 });
 
 test('N: der alte Vergleichsstand bleibt bei Analyse und Uebernahme unveraendert erhalten', () => {

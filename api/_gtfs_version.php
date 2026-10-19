@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/_gtfs_timetable_change.php';
 
-function lehrfahrer_gtfs_version_info(string $zipPath, ?string $indexPath = null): array {
+function lehrfahrer_gtfs_version_info(string $zipPath, ?string $indexPath = null, ?string $operatorName = null): array {
     if (!is_file($zipPath) || is_link($zipPath) || !is_readable($zipPath)) {
         throw new RuntimeException('Server-GTFS-ZIP fehlt oder ist nicht lesbar.');
     }
@@ -14,6 +15,7 @@ function lehrfahrer_gtfs_version_info(string $zipPath, ?string $indexPath = null
     $zip = new ZipArchive();
     if ($zip->open($zipPath) !== true) throw new RuntimeException('Server-GTFS-ZIP kann nicht geöffnet werden.');
     try {
+        $zipAgencyId = $operatorName !== null ? lehrfahrer_gtfs_operator_id_from_zip($zip, $operatorName) : null;
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $stat = $zip->statIndex($i);
             if (!is_array($stat) || strtolower(basename(str_replace('\\', '/', (string)$stat['name']))) !== 'feed_info.txt') continue;
@@ -43,7 +45,12 @@ function lehrfahrer_gtfs_version_info(string $zipPath, ?string $indexPath = null
     $indexedSha256 = null;
     $lineCount = null;
     $variantCount = null;
+    $agencyId = null;
     if ($indexPath !== null && is_file($indexPath) && !is_link($indexPath) && is_readable($indexPath)) {
+        if ($operatorName !== null) {
+            $agencyId = lehrfahrer_gtfs_operator_id_from_index($indexPath);
+            if ($agencyId !== $zipAgencyId) throw new RuntimeException('GTFS-ZIP und Index nennen unterschiedliche Cottbusverkehr-IDs.');
+        }
         $pdo = new PDO('sqlite:file:' . $indexPath . '?mode=ro', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $metadata = $pdo->query('SELECT key, value FROM meta')->fetchAll(PDO::FETCH_KEY_PAIR);
         $indexedAt = $metadata['created_at'] ?? null;
@@ -68,5 +75,7 @@ function lehrfahrer_gtfs_version_info(string $zipPath, ?string $indexPath = null
         'indexMatchesZip' => $indexedSha256 !== null && hash_equals($sha256, $indexedSha256),
         'lineCount' => $lineCount,
         'variantCount' => $variantCount,
+        'agencyId' => $zipAgencyId,
+        'agencyIdBasis' => 'nur fuer diesen GTFS-Feed',
     ];
 }

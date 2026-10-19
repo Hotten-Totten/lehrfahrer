@@ -12,7 +12,6 @@ const GTFS_MAX_UPLOAD_BYTES = 262144000;
 const GTFS_MAX_FILTERED_ROUTES = 5000;
 const GTFS_SESSION_TTL_SECONDS = 7200;
 const GTFS_COTTBUS_COMPANY_ID = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
-const GTFS_COTTBUS_AGENCY_ID = '143';
 
 function gtfs_reply(array $payload, int $status = 200): void {
     http_response_code($status);
@@ -567,10 +566,9 @@ function gtfs_require_cottbus_change_scope(): void {
 
 function gtfs_timetable_change_analysis(): array {
     gtfs_require_cottbus_change_scope();
-    $analysis = lehrfahrer_gtfs_compare_indexes(
+    $analysis = lehrfahrer_gtfs_compare_operator_indexes(
         gtfs_index_path(),
-        is_file(gtfs_previous_index_path()) ? gtfs_previous_index_path() : null,
-        [GTFS_COTTBUS_AGENCY_ID]
+        is_file(gtfs_previous_index_path()) ? gtfs_previous_index_path() : null
     );
     $reviewLines = [];
     foreach ($analysis['lines'] as $line) {
@@ -617,11 +615,11 @@ function gtfs_adopt_timetable_working_set(string $scope): void {
 
 function gtfs_work_inventory_response(bool $prepareAll = false): void {
     gtfs_require_cottbus_change_scope();
-    $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+    $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [lehrfahrer_gtfs_operator_id_from_index(gtfs_index_path())]);
     $prepared = null;
     if ($prepareAll) {
         $prepared = lehrfahrer_gtfs_work_prepare_all(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), $inventory);
-        $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+        $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [lehrfahrer_gtfs_operator_id_from_index(gtfs_index_path())]);
     }
     gtfs_reply(['ok' => true, 'inventory' => $inventory, 'preparedCount' => $prepared]);
 }
@@ -631,7 +629,7 @@ function gtfs_work_open(): void {
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
-    lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [GTFS_COTTBUS_AGENCY_ID]);
+    lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [lehrfahrer_gtfs_operator_id_from_index(gtfs_index_path())]);
     $line = lehrfahrer_gtfs_work_prepare(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), $routeId, $variantId);
     $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, 'IN_BEARBEITUNG');
     gtfs_reply(['ok' => true, 'line' => $line, 'inventory' => $inventory]);
@@ -976,8 +974,13 @@ function gtfs_start_index_job(bool $restart, array $requestedAgencyIds): void {
     $zip = new ZipArchive();
     if ($zip->open($zipPath) !== true) gtfs_error(422, 'Server-GTFS-ZIP kann nicht geöffnet werden.');
     $availableAgencies = gtfs_read_agencies($zip);
+    $cottbusAgencyId = LEHRFAHRER_GTFS_COMPANY_ID === GTFS_COTTBUS_COMPANY_ID
+        ? lehrfahrer_gtfs_operator_id_from_zip($zip) : null;
     $zip->close();
     $unknownAgencyIds = array_values(array_filter($agencyIds, static fn(string $id): bool => !array_key_exists($id, $availableAgencies)));
+    if ($cottbusAgencyId !== null && $agencyIds !== [$cottbusAgencyId]) {
+        gtfs_error(400, 'Fuer Cottbusverkehr muss der eindeutig erkannte Betreiber dieses Feeds gewaehlt werden.');
+    }
     if ($unknownAgencyIds) gtfs_error(400, 'Unbekannte Betreiber-ID für GTFS-Index: ' . $unknownAgencyIds[0]);
     $agencyFingerprint = gtfs_agency_fingerprint($agencyIds);
     $existing = gtfs_read_index_job();
@@ -1465,7 +1468,10 @@ try {
     $action = strtolower(trim(strval($_POST['action'] ?? 'upload')));
     if ($action === 'upload') gtfs_handle_upload();
     if ($action === 'server') gtfs_handle_server_zip();
-    if ($action === 'serverinfo') gtfs_reply(['ok' => true, 'version' => lehrfahrer_gtfs_version_info(gtfs_server_zip_path(), gtfs_index_path())]);
+    if ($action === 'serverinfo') gtfs_reply(['ok' => true, 'version' => lehrfahrer_gtfs_version_info(
+        gtfs_server_zip_path(), gtfs_index_path(),
+        LEHRFAHRER_GTFS_COMPANY_ID === GTFS_COTTBUS_COMPANY_ID ? LEHRFAHRER_GTFS_COTTBUS_NAME : null
+    )]);
     if ($action === 'indexagencies') gtfs_handle_index_agencies();
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
