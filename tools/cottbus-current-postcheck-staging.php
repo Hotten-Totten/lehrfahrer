@@ -41,7 +41,13 @@ try {
     $settingsPath = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'settings', 'city_settings.json');
     if (!is_file($settingsPath) || is_link($settingsPath)) throw new RuntimeException('Cottbus-Einstellungen fehlen.');
     $settings = json_decode((string)file_get_contents($settingsPath), true, 512, JSON_THROW_ON_ERROR);
-    if (!is_array($settings) || !is_array($settings['cottbus'] ?? null)) throw new RuntimeException('Cottbus-Einstellungen sind ungueltig.');
+    if (!is_array($settings) || $settings === []) throw new RuntimeException('Cottbus-Einstellungen sind leer oder ungueltig.');
+    foreach ($settings as $city => $entry) {
+        if (!is_string($city) || preg_match('/^[a-z0-9_-]+$/D', $city) !== 1 || !is_array($entry)
+            || (isset($entry['dispatchPhone']) && !is_string($entry['dispatchPhone']))) {
+            throw new RuntimeException('Cottbus-Einstellungen besitzen ein ungueltiges Stadtformat.');
+        }
+    }
     foreach (['drivers', 'trainings', 'packages', 'documents'] as $area) {
         $directory = lehrfahrer_tenant_area(POSTCHECK_COMPANY, $area);
         if (!is_dir($directory) || is_link($directory)) throw new RuntimeException('Cottbus-Fachbereich fehlt: ' . $area);
