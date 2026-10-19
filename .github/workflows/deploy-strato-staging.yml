@@ -277,6 +277,7 @@ jobs:
             tools/reissue-first-admin-activation.php \
             tools/staging-reissue-state.php \
             tools/cottbus-migrate-staging.php \
+            tools/cottbus-current-postcheck-staging.php \
             tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
             tools/staging-smoke.php \
@@ -560,98 +561,11 @@ jobs:
             GTFS_VERSION_INDEX="$private_root/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/index/variants.sqlite" \
               php -q -f "$gtfs_version_report"
             rm -f -- "$gtfs_version_report"
-            post_result="$(mktemp "$private_root/.cottbus-postcheck.XXXXXX")"
-            post_validator="$(mktemp "$private_root/.cottbus-postvalidate.XXXXXX")"
-            trap 'rm -f -- "$post_result" "$post_validator"' EXIT
             LEHRFAHRER_ENV=staging \
             LEHRFAHRER_APP_ROOT="$webroot" \
             LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
-            LEHRFAHRER_STAGING_CGI_DRY_RUN=1 \
-              php -q -d max_execution_time=900 -d register_argc_argv=1 -d "auto_prepend_file=$private_root/runtime-env.php" \
-                -f "$private_root/cottbus-migrate-staging.php" -- \
-                --dry-run --public-root="$live_webroot" --private-root="$live_private" \
-                --gtfs-zip="$live_webroot/gtfs/data/gtfs/latest.zip" \
-                --company-id='cmp_2ff1b82166c99988ed6f7eb51cca7b56' \
-                --staging-private-root="$private_root" --compact > "$post_result"
-            chmod 600 "$post_result"
-            cat > "$post_validator" <<'PHP'
-          <?php
-          require_once (string)getenv('LEHRFAHRER_APP_ROOT') . '/api/_control_repositories.php';
-          try {
-              $raw = (string)file_get_contents((string)getenv('POST_RESULT'));
-              if (str_starts_with($raw, "\xEF\xBB\xBF")) $raw = substr($raw, 3);
-              $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-              if (preg_match('/\A(?:(?:Content-Type|X-Powered-By|Status):[^\n]*\n)*\n*(\{.*\})\s*\z/isD',
-                  $raw, $matches) !== 1) {
-                  throw new RuntimeException('Cottbus-Postmigration-Ergebnis ist kein valides JSON.');
-              }
-              $report = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
-              $status = $report['real_target']['target_status'] ?? [];
-              if (($report['mode'] ?? '') !== 'DRY_RUN'
-                  || ($report['READY_FOR_APPLY'] ?? '') !== 'YES'
-                  || ($report['BLOCKERS'] ?? null) !== []
-                  || ($report['deterministic_manifest']['company_id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
-                  || ($report['deterministic_manifest']['variants_index']['routes'] ?? null) !== 75
-                  || ($report['deterministic_manifest']['variants_index']['variants'] ?? null) !== 678
-                  || count($status) !== 23
-                  || count(array_filter($status, static fn($value) => $value !== 'SKIP')) !== 0
-                  || ($report['real_target']['target_unchanged'] ?? false) !== true
-                  || ($report['real_target']['other_tenants_unchanged'] ?? false) !== true
-                  || ($report['read_only_evidence']['database_writes'] ?? -1) !== 0
-                  || ($report['read_only_evidence']['target_writes'] ?? -1) !== 0) {
-                  throw new RuntimeException('Migrierter Cottbus-Bestand weicht vom freigegebenen Stand ab.');
-              }
-              $pdo = lehrfahrer_control_database();
-              if (lehrfahrer_control_driver($pdo) !== 'mysql') {
-                  throw new RuntimeException('Staging-Control-DB ist nicht MariaDB.');
-              }
-              $company = (new LehrfahrerCompanyRepository($pdo))->findBySlug('cottbusverkehr');
-              if (!is_array($company)
-                  || ($company['id'] ?? '') !== 'cmp_2ff1b82166c99988ed6f7eb51cca7b56'
-                  || ($company['status'] ?? '') !== 'active') {
-                  throw new RuntimeException('Cottbus-Gesellschaft ist nicht eindeutig.');
-              }
-              $users = $pdo->prepare('SELECT id, active, must_change_password, password_hash
-                  FROM users WHERE company_id = :company_id AND login_normalized = :login');
-              $users->execute([':company_id' => $company['id'], ':login' => 'cottbus-admin']);
-              $admin = $users->fetchAll();
-              if (count($admin) !== 1 || !str_starts_with((string)$admin[0]['password_hash'], '$')) {
-                  throw new RuntimeException('Cottbus-Erstadmin ist nicht eindeutig.');
-              }
-              $roles = $pdo->prepare('SELECT roles.code FROM user_roles
-                  JOIN roles ON roles.id = user_roles.role_id
-                  WHERE user_roles.user_id = :user_id ORDER BY roles.code');
-              $roles->execute([':user_id' => $admin[0]['id']]);
-              if ($roles->fetchAll(PDO::FETCH_COLUMN) !== ['ADMIN']) {
-                  throw new RuntimeException('Cottbus-Erstadmin besitzt unerwartete Rollen.');
-              }
-              $tokens = $pdo->prepare('SELECT token_hash, expires_at, used_at
-                  FROM user_activation_tokens WHERE company_id = :company_id AND user_id = :user_id');
-              $tokens->execute([':company_id' => $company['id'], ':user_id' => $admin[0]['id']]);
-              $records = $tokens->fetchAll();
-              $active = (int)$admin[0]['active'] === 1;
-              if ($active) {
-                  if ((int)$admin[0]['must_change_password'] !== 0 || $records !== []) {
-                      throw new RuntimeException('Aktivierter Cottbus-Admin besitzt noch einen Aktivierungstoken.');
-                  }
-              } elseif ((int)$admin[0]['must_change_password'] !== 1
-                  || count($records) !== 1
-                  || preg_match('/^[0-9a-f]{64}$/D', (string)$records[0]['token_hash']) !== 1
-                  || $records[0]['used_at'] !== null
-                  || strtotime((string)$records[0]['expires_at']) === false) {
-                  throw new RuntimeException('Inaktiver Cottbus-Admin besitzt keinen sicheren Aktivierungstoken.');
-              }
-              echo 'COTTBUS_POSTMIGRATION_READ_ONLY=OK', "\n";
-              echo 'COTTBUS_ADMIN_ACTIVE=', $active ? 'YES' : 'NO', "\n";
-          } catch (Throwable $error) {
-              file_put_contents('php://stderr', 'Cottbus-Postmigration-Pruefung fehlgeschlagen.');
-              exit(1);
-          }
-          PHP
-            LEHRFAHRER_APP_ROOT="$webroot" POST_RESULT="$post_result" \
-              php -q -d "auto_prepend_file=$private_root/runtime-env.php" -f "$post_validator"
-            rm -f -- "$post_result" "$post_validator"
-            trap - EXIT
+              php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+                -f "$private_root/cottbus-current-postcheck-staging.php"
           else
           cat > "$private_root/run-cottbus-provision.php" <<PHP
           <?php
