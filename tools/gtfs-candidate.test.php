@@ -139,7 +139,7 @@ try {
     fixture_zip($candidateZip, $foreign);
     fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     blocked($preflight, 'Fremdbetrieb im Kandidaten-ZIP');
-    fixture_zip($candidateZip, $new);
+    copy($incomingZip, $candidateZip);
     fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     $pdo = new PDO('sqlite:' . $candidateIndex);
     $pdo->exec("UPDATE meta SET value='" . str_repeat('f', 64) . "' WHERE key='source_sha256'");
