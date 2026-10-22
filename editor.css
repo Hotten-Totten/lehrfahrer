@@ -3353,6 +3353,7 @@ button.danger:hover {
 
 .gtfs-change-header h3 { margin: 0 0 5px; font-size: 1.35rem; }
 .gtfs-change-baseline { color: #5c677a; font-size: 0.9rem; }
+#gtfsChangeDiagnostics { white-space: pre-line; margin: 0.5rem 0; }
 .gtfs-change-header button,
 .gtfs-change-toolbar button,
 .gtfs-change-actions button {

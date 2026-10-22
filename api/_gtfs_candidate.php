@@ -5,6 +5,7 @@ require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_gtfs_version.php';
+require_once __DIR__ . '/_gtfs_service_compare.php';
 
 const LEHRFAHRER_GTFS_OFFICIAL_URL = 'https://download.gtfs.de/germany/nv_free/latest.zip';
 
@@ -49,7 +50,7 @@ function lehrfahrer_gtfs_candidate_zip_agency(string $path, int $minimumBytes = 
 }
 
 function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $currentZip, string $currentIndex,
-    int $minimumBytes = 1048576, bool $requireNamedDirectory = true): array {
+    int $minimumBytes = 1048576, bool $requireNamedDirectory = true, ?string $comparisonDate = null): array {
     if (is_link($candidateDir) || !is_dir($candidateDir)) throw new RuntimeException('Gepruefter GTFS-Kandidat fehlt.');
     $manifestPath = $candidateDir . DIRECTORY_SEPARATOR . 'checked.json';
     lehrfahrer_gtfs_candidate_regular($manifestPath);
@@ -114,11 +115,13 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
         || hash_equals($manifest['checkedSourceSha256'], $manifest['checkedAgainstSha256'])) {
         throw new RuntimeException('GTFS-Kandidat ist nicht nachweislich neuer als der aktuelle Stand.');
     }
-    $analysis = lehrfahrer_gtfs_compare_operator_indexes($candidateIndex, $currentIndex);
-    $workingSet = lehrfahrer_gtfs_working_set($analysis, 'all');
+    $inventoryAnalysis = lehrfahrer_gtfs_compare_operator_indexes($candidateIndex, $currentIndex);
+    $workingSet = lehrfahrer_gtfs_working_set($inventoryAnalysis, 'all');
     if (!$workingSet['completeness']['complete']) throw new RuntimeException('GTFS-Kandidat ist nicht vollstaendig.');
+    $analysis = lehrfahrer_gtfs_compare_service_zips($candidateZip, $currentZip, $comparisonDate);
     return ['manifest' => $manifest, 'agencyId' => $agency, 'index' => $index,
-        'analysis' => $analysis, 'workingSet' => $workingSet];
+        'analysis' => $analysis, 'workingSet' => $workingSet,
+        'manualAdoptionReady' => $analysis['comparable']];
 }
 
 function lehrfahrer_gtfs_candidate_active_dir(string $candidateRoot): string {
@@ -213,12 +216,16 @@ function lehrfahrer_gtfs_candidate_publish(string $candidateRoot, string $incomi
 }
 
 function lehrfahrer_gtfs_candidate_adopt(string $candidateDir, string $currentZip, string $currentIndex,
-    string $companyId, int $minimumBytes = 1048576): array {
+    string $companyId, int $minimumBytes = 1048576, ?string $comparisonDate = null): array {
     $lockPath = dirname($currentIndex) . DIRECTORY_SEPARATOR . 'candidate-adopt.lock';
     $lock = fopen($lockPath, 'c+');
     if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) throw new RuntimeException('GTFS-Uebernahme ist bereits aktiv.');
     try {
-        $ready = lehrfahrer_gtfs_candidate_preflight($candidateDir, $currentZip, $currentIndex, $minimumBytes);
+        $ready = lehrfahrer_gtfs_candidate_preflight($candidateDir, $currentZip, $currentIndex,
+            $minimumBytes, true, $comparisonDate);
+        if (!$ready['manualAdoptionReady']) {
+            throw new RuntimeException('Keine gemeinsame Fahrplanperiode; manuelle Uebernahme bleibt gesperrt.');
+        }
         $candidateZip = $candidateDir . DIRECTORY_SEPARATOR . 'candidate.zip';
         $candidateIndex = $candidateDir . DIRECTORY_SEPARATOR . 'variants.sqlite';
         $previousZip = dirname($currentZip) . DIRECTORY_SEPARATOR . 'previous.zip';

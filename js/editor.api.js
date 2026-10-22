@@ -1593,9 +1593,17 @@ function renderGtfsChangeAnalysis(analysis) {
   baseline.textContent = analysis.candidateReady
     ? "Geprüfter offizieller Kandidat im Vergleich zum aktuellen Staging-Stand"
     : "Aktueller Staging-Stand; ein offizieller Kandidat ist noch nicht freigegeben";
+  const diagnostics = document.getElementById("gtfsChangeDiagnostics");
+  const comparisonDate = document.getElementById("gtfsComparisonDate");
+  if (diagnostics) diagnostics.textContent = analysis.candidateChecked ? [
+    `CURRENT: ${analysis.currentPeriod?.start || "?"} – ${analysis.currentPeriod?.end || "?"} (Agency ${analysis.currentAgency || "?"}; ${Number(analysis.currentValidTrips || 0)} gültige Trips; ${Number(analysis.currentValidLines || 0)} Linien)`,
+    `CANDIDATE: ${analysis.candidatePeriod?.start || "?"} – ${analysis.candidatePeriod?.end || "?"} (Agency ${analysis.candidateAgency || "?"}; ${Number(analysis.candidateValidTrips || 0)} gültige Trips; ${Number(analysis.candidateValidLines || 0)} Linien)`,
+    `Vergleich: ${analysis.comparisonMode || "?"}; Betriebstag: ${analysis.comparisonDate || "kein gemeinsamer"}; belegte Änderungen: ${Number(analysis.lineCounts?.GEAENDERT || 0) + Number(analysis.lineCounts?.NEU || 0) + Number(analysis.lineCounts?.ENTFALLEN || 0)}`
+  ].join("\n") : "";
+  if (comparisonDate && analysis.comparisonDate) comparisonDate.value = analysis.comparisonDate;
   summary.replaceChildren();
   const stats = [
-    [analysis.current?.routeCount, "Linien geprüft"],
+    [analysis.candidateValidLines ?? analysis.current?.routeCount, "Linien geprüft"],
     [analysis.current?.variantCount, "Varianten geprüft"],
     [analysis.lineCounts?.NEU, "Linien neu"],
     [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
@@ -1608,7 +1616,7 @@ function renderGtfsChangeAnalysis(analysis) {
   });
 
   list.replaceChildren();
-  (analysis.lines || []).forEach(line => {
+  (analysis.candidateChecked ? (analysis.lines || []) : []).forEach(line => {
     const card = gtfsChangeElement("details", "gtfs-change-line");
     card.dataset.status = line.status;
     const heading = document.createElement("summary");
@@ -1662,22 +1670,28 @@ function renderGtfsChangeAnalysis(analysis) {
   candidateStatus.textContent = analysis.candidateReady
     ? "Offizieller Kandidat erneut validiert; Lehrfahrer-Routen bleiben unverändert."
     : "Kein geprüfter offizieller Kandidat zur Übernahme freigegeben.";
-  if (!analysis.candidateReady) {
-    void postGtfsImport({ action: "candidateStatus" }).then(result => {
+  const checkCandidate = date => postGtfsImport({ action: "candidateStatus", ...(date ? { comparisonDate: date } : {}) }).then(result => {
       if (modal.classList.contains("hidden")) return;
-      if (result.ready && result.changeAnalysis) {
-        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateReady: true, candidateId: result.candidateId });
+      if (result.changeAnalysis) {
+        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateChecked: true,
+          candidateReady: result.ready, candidateId: result.candidateId });
+        if (!result.ready) candidateStatus.textContent = result.changeAnalysis.comparisonMode === "KEINE_GEMEINSAME_FAHRPLANPERIODE"
+          ? "Keine gemeinsame Fahrplanperiode – Übernahme gesperrt." : "Vergleichstag nicht in beiden Feeds aktiv – Übernahme gesperrt.";
       } else {
         candidateStatus.textContent = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
       }
     }).catch(err => { candidateStatus.textContent = err.message || "Kandidatenprüfung fehlgeschlagen."; });
+  document.getElementById("gtfsComparisonCheckBtn").onclick = () => { void checkCandidate(comparisonDate?.value || ""); };
+  if (!analysis.candidateChecked) {
+    void checkCandidate("");
   }
   button.onclick = async () => {
       if (!analysis.candidateReady || !confirm("Geprüften offiziellen GTFS-Kandidaten manuell übernehmen? Bestehende Lehrfahrer-Routen bleiben unverändert.")) return;
       button.disabled = true;
       modal.setAttribute("aria-busy", "true");
       try {
-        const result = await postGtfsImport({ action: "candidateAdopt", candidateId: analysis.candidateId });
+        const result = await postGtfsImport({ action: "candidateAdopt", candidateId: analysis.candidateId,
+          comparisonDate: comparisonDate?.value || "" });
         const complete = result.completeness || {};
         report.className = `gtfs-change-report${complete.complete ? "" : " warn"}`;
         report.textContent = [

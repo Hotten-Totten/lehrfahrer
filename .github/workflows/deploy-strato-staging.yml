@@ -70,6 +70,7 @@ jobs:
             php -l "$file" >/dev/null
           done < <(git ls-files -z -- '*.php')
 
+          php tools/gtfs-service-compare.test.php
           php tools/gtfs-candidate.test.php
           python3 tools/gtfs-official-candidate-filter.test.py
 
@@ -215,6 +216,8 @@ jobs:
           REMOTE="$STRATO_USER@$STRATO_HOST"
           remote_path="./${STAGING_PRIVATE_PATH#/}/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/index/variants.sqlite"
           "${SCP_RUN[@]}" "$REMOTE:$remote_path" "$temp_dir/current.sqlite"
+          current_zip="./${STAGING_PRIVATE_PATH#/}/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/latest.zip"
+          "${SCP_RUN[@]}" "$REMOTE:$current_zip" "$temp_dir/current.zip"
           curl --fail --location --silent --show-error --max-time 360 \
             --dump-header "$temp_dir/headers" \
             --output "$temp_dir/official.zip" https://download.gtfs.de/germany/nv_free/latest.zip
@@ -223,7 +226,7 @@ jobs:
             echo 'Official GTFS size outside plausible range' >&2
             exit 1
           fi
-          python3 tools/gtfs-official-readonly-check.py "$temp_dir/current.sqlite" "$temp_dir/official.zip"
+          php -d max_execution_time=900 tools/gtfs-service-compare-cli.php "$temp_dir/official.zip" "$temp_dir/current.zip"
           published_at="$(python3 - "$temp_dir/headers" <<'PY'
           import email.utils, pathlib, sys
           lines = pathlib.Path(sys.argv[1]).read_text().splitlines()

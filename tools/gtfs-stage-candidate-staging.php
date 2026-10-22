@@ -36,16 +36,13 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D', $publishedAt)) {
     throw new RuntimeException('Offizieller Last-Modified-Zeitpunkt fehlt.');
 }
 $ready = lehrfahrer_gtfs_candidate_publish($candidateRoot, $sourceZip, $sourceIndex,
-    $currentZip, $currentIndex, $publishedAt, 50000000, true);
+    $currentZip, $currentIndex, $publishedAt, 50000000, false);
 $line16 = array_values(array_filter($ready['analysis']['lines'], static fn(array $line): bool => $line['line'] === '16'));
-if (count($line16) !== 1 || $line16[0]['status'] !== 'GEAENDERT') {
-    throw new RuntimeException('Linie 16 ist im offiziellen Kandidaten nicht eindeutig geaendert.');
-}
 $result = json_encode([
     'candidate_id' => $ready['manifest']['candidate_id'],
     'agency_id' => $ready['agencyId'],
-    'line16_changed' => true,
-    'manual_adoption_ready' => true,
+    'line16_status' => $line16[0]['status'] ?? 'NICHT_VERGLEICHBAR',
+    'manual_adoption_ready' => $ready['manualAdoptionReady'],
 ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 $resultFile = trim((string)getenv('GTFS_CANDIDATE_RESULT_FILE'));
 if ($resultFile === '' || dirname($resultFile) !== dirname($sourceZip)
