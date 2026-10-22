@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
       check_official_cottbus:
-        description: Compare official DELFI GTFS with Cottbus staging index read-only
+        description: Check official DELFI GTFS and persist the exact checked candidate on staging (no adoption)
         required: true
         default: false
         type: boolean
@@ -71,6 +71,7 @@ jobs:
           done < <(git ls-files -z -- '*.php')
 
           php tools/gtfs-candidate.test.php
+          python3 tools/gtfs-official-candidate-filter.test.py
 
           node --test \
             tools/company-activation.test.js \
@@ -170,7 +171,7 @@ jobs:
             ssh-keyscan -p "${{ secrets.STRATO_PORT }}" "${{ secrets.STRATO_HOST }}" >> ~/.ssh/known_hosts
           fi
 
-      - name: Compare official Cottbus feed read-only
+      - name: Check and persist official Cottbus candidate without adoption
         if: github.event_name == 'workflow_dispatch' && inputs.check_official_cottbus
         shell: bash
         env:
@@ -180,6 +181,7 @@ jobs:
           STRATO_PORT: ${{ secrets.STRATO_PORT }}
           STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
         run: |
           set -euo pipefail
           case "$STAGING_PRIVATE_PATH" in
@@ -189,12 +191,16 @@ jobs:
           trap 'rm -rf -- "$temp_dir"' EXIT
           if [ -n "$STRATO_SSH_KEY" ]; then
             SCP_RUN=(scp -i ~/.ssh/id_rsa -P "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+            SSH_RUN=(ssh -i ~/.ssh/id_rsa -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
           else
             SCP_RUN=(sshpass -e scp -P "$STRATO_PORT" -o StrictHostKeyChecking=yes)
+            SSH_RUN=(sshpass -e ssh -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
           fi
+          REMOTE="$STRATO_USER@$STRATO_HOST"
           remote_path="./${STAGING_PRIVATE_PATH#/}/companies/cmp_2ff1b82166c99988ed6f7eb51cca7b56/imports/gtfs/index/variants.sqlite"
-          "${SCP_RUN[@]}" "$STRATO_USER@$STRATO_HOST:$remote_path" "$temp_dir/current.sqlite"
+          "${SCP_RUN[@]}" "$REMOTE:$remote_path" "$temp_dir/current.sqlite"
           curl --fail --location --silent --show-error --max-time 360 \
+            --dump-header "$temp_dir/headers" \
             --output "$temp_dir/official.zip" https://download.gtfs.de/germany/nv_free/latest.zip
           size="$(stat -c %s "$temp_dir/official.zip")"
           if [ "$size" -lt 50000000 ] || [ "$size" -gt 500000000 ]; then
@@ -202,6 +208,46 @@ jobs:
             exit 1
           fi
           python3 tools/gtfs-official-readonly-check.py "$temp_dir/current.sqlite" "$temp_dir/official.zip"
+          published_at="$(python3 - "$temp_dir/headers" <<'PY'
+          import email.utils, pathlib, sys
+          lines = pathlib.Path(sys.argv[1]).read_text().splitlines()
+          values = [line.split(':', 1)[1].strip() for line in lines if line.lower().startswith('last-modified:')]
+          if not values:
+              raise SystemExit('Official Last-Modified is missing')
+          date = email.utils.parsedate_to_datetime(values[-1])
+          if date.tzinfo is None:
+              raise SystemExit('Official Last-Modified has no timezone')
+          print(date.strftime('%Y-%m-%dT%H:%M:%SZ'))
+          PY
+          )"
+          python3 tools/gtfs-official-candidate-filter.py "$temp_dir/official.zip" "$temp_dir/filtered"
+          php -d memory_limit=1G tools/gtfs-build-candidate-index.php "$temp_dir/filtered" "$temp_dir/official.zip" "$temp_dir/variants.sqlite"
+          upload_dir="$("${SSH_RUN[@]}" "$REMOTE" "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_CREATE'
+          set -euo pipefail
+          private_root="$(pwd)/${1#./}"
+          test -d "$private_root" && test ! -L "$private_root"
+          mktemp -d "$private_root/candidate-upload.XXXXXXXX"
+          REMOTE_CREATE
+          )"
+          case "$upload_dir" in
+            */candidate-upload.*) ;;
+            *) echo 'Unsafe candidate upload directory' >&2; exit 1 ;;
+          esac
+          "${SCP_RUN[@]}" "$temp_dir/official.zip" "$temp_dir/variants.sqlite" tools/gtfs-stage-candidate-staging.php \
+            "$REMOTE:$upload_dir/"
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_PRIVATE_PATH' '$STAGING_TARGET_PATH' '$upload_dir' '$published_at'" <<'REMOTE_STAGE'
+          set -euo pipefail
+          private_root="$(pwd)/${1#./}"
+          webroot="$(pwd)/${2#./}"
+          upload="$3"
+          published="$4"
+          case "$upload" in "$private_root"/candidate-upload.*) ;; *) exit 1 ;; esac
+          test -d "$upload" && test ! -L "$upload"
+          trap 'rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php"; rmdir -- "$upload"' EXIT
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" GTFS_STAGING_WEBROOT="$webroot" \
+            php "$upload/gtfs-stage-candidate-staging.php" "$upload/official.zip" "$upload/variants.sqlite" "$published"
+          REMOTE_STAGE
 
       - name: Build private staging runtime files
         shell: bash

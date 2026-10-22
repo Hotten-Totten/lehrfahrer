@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_gtfs_version.php';
 
 const LEHRFAHRER_GTFS_OFFICIAL_URL = 'https://download.gtfs.de/germany/nv_free/latest.zip';
 
@@ -23,7 +24,7 @@ function lehrfahrer_gtfs_candidate_sha(string $path): string {
 function lehrfahrer_gtfs_candidate_zip_agency(string $path, int $minimumBytes = 1048576): string {
     lehrfahrer_gtfs_candidate_regular($path);
     $size = filesize($path);
-    if ($size === false || $size < $minimumBytes || $size > 262144000) {
+    if ($size === false || $size < $minimumBytes || $size > 500000000) {
         throw new RuntimeException('GTFS-Kandidaten-ZIP hat eine unplausible Dateigroesse.');
     }
     $zip = new ZipArchive();
@@ -48,7 +49,7 @@ function lehrfahrer_gtfs_candidate_zip_agency(string $path, int $minimumBytes = 
 }
 
 function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $currentZip, string $currentIndex,
-    int $minimumBytes = 1048576): array {
+    int $minimumBytes = 1048576, bool $requireNamedDirectory = true): array {
     if (is_link($candidateDir) || !is_dir($candidateDir)) throw new RuntimeException('Gepruefter GTFS-Kandidat fehlt.');
     $manifestPath = $candidateDir . DIRECTORY_SEPARATOR . 'checked.json';
     lehrfahrer_gtfs_candidate_regular($manifestPath);
@@ -63,6 +64,17 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
             throw new RuntimeException('GTFS-Kandidatenbindung ist unvollstaendig.');
         }
     }
+    if (($manifest['candidate_id'] ?? '') !== $manifest['checkedSourceSha256']
+        || ($manifest['source_sha256'] ?? '') !== $manifest['checkedSourceSha256']
+        || ($manifest['agency_name'] ?? '') !== LEHRFAHRER_GTFS_COTTBUS_NAME
+        || ($manifest['zip_path'] ?? '') !== 'candidate.zip'
+        || ($manifest['index_path'] ?? '') !== 'variants.sqlite'
+        || ($manifest['validation_status'] ?? '') !== 'OK'
+        || strtotime(strval($manifest['validation_timestamp'] ?? '')) === false
+        || strtotime(strval($manifest['created_at'] ?? '')) === false
+        || ($requireNamedDirectory && basename($candidateDir) !== $manifest['candidate_id'])) {
+        throw new RuntimeException('GTFS-Kandidatenmanifest ist unvollstaendig oder ungebunden.');
+    }
     if (!hash_equals($manifest['checkedSourceSha256'], lehrfahrer_gtfs_candidate_sha($candidateZip))) {
         throw new RuntimeException('GTFS-Kandidaten-SHA weicht vom geprueften SHA ab.');
     }
@@ -75,6 +87,9 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
     $agency = lehrfahrer_gtfs_candidate_zip_agency($candidateZip, $minimumBytes);
     if ($agency !== strval($manifest['checkedAgencyId'] ?? '')) {
         throw new RuntimeException('Cottbusverkehr-Agency-ID weicht vom geprueften Kandidaten ab.');
+    }
+    if ($agency !== strval($manifest['agency_id'] ?? '')) {
+        throw new RuntimeException('GTFS-Manifest hat eine abweichende Agency-ID.');
     }
     $indexAgency = lehrfahrer_gtfs_operator_id_from_index($candidateIndex);
     if ($indexAgency !== $agency) throw new RuntimeException('GTFS-Kandidaten-ZIP und Index haben verschiedene Betreiber.');
@@ -104,6 +119,97 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
     if (!$workingSet['completeness']['complete']) throw new RuntimeException('GTFS-Kandidat ist nicht vollstaendig.');
     return ['manifest' => $manifest, 'agencyId' => $agency, 'index' => $index,
         'analysis' => $analysis, 'workingSet' => $workingSet];
+}
+
+function lehrfahrer_gtfs_candidate_active_dir(string $candidateRoot): string {
+    if (!is_dir($candidateRoot) || is_link($candidateRoot)) throw new RuntimeException('Kein persistierter GTFS-Kandidat vorhanden.');
+    $pointer = $candidateRoot . DIRECTORY_SEPARATOR . 'active.json';
+    lehrfahrer_gtfs_candidate_regular($pointer);
+    $active = json_decode(strval(file_get_contents($pointer)), true, 512, JSON_THROW_ON_ERROR);
+    $id = strval($active['candidate_id'] ?? '');
+    if (preg_match('/^[a-f0-9]{64}$/D', $id) !== 1) throw new RuntimeException('GTFS-Kandidatenzeiger ist ungueltig.');
+    $packages = $candidateRoot . DIRECTORY_SEPARATOR . 'packages';
+    if (!is_dir($packages) || is_link($packages)) throw new RuntimeException('GTFS-Kandidatenablage fehlt.');
+    return $packages . DIRECTORY_SEPARATOR . $id;
+}
+
+function lehrfahrer_gtfs_candidate_publish(string $candidateRoot, string $incomingZip, string $incomingIndex,
+    string $currentZip, string $currentIndex, string $publishedAt, int $minimumBytes = 1048576,
+    bool $requireChangedLine16 = false): array {
+    if (!is_dir($candidateRoot) || is_link($candidateRoot)) throw new RuntimeException('GTFS-Kandidatenablage fehlt.');
+    lehrfahrer_gtfs_candidate_regular($incomingZip);
+    lehrfahrer_gtfs_candidate_regular($incomingIndex);
+    $id = lehrfahrer_gtfs_candidate_sha($incomingZip);
+    $packages = $candidateRoot . DIRECTORY_SEPARATOR . 'packages';
+    if (!is_dir($packages) && !mkdir($packages, 0700)) throw new RuntimeException('GTFS-Kandidatenablage kann nicht angelegt werden.');
+    if (is_link($packages)) throw new RuntimeException('Symlink in der GTFS-Kandidatenablage.');
+    $target = $packages . DIRECTORY_SEPARATOR . $id;
+    $temp = $packages . DIRECTORY_SEPARATOR . '.building-' . bin2hex(random_bytes(8));
+    if (file_exists($target) || is_link($target)) {
+        $ready = lehrfahrer_gtfs_candidate_preflight($target, $currentZip, $currentIndex, $minimumBytes);
+    } else {
+        if (!mkdir($temp, 0700)) throw new RuntimeException('GTFS-Kandidatenpaket kann nicht vorbereitet werden.');
+        try {
+            if (!copy($incomingZip, $temp . '/candidate.zip') || !copy($incomingIndex, $temp . '/variants.sqlite')) {
+                throw new RuntimeException('GTFS-Kandidatendateien konnten nicht gespeichert werden.');
+            }
+            $agency = lehrfahrer_gtfs_candidate_zip_agency($temp . '/candidate.zip', $minimumBytes);
+            $version = lehrfahrer_gtfs_version_info($temp . '/candidate.zip', $temp . '/variants.sqlite', LEHRFAHRER_GTFS_COTTBUS_NAME);
+            $now = gmdate('c');
+            $manifest = [
+                'candidate_id' => $id,
+                'created_at' => $now,
+                'source' => 'DELFI nv_free',
+                'sourceUrl' => LEHRFAHRER_GTFS_OFFICIAL_URL,
+                'source_sha256' => $id,
+                'checkedSourceSha256' => $id,
+                'checkedIndexSha256' => lehrfahrer_gtfs_candidate_sha($temp . '/variants.sqlite'),
+                'checkedAgainstSha256' => lehrfahrer_gtfs_candidate_sha($currentZip),
+                'agency_id' => $agency,
+                'checkedAgencyId' => $agency,
+                'agency_name' => LEHRFAHRER_GTFS_COTTBUS_NAME,
+                'zip_path' => 'candidate.zip',
+                'index_path' => 'variants.sqlite',
+                'validation_status' => 'OK',
+                'validation_timestamp' => $now,
+                'publishedAt' => $publishedAt,
+                'feed_info' => $version['feedInfo'],
+                'line_count' => $version['lineCount'],
+                'variant_count' => $version['variantCount'],
+            ];
+            $json = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            if (file_put_contents($temp . '/checked.json', $json, LOCK_EX) === false) {
+                throw new RuntimeException('GTFS-Kandidatenmanifest konnte nicht gespeichert werden.');
+            }
+            lehrfahrer_gtfs_candidate_preflight($temp, $currentZip, $currentIndex, $minimumBytes, false);
+            if (!rename($temp, $target)) throw new RuntimeException('GTFS-Kandidatenpaket konnte nicht aktiviert werden.');
+            $temp = '';
+            $ready = lehrfahrer_gtfs_candidate_preflight($target, $currentZip, $currentIndex, $minimumBytes);
+            foreach (['candidate.zip', 'variants.sqlite', 'checked.json'] as $name) @chmod($target . '/' . $name, 0440);
+            @chmod($target, 0550);
+        } finally {
+            if ($temp !== '' && is_dir($temp)) {
+                foreach (['candidate.zip', 'variants.sqlite', 'checked.json'] as $name) @unlink($temp . '/' . $name);
+                @rmdir($temp);
+            }
+        }
+    }
+    if ($requireChangedLine16) {
+        $line16 = array_values(array_filter($ready['analysis']['lines'],
+            static fn(array $line): bool => $line['line'] === '16'));
+        if (count($line16) !== 1 || $line16[0]['status'] !== 'GEAENDERT') {
+            throw new RuntimeException('Linie 16 ist im offiziellen Kandidaten nicht eindeutig geaendert.');
+        }
+    }
+    $pointer = $candidateRoot . DIRECTORY_SEPARATOR . 'active.json';
+    if (is_link($pointer)) throw new RuntimeException('GTFS-Kandidatenzeiger ist ein Symlink.');
+    $pointerTemp = $candidateRoot . DIRECTORY_SEPARATOR . '.active-' . bin2hex(random_bytes(8));
+    if (file_put_contents($pointerTemp, json_encode(['candidate_id' => $id], JSON_THROW_ON_ERROR), LOCK_EX) === false
+        || !rename($pointerTemp, $pointer)) {
+        @unlink($pointerTemp);
+        throw new RuntimeException('GTFS-Kandidatenzeiger konnte nicht gesetzt werden.');
+    }
+    return $ready;
 }
 
 function lehrfahrer_gtfs_candidate_adopt(string $candidateDir, string $currentZip, string $currentIndex,

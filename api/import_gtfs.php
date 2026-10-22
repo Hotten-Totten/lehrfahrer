@@ -560,14 +560,16 @@ function gtfs_previous_index_path(): string {
 }
 
 function gtfs_candidate_dir(): string {
-    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate');
+    return lehrfahrer_gtfs_candidate_active_dir(
+        lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate')
+    );
 }
 
 function gtfs_candidate_status(): void {
     gtfs_require_cottbus_change_scope();
     try {
         $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
-        gtfs_reply(['ok' => true, 'ready' => true, 'agencyId' => $ready['agencyId'],
+        gtfs_reply(['ok' => true, 'ready' => true, 'candidateId' => $ready['manifest']['candidate_id'], 'agencyId' => $ready['agencyId'],
             'sourceSha256' => $ready['manifest']['checkedSourceSha256'], 'changeAnalysis' => $ready['analysis']]);
     } catch (Throwable $error) {
         gtfs_reply(['ok' => true, 'ready' => false, 'reason' => $error->getMessage()]);
@@ -576,7 +578,12 @@ function gtfs_candidate_status(): void {
 
 function gtfs_candidate_adopt(): void {
     gtfs_require_cottbus_change_scope();
-    $ready = lehrfahrer_gtfs_candidate_adopt(gtfs_candidate_dir(), gtfs_server_zip_path(),
+    $dir = gtfs_candidate_dir();
+    $id = trim(strval($_POST['candidateId'] ?? ''));
+    if (preg_match('/^[a-f0-9]{64}$/D', $id) !== 1 || !hash_equals(basename($dir), $id)) {
+        gtfs_error(409, 'Gepruefter GTFS-Kandidat wurde gewechselt; bitte erneut pruefen.');
+    }
+    $ready = lehrfahrer_gtfs_candidate_adopt($dir, gtfs_server_zip_path(),
         gtfs_index_path(), LEHRFAHRER_GTFS_COMPANY_ID);
     gtfs_reply(['ok' => true, 'ready' => true, 'routesProtected' => true,
         'completeness' => $ready['workingSet']['completeness']]);

@@ -1666,7 +1666,7 @@ function renderGtfsChangeAnalysis(analysis) {
     void postGtfsImport({ action: "candidateStatus" }).then(result => {
       if (modal.classList.contains("hidden")) return;
       if (result.ready && result.changeAnalysis) {
-        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateReady: true });
+        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateReady: true, candidateId: result.candidateId });
       } else {
         candidateStatus.textContent = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
       }
@@ -1677,7 +1677,7 @@ function renderGtfsChangeAnalysis(analysis) {
       button.disabled = true;
       modal.setAttribute("aria-busy", "true");
       try {
-        const result = await postGtfsImport({ action: "candidateAdopt" });
+        const result = await postGtfsImport({ action: "candidateAdopt", candidateId: analysis.candidateId });
         const complete = result.completeness || {};
         report.className = `gtfs-change-report${complete.complete ? "" : " warn"}`;
         report.textContent = [

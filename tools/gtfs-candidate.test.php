@@ -14,12 +14,12 @@ putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . $root);
 $company = 'cmp_' . bin2hex(random_bytes(16));
 $imports = lehrfahrer_tenant_ensure_directory($company, 'imports', 'gtfs');
 $indexDir = lehrfahrer_tenant_ensure_directory($company, 'imports', 'gtfs/index');
-$candidate = lehrfahrer_tenant_ensure_directory($company, 'imports', 'gtfs/candidate');
+$candidateRoot = lehrfahrer_tenant_ensure_directory($company, 'imports', 'gtfs/candidate');
+$candidate = '';
 $currentZip = $imports . DIRECTORY_SEPARATOR . 'latest.zip';
 $currentIndex = $indexDir . DIRECTORY_SEPARATOR . 'variants.sqlite';
-$candidateZip = $candidate . DIRECTORY_SEPARATOR . 'candidate.zip';
-$candidateIndex = $candidate . DIRECTORY_SEPARATOR . 'variants.sqlite';
-$manifestPath = $candidate . DIRECTORY_SEPARATOR . 'checked.json';
+$incomingZip = $root . DIRECTORY_SEPARATOR . 'official.zip';
+$incomingIndex = $root . DIRECTORY_SEPARATOR . 'official.sqlite';
 $routeFile = lehrfahrer_tenant_ensure_directory($company, 'lines', 'Cottbus') . DIRECTORY_SEPARATOR . 'manual.json';
 file_put_contents($routeFile, '{"routePoints":[1,2,3],"note":"manual"}');
 $routeSha = hash_file('sha256', $routeFile);
@@ -52,11 +52,21 @@ function fixture_index(string $path, array $files, string $agency, string $zip):
 function fixture_manifest(string $path, string $candidateZip, string $candidateIndex, string $currentZip,
     string $agency = '287'): void {
     file_put_contents($path, json_encode([
+        'candidate_id' => hash_file('sha256', $candidateZip),
+        'created_at' => '2026-10-17T01:00:00Z',
+        'source' => 'DELFI nv_free',
         'sourceUrl' => LEHRFAHRER_GTFS_OFFICIAL_URL,
+        'source_sha256' => hash_file('sha256', $candidateZip),
         'checkedSourceSha256' => hash_file('sha256', $candidateZip),
         'checkedIndexSha256' => hash_file('sha256', $candidateIndex),
         'checkedAgainstSha256' => hash_file('sha256', $currentZip),
         'checkedAgencyId' => $agency,
+        'agency_id' => $agency,
+        'agency_name' => LEHRFAHRER_GTFS_COTTBUS_NAME,
+        'zip_path' => 'candidate.zip',
+        'index_path' => 'variants.sqlite',
+        'validation_status' => 'OK',
+        'validation_timestamp' => '2026-10-17T01:00:00Z',
         'publishedAt' => '2026-10-17T00:00:00Z',
     ], JSON_THROW_ON_ERROR));
 }
@@ -73,6 +83,7 @@ function blocked(callable $callback, string $message): void {
 
 function clean_fixture(string $path): void {
     if (is_dir($path) && !is_link($path)) {
+        @chmod($path, 0700);
         foreach (new DirectoryIterator($path) as $entry) {
             if ($entry->isDot()) continue;
             clean_fixture($entry->getPathname());
@@ -87,9 +98,21 @@ try {
     fixture_zip($currentZip, $old);
     touch($currentZip, strtotime('2026-10-13T00:00:00Z'));
     fixture_index($currentIndex, $old, '143', $currentZip);
-    fixture_zip($candidateZip, $new);
-    fixture_index($candidateIndex, $new, '287', $candidateZip);
-    fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
+    fixture_zip($incomingZip, $new);
+    fixture_index($incomingIndex, $new, '287', $incomingZip);
+    $published = lehrfahrer_gtfs_candidate_publish($candidateRoot, $incomingZip, $incomingIndex,
+        $currentZip, $currentIndex, '2026-10-17T00:00:00Z', 0, true);
+    $candidate = lehrfahrer_gtfs_candidate_active_dir($candidateRoot);
+    $candidateZip = $candidate . DIRECTORY_SEPARATOR . 'candidate.zip';
+    $candidateIndex = $candidate . DIRECTORY_SEPARATOR . 'variants.sqlite';
+    $manifestPath = $candidate . DIRECTORY_SEPARATOR . 'checked.json';
+    check(is_file($candidateZip) && is_file($candidateIndex) && is_file($manifestPath), 'Kandidat persistent angelegt');
+    check(($published['manifest']['candidate_id'] ?? '') === hash_file('sha256', $candidateZip), 'Manifest-SHA korrekt');
+    check(($published['manifest']['source_sha256'] ?? '') === hash_file('sha256', $candidateZip)
+        && ($published['manifest']['agency_id'] ?? '') === '287'
+        && ($published['manifest']['validation_status'] ?? '') === 'OK', 'Persistente Metadaten korrekt');
+    chmod($candidate, 0700);
+    foreach ([$candidateZip, $candidateIndex, $manifestPath] as $path) chmod($path, 0600);
     $preflight = static fn(): array => lehrfahrer_gtfs_candidate_preflight($candidate, $currentZip, $currentIndex, 0);
     $original = json_decode(file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
     $wrongSha = $original;
@@ -97,6 +120,15 @@ try {
     file_put_contents($manifestPath, json_encode($wrongSha));
     blocked($preflight, 'Falscher SHA');
     file_put_contents($manifestPath, json_encode($original));
+    file_put_contents($candidateZip, 'tamper', FILE_APPEND);
+    blocked($preflight, 'Manipuliertes Kandidaten-ZIP');
+    copy($incomingZip, $candidateZip);
+    fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
+    file_put_contents($candidateIndex, 'tamper', FILE_APPEND);
+    blocked($preflight, 'Manipulierter Kandidatenindex');
+    fixture_index($candidateIndex, $new, '287', $candidateZip);
+    fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
+    $original = json_decode(file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
     $wrongAgency = $original;
     $wrongAgency['checkedAgencyId'] = '143';
     file_put_contents($manifestPath, json_encode($wrongAgency));
