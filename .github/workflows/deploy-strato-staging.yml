@@ -507,7 +507,8 @@ jobs:
           require '$private_root/provision-staging-company.php';
           PHP
           set +e
-          php -q -d register_argc_argv=1 -f "$private_root/run-provision.php" -- \
+          /bin/timeout --signal=TERM --kill-after=10s 300s \
+            php -q -d register_argc_argv=1 -f "$private_root/run-provision.php" -- \
             --company-name='Lehrfahrer Testgesellschaft' \
             --company-slug='lehrfahrer-test' \
             --license-status='trial' \
@@ -522,6 +523,10 @@ jobs:
             "$private_root/provision-cgi-diagnostic.json" \
             "$private_root/provision-stdout.raw" \
             "$private_root/provision-stderr.raw"
+          if [ "$provision_status" -eq 124 ] || [ "$provision_status" -eq 137 ]; then
+            echo 'Staging-Provisioning-Zeitlimit erreicht; private Roh-Ausgaben bleiben unveroeffentlicht.' >&2
+            exit 1
+          fi
 
           stdout_bytes="$(wc -c < "$private_root/provision-stdout.raw" | tr -d ' ')"
           stderr_bytes="$(wc -c < "$private_root/provision-stderr.raw" | tr -d ' ')"
