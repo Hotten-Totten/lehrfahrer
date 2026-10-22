@@ -35,7 +35,7 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-strato-staging
+  group: deploy-strato-staging-v2
   cancel-in-progress: false
 
 jobs:
