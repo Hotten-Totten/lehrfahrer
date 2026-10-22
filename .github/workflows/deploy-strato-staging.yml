@@ -199,7 +199,7 @@ jobs:
           case "$name" in candidate-upload.[A-Za-z0-9]*) ;; *) exit 1 ;; esac
           upload="$private_root/$name"
           test ! -L "$upload"
-          rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php"
+          rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php" "$upload/result.json" "$upload/result.stdout" "$upload/result.stderr"
           rmdir -- "$upload" 2>/dev/null || true
           REMOTE_CLEAN
             fi
@@ -261,9 +261,22 @@ jobs:
           published="$4"
           case "$upload" in "$private_root"/candidate-upload.*) ;; *) exit 1 ;; esac
           test -d "$upload" && test ! -L "$upload"
-          trap 'rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php"; rmdir -- "$upload"' EXIT
+          trap 'rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php" "$upload/result.json" "$upload/result.stdout" "$upload/result.stderr"; rmdir -- "$upload"' EXIT
+          set +e
           LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" GTFS_STAGING_WEBROOT="$webroot" \
-            php "$upload/gtfs-stage-candidate-staging.php" "$upload/official.zip" "$upload/variants.sqlite" "$published"
+          GTFS_CANDIDATE_UPLOAD_ZIP="$upload/official.zip" GTFS_CANDIDATE_UPLOAD_INDEX="$upload/variants.sqlite" \
+          GTFS_CANDIDATE_PUBLISHED_AT="$published" GTFS_CANDIDATE_RESULT_FILE="$upload/result.json" \
+            php -q -d max_execution_time=900 -d memory_limit=512M -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$upload/gtfs-stage-candidate-staging.php" \
+              > "$upload/result.stdout" 2> "$upload/result.stderr"
+          status="$?"
+          set -e
+          if [ "$status" -ne 0 ] || [ ! -s "$upload/result.json" ]; then
+            echo 'Staging-Kandidatenvalidierung fehlgeschlagen.' >&2
+            tail -n 3 "$upload/result.stderr" >&2
+            exit 1
+          fi
+          cat "$upload/result.json"
           REMOTE_STAGE
 
       - name: Build private staging runtime files
