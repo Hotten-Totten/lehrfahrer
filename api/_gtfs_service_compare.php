@@ -103,7 +103,9 @@ function lehrfahrer_gtfs_service_stop_key(array $stop): string {
         throw new RuntimeException('GTFS-Haltestelle besitzt keine eindeutigen Vergleichsmerkmale.');
     }
     $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
-    // Name plus ~10 m coordinates; ambiguous same-feed identities are rejected below.
+    // Feed-local stop_id/parent_station cannot identify a stop across feeds. Use exact
+    // normalized name plus ~10 m coordinates; reject duplicate keys within a feed.
+    // Prefer a detectable false change over silently merging different platforms.
     return $name . '|' . number_format((float)$stop['stop_lat'], 4, '.', '')
         . '|' . number_format((float)$stop['stop_lon'], 4, '.', '');
 }
@@ -185,13 +187,15 @@ function lehrfahrer_gtfs_service_public_variant(array $variant, string $status):
 function lehrfahrer_gtfs_compare_service_zips(string $candidateZip, string $currentZip, ?string $requestedDate = null): array {
     $candidate = lehrfahrer_gtfs_service_feed($candidateZip);
     $current = lehrfahrer_gtfs_service_feed($currentZip);
-    if ($requestedDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $requestedDate)) {
+    if ($requestedDate !== null && (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $requestedDate)
+        || !checkdate((int)substr($requestedDate, 5, 2), (int)substr($requestedDate, 8, 2),
+            (int)substr($requestedDate, 0, 4)))) {
         throw new InvalidArgumentException('Vergleichstag ist ungueltig.');
     }
     $shared = array_keys(array_intersect_key($candidate['activeDays'], $current['activeDays']));
     sort($shared, SORT_STRING);
     $candidateDays = array_keys($candidate['activeDays']); sort($candidateDays, SORT_STRING);
-    $today = gmdate('Y-m-d');
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
     $date = $requestedDate ?? ($shared[0] ?? (isset($candidate['activeDays'][$today]) ? $today : $candidateDays[0]));
     $mode = $shared === [] ? 'KEINE_GEMEINSAME_FAHRPLANPERIODE'
         : ($requestedDate === null ? 'ERSTER_GEMEINSAMER_BETRIEBSTAG' : 'EXPLIZITER_BETRIEBSTAG');

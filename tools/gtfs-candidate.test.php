@@ -159,6 +159,22 @@ try {
     check($ready['agencyId'] === '287' && $ready['workingSet']['completeness']['complete'], 'Kandidat manuell uebernahmebereit');
     $line16 = array_values(array_filter($ready['analysis']['lines'], static fn(array $line): bool => $line['line'] === '16'));
     check(count($line16) === 1 && $line16[0]['status'] === 'GEAENDERT', 'Linie 16 geaendert');
+    $past = $old;
+    $past['calendar.txt'] = "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\ns,1,1,1,1,1,1,1,20260620,20260720\n";
+    fixture_zip($currentZip, $past);
+    touch($currentZip, strtotime('2026-10-13T00:00:00Z'));
+    fixture_index($currentIndex, $past, '143', $currentZip);
+    fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
+    $withoutOverlap = $preflight();
+    check(!$withoutOverlap['manualAdoptionReady']
+        && $withoutOverlap['analysis']['comparisonMode'] === 'KEINE_GEMEINSAME_FAHRPLANPERIODE',
+        'Nicht ueberlappende Fahrplanperioden werden nicht freigegeben');
+    blocked(static fn(): array => lehrfahrer_gtfs_candidate_adopt($candidate, $currentZip, $currentIndex, $company, 0),
+        'Uebernahme ohne gemeinsame Fahrplanperiode');
+    fixture_zip($currentZip, $old);
+    touch($currentZip, strtotime('2026-10-13T00:00:00Z'));
+    fixture_index($currentIndex, $old, '143', $currentZip);
+    fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     $oldSha = hash_file('sha256', $currentZip);
     $newSha = hash_file('sha256', $candidateZip);
     $result = lehrfahrer_gtfs_candidate_adopt($candidate, $currentZip, $currentIndex, $company, 0);

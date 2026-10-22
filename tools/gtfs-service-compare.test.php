@@ -78,6 +78,17 @@ try {
         'feed-local agency and stop IDs do not fabricate changes');
     check_service($sameResult['currentValidTrips']===1 && $sameResult['candidateValidTrips']===1,
         'only active services contribute trips');
+    $ambiguous = $same;
+    $ambiguous[0]['trips'][] = ['id'=>'ambiguous','service'=>'s',
+        'stops'=>[$a2,['other-middle','Mitte','51.7100','14.3100'],$u2]];
+    zip_service($dir.'/ambiguous.zip','325',$ambiguous);
+    try {
+        cmp_service($dir.'/ambiguous.zip',$dir.'/old.zip');
+        throw new RuntimeException('Ambiguous stops were merged');
+    } catch (RuntimeException $error) {
+        if ($error->getMessage()==='Ambiguous stops were merged') throw $error;
+    }
+    check_service(true, 'ambiguous real stops are not merged');
     $changed = $same; $changed[0]['trips'][0]['stops'] = [$a2,$x,$u2];
     zip_service($dir.'/changed.zip','325',$changed);
     $r = cmp_service($dir.'/changed.zip',$dir.'/old.zip');

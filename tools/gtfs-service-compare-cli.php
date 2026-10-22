@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../api/_gtfs_timetable_change.php';
-require_once __DIR__ . '/../api/_gtfs_service_compare.php';
+$apiRoot = trim(strval(getenv('GTFS_SERVICE_API_ROOT')));
+if ($apiRoot === '') $apiRoot = __DIR__ . '/../api';
+require_once $apiRoot . '/_gtfs_timetable_change.php';
+require_once $apiRoot . '/_gtfs_service_compare.php';
 
 if ($argc !== 3) {
     fwrite(STDERR, "usage: php gtfs-service-compare-cli.php CANDIDATE_ZIP CURRENT_ZIP\n");

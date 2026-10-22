@@ -1592,7 +1592,8 @@ function renderGtfsChangeAnalysis(analysis) {
 
   baseline.textContent = analysis.candidateReady
     ? "Geprüfter offizieller Kandidat im Vergleich zum aktuellen Staging-Stand"
-    : "Aktueller Staging-Stand; ein offizieller Kandidat ist noch nicht freigegeben";
+    : (analysis.candidateChecked ? "Offizieller Kandidat geprüft; Übernahme fachlich gesperrt"
+      : "Aktueller Staging-Stand; Kandidatenprüfung läuft");
   const diagnostics = document.getElementById("gtfsChangeDiagnostics");
   const comparisonDate = document.getElementById("gtfsComparisonDate");
   if (diagnostics) diagnostics.textContent = analysis.candidateChecked ? [
