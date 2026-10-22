@@ -70,6 +70,8 @@ jobs:
             php -l "$file" >/dev/null
           done < <(git ls-files -z -- '*.php')
 
+          php tools/gtfs-candidate.test.php
+
           node --test \
             tools/company-activation.test.js \
             tools/company-activation-reissue.test.js \

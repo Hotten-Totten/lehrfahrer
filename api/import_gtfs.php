@@ -5,6 +5,7 @@ require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_gtfs_version.php';
+require_once __DIR__ . '/_gtfs_candidate.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -556,6 +557,29 @@ function gtfs_index_path(): string {
 
 function gtfs_previous_index_path(): string {
     return gtfs_index_file('variants.sqlite.previous');
+}
+
+function gtfs_candidate_dir(): string {
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate');
+}
+
+function gtfs_candidate_status(): void {
+    gtfs_require_cottbus_change_scope();
+    try {
+        $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
+        gtfs_reply(['ok' => true, 'ready' => true, 'agencyId' => $ready['agencyId'],
+            'sourceSha256' => $ready['manifest']['checkedSourceSha256'], 'changeAnalysis' => $ready['analysis']]);
+    } catch (Throwable $error) {
+        gtfs_reply(['ok' => true, 'ready' => false, 'reason' => $error->getMessage()]);
+    }
+}
+
+function gtfs_candidate_adopt(): void {
+    gtfs_require_cottbus_change_scope();
+    $ready = lehrfahrer_gtfs_candidate_adopt(gtfs_candidate_dir(), gtfs_server_zip_path(),
+        gtfs_index_path(), LEHRFAHRER_GTFS_COMPANY_ID);
+    gtfs_reply(['ok' => true, 'ready' => true, 'routesProtected' => true,
+        'completeness' => $ready['workingSet']['completeness']]);
 }
 
 function gtfs_require_cottbus_change_scope(): void {
@@ -1485,7 +1509,9 @@ try {
     if ($action === 'indexagencies') gtfs_handle_index_agencies();
     if ($action === 'indexstatus') gtfs_index_job_status();
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
-    if ($action === 'indexadopt') gtfs_adopt_timetable_working_set(strtolower(trim(strval($_POST['scope'] ?? ''))));
+    if ($action === 'indexadopt') gtfs_error(409, 'Alte GTFS-Uebernahme ist deaktiviert; geprueften Kandidaten verwenden.');
+    if ($action === 'candidatestatus') gtfs_candidate_status();
+    if ($action === 'candidateadopt') gtfs_candidate_adopt();
     if ($action === 'workinventory') gtfs_work_inventory_response(false);
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);
     if ($action === 'workopen') gtfs_work_open();

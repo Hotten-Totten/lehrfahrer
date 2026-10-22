@@ -696,13 +696,11 @@
       <div id="gtfsChangeList" class="gtfs-change-list"></div>
       <div class="gtfs-change-adoption">
         <div>
-          <strong>Arbeitsgrundlage übernehmen</strong>
-          <span>Bestehende Lehrfahrer-Routen und manuelle Editor-Daten bleiben unverändert.</span>
+          <strong>Geprüften offiziellen Stand übernehmen</strong>
+          <span id="gtfsCandidateStatus">Kandidatenprüfung läuft …</span>
         </div>
         <div class="gtfs-change-actions">
-          <button type="button" data-gtfs-adopt="new">Nur neue Linien übernehmen</button>
-          <button type="button" data-gtfs-adopt="new_changed">Neue + geänderte übernehmen</button>
-          <button type="button" data-gtfs-adopt="all" class="gtfs-change-primary">ALLE Linien übernehmen</button>
+          <button type="button" id="gtfsCandidateAdoptBtn" class="gtfs-change-primary" disabled>Neuen Stand übernehmen</button>
         </div>
       </div>
       <div id="gtfsChangeReport" class="gtfs-change-report hidden"></div>

@@ -1590,9 +1590,9 @@ function renderGtfsChangeAnalysis(analysis) {
   const report = document.getElementById("gtfsChangeReport");
   if (!modal || !baseline || !summary || !list || !report) return;
 
-  baseline.textContent = analysis.baselineAvailable
-    ? "Änderungen seit dem vorherigen Fahrplanstand"
-    : "Erster Vergleichsstand: alle Linien und Varianten gelten als neu";
+  baseline.textContent = analysis.candidateReady
+    ? "Geprüfter offizieller Kandidat im Vergleich zum aktuellen Staging-Stand"
+    : "Aktueller Staging-Stand; ein offizieller Kandidat ist noch nicht freigegeben";
   summary.replaceChildren();
   const stats = [
     [analysis.current?.routeCount, "Linien geprüft"],
@@ -1656,46 +1656,49 @@ function renderGtfsChangeAnalysis(analysis) {
   document.getElementById("gtfsChangeCloseBtn").onclick = close;
   modal.onclick = event => { if (event.target === modal) close(); };
 
-  const adoptionButtons = [...modal.querySelectorAll("[data-gtfs-adopt]")];
-  adoptionButtons.forEach(button => {
-    button.onclick = async () => {
-      const scope = button.dataset.gtfsAdopt;
-      if (scope === "all" && !confirm("Alle Linien und Varianten als neue GTFS-Arbeitsgrundlage übernehmen? Bestehende Lehrfahrer-Routen werden nicht überschrieben.")) return;
-      adoptionButtons.forEach(item => { item.disabled = true; });
+  const button = document.getElementById("gtfsCandidateAdoptBtn");
+  const candidateStatus = document.getElementById("gtfsCandidateStatus");
+  button.disabled = !analysis.candidateReady;
+  candidateStatus.textContent = analysis.candidateReady
+    ? "Offizieller Kandidat erneut validiert; Lehrfahrer-Routen bleiben unverändert."
+    : "Kein geprüfter offizieller Kandidat zur Übernahme freigegeben.";
+  if (!analysis.candidateReady) {
+    void postGtfsImport({ action: "candidateStatus" }).then(result => {
+      if (modal.classList.contains("hidden")) return;
+      if (result.ready && result.changeAnalysis) {
+        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateReady: true });
+      } else {
+        candidateStatus.textContent = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
+      }
+    }).catch(err => { candidateStatus.textContent = err.message || "Kandidatenprüfung fehlgeschlagen."; });
+  }
+  button.onclick = async () => {
+      if (!analysis.candidateReady || !confirm("Geprüften offiziellen GTFS-Kandidaten manuell übernehmen? Bestehende Lehrfahrer-Routen bleiben unverändert.")) return;
+      button.disabled = true;
       modal.setAttribute("aria-busy", "true");
       try {
-        const result = await postGtfsImport({ action: "indexAdopt", scope });
+        const result = await postGtfsImport({ action: "candidateAdopt" });
         const complete = result.completeness || {};
-        const counts = result.summary?.lineCounts || {};
-        const variantCounts = result.summary?.variantCounts || {};
         report.className = `gtfs-change-report${complete.complete ? "" : " warn"}`;
         report.textContent = [
           "Fahrplanwechsel abgeschlossen",
           "",
-          `${Number(result.summary?.checkedRoutes || 0)} Linien geprüft`,
-          `${Number(result.summary?.checkedVariants || 0)} Varianten geprüft`,
-          `Neu: ${Number(counts.NEU || 0)} Linien / ${Number(variantCounts.NEU || 0)} Varianten`,
-          `Geändert: ${Number(counts.GEAENDERT || 0)} Linien / ${Number(variantCounts.GEAENDERT || 0)} Varianten`,
-          `Entfallen: ${Number(counts.ENTFALLEN || 0)} Linien / ${Number(variantCounts.ENTFALLEN || 0)} Varianten`,
-          `Unverändert: ${Number(counts.UNVERAENDERT || 0)} Linien`,
           `Übernommen: ${Number(complete.adoptedRouteCount || 0)}/${Number(complete.expectedRouteCount || 0)} Linien`,
           `${Number(complete.adoptedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten`,
-          `Lehrfahrer-Routen mit Prüfbedarf: ${Number(result.summary?.existingRoutesReviewRequired || 0)}`,
           complete.complete ? "Vollständigkeit: OK" : (result.warning || "Nicht alle Linien/Varianten wurden übernommen.")
         ].join("\n");
         report.classList.remove("hidden");
-        setStatus(complete.complete ? "Alle GTFS-Linien und Varianten vollständig übernommen." : "GTFS-Teilübernahme gespeichert; Vollständigkeitswarnung beachten.", complete.complete ? "success" : "warn");
+        setStatus(complete.complete ? "Geprüfter offizieller GTFS-Kandidat übernommen." : "GTFS-Übernahme unvollständig.", complete.complete ? "success" : "warn");
       } catch (err) {
         report.className = "gtfs-change-report warn";
         report.textContent = err.message || "GTFS-Übernahme fehlgeschlagen.";
         report.classList.remove("hidden");
         setStatus(err.message || "GTFS-Übernahme fehlgeschlagen.", "error");
       } finally {
-        adoptionButtons.forEach(item => { item.disabled = false; });
+        button.disabled = false;
         modal.setAttribute("aria-busy", "false");
       }
-    };
-  });
+  };
 }
 
 function gtfsWorkStatusLabel(status) {
