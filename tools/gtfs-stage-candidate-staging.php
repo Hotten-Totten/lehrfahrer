@@ -14,7 +14,9 @@ if (strtolower(trim((string)getenv('LEHRFAHRER_ENV'))) !== 'staging') {
 $companyId = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
 $privateRoot = lehrfahrer_private_storage_root();
 $projectRoot = realpath($webroot);
-if ($projectRoot === false || str_contains(strtolower($privateRoot), strtolower($projectRoot))) {
+$privateNorm = rtrim(str_replace('\\', '/', $privateRoot), '/');
+$projectNorm = $projectRoot === false ? '' : rtrim(str_replace('\\', '/', $projectRoot), '/');
+if ($projectNorm === '' || $privateNorm === $projectNorm || str_starts_with($privateNorm, $projectNorm . '/')) {
     throw new RuntimeException('Staging-Private-Storage ist ungueltig.');
 }
 $candidateRoot = lehrfahrer_tenant_ensure_directory($companyId, 'imports', 'gtfs/candidate');
