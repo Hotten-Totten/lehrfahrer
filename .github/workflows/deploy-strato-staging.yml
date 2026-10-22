@@ -188,7 +188,23 @@ jobs:
             ''|/*|.|..|*../*|*/..|*//*|*[!A-Za-z0-9._/-]*) exit 1 ;;
           esac
           temp_dir="$(mktemp -d)"
-          trap 'rm -rf -- "$temp_dir"' EXIT
+          upload_dir=''
+          cleanup_candidate_temp() {
+            rm -rf -- "$temp_dir"
+            if [ -n "$upload_dir" ] && [ -n "${REMOTE:-}" ]; then
+              "${SSH_RUN[@]}" "$REMOTE" "bash -s -- '$STAGING_PRIVATE_PATH' '$(basename "$upload_dir")'" <<'REMOTE_CLEAN' || true
+          set -euo pipefail
+          private_root="$(pwd)/${1#./}"
+          name="$2"
+          case "$name" in candidate-upload.[A-Za-z0-9]*) ;; *) exit 1 ;; esac
+          upload="$private_root/$name"
+          test ! -L "$upload"
+          rm -f -- "$upload/official.zip" "$upload/variants.sqlite" "$upload/gtfs-stage-candidate-staging.php"
+          rmdir -- "$upload" 2>/dev/null || true
+          REMOTE_CLEAN
+            fi
+          }
+          trap cleanup_candidate_temp EXIT
           if [ -n "$STRATO_SSH_KEY" ]; then
             SCP_RUN=(scp -i ~/.ssh/id_rsa -P "$STRATO_PORT" -o StrictHostKeyChecking=yes)
             SSH_RUN=(ssh -i ~/.ssh/id_rsa -p "$STRATO_PORT" -o StrictHostKeyChecking=yes)
@@ -233,8 +249,9 @@ jobs:
             */candidate-upload.*) ;;
             *) echo 'Unsafe candidate upload directory' >&2; exit 1 ;;
           esac
+          scp_upload_dir="./${STAGING_PRIVATE_PATH#/}/$(basename "$upload_dir")"
           "${SCP_RUN[@]}" "$temp_dir/official.zip" "$temp_dir/variants.sqlite" tools/gtfs-stage-candidate-staging.php \
-            "$REMOTE:$upload_dir/"
+            "$REMOTE:$scp_upload_dir/"
           "${SSH_RUN[@]}" "$REMOTE" \
             "bash -s -- '$STAGING_PRIVATE_PATH' '$STAGING_TARGET_PATH' '$upload_dir' '$published_at'" <<'REMOTE_STAGE'
           set -euo pipefail
