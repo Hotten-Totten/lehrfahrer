@@ -128,6 +128,11 @@ try {
     $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/changed.zip', $dir.'/old.zip');
     check_service($v1['lineCounts']['GEAENDERT']===1 && in_array('neue haltestelle', $v1['lines'][0]['variants'][0]['diff']['addedStops'], true),
         'V1 detects real stop replacement');
+    $renamed = $same;
+    $renamed[0]['trips'][0]['stops'][1] = ['bb','Neuer Name','51.7100','14.3100'];
+    zip_service($dir.'/renamed.zip','325',$renamed);
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/renamed.zip', $dir.'/old.zip')['lineCounts']['PRUEFEN']===1,
+        'V1 reviews uncertain same-place stop rename');
     $duplicate = $same;
     $duplicate[0]['trips'][] = ['id'=>'second-trip','service'=>'s','stops'=>[$a2,$b2,$u2]];
     zip_service($dir.'/duplicate.zip','325',$duplicate);

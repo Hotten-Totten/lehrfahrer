@@ -27,10 +27,12 @@ $routeSha = hash_file('sha256', $routeFile);
 function fixture_files(string $agency, bool $changed): array {
     $last = $changed ? 'Uhlandstrasse' : 'Altstadt';
     $lastId = $changed ? 'u' : 'a';
+    $lastLat = $changed ? '51.91' : '51.9';
+    $lastLon = $changed ? '14.51' : '14.5';
     return [
         'agency.txt' => "agency_id,agency_name\n$agency,Cottbusverkehr\n",
         'routes.txt' => "route_id,agency_id,route_short_name,route_long_name,route_type\nr16,$agency,16,Linie 16,3\n",
-        'stops.txt' => "stop_id,stop_name,stop_lat,stop_lon,parent_station\nx,Start,51.7,14.3,\ny,Mitte,51.8,14.4,\n$lastId,$last,51.9,14.5,\n",
+        'stops.txt' => "stop_id,stop_name,stop_lat,stop_lon,parent_station\nx,Start,51.7,14.3,\ny,Mitte,51.8,14.4,\n$lastId,$last,$lastLat,$lastLon,\n",
         'trips.txt' => "route_id,service_id,trip_id,trip_headsign,direction_id\nr16,s,t16,$last,0\n",
         'calendar.txt' => "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\ns,1,1,1,1,1,1,1,20261001,20261031\n",
         'calendar_dates.txt' => "service_id,date,exception_type\n",
