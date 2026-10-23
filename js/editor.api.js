@@ -1862,6 +1862,10 @@ async function openGtfsWorkInventory() {
   }
 }
 
+function openGtfsFahrplanupdate() {
+  renderGtfsChangeAnalysis({ candidateChecked: false, candidateReady: false, lines: [], lineCounts: {} });
+}
+
 async function analyzeGtfsServerIndex() {
   showVbbImportProgressPopup("", "GTFS-Indexanalyse");
   updateVbbImportProgressPopup("Turboindex wird schreibgeschützt ausgewertet ...", {

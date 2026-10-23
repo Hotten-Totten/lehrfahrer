@@ -30,6 +30,7 @@
           <button type="button" class="menu-item" onclick="rebuildGtfsServerIndex()" title="Privaten Variantenindex dieser Gesellschaft neu erstellen">GTFS-Index neu erstellen</button>
           <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="GTFS-Turboindex und Änderungen zum vorherigen Fahrplanstand analysieren">GTFS-Index analysieren</button>
           <button type="button" class="menu-item" onclick="openGtfsWorkInventory()" title="Alle GTFS-Varianten mit Bearbeitungs- und Freigabestatus anzeigen">GTFS-Arbeitsvorrat</button>
+          <button type="button" class="menu-item" id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()" title="Geprüften offiziellen GTFS-Kandidaten mit dem aktuellen Fahrplan vergleichen">GTFS-Fahrplanupdate</button>
           <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
           <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
           <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft den Schreibzugriff der aktuellen Sitzung">Schreibzugriff testen</button>
@@ -835,7 +836,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>
-  <script src="js/editor.api.js?v=V2.1.071"></script>
+  <script src="js/editor.api.js?v=V2.1.072"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>

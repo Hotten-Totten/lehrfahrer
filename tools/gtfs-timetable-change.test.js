@@ -355,3 +355,20 @@ test('T: Fahrplanwechsel zeigt die vorhandene GTFS-Versionsinfo oben an', () => 
   assert.match(editor, /Aktueller GTFS-Stand: \$\{version\.stand\}/);
   assert.match(editor, /Importiert: \$\{version\.importedAt \|\| version\.importDateNote\}/);
 });
+
+test('U: Server-Menü öffnet den bestehenden Fahrplan-Updater mit Kandidatenprüfung', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const serverMenu = html.slice(html.indexOf('<button class="menu-button" type="button">Server</button>'),
+    html.indexOf('<button class="menu-button" type="button">Bearbeiten</button>'));
+  assert.match(serverMenu, /id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate\(\)"[^>]*>GTFS-Fahrplanupdate<\/button>/);
+  assert.match(editor, /function openGtfsFahrplanupdate\(\) \{\s*renderGtfsChangeAnalysis\(\{ candidateChecked: false/);
+  assert.match(editor, /renderGtfsChangeAnalysis[\s\S]*postGtfsImport\(\{ action: "candidateStatus" \}\)/);
+  const opener = editor.match(/function openGtfsFahrplanupdate\(\) \{[\s\S]*?\n\}/)?.[0];
+  let opened = null;
+  new Function('renderGtfsChangeAnalysis', `${opener}; openGtfsFahrplanupdate();`)(analysis => { opened = analysis; });
+  assert.equal(opened.candidateChecked, false);
+  assert.equal(opened.candidateReady, false);
+  for (const id of ['gtfsChangeVersionInfo', 'gtfsCandidateVersionInfo', 'gtfsChangeDiagnostics',
+    'gtfsChangeList', 'gtfsCandidateAdoptBtn']) assert.match(html, new RegExp(`id="${id}"`));
+});
