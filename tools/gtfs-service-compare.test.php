@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../api/_gtfs_timetable_change.php';
 require_once __DIR__ . '/../api/_gtfs_service_compare.php';
+require_once __DIR__ . '/../api/_gtfs_route_compare_v1.php';
 
 function check_service(bool $ok, string $label): void {
     if (!$ok) throw new RuntimeException($label);
@@ -117,6 +118,24 @@ try {
     check_service(!$r['comparable'] && $r['candidateValidTrips']===1,'added service included');
     check_service($sameResult['lines'][0]['line']==='16' && $sameResult['lineCounts']['UNVERAENDERT']===1,
         'line 16 to Uhlandstraße is not new solely from feed IDs');
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/old.zip');
+    check_service($v1['lineCounts']['UNVERAENDERT']===1, 'V1 ignores feed-local stop, trip and agency IDs');
+    $shifted = $same;
+    $shifted[0]['trips'][0]['stops'][1] = ['bb','Mitte','51.7101','14.3101'];
+    zip_service($dir.'/shifted.zip','325',$shifted);
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/shifted.zip', $dir.'/old.zip');
+    check_service($v1['lineCounts']['UNVERAENDERT']===1, 'V1 ignores small coordinate shifts');
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/changed.zip', $dir.'/old.zip');
+    check_service($v1['lineCounts']['GEAENDERT']===1 && in_array('neue haltestelle', $v1['lines'][0]['variants'][0]['diff']['addedStops'], true),
+        'V1 detects real stop replacement');
+    $duplicate = $same;
+    $duplicate[0]['trips'][] = ['id'=>'second-trip','service'=>'s','stops'=>[$a2,$b2,$u2]];
+    zip_service($dir.'/duplicate.zip','325',$duplicate);
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/duplicate.zip', $dir.'/old.zip')['lineCounts']['UNVERAENDERT']===1,
+        'V1 ignores trip density');
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/future.zip', $dir.'/old.zip');
+    check_service($v1['comparable'] && $v1['lineCounts']['UNVERAENDERT']===1,
+        'V1 compares service-valid routes across separate periods');
 } finally {
     foreach (glob($dir.'/*.zip') ?: [] as $file) unlink($file);
     rmdir($dir);

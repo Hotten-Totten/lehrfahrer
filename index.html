@@ -686,15 +686,16 @@
         <div id="gtfsChangeVersionInfo">Aktueller GTFS-Stand: Wird geladen …</div>
       </section>
       <div id="gtfsChangeDiagnostics" class="gtfs-change-baseline" aria-live="polite"></div>
-      <label for="gtfsComparisonDate">Betriebstag für Alt/Neu-Vergleich</label>
-      <input id="gtfsComparisonDate" type="date">
-      <button type="button" id="gtfsComparisonCheckBtn">Betriebstag prüfen</button>
+      <div id="gtfsCandidateVersionInfo" class="gtfs-change-baseline"></div>
+      <p>Der Streckenvergleich berücksichtigt alle servicegültigen Führungen; ein einzelner Betriebstag ist dafür nicht maßgeblich.</p>
+      <button type="button" id="gtfsComparisonCheckBtn">Änderungen prüfen</button>
       <div id="gtfsChangeSummary" class="gtfs-change-summary"></div>
       <div class="gtfs-change-toolbar" aria-label="Änderungen filtern">
         <button type="button" data-gtfs-filter="ALLE" class="active">Alle</button>
         <button type="button" data-gtfs-filter="NEU">Nur neu</button>
         <button type="button" data-gtfs-filter="GEAENDERT">Nur geändert</button>
         <button type="button" data-gtfs-filter="ENTFALLEN">Nur entfallen</button>
+        <button type="button" data-gtfs-filter="PRUEFEN">Nur prüfen</button>
         <button type="button" data-gtfs-filter="UNVERAENDERT">Nur unverändert</button>
       </div>
       <div id="gtfsChangeList" class="gtfs-change-list"></div>

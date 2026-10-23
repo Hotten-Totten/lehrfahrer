@@ -1561,7 +1561,7 @@ async function rebuildGtfsServerIndex() {
 }
 
 function gtfsChangeStatusLabel(status) {
-  return ({ NEU: "NEU", GEAENDERT: "GEÄNDERT", ENTFALLEN: "ENTFALLEN", UNVERAENDERT: "UNVERÄNDERT" })[status] || status;
+  return ({ NEU: "NEU", GEAENDERT: "GEÄNDERT", ENTFALLEN: "ENTFALLEN", UNVERAENDERT: "UNVERÄNDERT", PRUEFEN: "PRÜFEN" })[status] || status;
 }
 
 function gtfsChangeElement(tag, className = "", text = "") {
@@ -1579,6 +1579,8 @@ function gtfsChangeDiffText(variant) {
   if (diff.orderChanged) parts.push("Reihenfolge geändert");
   if (diff.headsignChanged) parts.push(`Zieltext geändert: ${diff.previousHeadsign || "–"} → ${variant.headsign || "–"}`);
   if (diff.stopCountChanged) parts.push(`Stopanzahl: ${Number(diff.previousStopCount || 0)} → ${Number(variant.stopCount || 0)}`);
+  if (diff.note) parts.push(diff.note);
+  if (variant.temporary) parts.push("Nur zeitweise gültig");
   return parts.join(" · ");
 }
 
@@ -1595,20 +1597,25 @@ function renderGtfsChangeAnalysis(analysis) {
     : (analysis.candidateChecked ? "Offizieller Kandidat geprüft; Übernahme fachlich gesperrt"
       : "Aktueller Staging-Stand; Kandidatenprüfung läuft");
   const diagnostics = document.getElementById("gtfsChangeDiagnostics");
-  const comparisonDate = document.getElementById("gtfsComparisonDate");
   if (diagnostics) diagnostics.textContent = analysis.candidateChecked ? [
-    `CURRENT: ${analysis.currentPeriod?.start || "?"} – ${analysis.currentPeriod?.end || "?"} (Agency ${analysis.currentAgency || "?"}; ${Number(analysis.currentValidTrips || 0)} gültige Trips; ${Number(analysis.currentValidLines || 0)} Linien)`,
-    `CANDIDATE: ${analysis.candidatePeriod?.start || "?"} – ${analysis.candidatePeriod?.end || "?"} (Agency ${analysis.candidateAgency || "?"}; ${Number(analysis.candidateValidTrips || 0)} gültige Trips; ${Number(analysis.candidateValidLines || 0)} Linien)`,
-    `Vergleich: ${analysis.comparisonMode || "?"}; Betriebstag: ${analysis.comparisonDate || "kein gemeinsamer"}; belegte Änderungen: ${Number(analysis.lineCounts?.GEAENDERT || 0) + Number(analysis.lineCounts?.NEU || 0) + Number(analysis.lineCounts?.ENTFALLEN || 0)}`
+    `CURRENT: ${analysis.currentPeriod?.start || "?"} – ${analysis.currentPeriod?.end || "?"} (${Number(analysis.currentValidLines || 0)} Linien)`,
+    `CANDIDATE: ${analysis.candidatePeriod?.start || "?"} – ${analysis.candidatePeriod?.end || "?"} (${Number(analysis.candidateValidLines || 0)} Linien)`,
+    `Vergleich: servicegültige Haltestellenfolgen; ${Number(analysis.lineCounts?.PRUEFEN || 0)} Linien fachlich prüfen`
   ].join("\n") : "";
-  if (comparisonDate && analysis.comparisonDate) comparisonDate.value = analysis.comparisonDate;
+  const candidateInfo = document.getElementById("gtfsCandidateVersionInfo");
+  if (candidateInfo) candidateInfo.textContent = analysis.candidateChecked ? [
+    `Kandidat: ${analysis.candidateInfo?.feedInfo?.feed_version || analysis.candidateInfo?.publishedAt || "Version nicht ausgewiesen"}`,
+    `Quelle: ${analysis.candidateInfo?.source || "?"}; Betreiber: ${analysis.candidateInfo?.agencyName || "Cottbusverkehr"}`,
+    `Geprüft: ${analysis.candidateInfo?.checkedAt || "?"}`
+  ].join("\n") : "";
   summary.replaceChildren();
   const stats = [
     [analysis.candidateValidLines ?? analysis.current?.routeCount, "Linien geprüft"],
     [analysis.current?.variantCount, "Varianten geprüft"],
     [analysis.lineCounts?.NEU, "Linien neu"],
     [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
-    [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"]
+    [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"],
+    [analysis.lineCounts?.PRUEFEN, "Linien prüfen"]
   ];
   stats.forEach(([value, label]) => {
     const card = gtfsChangeElement("div", "gtfs-change-stat");
@@ -1632,7 +1639,6 @@ function renderGtfsChangeAnalysis(analysis) {
       const head = gtfsChangeElement("div", "gtfs-change-variant-head");
       head.append(
         gtfsChangeElement("span", "", gtfsChangeStatusLabel(variant.status)),
-        gtfsChangeElement("span", "", `Richtung ${variant.directionId || "–"}`),
         gtfsChangeElement("span", "", variant.headsign || variant.destination || "ohne Zieltext"),
         gtfsChangeElement("span", "", `${Number(variant.stopCount || 0)} Stops`)
       );
@@ -1671,28 +1677,26 @@ function renderGtfsChangeAnalysis(analysis) {
   candidateStatus.textContent = analysis.candidateReady
     ? "Offizieller Kandidat erneut validiert; Lehrfahrer-Routen bleiben unverändert."
     : "Kein geprüfter offizieller Kandidat zur Übernahme freigegeben.";
-  const checkCandidate = date => postGtfsImport({ action: "candidateStatus", ...(date ? { comparisonDate: date } : {}) }).then(result => {
+  const checkCandidate = () => postGtfsImport({ action: "candidateStatus" }).then(result => {
       if (modal.classList.contains("hidden")) return;
       if (result.changeAnalysis) {
         renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateChecked: true,
-          candidateReady: result.ready, candidateId: result.candidateId });
-        if (!result.ready) candidateStatus.textContent = result.changeAnalysis.comparisonMode === "KEINE_GEMEINSAME_FAHRPLANPERIODE"
-          ? "Keine gemeinsame Fahrplanperiode – Übernahme gesperrt." : "Vergleichstag nicht in beiden Feeds aktiv – Übernahme gesperrt.";
+          candidateReady: result.ready, candidateId: result.candidateId, candidateInfo: result.candidateInfo });
+        if (!result.ready) candidateStatus.textContent = "Kandidat nicht zur Übernahme freigegeben.";
       } else {
         candidateStatus.textContent = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
       }
     }).catch(err => { candidateStatus.textContent = err.message || "Kandidatenprüfung fehlgeschlagen."; });
-  document.getElementById("gtfsComparisonCheckBtn").onclick = () => { void checkCandidate(comparisonDate?.value || ""); };
+  document.getElementById("gtfsComparisonCheckBtn").onclick = () => { void checkCandidate(); };
   if (!analysis.candidateChecked) {
-    void checkCandidate("");
+    void checkCandidate();
   }
   button.onclick = async () => {
       if (!analysis.candidateReady || !confirm("Geprüften offiziellen GTFS-Kandidaten manuell übernehmen? Bestehende Lehrfahrer-Routen bleiben unverändert.")) return;
       button.disabled = true;
       modal.setAttribute("aria-busy", "true");
       try {
-        const result = await postGtfsImport({ action: "candidateAdopt", candidateId: analysis.candidateId,
-          comparisonDate: comparisonDate?.value || "" });
+        const result = await postGtfsImport({ action: "candidateAdopt", candidateId: analysis.candidateId });
         const complete = result.completeness || {};
         report.className = `gtfs-change-report${complete.complete ? "" : " warn"}`;
         report.textContent = [

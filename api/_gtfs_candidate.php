@@ -6,6 +6,7 @@ require_once __DIR__ . '/_gtfs_variant_index.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_gtfs_version.php';
 require_once __DIR__ . '/_gtfs_service_compare.php';
+require_once __DIR__ . '/_gtfs_route_compare_v1.php';
 
 const LEHRFAHRER_GTFS_OFFICIAL_URL = 'https://download.gtfs.de/germany/nv_free/latest.zip';
 
@@ -118,7 +119,7 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
     $inventoryAnalysis = lehrfahrer_gtfs_compare_operator_indexes($candidateIndex, $currentIndex);
     $workingSet = lehrfahrer_gtfs_working_set($inventoryAnalysis, 'all');
     if (!$workingSet['completeness']['complete']) throw new RuntimeException('GTFS-Kandidat ist nicht vollstaendig.');
-    $analysis = lehrfahrer_gtfs_compare_service_zips($candidateZip, $currentZip, $comparisonDate);
+    $analysis = lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
     return ['manifest' => $manifest, 'agencyId' => $agency, 'index' => $index,
         'analysis' => $analysis, 'workingSet' => $workingSet,
         'manualAdoptionReady' => $analysis['comparable']];

@@ -572,7 +572,10 @@ function gtfs_candidate_status(): void {
         $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path(),
             1048576, true, $date === '' ? null : $date);
         gtfs_reply(['ok' => true, 'ready' => $ready['manualAdoptionReady'], 'candidateId' => $ready['manifest']['candidate_id'], 'agencyId' => $ready['agencyId'],
-            'sourceSha256' => $ready['manifest']['checkedSourceSha256'], 'changeAnalysis' => $ready['analysis']]);
+            'sourceSha256' => $ready['manifest']['checkedSourceSha256'], 'candidateInfo' => [
+                'source' => $ready['manifest']['source'] ?? '', 'checkedAt' => $ready['manifest']['validation_timestamp'] ?? '',
+                'feedInfo' => $ready['manifest']['feed_info'] ?? [], 'agencyName' => $ready['manifest']['agency_name'] ?? '',
+                'publishedAt' => $ready['manifest']['publishedAt'] ?? ''], 'changeAnalysis' => $ready['analysis']]);
     } catch (Throwable $error) {
         gtfs_reply(['ok' => true, 'ready' => false, 'reason' => $error->getMessage()]);
     }

@@ -166,11 +166,9 @@ try {
     fixture_index($currentIndex, $past, '143', $currentZip);
     fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     $withoutOverlap = $preflight();
-    check(!$withoutOverlap['manualAdoptionReady']
-        && $withoutOverlap['analysis']['comparisonMode'] === 'KEINE_GEMEINSAME_FAHRPLANPERIODE',
-        'Nicht ueberlappende Fahrplanperioden werden nicht freigegeben');
-    blocked(static fn(): array => lehrfahrer_gtfs_candidate_adopt($candidate, $currentZip, $currentIndex, $company, 0),
-        'Uebernahme ohne gemeinsame Fahrplanperiode');
+    check($withoutOverlap['manualAdoptionReady']
+        && $withoutOverlap['analysis']['comparisonMode'] === 'SERVICEGUELTIGE_STRECKEN_V1',
+        'Servicegueltige Strecken sind ohne Periodenueberlappung vergleichbar');
     fixture_zip($currentZip, $old);
     touch($currentZip, strtotime('2026-10-13T00:00:00Z'));
     fixture_index($currentIndex, $old, '143', $currentZip);
