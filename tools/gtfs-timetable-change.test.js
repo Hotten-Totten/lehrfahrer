@@ -413,3 +413,27 @@ test('X: manuelle aktuelle Route ist kandidatengebunden und vom Vergleichsstatus
   assert.match(selection, /rename\(\$temp, \$path\)/);
   assert.doesNotMatch(selection, /routePoints|save_line|candidate\.zip|variants\.sqlite/);
 });
+
+test('Y: nur positive aktuelle Routenzahl wird in der Linienübersicht blau und fett', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'editor.css'), 'utf8');
+  const updateSource = editor.match(/const updateLineMeta = count => \{[\s\S]*?\n    \};/)?.[0];
+  assert.ok(updateSource);
+  const classes = new Set();
+  const markedCount = { textContent: '', classList: { toggle(name, enabled) {
+    if (enabled) classes.add(name);
+    else classes.delete(name);
+  } } };
+  const update = new Function('markedCount', `${updateSource}; return updateLineMeta;`)(markedCount);
+  update(0);
+  assert.equal(markedCount.textContent, '0 als aktuell markiert');
+  assert.equal(classes.has('has-selection'), false);
+  update(2);
+  assert.equal(markedCount.textContent, '2 als aktuell markiert');
+  assert.equal(classes.has('has-selection'), true);
+  update(0);
+  assert.equal(classes.has('has-selection'), false);
+  assert.match(css, /\.gtfs-change-line-meta \{[^}]*color: #637086/);
+  assert.match(css, /\.gtfs-change-marked-count\.has-selection \{[^}]*color: #1454bd; font-weight: 750/);
+  assert.match(editor, /updateLineMeta\(Number\(result\.selectedVariantCount \|\| 0\)\)/);
+});

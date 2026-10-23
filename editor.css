@@ -3397,6 +3397,7 @@ button.danger:hover {
 .gtfs-change-line summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
 .gtfs-change-line-title { min-width: 85px; font-weight: 750; }
 .gtfs-change-line-meta { flex: 1; color: #637086; }
+.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }
 .gtfs-change-badge { border-radius: 999px; padding: 4px 9px; background: #edf1f6; font-size: 0.78rem; font-weight: 750; }
 .gtfs-change-variants { display: grid; gap: 8px; padding: 0 16px 14px; }
 .gtfs-change-variant { padding: 10px 12px; border-radius: 9px; background: #f3f6fa; }

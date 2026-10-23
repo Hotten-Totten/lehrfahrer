@@ -1634,8 +1634,15 @@ function renderGtfsChangeAnalysis(analysis) {
     card.dataset.status = line.status;
     const heading = document.createElement("summary");
     const lineMeta = gtfsChangeElement("span", "gtfs-change-line-meta");
+    const markedCount = gtfsChangeElement("span", "gtfs-change-marked-count");
+    lineMeta.append(
+      document.createTextNode(`${(line.variants || []).length} Varianten · `),
+      markedCount,
+      document.createTextNode(line.status === "PRUEFEN" ? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen" : "")
+    );
     const updateLineMeta = count => {
-      lineMeta.textContent = `${(line.variants || []).length} Varianten · ${count} als aktuell markiert${line.status === "PRUEFEN" ? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen" : ""}`;
+      markedCount.textContent = `${count} als aktuell markiert`;
+      markedCount.classList.toggle("has-selection", count > 0);
     };
     updateLineMeta(Number(line.selectedVariantCount || 0));
     heading.append(
