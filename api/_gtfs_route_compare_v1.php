@@ -148,6 +148,8 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
         'currentAgency' => $oldFeed['agencyId'], 'candidateAgency' => $newFeed['agencyId'],
         'currentValidTrips' => $oldFeed['tripCount'], 'candidateValidTrips' => $newFeed['tripCount'],
         'currentValidLines' => count($old), 'candidateValidLines' => count($new),
+        'currentVariantCount' => array_sum(array_map(static fn(array $line): int => count($line['variants']), $old)),
+        'candidateVariantCount' => array_sum(array_map(static fn(array $line): int => count($line['variants']), $new)),
         'lineCounts' => ['NEU' => 0, 'GEAENDERT' => 0, 'UNVERAENDERT' => 0, 'ENTFALLEN' => 0, 'PRUEFEN' => 0], 'lines' => []];
     foreach ($keys as $key) {
         $n = $new[$key] ?? null; $o = $old[$key] ?? null;
@@ -210,13 +212,13 @@ function lehrfahrer_gtfs_routes_v1_cached(string $candidateZip, string $currentZ
     }
     if (is_link($cacheDir)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
     if (!is_dir($cacheDir) && !mkdir($cacheDir, 0700)) throw new RuntimeException('GTFS-Vergleichscache kann nicht angelegt werden.');
-    $path = $cacheDir . '/v1-3-' . $candidateSha . '-' . $currentSha . '.json';
+    $path = $cacheDir . '/v1-4-' . $candidateSha . '-' . $currentSha . '.json';
     if (is_link($path)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
     if (is_file($path)) {
         $data = json_decode(strval(file_get_contents($path)), true);
         if (is_array($data) && ($data['candidateSha'] ?? '') === $candidateSha
             && ($data['currentSha'] ?? '') === $currentSha
-            && ($data['rule'] ?? '') === 'routes-v1-3'
+            && ($data['rule'] ?? '') === 'routes-v1-4'
             && is_array($data['analysis'] ?? null)
             && ($data['analysis']['comparisonMode'] ?? '') === 'SERVICEGUELTIGE_STRECKEN_V1') {
             return $data['analysis'];
@@ -224,7 +226,7 @@ function lehrfahrer_gtfs_routes_v1_cached(string $candidateZip, string $currentZ
         throw new RuntimeException('GTFS-Vergleichscache ist beschaedigt.');
     }
     $analysis = lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
-    $payload = json_encode(['rule' => 'routes-v1-3', 'candidateSha' => $candidateSha,
+    $payload = json_encode(['rule' => 'routes-v1-4', 'candidateSha' => $candidateSha,
         'currentSha' => $currentSha, 'analysis' => $analysis], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     $temp = $cacheDir . '/.building-' . bin2hex(random_bytes(8));
     try {

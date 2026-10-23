@@ -1611,7 +1611,7 @@ function renderGtfsChangeAnalysis(analysis) {
   summary.replaceChildren();
   const stats = [
     [analysis.candidateValidLines ?? analysis.current?.routeCount, "Linien geprüft"],
-    [analysis.current?.variantCount, "Varianten geprüft"],
+    [analysis.candidateVariantCount ?? analysis.current?.variantCount, "Varianten geprüft"],
     [analysis.lineCounts?.NEU, "Linien neu"],
     [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
     [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"],
