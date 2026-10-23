@@ -1116,9 +1116,9 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.072' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.073' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.072" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.073" > /tmp/staging-editor-api.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/staging.cookies -D /tmp/staging-cities.headers \
@@ -1185,8 +1185,13 @@ jobs:
           if (count($line16) !== 1 || $line16[0]['status'] === 'GEAENDERT') {
               throw new RuntimeException('Line 16 comparison is missing or falsely changed.');
           }
+          $referenceStatuses = [];
+          foreach ($ready['analysis']['lines'] as $line) {
+              if (in_array($line['line'], ['1', '890', '16'], true)) $referenceStatuses[$line['line']] = $line['status'];
+          }
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
-              'line16Status' => $line16[0]['status'], 'lineCounts' => $ready['analysis']['lineCounts'],
+              'referenceStatuses' => $referenceStatuses, 'lineTotal' => count($ready['analysis']['lines']),
+              'lineCounts' => $ready['analysis']['lineCounts'],
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP

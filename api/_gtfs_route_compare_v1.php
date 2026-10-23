@@ -74,12 +74,11 @@ function lehrfahrer_gtfs_v1_inventory(array $feed): array {
             $stoppage[] = $stops[$id];
         }
         $route = $feed['routes'][strval($trip['route_id'])];
-        $key = trim(strval($route['route_short_name'])) . "\0" . strval($route['route_type']);
-        if ($key === "\0") throw new RuntimeException('GTFS-Linienidentitaet fehlt.');
-        if (isset($lines[$key]) && $lines[$key]['routeId'] !== strval($trip['route_id'])) {
-            throw new RuntimeException('GTFS-Linienidentitaet ist mehrdeutig.');
-        }
-        $lines[$key] ??= ['line' => trim(strval($route['route_short_name'])), 'routeId' => strval($trip['route_id']), 'variants' => []];
+        $key = lehrfahrer_gtfs_v1_name(strval($route['route_short_name']));
+        if ($key === '') throw new RuntimeException('GTFS-Linienidentitaet fehlt.');
+        $lines[$key] ??= ['line' => trim(strval($route['route_short_name'])), 'routeId' => strval($trip['route_id']),
+            'routeTypes' => [], 'variants' => []];
+        $lines[$key]['routeTypes'][strval($route['route_type'])] = true;
         $found = null;
         foreach ($lines[$key]['variants'] as $i => $variant) {
             if (lehrfahrer_gtfs_v1_same_sequence($variant['stops'], $stoppage)) { $found = $i; break; }
@@ -94,6 +93,27 @@ function lehrfahrer_gtfs_v1_inventory(array $feed): array {
         }
     }
     return $lines;
+}
+
+function lehrfahrer_gtfs_v1_feed_lines(array $feed): array {
+    $lines = [];
+    foreach ($feed['routes'] as $route) {
+        $key = lehrfahrer_gtfs_v1_name(strval($route['route_short_name']));
+        if ($key === '') throw new RuntimeException('GTFS-Linienidentitaet fehlt.');
+        $lines[$key]['line'] ??= trim(strval($route['route_short_name']));
+        $lines[$key]['routeTypes'][strval($route['route_type'])] = true;
+    }
+    return $lines;
+}
+
+function lehrfahrer_gtfs_v1_line_status(bool $oldPresent, bool $newPresent,
+    bool $oldActive, bool $newActive, array $variants, bool $ambiguousType): string {
+    if (!$oldPresent && $newPresent && $newActive) return 'NEU';
+    if ($oldPresent && !$newPresent && $oldActive) return 'ENTFALLEN';
+    if (!$oldPresent || !$newPresent || !$oldActive || !$newActive || $ambiguousType) return 'PRUEFEN';
+    foreach ($variants as $variant) if ($variant['status'] === 'GEAENDERT') return 'GEAENDERT';
+    foreach ($variants as $variant) if ($variant['status'] === 'PRUEFEN') return 'PRUEFEN';
+    return 'UNVERAENDERT';
 }
 
 function lehrfahrer_gtfs_v1_temporary(array $variant, array $feed): bool {
@@ -140,7 +160,9 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
     $oldFeed = lehrfahrer_gtfs_service_feed($currentZip);
     $new = lehrfahrer_gtfs_v1_inventory($newFeed);
     $old = lehrfahrer_gtfs_v1_inventory($oldFeed);
-    $keys = array_unique(array_merge(array_keys($old), array_keys($new)));
+    $newLines = lehrfahrer_gtfs_v1_feed_lines($newFeed);
+    $oldLines = lehrfahrer_gtfs_v1_feed_lines($oldFeed);
+    $keys = array_unique(array_merge(array_keys($oldLines), array_keys($newLines)));
     sort($keys, SORT_NATURAL | SORT_FLAG_CASE);
     $result = ['comparisonMode' => 'SERVICEGUELTIGE_STRECKEN_V1', 'comparable' => true,
         'commonPeriod' => (bool)array_intersect_key($newFeed['activeDays'], $oldFeed['activeDays']),
@@ -192,11 +214,15 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
         foreach ($ov as $oi => $variant) if (!isset($matchedOld[$oi])) $public[] = lehrfahrer_gtfs_v1_public($variant,
             $variant['temporary'] ? 'PRUEFEN' : 'GEAENDERT',
             ['note' => $variant['temporary'] ? 'Zeitweise entfallene Stopfolge; fachlich prüfen.' : 'Variante entfallen.']);
-        $changed = (bool)array_filter($public, static fn(array $item): bool => $item['status'] === 'GEAENDERT');
-        $review = (bool)array_filter($public, static fn(array $item): bool => $item['status'] === 'PRUEFEN');
-        $status = $o === null ? 'NEU' : ($n === null ? 'ENTFALLEN' : ($review ? 'PRUEFEN' : ($changed ? 'GEAENDERT' : 'UNVERAENDERT')));
+        $oldTypes = array_keys($oldLines[$key]['routeTypes'] ?? []);
+        $newTypes = array_keys($newLines[$key]['routeTypes'] ?? []);
+        sort($oldTypes); sort($newTypes);
+        $ambiguousType = count($oldTypes) !== 1 || count($newTypes) !== 1 || $oldTypes !== $newTypes;
+        $status = lehrfahrer_gtfs_v1_line_status(isset($oldLines[$key]), isset($newLines[$key]),
+            $o !== null, $n !== null, $public, $ambiguousType);
         $result['lineCounts'][$status]++;
-        $result['lines'][] = ['line' => ($n ?? $o)['line'], 'routeId' => ($n ?? $o)['routeId'],
+        $result['lines'][] = ['line' => ($n ?? $o ?? $newLines[$key] ?? $oldLines[$key])['line'],
+            'routeId' => ($n ?? $o ?? [])['routeId'] ?? null,
             'status' => $status, 'variantCount' => count($nv), 'previousVariantCount' => count($ov),
             'stopSequenceChanges' => $changes, 'variants' => $public];
     }
@@ -212,13 +238,13 @@ function lehrfahrer_gtfs_routes_v1_cached(string $candidateZip, string $currentZ
     }
     if (is_link($cacheDir)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
     if (!is_dir($cacheDir) && !mkdir($cacheDir, 0700)) throw new RuntimeException('GTFS-Vergleichscache kann nicht angelegt werden.');
-    $path = $cacheDir . '/v1-4-' . $candidateSha . '-' . $currentSha . '.json';
+    $path = $cacheDir . '/v1-5-' . $candidateSha . '-' . $currentSha . '.json';
     if (is_link($path)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
     if (is_file($path)) {
         $data = json_decode(strval(file_get_contents($path)), true);
         if (is_array($data) && ($data['candidateSha'] ?? '') === $candidateSha
             && ($data['currentSha'] ?? '') === $currentSha
-            && ($data['rule'] ?? '') === 'routes-v1-4'
+            && ($data['rule'] ?? '') === 'routes-v1-5'
             && is_array($data['analysis'] ?? null)
             && ($data['analysis']['comparisonMode'] ?? '') === 'SERVICEGUELTIGE_STRECKEN_V1') {
             return $data['analysis'];
@@ -226,7 +252,7 @@ function lehrfahrer_gtfs_routes_v1_cached(string $candidateZip, string $currentZ
         throw new RuntimeException('GTFS-Vergleichscache ist beschaedigt.');
     }
     $analysis = lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
-    $payload = json_encode(['rule' => 'routes-v1-4', 'candidateSha' => $candidateSha,
+    $payload = json_encode(['rule' => 'routes-v1-5', 'candidateSha' => $candidateSha,
         'currentSha' => $currentSha, 'analysis' => $analysis], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     $temp = $cacheDir . '/.building-' . bin2hex(random_bytes(8));
     try {

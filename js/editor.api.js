@@ -1630,7 +1630,7 @@ function renderGtfsChangeAnalysis(analysis) {
     const heading = document.createElement("summary");
     heading.append(
       gtfsChangeElement("span", "gtfs-change-line-title", `Linie ${line.line || line.routeId}`),
-      gtfsChangeElement("span", "gtfs-change-line-meta", `${Number(line.variantCount || 0)} Varianten${line.status === "GEAENDERT" ? " · Prüfung erforderlich" : ""}`),
+      gtfsChangeElement("span", "gtfs-change-line-meta", `${Number(line.variantCount || 0)} Varianten${line.status === "PRUEFEN" ? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen" : ""}`),
       gtfsChangeElement("span", "gtfs-change-badge", gtfsChangeStatusLabel(line.status))
     );
     const variants = gtfsChangeElement("div", "gtfs-change-variants");

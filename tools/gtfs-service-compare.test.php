@@ -162,6 +162,26 @@ try {
     $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/future.zip', $dir.'/old.zip');
     check_service($v1['comparable'] && $v1['lineCounts']['UNVERAENDERT']===1,
         'V1 compares service-valid routes across separate periods');
+    check_service(lehrfahrer_gtfs_v1_line_status(true, true, true, true,
+        [['status'=>'GEAENDERT'], ['status'=>'PRUEFEN']], false) === 'GEAENDERT',
+        'confirmed change takes precedence over additional review variants');
+    check_service(lehrfahrer_gtfs_v1_line_status(true, true, true, true,
+        [['status'=>'UNVERAENDERT'], ['status'=>'PRUEFEN']], false) === 'PRUEFEN',
+        'uncertain differences do not become confirmed changes');
+    check_service(lehrfahrer_gtfs_v1_line_status(false, true, false, true,
+        [['status'=>'PRUEFEN']], false) === 'NEU'
+        && lehrfahrer_gtfs_v1_line_status(true, false, true, false, [], false) === 'ENTFALLEN',
+        'new and removed line require actual feed absence');
+    $dormant = $base;
+    $dormant[] = ['id'=>'r1-old','line'=>'1','trips'=>[['id'=>'inactive','service'=>'t','stops'=>[$a,$b,$u]]]];
+    $emerging = $same;
+    $emerging[] = ['id'=>'r1-new','line'=>'1','trips'=>[['id'=>'temporary-line1','service'=>'t','stops'=>[$a2,$b2,$u2]]]];
+    zip_service($dir.'/dormant.zip','143',$dormant);
+    zip_service($dir.'/emerging.zip','325',$emerging,'20261019','20261025',[['t','20261021','1']]);
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/emerging.zip', $dir.'/dormant.zip');
+    $line1 = array_values(array_filter($v1['lines'], static fn(array $line): bool => $line['line']==='1'));
+    check_service(count($line1)===1 && $line1[0]['status']==='PRUEFEN'
+        && array_sum($v1['lineCounts'])===2, 'existing line with only temporary new service is review, not new');
 } finally {
     foreach (glob($dir.'/*.zip') ?: [] as $file) unlink($file);
     rmdir($dir);

@@ -372,3 +372,13 @@ test('U: Server-Menü öffnet den bestehenden Fahrplan-Updater mit Kandidatenpr�
   for (const id of ['gtfsChangeVersionInfo', 'gtfsCandidateVersionInfo', 'gtfsChangeDiagnostics',
     'gtfsChangeList', 'gtfsCandidateAdoptBtn']) assert.match(html, new RegExp(`id="${id}"`));
 });
+
+test('V: bestätigte Änderung und Prüfbedarf werden auf Linienebene eindeutig dargestellt', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const compare = fs.readFileSync(path.join(root, 'api', '_gtfs_route_compare_v1.php'), 'utf8');
+  assert.doesNotMatch(editor, /line\.status === "GEAENDERT" \? " · Prüfung erforderlich"/);
+  assert.match(editor, /line\.status === "PRUEFEN" \? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen"/);
+  assert.match(editor, /Nur zeitweise gültig/);
+  assert.match(compare, /Variante hinzugekommen/);
+  assert.match(compare, /Variante entfallen/);
+});
