@@ -188,7 +188,8 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
             ['note' => 'Entfallene oder zeitweise Stopfolge; fachlich pruefen.']);
         $unmatched = count($nv) - count($matchedNew) + count($ov) - count($matchedOld);
         $changed = (bool)array_filter($public, static fn(array $item): bool => $item['status'] === 'GEAENDERT');
-        $status = $o === null ? 'NEU' : ($n === null ? 'ENTFALLEN' : ($unmatched ? 'PRUEFEN' : ($changed ? 'GEAENDERT' : 'UNVERAENDERT')));
+        $review = (bool)array_filter($public, static fn(array $item): bool => $item['status'] === 'PRUEFEN');
+        $status = $o === null ? 'NEU' : ($n === null ? 'ENTFALLEN' : (($unmatched || $review) ? 'PRUEFEN' : ($changed ? 'GEAENDERT' : 'UNVERAENDERT')));
         $result['lineCounts'][$status]++;
         $result['lines'][] = ['line' => ($n ?? $o)['line'], 'routeId' => ($n ?? $o)['routeId'],
             'status' => $status, 'variantCount' => count($nv), 'previousVariantCount' => count($ov),
