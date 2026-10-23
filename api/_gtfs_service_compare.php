@@ -92,6 +92,7 @@ function lehrfahrer_gtfs_service_feed(string $path): array {
         $dateKeys = array_keys($activeDays); sort($dateKeys, SORT_STRING);
         return ['path' => $path, 'agencyId' => $agencyId, 'routes' => $routes, 'trips' => $trips,
             'serviceDays' => $dates, 'activeDays' => $activeDays,
+            'regularServiceDays' => lehrfahrer_gtfs_service_calendar($calendar, []),
             'period' => ['start' => $dateKeys[0], 'end' => $dateKeys[count($dateKeys) - 1]],
             'tripCount' => count($trips), 'routeCount' => count($routes), 'serviceCount' => count($services)];
     } finally { $zip->close(); }

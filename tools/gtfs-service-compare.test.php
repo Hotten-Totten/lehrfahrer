@@ -138,6 +138,27 @@ try {
     zip_service($dir.'/duplicate.zip','325',$duplicate);
     check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/duplicate.zip', $dir.'/old.zip')['lineCounts']['UNVERAENDERT']===1,
         'V1 ignores trip density');
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/more.zip', $dir.'/same.zip')['lineCounts']['GEAENDERT']===1,
+        'V1 detects stable added stop sequence');
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/more.zip')['lineCounts']['GEAENDERT']===1,
+        'V1 detects stable removed stop sequence');
+    $removedStop = $same;
+    $removedStop[0]['trips'][0]['stops'] = [$a2,$u2];
+    zip_service($dir.'/removed-stop.zip','325',$removedStop);
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/removed-stop.zip', $dir.'/old.zip');
+    check_service($v1['lineCounts']['GEAENDERT']===1 && in_array('mitte', $v1['lines'][0]['variants'][0]['diff']['removedStops'], true),
+        'V1 detects removed real stop');
+    $reordered = $same;
+    $reordered[0]['trips'][0]['stops'] = [$a2,$u2,$b2];
+    zip_service($dir.'/reordered.zip','325',$reordered);
+    $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/reordered.zip', $dir.'/old.zip');
+    check_service($v1['lineCounts']['GEAENDERT']===1 && $v1['lines'][0]['variants'][0]['diff']['orderChanged'],
+        'V1 detects real stop order change');
+    $temporary = $same;
+    $temporary[0]['trips'][] = ['id'=>'temporary','service'=>'t','stops'=>[$a2,$x,$u2]];
+    zip_service($dir.'/temporary.zip','325',$temporary,'20261019','20261025',[['t','20261021','1']]);
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/temporary.zip', $dir.'/old.zip')['lineCounts']['PRUEFEN']===1,
+        'V1 reviews temporary variant rather than claiming permanent change');
     $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/future.zip', $dir.'/old.zip');
     check_service($v1['comparable'] && $v1['lineCounts']['UNVERAENDERT']===1,
         'V1 compares service-valid routes across separate periods');
