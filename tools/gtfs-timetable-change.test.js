@@ -382,3 +382,17 @@ test('V: bestätigte Änderung und Prüfbedarf werden auf Linienebene eindeutig 
   assert.match(compare, /Variante hinzugekommen/);
   assert.match(compare, /Variante entfallen/);
 });
+
+test('W: Variantenüberschrift zeigt für jeden Status die Endpunkte der sichtbaren Stopfolge', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const helper = editor.match(/function gtfsChangeVariantEndpoints\(stopNames\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(helper);
+  const endpoints = new Function(`${helper}; return gtfsChangeVariantEndpoints;`)();
+  for (const status of ['UNVERAENDERT', 'GEAENDERT', 'NEU', 'ENTFALLEN', 'PRUEFEN']) {
+    const variant = { status, headsign: 'Anderes Ziel', stopNames: ['Sandow', 'Zwischenhalt', 'Jessener Straße'], stopCount: 3 };
+    assert.equal(endpoints(variant.stopNames), 'Sandow → Jessener Straße', status);
+    assert.equal(endpoints([...variant.stopNames].reverse()), 'Jessener Straße → Sandow', status);
+  }
+  assert.match(editor, /gtfsChangeStatusLabel\(variant\.status\)[\s\S]*?gtfsChangeVariantEndpoints\(variant\.stopNames\)[\s\S]*?variant\.stopCount/);
+  assert.match(editor, /gtfs-change-variant-stops", \(variant\.stopNames \|\| \[\]\)\.join\(" → "\)/);
+});

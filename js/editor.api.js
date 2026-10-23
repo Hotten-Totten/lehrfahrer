@@ -1571,6 +1571,11 @@ function gtfsChangeElement(tag, className = "", text = "") {
   return element;
 }
 
+function gtfsChangeVariantEndpoints(stopNames) {
+  const stops = Array.isArray(stopNames) ? stopNames : [];
+  return `${stops[0] || "–"} → ${stops[stops.length - 1] || "–"}`;
+}
+
 function gtfsChangeDiffText(variant) {
   const diff = variant.diff || {};
   const parts = [];
@@ -1639,7 +1644,7 @@ function renderGtfsChangeAnalysis(analysis) {
       const head = gtfsChangeElement("div", "gtfs-change-variant-head");
       head.append(
         gtfsChangeElement("span", "", gtfsChangeStatusLabel(variant.status)),
-        gtfsChangeElement("span", "", variant.headsign || variant.destination || "ohne Zieltext"),
+        gtfsChangeElement("span", "", gtfsChangeVariantEndpoints(variant.stopNames)),
         gtfsChangeElement("span", "", `${Number(variant.stopCount || 0)} Stops`)
       );
       row.appendChild(head);
