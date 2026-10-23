@@ -78,6 +78,7 @@ jobs:
           php tools/gtfs-service-compare.test.php
           php tools/gtfs-candidate.test.php
           php tools/gtfs-route-selection.test.php
+          php tools/gtfs-route-preview.test.php
           python3 tools/gtfs-official-candidate-filter.test.py
 
           node --test \
@@ -1117,16 +1118,18 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.076' /tmp/staging-editor.html
-          grep -q 'editor.css?v=V2.1.072' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.077' /tmp/staging-editor.html
+          grep -q 'editor.css?v=V2.1.073' /tmp/staging-editor.html
+          grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.076" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.077" > /tmp/staging-editor-api.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
           grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-api.js
           grep -q 'action: "candidateSelection"' /tmp/staging-editor-api.js
           grep -q 'markedCount.classList.toggle("has-selection", count > 0)' /tmp/staging-editor-api.js
+          grep -q 'function openGtfsRoutePreview(candidateId)' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/editor.css?v=V2.1.072" > /tmp/staging-editor.css
+            "$origin/editor.css?v=V2.1.073" > /tmp/staging-editor.css
           grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor.css
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/staging.cookies -D /tmp/staging-cities.headers \
@@ -1169,6 +1172,8 @@ jobs:
           <?php
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_storage.php';
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_candidate.php';
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_route_preview.php';
           $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
           $root = lehrfahrer_tenant_path($company, 'imports', 'gtfs/candidate');
           $dir = lehrfahrer_gtfs_candidate_active_dir($root);
@@ -1197,9 +1202,15 @@ jobs:
           foreach ($ready['analysis']['lines'] as $line) {
               if (in_array($line['line'], ['1', '890', '16'], true)) $referenceStatuses[$line['line']] = $line['status'];
           }
+          $selected = lehrfahrer_gtfs_route_selection_read($root . '/route-selections', $beforeCandidate);
+          $existing = lehrfahrer_gtfs_preview_route_files(lehrfahrer_route_line_city_path($company, 'cottbus'), '16');
+          $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $existing, '16');
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
               'referenceStatuses' => $referenceStatuses, 'lineTotal' => count($ready['analysis']['lines']),
               'lineCounts' => $ready['analysis']['lineCounts'],
+              'previewLine16' => ['selected' => $preview['selectedVariantCount'],
+                  'existingRoutes' => $preview['existingRouteCount'],
+                  'results' => array_count_values(array_column($preview['variants'], 'result'))],
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP

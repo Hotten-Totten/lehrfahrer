@@ -1576,6 +1576,51 @@ function gtfsChangeVariantEndpoints(stopNames) {
   return `${stops[0] || "–"} → ${stops[stops.length - 1] || "–"}`;
 }
 
+async function openGtfsRoutePreview(candidateId) {
+  const modal = document.getElementById("gtfsRoutePreviewModal");
+  const summary = document.getElementById("gtfsRoutePreviewSummary");
+  const list = document.getElementById("gtfsRoutePreviewList");
+  if (!modal || !summary || !list) return;
+  const close = () => modal.classList.add("hidden");
+  document.getElementById("gtfsRoutePreviewCloseBtn").onclick = close;
+  modal.onclick = event => { if (event.target === modal) close(); };
+  summary.textContent = "Vorschau wird geladen …";
+  list.replaceChildren();
+  modal.classList.remove("hidden");
+  try {
+    const response = await postGtfsImport({ action: "candidatePreview", candidateId });
+    if (modal.classList.contains("hidden")) return;
+    const preview = response.preview;
+    summary.textContent = `${preview.selectedVariantCount} markierte Varianten · ${preview.existingRouteCount} vorhandene Lehrfahrer-Routen gelesen · nur Vorschau`;
+    (preview.variants || []).forEach(variant => {
+      const card = gtfsChangeElement("div", "gtfs-route-preview-card");
+      card.append(
+        gtfsChangeElement("strong", "", `Linie ${variant.line} · ${variant.startStop} → ${variant.destination} · ${variant.stopCount} Stops`),
+        gtfsChangeElement("span", "gtfs-route-preview-result", ({
+          IDENTISCH: "IDENTISCH", ANPASSUNG_NOETIG: "ANPASSUNG NÖTIG",
+          NEUE_ROUTE_ERFORDERLICH: "NEUE ROUTE ERFORDERLICH", KONFLIKT: "KONFLIKT"
+        })[variant.result] || variant.result),
+        gtfsChangeElement("div", "gtfs-change-variant-stops", (variant.stopNames || []).join(" → "))
+      );
+      (variant.matches || []).forEach(match => {
+        const details = [match.id, match.variantName, match.category, `${match.stopCount} Stops`].filter(Boolean);
+        card.appendChild(gtfsChangeElement("div", "gtfs-route-preview-match", details.join(" · ")));
+        if (match.difference) {
+          const diff = match.difference;
+          card.appendChild(gtfsChangeElement("div", "gtfs-change-diff", [
+            diff.addedStops?.length ? `Hinzugekommen: ${diff.addedStops.join(", ")}` : "",
+            diff.removedStops?.length ? `Entfallen: ${diff.removedStops.join(", ")}` : "",
+            diff.orderChanged ? "Reihenfolge geändert" : ""
+          ].filter(Boolean).join(" · ")));
+        }
+      });
+      list.appendChild(card);
+    });
+  } catch (err) {
+    summary.textContent = err.message || "Übernahme-Vorschau konnte nicht geladen werden.";
+  }
+}
+
 function gtfsChangeDiffText(variant) {
   const diff = variant.diff || {};
   const parts = [];
@@ -1645,10 +1690,21 @@ function renderGtfsChangeAnalysis(analysis) {
       markedCount.classList.toggle("has-selection", count > 0);
     };
     updateLineMeta(Number(line.selectedVariantCount || 0));
+    const previewButton = line.line === "16" ? gtfsChangeElement("button", "gtfs-change-preview-button", "Übernahme-Vorschau") : null;
+    if (previewButton) {
+      previewButton.type = "button";
+      previewButton.hidden = !Number(line.selectedVariantCount || 0);
+      previewButton.onclick = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openGtfsRoutePreview(analysis.candidateId);
+      };
+    }
     heading.append(
       gtfsChangeElement("span", "gtfs-change-line-title", `Linie ${line.line || line.routeId}`),
       lineMeta,
-      gtfsChangeElement("span", "gtfs-change-badge", gtfsChangeStatusLabel(line.status))
+      gtfsChangeElement("span", "gtfs-change-badge", gtfsChangeStatusLabel(line.status)),
+      ...(previewButton ? [previewButton] : [])
     );
     const variants = gtfsChangeElement("div", "gtfs-change-variants");
     (line.variants || []).forEach(variant => {
@@ -1675,6 +1731,7 @@ function renderGtfsChangeAnalysis(analysis) {
           variant.currentRouteSelected = result.selected === true;
           checkbox.checked = variant.currentRouteSelected;
           updateLineMeta(Number(result.selectedVariantCount || 0));
+          if (previewButton) previewButton.hidden = Number(result.selectedVariantCount || 0) === 0;
         } catch (err) {
           checkbox.checked = !selected;
           setStatus(err.message || "Routenauswahl konnte nicht gespeichert werden.", "error");

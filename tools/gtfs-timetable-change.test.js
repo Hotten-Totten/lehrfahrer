@@ -437,3 +437,18 @@ test('Y: nur positive aktuelle Routenzahl wird in der Linienübersicht blau und 
   assert.match(css, /\.gtfs-change-marked-count\.has-selection \{[^}]*color: #1454bd; font-weight: 750/);
   assert.match(editor, /updateLineMeta\(Number\(result\.selectedVariantCount \|\| 0\)\)/);
 });
+
+test('Z: Linie 16 bietet nur bei Auswahl eine lesende Übernahme-Vorschau', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const endpoint = fs.readFileSync(path.join(root, 'api', 'import_gtfs.php'), 'utf8');
+  assert.match(editor, /line\.line === "16" \? gtfsChangeElement\("button", "gtfs-change-preview-button", "Übernahme-Vorschau"\)/);
+  assert.match(editor, /previewButton\.hidden = !Number\(line\.selectedVariantCount \|\| 0\)/);
+  assert.match(editor, /if \(previewButton\) previewButton\.hidden = Number\(result\.selectedVariantCount \|\| 0\) === 0/);
+  assert.match(editor, /postGtfsImport\(\{ action: "candidatePreview", candidateId \}\)/);
+  assert.match(html, /id="gtfsRoutePreviewModal"[\s\S]*id="gtfsRoutePreviewList"/);
+  assert.match(endpoint, /if \(\$action === 'candidatepreview'\) gtfs_candidate_preview\(\)/);
+  assert.match(endpoint, /lehrfahrer_gtfs_preview_line\(\$ready\['analysis'\], \$selected, \$routes, '16'\)/);
+  assert.doesNotMatch(editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText')),
+    /candidateAdopt|saveLine|loadLineFromData/);
+});

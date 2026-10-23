@@ -3398,6 +3398,12 @@ button.danger:hover {
 .gtfs-change-line-title { min-width: 85px; font-weight: 750; }
 .gtfs-change-line-meta { flex: 1; color: #637086; }
 .gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }
+.gtfs-change-preview-button { color: #174bbd; font-weight: 700; white-space: nowrap; }
+.gtfs-route-preview-box { max-width: 900px; }
+.gtfs-route-preview-card { margin: 10px 18px; padding: 12px; border: 1px solid #dce3ed; border-radius: 9px; background: #f8fafd; }
+.gtfs-route-preview-card strong, .gtfs-route-preview-result { display: block; }
+.gtfs-route-preview-result { margin-top: 5px; font-weight: 750; color: #174bbd; }
+.gtfs-route-preview-match { margin-top: 8px; font-size: 0.85rem; }
 .gtfs-change-badge { border-radius: 999px; padding: 4px 9px; background: #edf1f6; font-size: 0.78rem; font-weight: 750; }
 .gtfs-change-variants { display: grid; gap: 8px; padding: 0 16px 14px; }
 .gtfs-change-variant { padding: 10px 12px; border-radius: 9px; background: #f3f6fa; }

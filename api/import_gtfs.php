@@ -7,6 +7,7 @@ require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_gtfs_version.php';
 require_once __DIR__ . '/_gtfs_candidate.php';
 require_once __DIR__ . '/_gtfs_route_selection.php';
+require_once __DIR__ . '/_gtfs_route_preview.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -619,6 +620,22 @@ function gtfs_candidate_selection(): void {
         }
     }
     gtfs_error(400, 'Linie im Kandidatenvergleich nicht gefunden.');
+}
+
+function gtfs_candidate_preview(): void {
+    gtfs_require_cottbus_change_scope();
+    if (strtolower(trim(strval(getenv('LEHRFAHRER_ENV')))) !== 'staging') {
+        gtfs_error(403, 'Die Pilotvorschau ist nur auf Staging verfuegbar.');
+    }
+    $candidateId = trim(strval($_POST['candidateId'] ?? ''));
+    $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
+    $sha = $ready['manifest']['checkedSourceSha256'];
+    if (!hash_equals($sha, $candidateId)) gtfs_error(409, 'GTFS-Kandidat wurde gewechselt; bitte neu laden.');
+    $selected = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
+    $routes = lehrfahrer_gtfs_preview_route_files(
+        lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus'), '16');
+    $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
+    gtfs_reply(['ok' => true, 'candidateId' => $sha, 'preview' => $preview]);
 }
 
 function gtfs_candidate_adopt(): void {
@@ -1565,6 +1582,7 @@ try {
     if ($action === 'indexadopt') gtfs_error(409, 'Alte GTFS-Uebernahme ist deaktiviert; geprueften Kandidaten verwenden.');
     if ($action === 'candidatestatus') gtfs_candidate_status();
     if ($action === 'candidateselection') gtfs_candidate_selection();
+    if ($action === 'candidatepreview') gtfs_candidate_preview();
     if ($action === 'candidateadopt') gtfs_candidate_adopt();
     if ($action === 'workinventory') gtfs_work_inventory_response(false);
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);

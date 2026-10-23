@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.072">
+<link rel="stylesheet" href="editor.css?v=V2.1.073">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -713,6 +713,17 @@
     </div>
   </div>
 
+  <div id="gtfsRoutePreviewModal" class="modal-overlay hidden" aria-live="polite">
+    <div class="gtfs-change-box gtfs-route-preview-box">
+      <div class="gtfs-change-header">
+        <h3>Übernahme-Vorschau · Linie 16</h3>
+        <button id="gtfsRoutePreviewCloseBtn" type="button">Schließen</button>
+      </div>
+      <p id="gtfsRoutePreviewSummary" class="gtfs-change-baseline">Vorschau wird geladen …</p>
+      <div id="gtfsRoutePreviewList" class="gtfs-change-list"></div>
+    </div>
+  </div>
+
   <div id="gtfsWorkModal" class="modal-overlay hidden" aria-live="polite">
     <div class="gtfs-work-box">
       <div class="gtfs-change-header">
@@ -836,7 +847,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>
-  <script src="js/editor.api.js?v=V2.1.076"></script>
+  <script src="js/editor.api.js?v=V2.1.077"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>
