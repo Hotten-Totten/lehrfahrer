@@ -1633,9 +1633,14 @@ function renderGtfsChangeAnalysis(analysis) {
     const card = gtfsChangeElement("details", "gtfs-change-line");
     card.dataset.status = line.status;
     const heading = document.createElement("summary");
+    const lineMeta = gtfsChangeElement("span", "gtfs-change-line-meta");
+    const updateLineMeta = count => {
+      lineMeta.textContent = `${(line.variants || []).length} Varianten · ${count} als aktuell markiert${line.status === "PRUEFEN" ? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen" : ""}`;
+    };
+    updateLineMeta(Number(line.selectedVariantCount || 0));
     heading.append(
       gtfsChangeElement("span", "gtfs-change-line-title", `Linie ${line.line || line.routeId}`),
-      gtfsChangeElement("span", "gtfs-change-line-meta", `${Number(line.variantCount || 0)} Varianten${line.status === "PRUEFEN" ? " · Zeitweise oder nicht eindeutig zuordenbare Abweichungen" : ""}`),
+      lineMeta,
       gtfsChangeElement("span", "gtfs-change-badge", gtfsChangeStatusLabel(line.status))
     );
     const variants = gtfsChangeElement("div", "gtfs-change-variants");
@@ -1647,6 +1652,29 @@ function renderGtfsChangeAnalysis(analysis) {
         gtfsChangeElement("span", "", gtfsChangeVariantEndpoints(variant.stopNames)),
         gtfsChangeElement("span", "", `${Number(variant.stopCount || 0)} Stops`)
       );
+      const choice = gtfsChangeElement("label", "gtfs-change-current-route");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = variant.currentRouteSelected === true;
+      checkbox.disabled = !analysis.candidateId || !variant.selectionKey;
+      choice.append(checkbox, document.createTextNode(" Aktuelle Route"));
+      head.appendChild(choice);
+      checkbox.onchange = async () => {
+        const selected = checkbox.checked;
+        checkbox.disabled = true;
+        try {
+          const result = await postGtfsImport({ action: "candidateSelection", candidateId: analysis.candidateId,
+            line: line.line, variantKey: variant.selectionKey, selected: selected ? "1" : "0" });
+          variant.currentRouteSelected = result.selected === true;
+          checkbox.checked = variant.currentRouteSelected;
+          updateLineMeta(Number(result.selectedVariantCount || 0));
+        } catch (err) {
+          checkbox.checked = !selected;
+          setStatus(err.message || "Routenauswahl konnte nicht gespeichert werden.", "error");
+        } finally {
+          checkbox.disabled = false;
+        }
+      };
       row.appendChild(head);
       row.appendChild(gtfsChangeElement("div", "gtfs-change-variant-stops", (variant.stopNames || []).join(" → ")));
       const diffText = gtfsChangeDiffText(variant);

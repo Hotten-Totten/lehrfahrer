@@ -396,3 +396,20 @@ test('W: Variantenüberschrift zeigt für jeden Status die Endpunkte der sichtba
   assert.match(editor, /gtfsChangeStatusLabel\(variant\.status\)[\s\S]*?gtfsChangeVariantEndpoints\(variant\.stopNames\)[\s\S]*?variant\.stopCount/);
   assert.match(editor, /gtfs-change-variant-stops", \(variant\.stopNames \|\| \[\]\)\.join\(" → "\)/);
 });
+
+test('X: manuelle aktuelle Route ist kandidatengebunden und vom Vergleichsstatus getrennt', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const endpoint = fs.readFileSync(path.join(root, 'api', 'import_gtfs.php'), 'utf8');
+  const selection = fs.readFileSync(path.join(root, 'api', '_gtfs_route_selection.php'), 'utf8');
+  assert.match(editor, /checkbox\.type = "checkbox"/);
+  assert.match(editor, /checkbox\.checked = variant\.currentRouteSelected === true/);
+  assert.match(editor, /action: "candidateSelection", candidateId: analysis\.candidateId/);
+  assert.match(editor, /line: line\.line, variantKey: variant\.selectionKey, selected: selected \? "1" : "0"/);
+  assert.match(editor, /updateLineMeta\(Number\(result\.selectedVariantCount \|\| 0\)\)/);
+  assert.match(editor, /postGtfsImport\(\{ action: "candidateStatus" \}\)/);
+  assert.match(endpoint, /lehrfahrer_gtfs_route_selection_apply\(\$ready\['analysis'\]/);
+  assert.match(endpoint, /hash_equals\(\$ready\['manifest'\]\['checkedSourceSha256'\], \$candidateId\)/);
+  assert.match(selection, /candidate_sha256/);
+  assert.match(selection, /rename\(\$temp, \$path\)/);
+  assert.doesNotMatch(selection, /routePoints|save_line|candidate\.zip|variants\.sqlite/);
+});

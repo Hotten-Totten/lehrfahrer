@@ -6,6 +6,7 @@ require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_gtfs_version.php';
 require_once __DIR__ . '/_gtfs_candidate.php';
+require_once __DIR__ . '/_gtfs_route_selection.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -565,20 +566,59 @@ function gtfs_candidate_dir(): string {
     );
 }
 
+function gtfs_route_selection_dir(): string {
+    return lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate/route-selections');
+}
+
 function gtfs_candidate_status(): void {
     gtfs_require_cottbus_change_scope();
     try {
         $date = trim(strval($_POST['comparisonDate'] ?? ''));
         $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path(),
             1048576, true, $date === '' ? null : $date);
+        $sha = $ready['manifest']['checkedSourceSha256'];
+        $selectionDir = gtfs_route_selection_dir();
+        $analysis = lehrfahrer_gtfs_route_selection_apply($ready['analysis'],
+            lehrfahrer_gtfs_route_selection_read($selectionDir, $sha));
         gtfs_reply(['ok' => true, 'ready' => $ready['manualAdoptionReady'], 'candidateId' => $ready['manifest']['candidate_id'], 'agencyId' => $ready['agencyId'],
             'sourceSha256' => $ready['manifest']['checkedSourceSha256'], 'candidateInfo' => [
                 'source' => $ready['manifest']['source'] ?? '', 'checkedAt' => $ready['manifest']['validation_timestamp'] ?? '',
                 'feedInfo' => $ready['manifest']['feed_info'] ?? [], 'agencyName' => $ready['manifest']['agency_name'] ?? '',
-                'publishedAt' => $ready['manifest']['publishedAt'] ?? ''], 'changeAnalysis' => $ready['analysis']]);
+                'publishedAt' => $ready['manifest']['publishedAt'] ?? ''], 'changeAnalysis' => $analysis]);
     } catch (Throwable $error) {
         gtfs_reply(['ok' => true, 'ready' => false, 'reason' => $error->getMessage()]);
     }
+}
+
+function gtfs_candidate_selection(): void {
+    gtfs_require_cottbus_change_scope();
+    $candidateId = trim(strval($_POST['candidateId'] ?? ''));
+    $line = trim(strval($_POST['line'] ?? ''));
+    $variantKey = trim(strval($_POST['variantKey'] ?? ''));
+    $value = strval($_POST['selected'] ?? '');
+    if (!in_array($value, ['0', '1'], true)) gtfs_error(400, 'Ungueltiger Auswahlwert.');
+    $candidateDir = gtfs_candidate_dir();
+    $ready = lehrfahrer_gtfs_candidate_preflight($candidateDir, gtfs_server_zip_path(), gtfs_index_path());
+    if (!hash_equals($ready['manifest']['checkedSourceSha256'], $candidateId)) {
+        gtfs_error(409, 'GTFS-Kandidat wurde gewechselt; bitte neu laden.');
+    }
+    if (!hash_equals(basename(gtfs_candidate_dir()), $candidateId)) {
+        gtfs_error(409, 'GTFS-Kandidat wurde waehrend der Auswahl gewechselt; bitte neu laden.');
+    }
+    try {
+        $selected = lehrfahrer_gtfs_route_selection_set(gtfs_route_selection_dir(), $candidateId,
+            $ready['analysis'], $line, $variantKey, $value === '1');
+    } catch (InvalidArgumentException $error) {
+        gtfs_error(400, $error->getMessage());
+    }
+    $analysis = lehrfahrer_gtfs_route_selection_apply($ready['analysis'], $selected);
+    foreach ($analysis['lines'] as $entry) {
+        if ($entry['line'] === $line) {
+            gtfs_reply(['ok' => true, 'selected' => $value === '1',
+                'selectedVariantCount' => $entry['selectedVariantCount']]);
+        }
+    }
+    gtfs_error(400, 'Linie im Kandidatenvergleich nicht gefunden.');
 }
 
 function gtfs_candidate_adopt(): void {
@@ -1524,6 +1564,7 @@ try {
     if ($action === 'indexanalyze') gtfs_analyze_server_index();
     if ($action === 'indexadopt') gtfs_error(409, 'Alte GTFS-Uebernahme ist deaktiviert; geprueften Kandidaten verwenden.');
     if ($action === 'candidatestatus') gtfs_candidate_status();
+    if ($action === 'candidateselection') gtfs_candidate_selection();
     if ($action === 'candidateadopt') gtfs_candidate_adopt();
     if ($action === 'workinventory') gtfs_work_inventory_response(false);
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);

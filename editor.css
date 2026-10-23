@@ -3401,6 +3401,8 @@ button.danger:hover {
 .gtfs-change-variants { display: grid; gap: 8px; padding: 0 16px 14px; }
 .gtfs-change-variant { padding: 10px 12px; border-radius: 9px; background: #f3f6fa; }
 .gtfs-change-variant-head { display: flex; flex-wrap: wrap; gap: 8px 14px; font-weight: 650; }
+.gtfs-change-current-route { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; white-space: nowrap; }
+.gtfs-change-current-route input { margin: 0; accent-color: #2457d6; }
 .gtfs-change-variant-stops,
 .gtfs-change-diff { margin-top: 6px; color: #58657a; font-size: 0.84rem; line-height: 1.4; }
 .gtfs-change-adoption { display: flex; justify-content: space-between; gap: 20px; padding: 18px 24px; border-top: 1px solid #dce3ed; background: #fff; }
