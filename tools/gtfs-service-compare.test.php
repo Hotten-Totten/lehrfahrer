@@ -140,6 +140,9 @@ try {
         'V1 ignores trip density');
     check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/more.zip', $dir.'/same.zip')['lineCounts']['GEAENDERT']===1,
         'V1 detects stable added stop sequence');
+    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/two.zip', $dir.'/same.zip')['lineCounts']['NEU']===1
+        && lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/two.zip')['lineCounts']['ENTFALLEN']===1,
+        'V1 keeps confirmed whole-line additions and removals');
     check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/more.zip')['lineCounts']['GEAENDERT']===1,
         'V1 detects stable removed stop sequence');
     $removedStop = $same;
@@ -169,9 +172,15 @@ try {
         [['status'=>'UNVERAENDERT'], ['status'=>'PRUEFEN']], false) === 'PRUEFEN',
         'uncertain differences do not become confirmed changes');
     check_service(lehrfahrer_gtfs_v1_line_status(false, true, false, true,
-        [['status'=>'PRUEFEN']], false) === 'NEU'
-        && lehrfahrer_gtfs_v1_line_status(true, false, true, false, [], false) === 'ENTFALLEN',
-        'new and removed line require actual feed absence');
+        [['status'=>'GEAENDERT']], false) === 'NEU'
+        && lehrfahrer_gtfs_v1_line_status(true, false, true, false,
+            [['status'=>'GEAENDERT']], false) === 'ENTFALLEN',
+        'confirmed new and removed line require actual feed absence');
+    check_service(lehrfahrer_gtfs_v1_line_status(false, true, false, true,
+        [['status'=>'PRUEFEN']], false) === 'PRUEFEN'
+        && lehrfahrer_gtfs_v1_line_status(true, false, true, false,
+            [['status'=>'PRUEFEN']], false) === 'PRUEFEN',
+        'exclusively temporary line presence or absence remains review');
     $dormant = $base;
     $dormant[] = ['id'=>'r1-old','line'=>'1','trips'=>[['id'=>'inactive','service'=>'t','stops'=>[$a,$b,$u]]]];
     $emerging = $same;
