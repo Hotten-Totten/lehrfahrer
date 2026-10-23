@@ -119,7 +119,11 @@ function lehrfahrer_gtfs_candidate_preflight(string $candidateDir, string $curre
     $inventoryAnalysis = lehrfahrer_gtfs_compare_operator_indexes($candidateIndex, $currentIndex);
     $workingSet = lehrfahrer_gtfs_working_set($inventoryAnalysis, 'all');
     if (!$workingSet['completeness']['complete']) throw new RuntimeException('GTFS-Kandidat ist nicht vollstaendig.');
-    $analysis = lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
+    $analysis = $requireNamedDirectory
+        ? lehrfahrer_gtfs_routes_v1_cached($candidateZip, $currentZip,
+            dirname(dirname($candidateDir)) . '/route-v1-cache',
+            $manifest['checkedSourceSha256'], $manifest['checkedAgainstSha256'])
+        : lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
     return ['manifest' => $manifest, 'agencyId' => $agency, 'index' => $index,
         'analysis' => $analysis, 'workingSet' => $workingSet,
         'manualAdoptionReady' => $analysis['comparable']];

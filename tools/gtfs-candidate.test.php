@@ -159,6 +159,14 @@ try {
     fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     $ready = $preflight();
     check($ready['agencyId'] === '287' && $ready['workingSet']['completeness']['complete'], 'Kandidat manuell uebernahmebereit');
+    $reportCache = $candidateRoot . '/route-v1-cache/v1-2-' . hash_file('sha256', $candidateZip)
+        . '-' . hash_file('sha256', $currentZip) . '.json';
+    check(is_file($reportCache) && hash_file('sha256', $candidateZip) === $ready['manifest']['checkedSourceSha256'],
+        'SHA-gebundener Streckenbericht ausserhalb des Kandidatenpakets gespeichert');
+    $reportBytes = file_get_contents($reportCache);
+    file_put_contents($reportCache, '{}');
+    blocked($preflight, 'Manipulierter Streckenbericht');
+    file_put_contents($reportCache, $reportBytes);
     $line16 = array_values(array_filter($ready['analysis']['lines'], static fn(array $line): bool => $line['line'] === '16'));
     check(count($line16) === 1 && $line16[0]['status'] === 'GEAENDERT', 'Linie 16 geaendert');
     $past = $old;

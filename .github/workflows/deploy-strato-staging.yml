@@ -34,7 +34,7 @@ on:
         default: false
         type: boolean
       verify_gtfs_routes_v1:
-        description: Read-only check of persisted Cottbus candidate route comparison (no adoption)
+        description: Check persisted Cottbus route comparison and warm derived report cache (no adoption)
         required: true
         default: false
         type: boolean
@@ -1127,7 +1127,7 @@ jobs:
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
 
-      - name: Verify persisted GTFS route comparison read-only
+      - name: Verify persisted GTFS route comparison and warm derived cache
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_gtfs_routes_v1 }}
         shell: bash
         env:
@@ -1165,6 +1165,12 @@ jobs:
           $beforeCandidate = hash_file('sha256', $candidate);
           $beforeCurrent = hash_file('sha256', $current);
           $ready = lehrfahrer_gtfs_candidate_preflight($dir, $current, $index);
+          $cachedStart = microtime(true);
+          $cached = lehrfahrer_gtfs_candidate_preflight($dir, $current, $index);
+          $cachedSeconds = round(microtime(true) - $cachedStart, 1);
+          if ($cached['analysis']['lineCounts'] !== $ready['analysis']['lineCounts'] || $cachedSeconds > 30) {
+              throw new RuntimeException('Cached route report is inconsistent or too slow.');
+          }
           if (!hash_equals($beforeCandidate, hash_file('sha256', $candidate))
               || !hash_equals($beforeCurrent, hash_file('sha256', $current))) {
               throw new RuntimeException('GTFS-SHA changed during read-only comparison.');
@@ -1177,7 +1183,7 @@ jobs:
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
               'line16Status' => $line16[0]['status'], 'lineCounts' => $ready['analysis']['lineCounts'],
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
-              'currentShaUnchanged' => true], JSON_THROW_ON_ERROR), "\n";
+              'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP
           REMOTE_SCRIPT
 

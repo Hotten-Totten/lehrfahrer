@@ -197,3 +197,36 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
     }
     return $result;
 }
+
+// The official ZIP takes minutes to stream. Keep only the derived report outside
+// the immutable candidate package, bound to both SHA-checked ZIPs and this rule version.
+function lehrfahrer_gtfs_routes_v1_cached(string $candidateZip, string $currentZip,
+    string $cacheDir, string $candidateSha, string $currentSha): array {
+    foreach ([$candidateSha, $currentSha] as $sha) {
+        if (preg_match('/^[a-f0-9]{64}$/D', $sha) !== 1) throw new RuntimeException('GTFS-Vergleichs-SHA ist ungueltig.');
+    }
+    if (is_link($cacheDir)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
+    if (!is_dir($cacheDir) && !mkdir($cacheDir, 0700)) throw new RuntimeException('GTFS-Vergleichscache kann nicht angelegt werden.');
+    $path = $cacheDir . '/v1-2-' . $candidateSha . '-' . $currentSha . '.json';
+    if (is_link($path)) throw new RuntimeException('GTFS-Vergleichscache ist ein Symlink.');
+    if (is_file($path)) {
+        $data = json_decode(strval(file_get_contents($path)), true);
+        if (is_array($data) && ($data['candidateSha'] ?? '') === $candidateSha
+            && ($data['currentSha'] ?? '') === $currentSha
+            && ($data['rule'] ?? '') === 'routes-v1-2'
+            && is_array($data['analysis'] ?? null)
+            && ($data['analysis']['comparisonMode'] ?? '') === 'SERVICEGUELTIGE_STRECKEN_V1') {
+            return $data['analysis'];
+        }
+        throw new RuntimeException('GTFS-Vergleichscache ist beschaedigt.');
+    }
+    $analysis = lehrfahrer_gtfs_compare_routes_v1($candidateZip, $currentZip);
+    $payload = json_encode(['rule' => 'routes-v1-2', 'candidateSha' => $candidateSha,
+        'currentSha' => $currentSha, 'analysis' => $analysis], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    $temp = $cacheDir . '/.building-' . bin2hex(random_bytes(8));
+    try {
+        if (file_put_contents($temp, $payload, LOCK_EX) !== strlen($payload) || !chmod($temp, 0600)
+            || !rename($temp, $path)) throw new RuntimeException('GTFS-Vergleichscache konnte nicht gespeichert werden.');
+    } finally { if (is_file($temp)) unlink($temp); }
+    return $analysis;
+}
