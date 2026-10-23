@@ -33,6 +33,11 @@ on:
         required: true
         default: false
         type: boolean
+      verify_gtfs_routes_v1:
+        description: Read-only check of persisted Cottbus candidate route comparison (no adoption)
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging-v2
@@ -1121,6 +1126,60 @@ jobs:
           logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
+
+      - name: Verify persisted GTFS route comparison read-only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_gtfs_routes_v1 }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_RUN=("${SSH_BASE[@]}" -i ~/.ssh/id_rsa)
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+          "${SSH_RUN[@]}" "$STRATO_USER@$STRATO_HOST" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+            php -q -d max_execution_time=900 -d memory_limit=512M -d "auto_prepend_file=$private_root/runtime-env.php" <<'PHP'
+          <?php
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_storage.php';
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_candidate.php';
+          $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
+          $root = lehrfahrer_tenant_path($company, 'imports', 'gtfs/candidate');
+          $dir = lehrfahrer_gtfs_candidate_active_dir($root);
+          $candidate = $dir . '/candidate.zip';
+          $current = lehrfahrer_tenant_path($company, 'imports', 'gtfs/latest.zip');
+          $index = lehrfahrer_tenant_path($company, 'imports', 'gtfs/index/variants.sqlite');
+          $beforeCandidate = hash_file('sha256', $candidate);
+          $beforeCurrent = hash_file('sha256', $current);
+          $ready = lehrfahrer_gtfs_candidate_preflight($dir, $current, $index);
+          if (!hash_equals($beforeCandidate, hash_file('sha256', $candidate))
+              || !hash_equals($beforeCurrent, hash_file('sha256', $current))) {
+              throw new RuntimeException('GTFS-SHA changed during read-only comparison.');
+          }
+          $line16 = array_values(array_filter($ready['analysis']['lines'],
+              static fn(array $line): bool => $line['line'] === '16'));
+          if (count($line16) !== 1 || $line16[0]['status'] === 'GEAENDERT') {
+              throw new RuntimeException('Line 16 comparison is missing or falsely changed.');
+          }
+          echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
+              'line16Status' => $line16[0]['status'], 'lineCounts' => $ready['analysis']['lineCounts'],
+              'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
+              'currentShaUnchanged' => true], JSON_THROW_ON_ERROR), "\n";
+          PHP
+          REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_control_db_restore_point }}
