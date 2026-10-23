@@ -22,6 +22,17 @@ function lehrfahrer_gtfs_v1_same_sequence(array $a, array $b): bool {
     return true;
 }
 
+function lehrfahrer_gtfs_v1_related(array $a, array $b): bool {
+    if (lehrfahrer_gtfs_v1_same_stop($a[0], $b[0])
+        && lehrfahrer_gtfs_v1_same_stop($a[count($a) - 1], $b[count($b) - 1])) return true;
+    $shared = 0; $used = [];
+    foreach ($a as $stop) foreach ($b as $i => $other) {
+        if (isset($used[$i]) || !lehrfahrer_gtfs_v1_same_stop($stop, $other)) continue;
+        $shared++; $used[$i] = true; break;
+    }
+    return $shared >= 2 && $shared * 2 >= min(count($a), count($b));
+}
+
 function lehrfahrer_gtfs_v1_inventory(array $feed): array {
     $active = [];
     foreach ($feed['trips'] as $id => $trip) {
@@ -156,14 +167,12 @@ function lehrfahrer_gtfs_compare_routes_v1(string $candidateZip, string $current
             $possible = [];
             foreach ($ov as $oi => $prior) {
                 if (isset($matchedOld[$oi])) continue;
-                if (lehrfahrer_gtfs_v1_same_stop($variant['stops'][0], $prior['stops'][0])
-                    && lehrfahrer_gtfs_v1_same_stop(end($variant['stops']), end($prior['stops']))) $possible[] = $oi;
+                if (lehrfahrer_gtfs_v1_related($variant['stops'], $prior['stops'])) $possible[] = $oi;
             }
             if (count($possible) !== 1) continue;
             $oi = $possible[0]; $prior = $ov[$oi];
             $reverse = 0;
-            foreach ($nv as $other) if (lehrfahrer_gtfs_v1_same_stop($other['stops'][0], $prior['stops'][0])
-                && lehrfahrer_gtfs_v1_same_stop(end($other['stops']), end($prior['stops']))) $reverse++;
+            foreach ($nv as $other) if (lehrfahrer_gtfs_v1_related($other['stops'], $prior['stops'])) $reverse++;
             if ($reverse !== 1) continue;
             $matchedNew[$ni] = true; $matchedOld[$oi] = true;
             $status = ($variant['temporary'] || $prior['temporary']
