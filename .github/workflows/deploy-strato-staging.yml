@@ -98,6 +98,7 @@ jobs:
             tools/security-sensitive-storage.test.js \
             tools/tenant-storage.test.js \
             tools/tenant-lines-cities.test.js \
+            tools/route-load-progress.test.js \
             tools/tenant-personnel.test.js \
             tools/tenant-catalog-imports.test.js \
             tools/gtfs-timetable-change.test.js \
@@ -1131,11 +1132,13 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.083' /tmp/staging-editor.html
-          grep -q 'editor.css?v=V2.1.079' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.084' /tmp/staging-editor.html
+          grep -q 'editor.css?v=V2.1.080' /tmp/staging-editor.html
+          grep -q 'id="routeLoadProgressModal"' /tmp/staging-editor.html
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.083" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.084" > /tmp/staging-editor-api.js
+          grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-api.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
           grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-api.js
           grep -q 'action: "candidateSelection"' /tmp/staging-editor-api.js
@@ -1145,7 +1148,8 @@ jobs:
           grep -q 'GTFS-Candidate-SHA:' /tmp/staging-editor-api.js
           grep -q 'Erzeugungsvorschau (nicht gespeichert)' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/editor.css?v=V2.1.079" > /tmp/staging-editor.css
+            "$origin/editor.css?v=V2.1.080" > /tmp/staging-editor.css
+          grep -q '.route-load-progress-track {' /tmp/staging-editor.css
           grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor.css
           grep -q '.gtfs-change-current-only' /tmp/staging-editor.css
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
@@ -1194,6 +1198,7 @@ jobs:
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
           $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
           $files = [];
+          $routeCounts = [];
           foreach (['01', '02'] as $number) {
               $file = lehrfahrer_route_file($company, 'cottbus', 'Route_' . $number, 'json', 'Linie_16', 'Standard');
               if (!is_file($file) || is_link($file)) throw new RuntimeException('Existing Route ' . $number . ' is missing.');
@@ -1201,6 +1206,12 @@ jobs:
               if (($data['city'] ?? '') !== 'cottbus' || ($data['routeName'] ?? '') !== 'Route ' . $number) {
                   throw new RuntimeException('Existing Route ' . $number . ' is inconsistent.');
               }
+              $stops = $data['stops'] ?? null;
+              $points = $data['routePoints'] ?? ($data['route']['original'] ?? null);
+              if (!is_array($stops) || count($stops) !== ($number === '01' ? 20 : 19) || !is_array($points)) {
+                  throw new RuntimeException('Existing Route ' . $number . ' has invalid stops or route points.');
+              }
+              $routeCounts[$number] = ['stops' => count($stops), 'routePoints' => count($points)];
               $files[$number] = ['path' => $file, 'sha' => hash_file('sha256', $file)];
           }
           $alreadyPresent = lehrfahrer_route_city_exists($company, 'cottbus');
@@ -1217,7 +1228,7 @@ jobs:
           }
           echo json_encode(['cityRegistered' => true, 'cityAlreadyPresent' => $alreadyPresent,
               'editorCitySourceContainsCottbus' => true, 'editorRoute01Found' => true, 'editorRoute02Found' => true,
-              'routeHashesUnchanged' => true], JSON_THROW_ON_ERROR), "\n";
+              'routeHashesUnchanged' => true, 'routeCounts' => $routeCounts], JSON_THROW_ON_ERROR), "\n";
           PHP
           REMOTE_CITY
 

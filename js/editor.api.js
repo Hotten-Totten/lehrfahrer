@@ -2567,8 +2567,25 @@ async function fetchLineListFromServer(cityFilter = null) {
 
 // Lädt eine spezifische Linie vom Server anhand der ID
 // Parst die JSON-Daten und füllt den Editor mit den geladenen Werten
+let routeLoadInProgress = false;
+
+function setRouteLoadPhase(message) {
+  const step = document.getElementById("routeLoadProgressStep");
+  if (step) step.textContent = message;
+}
+
+function waitForRouteLoadPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
 async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride = null, categoryFolder = null) {
+  if (routeLoadInProgress) return;
+  routeLoadInProgress = true;
+  const progressModal = document.getElementById("routeLoadProgressModal");
+  setRouteLoadPhase("Routendaten werden geladen …");
+  progressModal?.classList.remove("hidden");
   try {
+    await waitForRouteLoadPaint();
     if (!lineId) {
       setStatus("Keine Linien-ID übergeben.", "warn");
       return;
@@ -2616,7 +2633,11 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
       throw new Error("Server-Antwort enthält keine gültigen Liniendaten.");
     }
 
+    setRouteLoadPhase("Haltestellen und Fahrweg werden aufgebaut …");
+    await waitForRouteLoadPaint();
     loadLineFromData(lineData);
+    setRouteLoadPhase("Karte wird aktualisiert …");
+    await waitForRouteLoadPaint();
 
     debug("Linie vom Server geladen", {
       city,
@@ -2624,9 +2645,13 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
     });
 
     setStatus(`Linie geladen: ${normalizedLineId} (${city})`);
+    setRouteLoadPhase("Route ist bereit");
   } catch (err) {
     error("Fehler beim Laden vom Server", err);
     setStatus(err.message || "Fehler beim Laden vom Server.", "error");
+  } finally {
+    progressModal?.classList.add("hidden");
+    routeLoadInProgress = false;
   }
 }
 

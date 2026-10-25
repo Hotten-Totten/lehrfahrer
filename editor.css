@@ -2560,6 +2560,30 @@ button.danger:hover {
 }
 .modal-overlay.hidden { display: none; }
 
+.route-load-progress-box .save-confirm-body { padding-bottom: 20px; }
+#routeLoadProgressStep { margin: 0 0 16px; color: #1e293b; font-size: 14px; }
+.route-load-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+.route-load-progress-indicator {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: inherit;
+  background: #1e40af;
+  animation: route-load-progress 1.4s ease-in-out infinite;
+}
+@keyframes route-load-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-load-progress-indicator { animation: none; width: 100%; }
+}
+
 .save-confirm-box {
   background: #fff;
   border-radius: 14px;

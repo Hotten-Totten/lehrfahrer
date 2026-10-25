@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.079">
+<link rel="stylesheet" href="editor.css?v=V2.1.080">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -530,6 +530,20 @@
     </div>
   </div>
 
+  <div id="routeLoadProgressModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="routeLoadProgressTitle" aria-describedby="routeLoadProgressStep">
+    <div class="save-confirm-box route-load-progress-box">
+      <div class="save-confirm-header">
+        <h3 id="routeLoadProgressTitle">Gespeicherte Route laden</h3>
+      </div>
+      <div class="save-confirm-body">
+        <p id="routeLoadProgressStep" role="status" aria-live="polite">Routendaten werden geladen …</p>
+        <div class="route-load-progress-track" role="progressbar" aria-label="Route wird geladen" aria-valuetext="Fortschritt nicht numerisch bestimmbar">
+          <span class="route-load-progress-indicator"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Speichern-Bestätigungs-Dialog -->
   <div id="saveConfirmModal" class="modal-overlay hidden">
     <div class="save-confirm-box">
@@ -890,7 +904,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>
-  <script src="js/editor.api.js?v=V2.1.083"></script>
+  <script src="js/editor.api.js?v=V2.1.084"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>
