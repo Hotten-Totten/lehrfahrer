@@ -99,6 +99,7 @@ jobs:
             tools/tenant-storage.test.js \
             tools/tenant-lines-cities.test.js \
             tools/route-load-progress.test.js \
+            tools/route-build-progress.test.js \
             tools/tenant-personnel.test.js \
             tools/tenant-catalog-imports.test.js \
             tools/gtfs-timetable-change.test.js \
@@ -1132,13 +1133,17 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.084' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.085' /tmp/staging-editor.html
+          grep -q 'js/editor.routing.js?v=V2.1.064' /tmp/staging-editor.html
           grep -q 'editor.css?v=V2.1.080' /tmp/staging-editor.html
           grep -q 'id="routeLoadProgressModal"' /tmp/staging-editor.html
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.084" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.085" > /tmp/staging-editor-api.js
           grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-api.js
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/js/editor.routing.js?v=V2.1.064" > /tmp/staging-editor-routing.js
+          grep -q 'showRouteProgress("Straßenroute aufbauen"' /tmp/staging-editor-routing.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
           grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-api.js
           grep -q 'action: "candidateSelection"' /tmp/staging-editor-api.js

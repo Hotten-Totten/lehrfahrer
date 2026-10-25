@@ -885,7 +885,34 @@ function buildManualRouteFromStopsAndAnchors() {
 
 // Erstellt eine vollständige Straßenroute zwischen allen Haltestellen
 // Verwendet OSRM für das Routing und berücksichtigt Sondertrassen
+let streetRouteProgressRunning = false;
+
 async function buildStreetRouteFromStops() {
+  if (streetRouteProgressRunning) return;
+  if (streetRoutingRunning || state.stops.length < 2 || normalizeEditorRoutingMode(state.routingMode) === "manual") {
+    return buildStreetRouteFromStopsImpl();
+  }
+  streetRouteProgressRunning = true;
+  let cancelledBeforeStart = false;
+  showRouteProgress("Straßenroute aufbauen", "Fahrwegpunkte werden vorbereitet …", () => {
+    cancelledBeforeStart = true;
+    routingAbortController?.abort();
+  });
+  try {
+    await waitForRouteLoadPaint();
+    if (cancelledBeforeStart) return;
+    await buildStreetRouteFromStopsImpl();
+    await waitForRouteLoadPaint();
+  } catch (err) {
+    error("Fehler beim Straßenrouting", err);
+    setStatus(`Fehler beim Straßenrouting: ${err.message}`, "error");
+  } finally {
+    hideRouteProgress();
+    streetRouteProgressRunning = false;
+  }
+}
+
+async function buildStreetRouteFromStopsImpl() {
   if (streetRoutingRunning) {
     setStatus("Straßenrouting läuft bereits.", "warn");
     return;
@@ -929,6 +956,7 @@ async function buildStreetRouteFromStops() {
     const isMiddleInsertion = insertedIdx > 0 && insertedIdx < state.stops.length - 1;
 
     if (isMiddleInsertion) {
+      setRouteLoadPhase("Zwischenstopp wird in die Straßenroute eingebaut …");
       if (!historyRestoreRunning) pushHistorySnapshot("Straßenroute erzeugt");
       streetRoutingRunning = true;
       routingAbortController = new AbortController();
@@ -1018,6 +1046,7 @@ async function buildStreetRouteFromStops() {
     debug("Erzwungene Routing-Schritte", steps);
 
     for (let i = 0; i < steps.length; i++) {
+      setRouteLoadPhase(`Routensegmente werden verarbeitet: Abschnitt ${i + 1} von ${steps.length} …`);
       const step = steps[i];
 
       if (step.type === "track") {
@@ -1097,6 +1126,7 @@ async function buildStreetRouteFromStops() {
       appendMode
     });
 
+    setRouteLoadPhase("Karte wird aktualisiert …");
     refreshRouteLine();
     updateStats();
     updateRouteStats();

@@ -23,13 +23,21 @@ function setup(payload, responseOk = true) {
     }
   };
   const step = { textContent: '' };
+  const heading = { textContent: '' };
+  const actions = { classList: { toggle() {}, add() {} } };
+  const cancel = { onclick: null };
   const statuses = [];
   const loaded = [];
   let fetchCount = 0;
   let finishFetch;
   const fetchGate = new Promise(resolve => { finishFetch = resolve; });
   const context = {
-    document: { getElementById(id) { return id === 'routeLoadProgressModal' ? modal : step; } },
+    document: { getElementById(id) {
+      return id === 'routeLoadProgressModal' ? modal
+        : id === 'routeLoadProgressTitle' ? heading
+        : id === 'routeLoadProgressActions' ? actions
+        : id === 'routeLoadProgressCancelBtn' ? cancel : step;
+    } },
     requestAnimationFrame(callback) { setImmediate(callback); },
     fetch: async () => {
       fetchCount++;

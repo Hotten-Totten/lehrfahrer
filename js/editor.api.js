@@ -2574,6 +2574,23 @@ function setRouteLoadPhase(message) {
   if (step) step.textContent = message;
 }
 
+function showRouteProgress(title, phase, onCancel = null) {
+  const heading = document.getElementById("routeLoadProgressTitle");
+  if (heading) heading.textContent = title;
+  setRouteLoadPhase(phase);
+  const cancel = document.getElementById("routeLoadProgressCancelBtn");
+  if (cancel) cancel.onclick = onCancel;
+  document.getElementById("routeLoadProgressActions")?.classList.toggle("hidden", !onCancel);
+  document.getElementById("routeLoadProgressModal")?.classList.remove("hidden");
+}
+
+function hideRouteProgress() {
+  document.getElementById("routeLoadProgressModal")?.classList.add("hidden");
+  document.getElementById("routeLoadProgressActions")?.classList.add("hidden");
+  const cancel = document.getElementById("routeLoadProgressCancelBtn");
+  if (cancel) cancel.onclick = null;
+}
+
 function waitForRouteLoadPaint() {
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
@@ -2581,9 +2598,7 @@ function waitForRouteLoadPaint() {
 async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride = null, categoryFolder = null) {
   if (routeLoadInProgress) return;
   routeLoadInProgress = true;
-  const progressModal = document.getElementById("routeLoadProgressModal");
-  setRouteLoadPhase("Routendaten werden geladen …");
-  progressModal?.classList.remove("hidden");
+  showRouteProgress("Gespeicherte Route laden", "Routendaten werden geladen …");
   try {
     await waitForRouteLoadPaint();
     if (!lineId) {
@@ -2650,7 +2665,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
     error("Fehler beim Laden vom Server", err);
     setStatus(err.message || "Fehler beim Laden vom Server.", "error");
   } finally {
-    progressModal?.classList.add("hidden");
+    hideRouteProgress();
     routeLoadInProgress = false;
   }
 }
