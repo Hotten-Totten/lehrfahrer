@@ -1187,7 +1187,7 @@ jobs:
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" <<'PHP'
           <?php
           set_exception_handler(static function (Throwable $error): void {
-              fwrite(STDERR, 'Cottbus city postcheck failed: ' . $error->getMessage() . "\n");
+              file_put_contents('php://stderr', 'Cottbus city postcheck failed: ' . $error->getMessage() . "\n");
               exit(1);
           });
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
