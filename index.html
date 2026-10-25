@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c">
+<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -26,23 +26,41 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Server</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP aus dem privaten Importbereich dieser Gesellschaft laden">GTFS vom Server laden</button>
-          <button type="button" class="menu-item" onclick="rebuildGtfsServerIndex()" title="Privaten Variantenindex dieser Gesellschaft neu erstellen">GTFS-Index neu erstellen</button>
-          <button type="button" class="menu-item" onclick="analyzeGtfsServerIndex()" title="GTFS-Turboindex und Änderungen zum vorherigen Fahrplanstand analysieren">GTFS-Index analysieren</button>
-          <button type="button" class="menu-item" onclick="openGtfsWorkInventory()" title="Alle GTFS-Varianten mit Bearbeitungs- und Freigabestatus anzeigen">GTFS-Arbeitsvorrat</button>
-          <button type="button" class="menu-item" id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()" title="Geprüften offiziellen GTFS-Kandidaten mit dem aktuellen Fahrplan vergleichen">GTFS-Fahrplanupdate</button>
-          <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
-          <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
-          <button type="button" class="menu-item" onclick="testApiWriteAuth()" title="Prüft den Schreibzugriff der aktuellen Sitzung">Schreibzugriff testen</button>
-          <button type="button" class="menu-item" onclick="importLineFromVbbPrompt()" title="Linienvarianten suchen und ihre Haltestellenfolge in den Editor laden">VBB-Haltestellenfolge importieren …</button>
-          <button type="button" class="menu-item" onclick="setVbbAccessIdViaPrompt()" title="VBB Access-ID lokal im Browser speichern, damit sie beim Import nicht neu eingegeben werden muss">VBB Access-ID setzen …</button>
-          <button type="button" class="menu-item" onclick="clearVbbAccessIdViaPrompt()" title="Löscht die lokal gespeicherte VBB Access-ID">VBB Access-ID löschen</button>
-          <hr class="menu-separator">
-          <button type="button" class="menu-item" data-click-target="loadLineBtn" title="Gespeicherte Linien vom Server anzeigen und in den Editor laden">Route laden / Inhalt</button>
+          <button type="button" class="menu-item" data-click-target="loadLineBtn" title="Gespeicherte Linien vom Server anzeigen und in den Editor laden">Route laden</button>
           <button type="button" class="menu-item" data-click-target="saveLineBtn" title="Die aktuelle Route mit allen Haltestellen auf dem Server speichern">Route speichern</button>
           <hr class="menu-separator">
-          <button type="button" class="menu-item" data-click-target="exportBtn" title="Aktuelle Route als JSON-Datei auf diesen Computer herunterladen">JSON exportieren</button>
-          <button type="button" class="menu-item" data-click-target="exportGpxBtn" title="Aktuelle Route als GPX-Datei herunterladen (z. B. für GPS-Geräte)">GPX herunterladen</button>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Fahrplanwechsel</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()" title="Geprüften offiziellen GTFS-Kandidaten mit dem aktuellen Fahrplan vergleichen">Fahrplanupdate</button>
+              <button type="button" class="menu-item" onclick="openGtfsWorkInventory()" title="Alle GTFS-Varianten mit Bearbeitungs- und Freigabestatus anzeigen">Arbeitsvorrat</button>
+            </div>
+          </div>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Import</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" onclick="importGtfsFromServer()" title="GTFS-ZIP aus dem privaten Importbereich dieser Gesellschaft laden">GTFS vom Server laden</button>
+              <button type="button" class="menu-item" onclick="importGtfsZipPrompt()" title="Linien und Haltestellenfolgen aus einer GTFS-ZIP-Datei importieren. Der Server benötigt PHP ZipArchive.">GTFS-ZIP importieren ...</button>
+              <button type="button" class="menu-item" onclick="importLineFromVbbPrompt()" title="Linienvarianten suchen und ihre Haltestellenfolge in den Editor laden">VBB-Haltestellenfolge importieren …</button>
+            </div>
+          </div>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Export</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" data-click-target="exportBtn" title="Aktuelle Route als JSON-Datei auf diesen Computer herunterladen">JSON exportieren</button>
+            </div>
+          </div>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Verwaltung</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
+            </div>
+          </div>
+          <button type="button" class="menu-item hidden" onclick="rebuildGtfsServerIndex()" title="Privaten Variantenindex dieser Gesellschaft neu erstellen">GTFS-Index neu erstellen</button>
+          <button type="button" class="menu-item hidden" onclick="analyzeGtfsServerIndex()" title="GTFS-Turboindex und Änderungen zum vorherigen Fahrplanstand analysieren">GTFS-Index analysieren</button>
+          <button type="button" class="menu-item hidden" onclick="testApiWriteAuth()" title="Prüft den Schreibzugriff der aktuellen Sitzung">Schreibzugriff testen</button>
+          <button type="button" class="menu-item hidden" onclick="setVbbAccessIdViaPrompt()" title="VBB Access-ID lokal im Browser speichern, damit sie beim Import nicht neu eingegeben werden muss">VBB Access-ID setzen …</button>
+          <button type="button" class="menu-item hidden" onclick="clearVbbAccessIdViaPrompt()" title="Löscht die lokal gespeicherte VBB Access-ID">VBB Access-ID löschen</button>
         </div>
       </div>
 

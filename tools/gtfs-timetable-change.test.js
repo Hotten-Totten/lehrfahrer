@@ -361,7 +361,7 @@ test('U: Server-Menü öffnet den bestehenden Fahrplan-Updater mit Kandidatenpr�
   const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
   const serverMenu = html.slice(html.indexOf('<button class="menu-button" type="button">Server</button>'),
     html.indexOf('<button class="menu-button" type="button">Bearbeiten</button>'));
-  assert.match(serverMenu, /id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate\(\)"[^>]*>GTFS-Fahrplanupdate<\/button>/);
+  assert.match(serverMenu, /class="menu-item menu-submenu-trigger"[^>]*>Fahrplanwechsel<\/button>[\s\S]*id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate\(\)"[^>]*>Fahrplanupdate<\/button>/);
   assert.match(editor, /function openGtfsFahrplanupdate\(\) \{\s*renderGtfsChangeAnalysis\(\{ candidateChecked: false/);
   assert.match(editor, /renderGtfsChangeAnalysis[\s\S]*postGtfsImport\(\{ action: "candidateStatus" \}\)/);
   const opener = editor.match(/function openGtfsFahrplanupdate\(\) \{[\s\S]*?\n\}/)?.[0];

@@ -67,7 +67,8 @@ body {
 }
 
 .menu-root:hover .menu-dropdown,
-.menu-root.menu-open .menu-dropdown {
+.menu-root.menu-open .menu-dropdown,
+.menu-root:focus-within .menu-dropdown {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -86,6 +87,37 @@ body {
 .menu-item:hover {
   background: #eff6ff;
   border-color: #bfdbfe;
+}
+
+.menu-submenu {
+  position: relative;
+}
+
+.menu-submenu-trigger::after {
+  content: "›";
+  float: right;
+  margin-left: 16px;
+}
+
+.menu-submenu-panel {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  min-width: 280px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 3100;
+}
+
+.menu-submenu:hover > .menu-submenu-panel,
+.menu-submenu:focus-within > .menu-submenu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .menu-section-label {
