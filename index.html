@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.077">
+<link rel="stylesheet" href="editor.css?v=V2.1.078">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -753,8 +753,17 @@
   <div id="gtfsAdoptionNoticeModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gtfsAdoptionNoticeTitle">
     <div class="save-confirm-box">
       <div class="save-confirm-header"><h3 id="gtfsAdoptionNoticeTitle">Lehrfahrer-Routen übernehmen</h3></div>
-      <div class="save-confirm-body"><p>Die tatsächliche Übernahme ist noch nicht freigeschaltet.</p></div>
-      <div class="save-confirm-actions"><button id="gtfsAdoptionNoticeClose" class="save-confirm-btn-ok" type="button">Schließen</button></div>
+      <div class="save-confirm-body">
+        <p id="gtfsAdoptionConfirmIntro">Folgende Routen werden neu angelegt:</p>
+        <div id="gtfsAdoptionConfirmList"></div>
+        <p id="gtfsAdoptionConfirmSafety">Bestehende Lehrfahrer-Routen werden dabei nicht verändert.</p>
+        <p id="gtfsAdoptionConfirmError" class="gtfs-route-assignment-warning" role="alert"></p>
+      </div>
+      <div class="save-confirm-actions">
+        <button id="gtfsAdoptionCancel" class="save-confirm-btn-cancel" type="button">Abbrechen</button>
+        <button id="gtfsAdoptionSubmit" class="save-confirm-btn-ok" type="button">Routen jetzt anlegen</button>
+        <button id="gtfsAdoptionNoticeClose" class="save-confirm-btn-ok hidden" type="button">Schließen</button>
+      </div>
     </div>
   </div>
 
@@ -881,7 +890,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>
-  <script src="js/editor.api.js?v=V2.1.081"></script>
+  <script src="js/editor.api.js?v=V2.1.082"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>

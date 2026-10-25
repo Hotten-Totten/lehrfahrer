@@ -10,6 +10,7 @@ require_once __DIR__ . '/_gtfs_route_selection.php';
 require_once __DIR__ . '/_gtfs_route_preview.php';
 require_once __DIR__ . '/_gtfs_route_assignment.php';
 require_once __DIR__ . '/_route_categories.php';
+require_once __DIR__ . '/_gtfs_route_creation.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -665,7 +666,58 @@ function gtfs_candidate_preview(): void {
     $existing = array_map(static fn(array $route): array => ['id' => $route['id'], 'routeNumber' => $route['routeNumber'],
         'startStop' => $route['stopNames'][0] ?? '', 'destination' => $route['stopNames'][count($route['stopNames']) - 1] ?? ''], $routes);
     gtfs_reply(['ok' => true, 'candidateId' => $sha, 'preview' => $preview,
+        'planFingerprint' => lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments),
         'existingRoutes' => $existing, 'categories' => $categories]);
+}
+
+function gtfs_candidate_create_routes(): void {
+    if (strval($_POST['confirm'] ?? '') !== '1') gtfs_error(400, 'Explizite Bestaetigung fehlt.');
+    $writeCompany = lehrfahrer_route_authorize('routes.write', true, true);
+    if (!hash_equals(LEHRFAHRER_GTFS_COMPANY_ID, $writeCompany)) gtfs_error(403, 'Falscher Gesellschaftskontext.');
+    try {
+    [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
+    $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
+    $assignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
+    $fingerprint = lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments);
+    if (!hash_equals($fingerprint, strval($_POST['planFingerprint'] ?? ''))) {
+        gtfs_error(409, 'Vorbereitete Routenauswahl wurde geaendert; Vorschau neu laden.');
+    }
+    $keys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
+    $indexRows = lehrfahrer_gtfs_creation_index_rows(gtfs_candidate_dir() . '/variants.sqlite',
+        $ready['agencyId'], '16', $keys);
+    $categories = lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes);
+    $plans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $routes, $categories, $sha, $indexRows);
+    $cityRoot = lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus');
+    $writes = [];
+    foreach ($plans as $plan) {
+        $data = $plan['data'];
+        $writes[] = ['path' => lehrfahrer_route_file(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus',
+            $data['fileBase'], 'json', $data['lineFolder'], $data['categoryFolder'], true), 'data' => $data];
+    }
+    lehrfahrer_gtfs_creation_install($cityRoot, $writes, static function () use ($cityRoot, $plans, $sha, $fingerprint): void {
+        $fresh = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
+        if (!hash_equals($sha, $fresh['manifest']['checkedSourceSha256'])) {
+            throw new RuntimeException('GTFS-Kandidat wurde vor dem Schreiben gewechselt.');
+        }
+        $marked = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
+        $freshPreview = lehrfahrer_gtfs_preview_line($fresh['analysis'], $marked,
+            lehrfahrer_gtfs_preview_route_files($cityRoot, '16'), '16');
+        $freshAssignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
+        if (!hash_equals($fingerprint, lehrfahrer_gtfs_creation_fingerprint($sha, $freshPreview, $freshAssignments))) {
+            throw new RuntimeException('Markierung oder Routenzuordnung wurde vor dem Schreiben geaendert.');
+        }
+        $existing = lehrfahrer_gtfs_preview_route_files($cityRoot, '16');
+        foreach ($plans as $plan) foreach ($existing as $route) {
+            if (strcasecmp($plan['routeNumber'], strval($route['routeNumber'] ?? '')) === 0) {
+                throw new RuntimeException('Route ' . $plan['routeNumber'] . ' existiert bereits; nichts wurde ueberschrieben.');
+            }
+        }
+    });
+    gtfs_reply(['ok' => true, 'created' => array_map(static fn(array $plan): array => [
+        'line' => $plan['line'], 'routeNumber' => $plan['routeNumber']], $plans)]);
+    } catch (InvalidArgumentException | RuntimeException $error) {
+        gtfs_error(409, $error->getMessage());
+    }
 }
 
 function gtfs_candidate_assignment(): void {
@@ -1643,6 +1695,7 @@ try {
     if ($action === 'candidatestatus') gtfs_candidate_status();
     if ($action === 'candidateselection') gtfs_candidate_selection();
     if ($action === 'candidatepreview') gtfs_candidate_preview();
+    if ($action === 'candidatecreateroutes') gtfs_candidate_create_routes();
     if ($action === 'candidateassignment') gtfs_candidate_assignment();
     if ($action === 'candidatecategoryadd') gtfs_candidate_category_add();
     if ($action === 'routecategorylist') gtfs_route_category_list();

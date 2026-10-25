@@ -1658,24 +1658,92 @@ function gtfsRouteAdoptionSummary(variants) {
   return { rows, readyCount, total: rows.length, allReady: rows.length > 0 && readyCount === rows.length };
 }
 
-function openGtfsAdoptionNoticeDialog() {
+async function openGtfsRouteCreateDialog(candidateId) {
   const modal = document.getElementById("gtfsAdoptionNoticeModal");
+  const intro = document.getElementById("gtfsAdoptionConfirmIntro");
+  const list = document.getElementById("gtfsAdoptionConfirmList");
+  const safety = document.getElementById("gtfsAdoptionConfirmSafety");
+  const error = document.getElementById("gtfsAdoptionConfirmError");
+  const submit = document.getElementById("gtfsAdoptionSubmit");
+  const cancel = document.getElementById("gtfsAdoptionCancel");
   const closeButton = document.getElementById("gtfsAdoptionNoticeClose");
-  if (!modal || !closeButton) return;
+  if (!modal || !intro || !list || !safety || !error || !submit || !cancel || !closeButton) return;
   const priorFocus = document.activeElement;
+  let busy = false;
+  let created = false;
   const close = () => {
+    if (busy) return;
     modal.classList.add("hidden");
+    submit.onclick = null;
+    cancel.onclick = null;
     closeButton.onclick = null;
     modal.onclick = null;
     modal.removeEventListener("keydown", onKeydown);
     if (priorFocus?.focus) priorFocus.focus();
+    if (created) void openGtfsRoutePreview(candidateId);
   };
   const onKeydown = event => { if (event.key === "Escape") { event.preventDefault(); close(); } };
+  intro.textContent = "Folgende Routen werden neu angelegt:";
+  safety.textContent = "Bestehende Lehrfahrer-Routen werden dabei nicht verändert.";
+  error.textContent = "Vorbereitete Routen werden erneut geprüft …";
+  list.replaceChildren();
+  submit.disabled = true;
+  submit.classList.remove("hidden");
+  cancel.classList.remove("hidden");
+  closeButton.classList.add("hidden");
+  submit.onclick = null;
+  cancel.onclick = close;
   closeButton.onclick = close;
   modal.onclick = event => { if (event.target === modal) close(); };
   modal.addEventListener("keydown", onKeydown);
   modal.classList.remove("hidden");
-  closeButton.focus();
+  cancel.focus();
+  try {
+    const response = await postGtfsImport({ action: "candidatePreview", candidateId });
+    if (modal.classList.contains("hidden")) return;
+    const result = gtfsRouteAdoptionSummary(response.preview?.variants);
+    if (!result.allReady || result.rows.some(row => row.action !== "NEU")) {
+      error.textContent = "Nicht alle markierten Varianten sind für eine neue Route bereit. Vorschau neu laden.";
+      return;
+    }
+    error.textContent = "";
+    result.rows.forEach(row => {
+      const item = gtfsChangeElement("div", "gtfs-route-confirm-row");
+      item.append(
+        gtfsChangeElement("strong", "", `Linie ${row.line} · Route ${row.routeNumber}`),
+        gtfsChangeElement("div", "", `${row.startStop} → ${row.destination}`),
+        gtfsChangeElement("small", "", `Kategorie: ${row.category} · ${row.stopCount} Stops`)
+      );
+      list.appendChild(item);
+    });
+    submit.disabled = false;
+    submit.onclick = async () => {
+      if (busy) return;
+      busy = true;
+      submit.disabled = true;
+      error.textContent = "Routen werden angelegt …";
+      try {
+        const saved = await postGtfsImport({ action: "candidateCreateRoutes", candidateId,
+          planFingerprint: response.planFingerprint, confirm: "1" });
+        created = true;
+        intro.textContent = `${saved.created.length} Lehrfahrer-Routen wurden erfolgreich angelegt.`;
+        list.replaceChildren();
+        saved.created.forEach(route => list.appendChild(gtfsChangeElement("div", "gtfs-route-confirm-row",
+          `Linie ${route.line} · Route ${route.routeNumber}`)));
+        safety.textContent = "Die Routen sind jetzt im normalen Lehrfahrer-Editor auffindbar.";
+        error.textContent = "";
+        submit.classList.add("hidden");
+        cancel.classList.add("hidden");
+        closeButton.classList.remove("hidden");
+        closeButton.focus();
+      } catch (failure) {
+        error.textContent = failure.message || "Routen konnten nicht angelegt werden.";
+        submit.disabled = false;
+      } finally { busy = false; }
+    };
+  } catch (failure) {
+    error.textContent = failure.message || "Vorbereitete Routen konnten nicht geprüft werden.";
+  }
 }
 
 async function openGtfsRoutePreview(candidateId) {
@@ -1707,12 +1775,14 @@ async function openGtfsRoutePreview(candidateId) {
         `${row.action === "ERSETZEN" ? "Bestehende Route ersetzen" : "Neue Route anlegen"} · Linie ${row.line} · ` +
         `${row.routeNumber} | ${row.startStop} → ${row.destination} | ${row.category} | ${row.stopCount} Stops | ${row.action} | ` +
         (row.ready ? "BEREIT ZUR ÜBERNAHME" : "ANGABEN UNVOLLSTÄNDIG"))));
-      adoptionStatus.textContent = result.allReady ? "Alle Routen sind bereit zur Übernahme" : "Übernahme noch nicht möglich";
+      const onlyNew = result.rows.every(row => row.action === "NEU");
+      adoptionStatus.textContent = !onlyNew ? "Bestehende Route ersetzen ist noch nicht freigeschaltet"
+        : result.allReady ? "Alle Routen sind bereit zur Übernahme" : "Übernahme noch nicht möglich";
       adoptionButton.textContent = `${result.total} Lehrfahrer-Routen übernehmen`;
-      adoptionButton.disabled = !result.allReady;
+      adoptionButton.disabled = !result.allReady || !onlyNew;
       adoption.classList.remove("hidden");
     };
-    adoptionButton.onclick = openGtfsAdoptionNoticeDialog;
+    adoptionButton.onclick = () => { void openGtfsRouteCreateDialog(candidateId); };
     let categories = response.categories || [];
     const existingRoutes = response.existingRoutes || [];
     const previewCategorySelects = [];

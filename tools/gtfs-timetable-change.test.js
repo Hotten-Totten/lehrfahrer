@@ -502,10 +502,10 @@ test('AC: Routenauswahl und eigener Kategorien-Dialog zeigen konkrete Bereitscha
   assert.doesNotMatch(dialog + preview, /\b(?:prompt|alert|confirm)\s*\(/);
 });
 
-test('AD: Übernahme-Zusammenfassung zählt nur markierte Varianten und bleibt rein lesend', () => {
+test('AD: Übernahme-Zusammenfassung zählt nur markierte Varianten', () => {
   const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const helper = editor.slice(editor.indexOf('function gtfsRouteAdoptionSummary'), editor.indexOf('function openGtfsAdoptionNoticeDialog'));
+  const helper = editor.slice(editor.indexOf('function gtfsRouteAdoptionSummary'), editor.indexOf('async function openGtfsRouteCreateDialog'));
   const summarize = new Function(`${helper}; return gtfsRouteAdoptionSummary;`)();
   const variants = [
     { line: '16', startStop: 'Uhlandstraße', destination: 'Stadthalle Puschkinpromenade', stopCount: 19,
@@ -531,11 +531,31 @@ test('AD: Übernahme-Zusammenfassung zählt nur markierte Varianten und bleibt r
   assert.equal(replacement.rows[0].action, 'ERSETZEN');
   assert.equal(replacement.rows[0].routeNumber, '03');
   const ui = editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText'));
-  const notice = editor.slice(editor.indexOf('function openGtfsAdoptionNoticeDialog'), editor.indexOf('async function openGtfsRoutePreview'));
-  assert.match(ui, /adoptionButton\.disabled = !result\.allReady/);
-  assert.match(ui, /adoptionButton\.onclick = openGtfsAdoptionNoticeDialog/);
+  assert.match(ui, /adoptionButton\.disabled = !result\.allReady \|\| !onlyNew/);
+  assert.match(ui, /adoptionButton\.onclick = \(\) => \{ void openGtfsRouteCreateDialog\(candidateId\); \}/);
   assert.match(ui, /renderAdoptionSummary\(\)/);
   assert.match(html, /id="gtfsRouteAdoptionSummary"[\s\S]*Übernahme-Zusammenfassung[\s\S]*id="gtfsRouteAdoptionButton"/);
-  assert.match(html, /Die tatsächliche Übernahme ist noch nicht freigeschaltet/);
-  assert.doesNotMatch(notice, /postGtfsImport|fetch\(|alert\(|prompt\(|confirm\(/);
+});
+
+test('AE: bewusste Bestätigung erzeugt nur neue Routen und verlangt Server-Revalidierung', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const endpoint = fs.readFileSync(path.join(root, 'api', 'import_gtfs.php'), 'utf8');
+  const dialog = editor.slice(editor.indexOf('async function openGtfsRouteCreateDialog'), editor.indexOf('async function openGtfsRoutePreview'));
+  assert.match(dialog, /action: "candidatePreview", candidateId/);
+  assert.match(dialog, /result\.rows\.some\(row => row\.action !== "NEU"\)/);
+  assert.match(dialog, /submit\.onclick = async \(\) =>/);
+  assert.match(dialog, /action: "candidateCreateRoutes", candidateId/);
+  assert.match(dialog, /planFingerprint: response\.planFingerprint, confirm: "1"/);
+  assert.match(dialog, /saved\.created\.length.*Lehrfahrer-Routen wurden erfolgreich angelegt/);
+  assert.match(html, /Folgende Routen werden neu angelegt/);
+  assert.match(html, /Bestehende Lehrfahrer-Routen werden dabei nicht verändert/);
+  assert.match(html, /Routen jetzt anlegen/);
+  assert.match(html, /Abbrechen/);
+  assert.doesNotMatch(dialog, /\b(?:alert|prompt|confirm)\s*\(/);
+  assert.match(endpoint, /lehrfahrer_route_authorize\('routes\.write', true, true\)/);
+  assert.match(endpoint, /lehrfahrer_gtfs_candidate_preflight\(gtfs_candidate_dir\(\), gtfs_server_zip_path\(\), gtfs_index_path\(\)\)/);
+  assert.match(endpoint, /lehrfahrer_gtfs_creation_fingerprint/);
+  assert.match(endpoint, /lehrfahrer_gtfs_creation_install/);
+  assert.doesNotMatch(dialog, /candidateAdopt/);
 });
