@@ -1054,13 +1054,46 @@ button.danger:hover {
   background: #fafafa;
   border-left: 1px solid #ccc;
   padding: 14px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 #sidebar h3,
 #sidebar h4 {
   margin-top: 0;
 }
+
+.sidebar-disclosure {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-disclosure summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 4px 0;
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 1;
+}
+
+#propertiesPanel[open] { max-height: 32%; }
+#statsPanel[open] { max-height: 25%; }
+
+#stopOrderPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#stopOrderPanel h4 { flex: 0 0 auto; margin-bottom: 8px; }
 
 .editor-section {
   margin-bottom: 18px;
@@ -1109,11 +1142,12 @@ button.danger:hover {
 /* =========================
    HALTESTELLENLISTE
 ========================= */
-.stop-order-list {
+#stopOrderList {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 280px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -3198,6 +3232,8 @@ button.danger:hover {
 
   #sidebar {
     width: 100%;
+    height: 60vh;
+    min-height: 360px;
     border-left: none;
     border-top: 1px solid #ccc;
   }

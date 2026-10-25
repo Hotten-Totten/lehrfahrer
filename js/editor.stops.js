@@ -137,6 +137,7 @@ function selectStop(stop) {
   noSelection.classList.add("hidden");
   routeEditor.classList.add("hidden");
   stopEditor.classList.remove("hidden");
+  setEditorPropertiesExpanded(true);
 
   stopNameInput.value = stop.name;
   stopMinuteInput.value = stop.minuteFromStart;

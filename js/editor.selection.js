@@ -253,12 +253,19 @@ function clearEditorSelectionStateOnly() {
   state.selected = null;
 }
 
+function setEditorPropertiesExpanded(expanded) {
+  if (typeof document === "undefined") return;
+  const panel = document.getElementById("propertiesPanel");
+  if (panel) panel.open = expanded;
+}
+
 function clearSelection() {
   state.selected = null;
   clearSelectionStyles();
   stopEditor.classList.add("hidden");
   routeEditor.classList.add("hidden");
   noSelection.classList.remove("hidden");
+  setEditorPropertiesExpanded(false);
 }
 
 function selectStop(stop) {
@@ -273,6 +280,7 @@ function selectStop(stop) {
   noSelection.classList.add("hidden");
   routeEditor.classList.add("hidden");
   stopEditor.classList.remove("hidden");
+  setEditorPropertiesExpanded(true);
 
   stopNameInput.value = stop.name;
   stopMinuteInput.value = Number(stop.minuteFromStart || 0);
@@ -309,6 +317,7 @@ function selectRoutePoint(point) {
   noSelection.classList.add("hidden");
   stopEditor.classList.add("hidden");
   routeEditor.classList.remove("hidden");
+  setEditorPropertiesExpanded(true);
 
   const typeLabels = {
     manual: "Manueller Pflichtpunkt",
@@ -351,5 +360,6 @@ function selectSpecialTrack(track) {
   stopEditor.classList.add("hidden");
   routeEditor.classList.add("hidden");
   noSelection.classList.remove("hidden");
+  setEditorPropertiesExpanded(false);
   setStatus("Sondertrasse ausgewählt.");
 }

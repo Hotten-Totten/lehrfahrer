@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a">
+<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -387,7 +387,8 @@
 
     <div id="sidebar">
 
-      <h3>Eigenschaften</h3>
+      <details id="propertiesPanel" class="sidebar-disclosure">
+        <summary>Eigenschaften</summary>
 
       <div id="stopEditor" class="editor-section hidden">
         <input id="stopName" placeholder="Haltestellenname">
@@ -410,11 +411,15 @@
       </div>
 
       <div id="noSelection">Nichts ausgewählt.</div>
+      </details>
 
-      <h4>Haltestellen-Reihenfolge</h4>
-      <div id="stopOrderList"></div>
+      <section id="stopOrderPanel" aria-label="Haltestellen-Reihenfolge">
+        <h4>Haltestellen-Reihenfolge</h4>
+        <div id="stopOrderList"></div>
+      </section>
 
-      <h4>Vorschau</h4>
+      <details id="statsPanel" class="sidebar-disclosure">
+        <summary>Vorschau / Statistik</summary>
 
       <div id="statsBox">
         <div>Haltestellen in Linie: <span id="stopCount">0</span></div>
@@ -429,6 +434,7 @@
         <div>Routing: <span id="routingModeText"></span></div>
         <div id="preserveManualChainsPreviewRow">Exakte Fahrwegpunkte: <span id="preserveManualChainsText">An</span></div>
       </div>
+      </details>
 
     </div>
   </div>
@@ -910,8 +916,8 @@
   <script src="js/editor.dom.js?v=V2.1.063"></script>
   <script src="js/editor.debug.js?v=V2.1.063"></script>
   <script src="js/editor.ui.js?v=V2.1.064"></script>
-  <script src="js/editor.selection.js?v=V2.1.063"></script>
-  <script src="js/editor.stops.js?v=V2.1.063"></script>
+  <script src="js/editor.selection.js?v=V2.1.064"></script>
+  <script src="js/editor.stops.js?v=V2.1.064"></script>
   <script src="js/editor.route.js?v=V2.1.063"></script>
   <script src="js/editor.routing.js?v=V2.1.064"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
