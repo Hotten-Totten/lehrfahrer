@@ -1224,11 +1224,17 @@ jobs:
                   'startStop' => $variant['startStop'], 'destination' => $variant['destination'],
                   'stopCount' => $variant['stopCount']];
           }
-          $creationKeys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
-          $creationStart = microtime(true);
-          $creationRows = lehrfahrer_gtfs_creation_zip_rows($dir . '/candidate.zip', '16', $creationKeys);
-          $creationPlans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $existing,
-              $categories, $beforeCandidate, $creationRows);
+          $selectedComparison = array_map(static fn(array $variant): array => [
+              'status' => $variant['result'], 'stopCount' => $variant['stopCount'],
+              'comparisonStatus' => (static function () use ($ready, $variant): string {
+                  foreach ($ready['analysis']['lines'] as $line) if ($line['line'] === '16') {
+                      foreach ($line['variants'] as $entry) if ($entry['selectionKey'] === $variant['selectionKey']) {
+                          return $entry['status'] . ':' . strval($entry['diff']['note'] ?? '');
+                      }
+                  }
+                  return 'missing';
+              })()
+          ], $preview['variants']);
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
               'referenceStatuses' => $referenceStatuses, 'lineTotal' => count($ready['analysis']['lines']),
               'lineCounts' => $ready['analysis']['lineCounts'],
@@ -1238,8 +1244,7 @@ jobs:
                       static fn(array $variant): bool => isset($variant['creationPreview']))),
                   'results' => array_count_values(array_column($preview['variants'], 'result')),
                   'assignmentRows' => $assignmentRows],
-              'creationDryRun' => ['planCount' => count($creationPlans), 'noRouteWrites' => true,
-                  'seconds' => round(microtime(true) - $creationStart, 1)],
+              'selectedComparison' => $selectedComparison,
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP
