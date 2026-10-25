@@ -193,6 +193,28 @@ button.detour-phase-build {
   user-select: text;
 }
 
+.menu-version-badge {
+  align-self: flex-start;
+  margin: 2px 10px;
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.menu-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.menu-info-row .token-help {
+  border-color: #64748b;
+  color: #334155;
+}
+
 .token-status-on {
   background: #e8f7ee;
   border-color: #9bd3b0;
@@ -234,6 +256,17 @@ button.detour-phase-build {
 
 #finishSpecialTrackBtn {
   display: none;
+}
+
+@media (max-width: 1450px) {
+  #quickbar { gap: 4px; padding-inline: 8px; }
+  #routingModeWrap > span,
+  #detourRoutingModeWrap > span,
+  #detourManualInputModeWrap > span { display: none; }
+  #routingModeSelect,
+  #detourRoutingModeSelect { max-width: 220px; }
+  #preserveManualChainsWrap > span { font-size: 0; }
+  #preserveManualChainsWrap > span::after { content: "Exakt"; font-size: 12px; }
 }
 
 /* =========================

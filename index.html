@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b">
+<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -136,6 +136,12 @@
           <div class="menu-section-label">Editor-Hilfe</div>
           <button type="button" class="menu-item" data-help-document="detourWizard" title="Kapitel zum stop-basierten Umleitungs-Wizard öffnen">Umleitungs-Wizard Hilfe öffnen</button>
           <button type="button" class="menu-item" data-click-target="helpBtn" title="Kurzhilfe und Erklärungen zum Editor öffnen">Editor-Kurzhilfe öffnen</button>
+          <div class="menu-section-label">Informationen</div>
+          <span id="editorVersionBadge" class="version-badge menu-version-badge" title="Aktuelle Editor-Version">Version: V2.1.070</span>
+          <div class="menu-info-row">
+            <span>Schreibzugriff</span>
+            <span class="token-help" title="Schreibaktionen werden über die aktuelle Anmeldung, Rollen und Berechtigungen geschützt." aria-label="Hilfe zum Schreibzugriff">?</span>
+          </div>
         </div>
       </div>
 
@@ -177,6 +183,8 @@
       <button id="finishDetourDraftBtn" type="button" title="Umleitung übernehmen: Der Abschnitt zwischen den zwei gewählten Routenpunkten wird durch die gesetzten Umleitungspunkte ersetzt. Haltestellen werden nicht automatisch verschoben." aria-label="Umleitung übernehmen: Abschnitt durch gesetzte Umleitungspunkte ersetzen. Haltestellen werden nicht automatisch verschoben." style="display:none">Umleitung übernehmen</button>
       <button id="cancelDetourDraftBtn" type="button" title="Umleitung abbrechen: Der Entwurf wird verworfen und die bestehende Route bleibt unverändert." aria-label="Umleitung abbrechen: Entwurf verwerfen und Route unverändert lassen." style="display:none">Umleitung abbrechen</button>
 
+      <span class="qb-sep"></span>
+
       <label id="routingModeWrap" class="quickbar-select-wrap">
         <span>Routing:</span>
         <select id="routingModeSelect" title="Routingmodus für Route erzeugen" aria-label="Routingmodus für Route erzeugen">
@@ -186,27 +194,16 @@
         </select>
       </label>
       <label id="preserveManualChainsWrap" class="quickbar-select-wrap" title="Direkt aufeinanderfolgende Fahrwegpunkte exakt verbinden, ohne dazwischen neu zu routen">
-        <input id="preserveManualChainsInput" type="checkbox" checked>
+        <input id="preserveManualChainsInput" type="checkbox" checked aria-label="Fahrwegpunkte exakt halten">
         <span>Fahrwegpunkte exakt halten</span>
       </label>
-
-      <span class="qb-sep"></span>
 
       <button id="buildStreetRouteBtn" type="button" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
       <button id="cancelRoutingBtn" type="button" title="Laufendes Routing abbrechen" style="display:none">✕ Abbrechen</button>
 
-      <span class="qb-sep"></span>
-
-      <button id="quickAutoMinutesBtn" type="button" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
-
-<span id="editorVersionBadge" class="version-badge" title="Aktuelle Editor-Version">Version: V2.1.070</span>
+      <button id="quickAutoMinutesBtn" type="button" class="hidden" title="Fahrzeiten zwischen den Haltestellen automatisch berechnen">⏱ Fahrzeiten</button>
       <span id="apiTokenStatus" class="token-status token-status-on" title="Schreibzugriff über die aktuelle Anmeldung">Sitzung: aktiv</span>
-      <button type="button" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
-      <span
-        class="token-help"
-        title="Schreibaktionen werden über die aktuelle Anmeldung, Rollen und Berechtigungen geschützt."
-        aria-label="Hilfe zum Schreibzugriff"
-      >?</span>
+      <button type="button" class="hidden" data-click-target="helpBtn" title="Editor-Kurzhilfe öffnen">Hilfe</button>
     </div>
 
   </div>
