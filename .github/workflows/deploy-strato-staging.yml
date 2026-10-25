@@ -1209,9 +1209,21 @@ jobs:
               if (in_array($line['line'], ['1', '890', '16'], true)) $referenceStatuses[$line['line']] = $line['status'];
           }
           $selected = lehrfahrer_gtfs_route_selection_read($root . '/route-selections', $beforeCandidate);
+          $oldOnlyMarked = 0; $candidateVariants = 0;
+          foreach ($line16[0]['variants'] as $variant) {
+              if ($variant['candidatePresent'] === true) { $candidateVariants++; continue; }
+              if (isset($selected[lehrfahrer_gtfs_route_selection_id('16', $variant['selectionKey'])])) $oldOnlyMarked++;
+          }
+          $validSelected = lehrfahrer_gtfs_route_selection_valid($ready['analysis'], $selected);
+          $applied = lehrfahrer_gtfs_route_selection_apply($ready['analysis'], $selected);
+          $validLine16 = array_values(array_filter($applied['lines'],
+              static fn(array $line): bool => $line['line'] === '16'))[0];
+          if ($oldOnlyMarked !== 2 || $candidateVariants === 0 || $validLine16['selectedVariantCount'] !== 0) {
+              throw new RuntimeException('Line 16 candidate-only selection postcheck failed.');
+          }
           $existing = lehrfahrer_gtfs_preview_route_files(lehrfahrer_route_line_city_path($company, 'cottbus'), '16');
           $preview = lehrfahrer_gtfs_preview_creation_proposals(
-              lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $existing, '16'), $beforeCandidate);
+              lehrfahrer_gtfs_preview_line($ready['analysis'], $validSelected, $existing, '16'), $beforeCandidate);
           $assignments = lehrfahrer_gtfs_assignment_read($root . '/route-assignments', $beforeCandidate);
           $categories = lehrfahrer_route_categories_read(
               lehrfahrer_tenant_path($company, 'settings', 'route_categories.json'), $existing);
@@ -1239,12 +1251,12 @@ jobs:
               'referenceStatuses' => $referenceStatuses, 'lineTotal' => count($ready['analysis']['lines']),
               'lineCounts' => $ready['analysis']['lineCounts'],
               'previewLine16' => ['selected' => $preview['selectedVariantCount'],
+                  'oldOnlyMarksIgnored' => $oldOnlyMarked, 'candidateVariantsSelectable' => $candidateVariants,
                   'existingRoutes' => $preview['existingRouteCount'],
                   'creationProposals' => count(array_filter($preview['variants'],
                       static fn(array $variant): bool => isset($variant['creationPreview']))),
                   'results' => array_count_values(array_column($preview['variants'], 'result')),
                   'assignmentRows' => $assignmentRows],
-              'selectedComparison' => $selectedComparison,
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP

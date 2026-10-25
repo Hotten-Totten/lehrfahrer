@@ -120,6 +120,8 @@ try {
         'line 16 to Uhlandstraße is not new solely from feed IDs');
     $v1 = lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/old.zip');
     check_service($v1['lineCounts']['UNVERAENDERT']===1, 'V1 ignores feed-local stop, trip and agency IDs');
+    check_service($v1['lines'][0]['variants'][0]['candidatePresent'] === true,
+        'unchanged variant remains selectable from candidate');
     $shifted = $same;
     $shifted[0]['trips'][0]['stops'][1] = ['bb','Mitte','51.7101','14.3101'];
     zip_service($dir.'/shifted.zip','325',$shifted);
@@ -143,8 +145,12 @@ try {
     check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/two.zip', $dir.'/same.zip')['lineCounts']['NEU']===1
         && lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/two.zip')['lineCounts']['ENTFALLEN']===1,
         'V1 keeps confirmed whole-line additions and removals');
-    check_service(lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/more.zip')['lineCounts']['GEAENDERT']===1,
+    $removedVariant = lehrfahrer_gtfs_compare_routes_v1($dir.'/same.zip', $dir.'/more.zip');
+    check_service($removedVariant['lineCounts']['GEAENDERT']===1,
         'V1 detects stable removed stop sequence');
+    check_service(count(array_filter($removedVariant['lines'][0]['variants'],
+        static fn(array $variant): bool => $variant['candidatePresent'] === false)) === 1,
+        'old-only variant remains visible but is not candidate-selectable');
     $removedStop = $same;
     $removedStop[0]['trips'][0]['stops'] = [$a2,$u2];
     zip_service($dir.'/removed-stop.zip','325',$removedStop);

@@ -37,7 +37,20 @@ function lehrfahrer_gtfs_route_selection_read(string $directory, string $candida
     return $data['selected'];
 }
 
+function lehrfahrer_gtfs_route_selection_valid(array $analysis, array $selected): array {
+    $valid = [];
+    foreach ($analysis['lines'] ?? [] as $line) foreach ($line['variants'] ?? [] as $variant) {
+        if (($variant['candidatePresent'] ?? false) !== true) continue;
+        $key = strval($variant['selectionKey'] ?? '');
+        if ($key === '') continue;
+        $id = lehrfahrer_gtfs_route_selection_id(strval($line['line']), $key);
+        if (isset($selected[$id])) $valid[$id] = true;
+    }
+    return $valid;
+}
+
 function lehrfahrer_gtfs_route_selection_apply(array $analysis, array $selected): array {
+    $selected = lehrfahrer_gtfs_route_selection_valid($analysis, $selected);
     foreach ($analysis['lines'] ?? [] as $lineIndex => $line) {
         $count = 0;
         foreach ($line['variants'] ?? [] as $variantIndex => $variant) {
@@ -57,7 +70,8 @@ function lehrfahrer_gtfs_route_selection_set(string $directory, string $candidat
     foreach ($analysis['lines'] ?? [] as $entry) {
         if (($entry['line'] ?? null) !== $line) continue;
         foreach ($entry['variants'] ?? [] as $variant) {
-            if (($variant['selectionKey'] ?? null) === $variantKey) { $valid = true; break 2; }
+            if (($variant['selectionKey'] ?? null) === $variantKey
+                && ($variant['candidatePresent'] ?? false) === true) { $valid = true; break 2; }
         }
     }
     if (!$valid) throw new InvalidArgumentException('Variante gehoert nicht zum geprueften Kandidatenvergleich.');
@@ -73,7 +87,8 @@ function lehrfahrer_gtfs_route_selection_set(string $directory, string $candidat
     $temp = null;
     try {
         if (!flock($lock, LOCK_EX)) throw new RuntimeException('Auswahl kann nicht gesperrt werden.');
-        $values = lehrfahrer_gtfs_route_selection_read($directory, $candidateSha);
+        $values = lehrfahrer_gtfs_route_selection_valid($analysis,
+            lehrfahrer_gtfs_route_selection_read($directory, $candidateSha));
         $id = lehrfahrer_gtfs_route_selection_id($line, $variantKey);
         if ($selected) $values[$id] = true;
         else unset($values[$id]);

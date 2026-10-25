@@ -2025,6 +2025,9 @@ function renderGtfsChangeAnalysis(analysis) {
         gtfsChangeElement("span", "", gtfsChangeVariantEndpoints(variant.stopNames)),
         gtfsChangeElement("span", "", `${Number(variant.stopCount || 0)} Stops`)
       );
+      if (variant.candidatePresent !== true) {
+        head.appendChild(gtfsChangeElement("span", "gtfs-change-current-only", "Im neuen Fahrplan nicht enthalten"));
+      } else {
       const choice = gtfsChangeElement("label", "gtfs-change-current-route");
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -2049,6 +2052,7 @@ function renderGtfsChangeAnalysis(analysis) {
           checkbox.disabled = false;
         }
       };
+      }
       row.appendChild(head);
       row.appendChild(gtfsChangeElement("div", "gtfs-change-variant-stops", (variant.stopNames || []).join(" → ")));
       const diffText = gtfsChangeDiffText(variant);

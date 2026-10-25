@@ -15,12 +15,14 @@ $candidateA = str_repeat('a', 64);
 $candidateB = str_repeat('b', 64);
 $first = str_repeat('1', 64);
 $second = str_repeat('2', 64);
+$oldOnly = str_repeat('3', 64);
 $analysis = ['lineCounts' => ['PRUEFEN' => 1, 'UNVERAENDERT' => 1], 'lines' => [
     ['line' => '16', 'status' => 'PRUEFEN', 'variants' => [
-        ['selectionKey' => $first, 'status' => 'PRUEFEN'],
-        ['selectionKey' => $second, 'status' => 'UNVERAENDERT']]],
+        ['selectionKey' => $first, 'status' => 'PRUEFEN', 'candidatePresent' => true],
+        ['selectionKey' => $second, 'status' => 'UNVERAENDERT', 'candidatePresent' => true],
+        ['selectionKey' => $oldOnly, 'status' => 'PRUEFEN', 'candidatePresent' => false]]],
     ['line' => '2', 'status' => 'UNVERAENDERT', 'variants' => [
-        ['selectionKey' => $first, 'status' => 'UNVERAENDERT']]],
+        ['selectionKey' => $first, 'status' => 'UNVERAENDERT', 'candidatePresent' => true]]],
 ]];
 mkdir($root, 0700);
 $protected = $root . '/protected-route.json';
@@ -47,10 +49,26 @@ try {
         && $reloaded['lines'][0]['variants'][0]['status'] === 'PRUEFEN'
         && $reloaded['lineCounts'] === $analysis['lineCounts'], 'comparison status unaffected');
     selection_check(lehrfahrer_gtfs_route_selection_read($directory, $candidateB) === [], 'candidate SHA isolation');
+    $legacy = lehrfahrer_gtfs_route_selection_read($directory, $candidateA);
+    $legacy[lehrfahrer_gtfs_route_selection_id('16', $oldOnly)] = true;
+    file_put_contents(lehrfahrer_gtfs_route_selection_path($directory, $candidateA), json_encode([
+        'candidate_sha256' => $candidateA, 'selected' => $legacy], JSON_THROW_ON_ERROR));
+    $clean = lehrfahrer_gtfs_route_selection_valid($analysis,
+        lehrfahrer_gtfs_route_selection_read($directory, $candidateA));
+    $view = lehrfahrer_gtfs_route_selection_apply($analysis, $legacy);
+    selection_check(count($clean) === 3 && $view['lines'][0]['selectedVariantCount'] === 2
+        && !$view['lines'][0]['variants'][2]['currentRouteSelected'], 'legacy current-only selection ignored');
+    try {
+        lehrfahrer_gtfs_route_selection_set($directory, $candidateA, $analysis, '16', $oldOnly, true);
+        throw new RuntimeException('Current-only variant accepted');
+    } catch (InvalidArgumentException $expected) {}
+    selection_check(true, 'current-only variant cannot be selected');
     $choices = lehrfahrer_gtfs_route_selection_set($directory, $candidateA, $analysis, '16', $first, false);
     $view = lehrfahrer_gtfs_route_selection_apply($analysis, $choices);
     selection_check(!$view['lines'][0]['variants'][0]['currentRouteSelected']
         && $view['lines'][0]['selectedVariantCount'] === 1, 'deselect persists');
+    selection_check(!isset(lehrfahrer_gtfs_route_selection_read($directory, $candidateA)[
+        lehrfahrer_gtfs_route_selection_id('16', $oldOnly)]), 'next selection write prunes invalid legacy mark');
     $manifest = json_decode(file_get_contents(lehrfahrer_gtfs_route_selection_path($directory, $candidateA)), true);
     selection_check($manifest['candidate_sha256'] === $candidateA, 'selection file bound to candidate SHA');
     try {

@@ -159,7 +159,7 @@ try {
     fixture_manifest($manifestPath, $candidateZip, $candidateIndex, $currentZip);
     $ready = $preflight();
     check($ready['agencyId'] === '287' && $ready['workingSet']['completeness']['complete'], 'Kandidat manuell uebernahmebereit');
-    $reportCache = $candidateRoot . '/route-v1-cache/v1-7-' . hash_file('sha256', $candidateZip)
+    $reportCache = $candidateRoot . '/route-v1-cache/v1-8-' . hash_file('sha256', $candidateZip)
         . '-' . hash_file('sha256', $currentZip) . '.json';
     check(is_file($reportCache) && hash_file('sha256', $candidateZip) === $ready['manifest']['checkedSourceSha256'],
         'SHA-gebundener Streckenbericht ausserhalb des Kandidatenpakets gespeichert');

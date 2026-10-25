@@ -593,7 +593,8 @@ function gtfs_pilot_context(): array {
     if (!hash_equals($sha, $candidateId) || !hash_equals(basename(gtfs_candidate_dir()), $sha)) {
         gtfs_error(409, 'GTFS-Kandidat wurde gewechselt; bitte neu laden.');
     }
-    $selected = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
+    $selected = lehrfahrer_gtfs_route_selection_valid($ready['analysis'],
+        lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha));
     $routes = lehrfahrer_gtfs_preview_route_files(
         lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus'), '16');
     return [$ready, $sha, $selected, $routes];
@@ -698,7 +699,8 @@ function gtfs_candidate_create_routes(): void {
         if (!hash_equals($sha, $fresh['manifest']['checkedSourceSha256'])) {
             throw new RuntimeException('GTFS-Kandidat wurde vor dem Schreiben gewechselt.');
         }
-        $marked = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
+        $marked = lehrfahrer_gtfs_route_selection_valid($fresh['analysis'],
+            lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha));
         $freshPreview = lehrfahrer_gtfs_preview_line($fresh['analysis'], $marked,
             lehrfahrer_gtfs_preview_route_files($cityRoot, '16'), '16');
         $freshAssignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);

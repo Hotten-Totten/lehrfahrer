@@ -97,7 +97,8 @@ function lehrfahrer_gtfs_preview_line(array $analysis, array $selected, array $r
     $results = [];
     foreach ($target['variants'] ?? [] as $variant) {
         $key = strval($variant['selectionKey'] ?? '');
-        if ($key === '' || !isset($selected[lehrfahrer_gtfs_route_selection_id($line, $key)])) continue;
+        if ($key === '' || ($variant['candidatePresent'] ?? false) !== true
+            || !isset($selected[lehrfahrer_gtfs_route_selection_id($line, $key)])) continue;
         $names = array_values(array_map('strval', $variant['stopNames'] ?? []));
         $normalized = array_map('lehrfahrer_gtfs_preview_name', $names);
         $exact = []; $plausible = [];

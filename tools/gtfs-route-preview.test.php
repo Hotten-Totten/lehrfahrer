@@ -13,8 +13,10 @@ function preview_check(bool $condition, string $label): void {
 $keyA = str_repeat('a', 64);
 $keyB = str_repeat('b', 64);
 $analysis = ['lines' => [['line' => '16', 'status' => 'PRUEFEN', 'variants' => [
-    ['selectionKey' => $keyA, 'status' => 'UNVERAENDERT', 'stopNames' => ['Sandow', 'Mitte', 'Jessener Straße']],
-    ['selectionKey' => $keyB, 'status' => 'PRUEFEN', 'stopNames' => ['Jessener Straße', 'Mitte', 'Sandow']],
+    ['selectionKey' => $keyA, 'status' => 'UNVERAENDERT', 'candidatePresent' => true,
+        'stopNames' => ['Sandow', 'Mitte', 'Jessener Straße']],
+    ['selectionKey' => $keyB, 'status' => 'PRUEFEN', 'candidatePresent' => true,
+        'stopNames' => ['Jessener Straße', 'Mitte', 'Sandow']],
 ]]]];
 $selected = [lehrfahrer_gtfs_route_selection_id('16', $keyA) => true];
 $route = static fn(string $id, array $stops): array => ['id' => $id, 'variantName' => 'Route 1',
@@ -41,6 +43,10 @@ preview_check(lehrfahrer_gtfs_preview_line($analysis, $selected, [$changed, $rou
 $both = $selected + [lehrfahrer_gtfs_route_selection_id('16', $keyB) => true];
 preview_check(lehrfahrer_gtfs_preview_line($analysis, $both, [$exact], '16')['selectedVariantCount'] === 2,
     'all selected variants included');
+$oldOnlyAnalysis = $analysis;
+$oldOnlyAnalysis['lines'][0]['variants'][1]['candidatePresent'] = false;
+preview_check(lehrfahrer_gtfs_preview_line($oldOnlyAnalysis, $both, [$exact], '16')['selectedVariantCount'] === 1,
+    'current-only legacy selection excluded from takeover preview');
 $candidateSha = str_repeat('c', 64);
 $oneProposal = lehrfahrer_gtfs_preview_creation_proposals(
     lehrfahrer_gtfs_preview_line($analysis, $selected, [], '16'), $candidateSha);

@@ -414,6 +414,17 @@ test('X: manuelle aktuelle Route ist kandidatengebunden und vom Vergleichsstatus
   assert.doesNotMatch(selection, /routePoints|save_line|candidate\.zip|variants\.sqlite/);
 });
 
+test('X2: CURRENT-only Stopfolge zeigt Hinweis statt auswählbarer Checkbox', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'editor.css'), 'utf8');
+  const selection = fs.readFileSync(path.join(root, 'api', '_gtfs_route_selection.php'), 'utf8');
+  const preview = fs.readFileSync(path.join(root, 'api', '_gtfs_route_preview.php'), 'utf8');
+  assert.match(editor, /if \(variant\.candidatePresent !== true\) \{[\s\S]*?Im neuen Fahrplan nicht enthalten[\s\S]*?\} else \{[\s\S]*?checkbox\.type = "checkbox"/);
+  assert.match(css, /\.gtfs-change-current-only/);
+  assert.match(selection, /lehrfahrer_gtfs_route_selection_valid/);
+  assert.match(preview, /\$variant\['candidatePresent'\] \?\? false/);
+});
+
 test('Y: nur positive aktuelle Routenzahl wird in der Linienübersicht blau und fett', () => {
   const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
   const css = fs.readFileSync(path.join(root, 'editor.css'), 'utf8');
