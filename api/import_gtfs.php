@@ -634,7 +634,8 @@ function gtfs_candidate_preview(): void {
     $selected = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
     $routes = lehrfahrer_gtfs_preview_route_files(
         lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus'), '16');
-    $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
+    $preview = lehrfahrer_gtfs_preview_creation_proposals(
+        lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16'), $sha);
     gtfs_reply(['ok' => true, 'candidateId' => $sha, 'preview' => $preview]);
 }
 

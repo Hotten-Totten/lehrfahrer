@@ -3404,6 +3404,8 @@ button.danger:hover {
 .gtfs-route-preview-card strong, .gtfs-route-preview-result { display: block; }
 .gtfs-route-preview-result { margin-top: 5px; font-weight: 750; color: #174bbd; }
 .gtfs-route-preview-match { margin-top: 8px; font-size: 0.85rem; }
+.gtfs-route-creation-preview { margin-top: 12px; padding: 12px; border-left: 4px solid #2457d6; background: #fff; line-height: 1.6; }
+.gtfs-route-creation-sha { margin-top: 8px; color: #58657a; font-size: 0.78rem; overflow-wrap: anywhere; }
 .gtfs-change-badge { border-radius: 999px; padding: 4px 9px; background: #edf1f6; font-size: 0.78rem; font-weight: 750; }
 .gtfs-change-variants { display: grid; gap: 8px; padding: 0 16px 14px; }
 .gtfs-change-variant { padding: 10px 12px; border-radius: 9px; background: #f3f6fa; }

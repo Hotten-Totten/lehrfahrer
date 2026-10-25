@@ -39,6 +39,31 @@ preview_check(lehrfahrer_gtfs_preview_line($analysis, $selected, [$changed, $rou
 $both = $selected + [lehrfahrer_gtfs_route_selection_id('16', $keyB) => true];
 preview_check(lehrfahrer_gtfs_preview_line($analysis, $both, [$exact], '16')['selectedVariantCount'] === 2,
     'all selected variants included');
+$candidateSha = str_repeat('c', 64);
+$oneProposal = lehrfahrer_gtfs_preview_creation_proposals(
+    lehrfahrer_gtfs_preview_line($analysis, $selected, [], '16'), $candidateSha);
+preview_check(count($oneProposal['variants']) === 1 && isset($oneProposal['variants'][0]['creationPreview']),
+    'only marked variant receives creation preview');
+$proposals = lehrfahrer_gtfs_preview_creation_proposals(
+    lehrfahrer_gtfs_preview_line($analysis, $both, [], '16'), $candidateSha);
+preview_check(count($proposals['variants']) === 2
+    && count(array_filter($proposals['variants'], static fn(array $variant): bool => isset($variant['creationPreview']))) === 2,
+    'two marked missing routes receive two creation proposals');
+foreach ($proposals['variants'] as $variant) {
+    $creation = $variant['creationPreview'];
+    preview_check($creation['label'] === 'NEUE LEHRFAHRER-ROUTE'
+        && $creation['line'] === '16' && $creation['routeNumber'] === 'noch festzulegen'
+        && $creation['category'] === 'noch festzulegen'
+        && $creation['startStop'] === $variant['startStop']
+        && $creation['destination'] === $variant['destination']
+        && $creation['stopCount'] === count($creation['stopNames'])
+        && $creation['stopNames'] === $variant['stopNames']
+        && $creation['candidateSha256'] === $candidateSha,
+        'proposal carries complete stops, endpoints, category and candidate SHA');
+}
+$identical = lehrfahrer_gtfs_preview_creation_proposals(
+    lehrfahrer_gtfs_preview_line($analysis, $selected, [$exact], '16'), $candidateSha);
+preview_check(!isset($identical['variants'][0]['creationPreview']), 'no creation proposal for identical route');
 preview_check(lehrfahrer_gtfs_preview_difference(['A', 'B', 'C'], ['A', 'C', 'B'])['orderChanged'],
     'changed order visible');
 

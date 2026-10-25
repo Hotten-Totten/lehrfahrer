@@ -1614,6 +1614,20 @@ async function openGtfsRoutePreview(candidateId) {
           ].filter(Boolean).join(" · ")));
         }
       });
+      if (variant.creationPreview) {
+        const proposal = variant.creationPreview;
+        const creation = gtfsChangeElement("section", "gtfs-route-creation-preview");
+        creation.append(
+          gtfsChangeElement("strong", "", `${proposal.label} · Erzeugungsvorschau (nicht gespeichert)`),
+          gtfsChangeElement("div", "", `Linie: ${proposal.line} · Vorgeschlagene Route: ${proposal.proposedRoute}`),
+          gtfsChangeElement("div", "", `Routennummer: ${proposal.routeNumber} · Kategorie: ${proposal.category}`),
+          gtfsChangeElement("div", "", `Variante: ${proposal.variant}`),
+          gtfsChangeElement("div", "", `Start: ${proposal.startStop} · Ziel: ${proposal.destination} · ${proposal.stopCount} Stops`),
+          gtfsChangeElement("div", "gtfs-change-variant-stops", (proposal.stopNames || []).join(" → ")),
+          gtfsChangeElement("div", "gtfs-route-creation-sha", `GTFS-Candidate-SHA: ${proposal.candidateSha256}`)
+        );
+        card.appendChild(creation);
+      }
       list.appendChild(card);
     });
   } catch (err) {

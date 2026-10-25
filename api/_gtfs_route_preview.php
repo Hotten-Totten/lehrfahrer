@@ -123,3 +123,26 @@ function lehrfahrer_gtfs_preview_line(array $analysis, array $selected, array $r
     return ['line' => $line, 'selectedVariantCount' => count($results),
         'existingRouteCount' => count($routes), 'variants' => $results];
 }
+
+function lehrfahrer_gtfs_preview_creation_proposals(array $preview, string $candidateSha): array {
+    if (preg_match('/^[a-f0-9]{64}$/D', $candidateSha) !== 1) {
+        throw new InvalidArgumentException('Ungueltiger GTFS-Candidate-SHA.');
+    }
+    foreach ($preview['variants'] ?? [] as $index => $variant) {
+        if (($variant['result'] ?? '') !== 'NEUE_ROUTE_ERFORDERLICH') continue;
+        $preview['variants'][$index]['creationPreview'] = [
+            'label' => 'NEUE LEHRFAHRER-ROUTE',
+            'line' => strval($variant['line']),
+            'proposedRoute' => 'Linie ' . strval($variant['line']) . ' · neue Lehrfahrer-Route',
+            'routeNumber' => 'noch festzulegen',
+            'startStop' => strval($variant['startStop']),
+            'destination' => strval($variant['destination']),
+            'stopCount' => (int)$variant['stopCount'],
+            'stopNames' => $variant['stopNames'],
+            'category' => 'noch festzulegen',
+            'variant' => strval($variant['startStop']) . ' → ' . strval($variant['destination']),
+            'candidateSha256' => $candidateSha,
+        ];
+    }
+    return $preview;
+}

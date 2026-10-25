@@ -452,3 +452,17 @@ test('Z: Linie 16 bietet nur bei Auswahl eine lesende Übernahme-Vorschau', () =
   assert.doesNotMatch(editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText')),
     /candidateAdopt|saveLine|loadLineFromData/);
 });
+
+test('AA: Erzeugungsvorschau zeigt Routenvorschlag und Herkunft ohne Speichern', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const preview = fs.readFileSync(path.join(root, 'api', '_gtfs_route_preview.php'), 'utf8');
+  const endpoint = fs.readFileSync(path.join(root, 'api', 'import_gtfs.php'), 'utf8');
+  const ui = editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText'));
+  for (const field of ['proposedRoute', 'routeNumber', 'category', 'variant', 'startStop', 'destination',
+    'stopCount', 'stopNames', 'candidateSha256']) assert.match(ui, new RegExp(`proposal\\.${field}`));
+  assert.match(ui, /NEUE LEHRFAHRER-ROUTE|proposal\.label/);
+  assert.match(preview, /if \(\(\$variant\['result'\] \?\? ''\) !== 'NEUE_ROUTE_ERFORDERLICH'\) continue/);
+  assert.match(preview, /'routeNumber' => 'noch festzulegen'/);
+  assert.match(endpoint, /lehrfahrer_gtfs_preview_creation_proposals\(/);
+  assert.doesNotMatch(ui, /candidateAdopt|saveLine|loadLineFromData|workPrepareAll/);
+});
