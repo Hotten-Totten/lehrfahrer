@@ -90,15 +90,26 @@ foreach ([
 }
 
 $cityRoot = lehrfahrer_tenant_ensure_directory($company, 'lines', 'cottbus');
-lehrfahrer_tenant_ensure_directory($company, 'cities', 'cottbus');
+creation_check(!lehrfahrer_route_city_exists($company, 'cottbus'), 'preview and plans never register a city');
 $writes = array_map(static fn(array $plan): array => ['path' => lehrfahrer_route_file($company, 'cottbus',
     $plan['data']['fileBase'], 'json', $plan['data']['lineFolder'], $plan['data']['categoryFolder'], true),
     'data' => $plan['data']], $plans);
 $check = static function () use ($cityRoot): void {
     if (lehrfahrer_gtfs_preview_route_files($cityRoot, '16') !== []) throw new RuntimeException('Route already exists.');
 };
+$registrationCount = 0;
+$registerCity = static function () use ($company, &$registrationCount): void {
+    if (lehrfahrer_route_city_exists($company, 'cottbus')) return;
+    lehrfahrer_route_register_city($company, 'Cottbus');
+    $registrationCount++;
+};
 try {
-    lehrfahrer_gtfs_creation_install($cityRoot, $writes, $check);
+    lehrfahrer_gtfs_creation_install($cityRoot, $writes, $check, null, $registerCity);
+    creation_check(lehrfahrer_route_city_exists($company, 'cottbus') && $registrationCount === 1,
+        'confirmed creation registers missing city through normal city storage');
+    creation_check(lehrfahrer_route_city_exists($company, 'cottbus')
+        && !lehrfahrer_route_city_exists('cmp_' . str_repeat('e', 32), 'cottbus'),
+        'city registration remains tenant-scoped');
     $found = [];
     foreach ($plans as $plan) {
         $data = $plan['data'];
@@ -113,7 +124,7 @@ try {
     }
     $before = array_map('hash_file', array_fill(0, count($found), 'sha256'), $found);
     try {
-        lehrfahrer_gtfs_creation_install($cityRoot, $writes, $check);
+        lehrfahrer_gtfs_creation_install($cityRoot, $writes, $check, null, $registerCity);
         throw new RuntimeException('overwrite accepted');
     } catch (RuntimeException $expected) {
         if ($expected->getMessage() === 'overwrite accepted') throw $expected;
@@ -121,6 +132,7 @@ try {
     }
     creation_check(array_map('hash_file', array_fill(0, count($found), 'sha256'), $found) === $before,
         'existing routes unchanged after repeat');
+    creation_check($registrationCount === 1, 'existing city is not registered twice');
     $rollbackWrites = [
         ['path' => lehrfahrer_route_file($company, 'cottbus', 'Route_03', 'json', 'Linie_16', 'Standard', true), 'data' => $plans[0]['data']],
         ['path' => lehrfahrer_route_file($company, 'cottbus', 'Route_04', 'json', 'Linie_16', 'Standard', true), 'data' => $plans[1]['data']]

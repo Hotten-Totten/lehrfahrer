@@ -56,6 +56,22 @@ function lehrfahrer_route_city_exists(string $companyId, string $city): bool {
     return is_dir(lehrfahrer_route_city_path($companyId, $city));
 }
 
+function lehrfahrer_route_city_slug(string $city): string {
+    $slug = mb_strtolower(trim($city), 'UTF-8');
+    $slug = str_replace(['ä', 'ö', 'ü', 'ß'], ['ae', 'oe', 'ue', 'ss'], $slug);
+    $slug = preg_replace('/[^a-z0-9_-]+/u', '-', $slug);
+    $slug = trim(preg_replace('/-+/', '-', $slug), '-');
+    if ($slug === '') throw new InvalidArgumentException('Ungültiger Ortsname.');
+    return $slug;
+}
+
+function lehrfahrer_route_register_city(string $companyId, string $city): string {
+    $slug = lehrfahrer_route_city_slug($city);
+    lehrfahrer_tenant_ensure_directory($companyId, 'cities', $slug);
+    lehrfahrer_tenant_ensure_directory($companyId, 'lines', $slug);
+    return $slug;
+}
+
 function lehrfahrer_route_file(
     string $companyId,
     string $city,

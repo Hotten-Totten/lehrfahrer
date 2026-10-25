@@ -713,6 +713,12 @@ function gtfs_candidate_create_routes(): void {
                 throw new RuntimeException('Route ' . $plan['routeNumber'] . ' existiert bereits; nichts wurde ueberschrieben.');
             }
         }
+    }, null, static function () use ($writeCompany): void {
+        if (lehrfahrer_route_city_exists($writeCompany, 'cottbus')) return;
+        if (!hash_equals($writeCompany, lehrfahrer_route_authorize('cities.manage', true, true))) {
+            throw new RuntimeException('Ortsverwaltung hat einen anderen Gesellschaftskontext.');
+        }
+        lehrfahrer_route_register_city($writeCompany, 'Cottbus');
     });
     gtfs_reply(['ok' => true, 'created' => array_map(static fn(array $plan): array => [
         'line' => $plan['line'], 'routeNumber' => $plan['routeNumber']], $plans)]);

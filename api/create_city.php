@@ -26,25 +26,12 @@ if ($city === "") {
     exit;
 }
 
-// slug bauen
-$slug = mb_strtolower($city, "UTF-8");
-$slug = str_replace(["ä", "ö", "ü", "ß"], ["ae", "oe", "ue", "ss"], $slug);
-$slug = preg_replace('/[^a-z0-9_-]+/u', '-', $slug);
-$slug = preg_replace('/-+/', '-', $slug);
-$slug = trim($slug, '-');
-
-if ($slug === "") {
-    http_response_code(400);
-    echo json_encode([
-        "ok" => false,
-        "error" => "Ungültiger Ortsname."
-    ]);
-    exit;
-}
-
 try {
-    lehrfahrer_tenant_ensure_directory($companyId, 'cities', $slug);
-    lehrfahrer_tenant_ensure_directory($companyId, 'lines', $slug);
+    $slug = lehrfahrer_route_register_city($companyId, $city);
+} catch (InvalidArgumentException $error) {
+    http_response_code(400);
+    echo json_encode(["ok" => false, "error" => "Ungültiger Ortsname."]);
+    exit;
 } catch (Throwable $error) {
     http_response_code(500);
     echo json_encode([

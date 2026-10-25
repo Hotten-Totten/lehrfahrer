@@ -38,6 +38,11 @@ on:
         required: true
         default: false
         type: boolean
+      repair_cottbus_city:
+        description: Register the missing Cottbus city only after verifying both existing route hashes
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-strato-staging-v2
@@ -1153,6 +1158,77 @@ jobs:
           logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
+
+      - name: Register missing Cottbus city without changing existing routes
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_cottbus_city }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_RUN=("${SSH_BASE[@]}" -i ~/.ssh/id_rsa)
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+          "${SSH_RUN[@]}" "$STRATO_USER@$STRATO_HOST" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_CITY'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" <<'PHP'
+          <?php
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
+          $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
+          $files = [];
+          foreach (['01', '02'] as $number) {
+              $file = lehrfahrer_route_file($company, 'cottbus', 'Route_' . $number, 'json', 'Linie_16', 'Standard');
+              if (!is_file($file) || is_link($file)) throw new RuntimeException('Existing Route ' . $number . ' is missing.');
+              $data = json_decode(strval(file_get_contents($file)), true, 512, JSON_THROW_ON_ERROR);
+              if (($data['city'] ?? '') !== 'cottbus' || ($data['routeName'] ?? '') !== 'Route ' . $number) {
+                  throw new RuntimeException('Existing Route ' . $number . ' is inconsistent.');
+              }
+              $files[$number] = ['path' => $file, 'sha' => hash_file('sha256', $file)];
+          }
+          $alreadyPresent = lehrfahrer_route_city_exists($company, 'cottbus');
+          if (!$alreadyPresent) lehrfahrer_route_register_city($company, 'Cottbus');
+          if (!lehrfahrer_route_city_exists($company, 'cottbus')) throw new RuntimeException('Cottbus city registration failed.');
+          putenv('LEHRFAHRER_LEGACY_COMPANY_ID=' . $company);
+          $_SERVER['HTTP_X_API_TOKEN'] = strval(getenv('LEHRFAHRER_API_TOKEN'));
+          $_SERVER['REQUEST_METHOD'] = 'GET';
+          $_GET = ['includeEmpty' => '1'];
+          ob_start();
+          require getenv('LEHRFAHRER_APP_ROOT') . '/api/list_cities.php';
+          $cityResponse = json_decode(strval(ob_get_clean()), true, 512, JSON_THROW_ON_ERROR);
+          if (!in_array('cottbus', $cityResponse['cities'] ?? [], true)) throw new RuntimeException('Editor city endpoint does not find Cottbus.');
+          $_GET = ['city' => 'cottbus'];
+          ob_start();
+          require getenv('LEHRFAHRER_APP_ROOT') . '/api/list_lines.php';
+          $lineResponse = json_decode(strval(ob_get_clean()), true, 512, JSON_THROW_ON_ERROR);
+          $found = [];
+          foreach ($lineResponse['lines'] ?? [] as $line) if (($line['lineFolder'] ?? '') === 'Linie_16'
+              && ($line['categoryFolder'] ?? '') === 'Standard') $found[$line['fileBase'] ?? ''] = true;
+          foreach (['01', '02'] as $number) {
+              if (!isset($found['Route_' . $number])) throw new RuntimeException('Editor line endpoint does not find Route ' . $number . '.');
+              if (!hash_equals($files[$number]['sha'], hash_file('sha256', $files[$number]['path']))) {
+                  throw new RuntimeException('Existing Route ' . $number . ' changed.');
+              }
+              if (lehrfahrer_route_find_file($company, 'cottbus', 'Route_' . $number, 'json', 'Linie_16', 'Standard')
+                  !== $files[$number]['path']) throw new RuntimeException('Editor cannot load Route ' . $number . '.');
+          }
+          echo json_encode(['cityRegistered' => true, 'cityAlreadyPresent' => $alreadyPresent,
+              'editorCitiesContainsCottbus' => true, 'editorRoute01Found' => true, 'editorRoute02Found' => true,
+              'routeHashesUnchanged' => true], JSON_THROW_ON_ERROR), "\n";
+          PHP
+          REMOTE_CITY
 
       - name: Verify persisted GTFS route comparison and warm derived cache
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_gtfs_routes_v1 }}

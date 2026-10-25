@@ -139,7 +139,7 @@ function lehrfahrer_gtfs_creation_plans(array $preview, array $assignments, arra
 }
 
 function lehrfahrer_gtfs_creation_install(string $cityRoot, array $writes, callable $checkExisting,
-    ?callable $afterInstall = null): void {
+    ?callable $afterInstall = null, ?callable $registerCity = null): void {
     if (!is_dir($cityRoot) || is_link($cityRoot)) throw new RuntimeException('Cottbus-Routenablage ist nicht sicher.');
     $lockPath = $cityRoot . DIRECTORY_SEPARATOR . '.gtfs-create.lock';
     if (is_link($lockPath)) throw new RuntimeException('Routensperre ist ein Symlink.');
@@ -149,6 +149,7 @@ function lehrfahrer_gtfs_creation_install(string $cityRoot, array $writes, calla
     try {
         if (!flock($lock, LOCK_EX)) throw new RuntimeException('Routensperre fehlgeschlagen.');
         $checkExisting();
+        if ($registerCity !== null) $registerCity();
         foreach ($writes as $write) {
             $target = strval($write['path']);
             $directory = dirname($target);
