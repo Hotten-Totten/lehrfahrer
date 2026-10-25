@@ -973,7 +973,7 @@ function updateRouteDataSummary() {
     ? `${String(realStops[0].name).trim()} → ${String(realStops[realStops.length - 1].name).trim()}`
     : (realStops[0]?.name || String(directionNameInput?.value || "").trim());
   if (direction) parts.push(direction);
-  summary.textContent = parts.join(" · ") || "Routendaten";
+  summary.textContent = (line || route || direction) ? parts.join(" · ") : "Routendaten";
   summary.title = summary.textContent;
 }
 
