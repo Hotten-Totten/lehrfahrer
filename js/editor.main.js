@@ -597,6 +597,7 @@ async function loadCitiesFromServer(selectCity = "", { throwOnError = false } = 
 
   await loadCityDispatchPhoneSetting();
   updateCityManagementButtons();
+  updateRouteDataSummary();
 }
 
 function updateCityManagementButtons() {
@@ -953,6 +954,45 @@ function updateEditorChromeLayoutMetrics() {
   }
 }
 
+function updateRouteDataSummary() {
+  const summary = document.getElementById("routeDataSummary");
+  if (!summary) return;
+  const parts = [];
+  const city = String(citySelect?.value || "").trim();
+  if (city) parts.push(prettifyCityName(city));
+  const line = String(lineNameInput?.value || "").replace(/^Linie\s+/i, "").trim();
+  if (line) parts.push(`Linie ${line}`);
+  const route = String(routeNameInput?.value || "").replace(/^Route\s+/i, "").trim();
+  if (route) parts.push(`Route ${route}`);
+  const category = String(variantCategoryInput?.value || "").trim();
+  if (category && parts.length) parts.push(category);
+  const realStops = Array.isArray(state.stops)
+    ? state.stops.filter(stop => stop && !stop.isGhostPoint && !stop.isGhost && String(stop.name || "").trim())
+    : [];
+  const direction = realStops.length > 1
+    ? `${String(realStops[0].name).trim()} → ${String(realStops[realStops.length - 1].name).trim()}`
+    : (realStops[0]?.name || String(directionNameInput?.value || "").trim());
+  if (direction) parts.push(direction);
+  summary.textContent = parts.join(" · ") || "Routendaten";
+  summary.title = summary.textContent;
+}
+
+function setRouteDataExpanded(expanded) {
+  const fields = document.getElementById("routeDataFields");
+  const toggle = document.getElementById("routeDataToggleBtn");
+  if (!fields || !toggle) return;
+  fields.classList.toggle("hidden", !expanded);
+  toggle.setAttribute("aria-expanded", String(expanded));
+  const action = document.getElementById("routeDataToggleAction");
+  if (action) action.textContent = expanded ? "Routendaten schließen" : "Routendaten bearbeiten";
+  updateRouteDataSummary();
+  updateEditorChromeLayoutMetrics();
+  requestAnimationFrame(() => {
+    updateEditorChromeLayoutMetrics();
+    window.EditorMapAdapter?.resizeEditorMap?.();
+  });
+}
+
 async function createNewLine() {
   updateEditorChromeLayoutMetrics();
   forceScrollToEditorTop();
@@ -1016,6 +1056,7 @@ async function createNewLine() {
   updateHistoryButtons();
 
   setMode("freeStop", "Neue Linie erstellt. Modus: Haltestelle");
+  setRouteDataExpanded(true);
   showLineInputFieldsForNewLine();
   updateEditorChromeLayoutMetrics();
 }
@@ -1087,6 +1128,13 @@ function showLineInputFieldsForNewLine() {
 // =========================
 
 initDebugPanel();
+document.getElementById("routeDataToggleBtn")?.addEventListener("click", () => {
+  const expanded = document.getElementById("routeDataToggleBtn").getAttribute("aria-expanded") === "true";
+  setRouteDataExpanded(!expanded);
+});
+for (const eventName of ["input", "change"]) {
+  document.getElementById("routeDataFields")?.addEventListener(eventName, updateRouteDataSummary);
+}
 updateApiTokenStatusUI();
 loadEditorVersionBadge();
 startInputMaskWatchdog();

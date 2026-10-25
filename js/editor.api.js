@@ -2651,6 +2651,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
     setRouteLoadPhase("Haltestellen und Fahrweg werden aufgebaut …");
     await waitForRouteLoadPaint();
     loadLineFromData(lineData);
+    if (typeof setRouteDataExpanded === "function") setRouteDataExpanded(false);
     setRouteLoadPhase("Karte wird aktualisiert …");
     await waitForRouteLoadPaint();
 

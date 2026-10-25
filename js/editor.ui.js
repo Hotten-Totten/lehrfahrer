@@ -255,6 +255,7 @@ function updateStats() {
   if (typeof updateLineMetricsUI === "function") {
     updateLineMetricsUI();
   }
+  if (typeof updateRouteDataSummary === "function") updateRouteDataSummary();
 }
 
 // Markiert Modus-Buttons passend zum aktuellen Bearbeitungsmodus.

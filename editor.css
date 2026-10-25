@@ -241,15 +241,51 @@ button.detour-phase-build {
 ========================= */
 #topbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: end;
-  padding: 10px 12px;
+  flex-direction: column;
+  padding: 0;
   background: #ffffff;
   border-bottom: 1px solid #ccc;
   position: sticky;
   top: var(--menubar-height);
   z-index: 1500;
+}
+
+.route-data-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  background: #ffffff;
+  color: #1e293b;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.route-data-toggle:hover { background: #f1f5f9; }
+.route-data-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.route-data-summary {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.route-data-toggle-action { flex: 0 0 auto; color: #1d4ed8; font-size: 12px; font-weight: 700; }
+.route-data-chevron { flex: 0 0 auto; color: #1d4ed8; transition: transform 0.15s ease; }
+.route-data-toggle[aria-expanded="true"] .route-data-chevron { transform: rotate(180deg); }
+.route-data-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-top: 1px solid #e2e8f0;
 }
 
 #topbar.topbar-attention {
@@ -3171,7 +3207,7 @@ button.danger:hover {
     max-width: 100%;
   }
 
-  #topbar {
+  #routeDataFields {
     gap: 10px;
   }
 

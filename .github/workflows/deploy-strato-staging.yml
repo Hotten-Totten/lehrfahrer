@@ -99,6 +99,7 @@ jobs:
             tools/tenant-storage.test.js \
             tools/tenant-lines-cities.test.js \
             tools/route-load-progress.test.js \
+            tools/route-data-layout.test.js \
             tools/route-build-progress.test.js \
             tools/tenant-personnel.test.js \
             tools/tenant-catalog-imports.test.js \
@@ -1133,13 +1134,15 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.085' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.086' /tmp/staging-editor.html
+          grep -q 'js/editor.main.js?v=V2.1.065' /tmp/staging-editor.html
           grep -q 'js/editor.routing.js?v=V2.1.064' /tmp/staging-editor.html
-          grep -q 'editor.css?v=V2.1.080' /tmp/staging-editor.html
+          grep -q 'editor.css?v=V2.1.081' /tmp/staging-editor.html
+          grep -q 'id="routeDataFields" class="route-data-fields hidden"' /tmp/staging-editor.html
           grep -q 'id="routeLoadProgressModal"' /tmp/staging-editor.html
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.085" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.086" > /tmp/staging-editor-api.js
           grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/js/editor.routing.js?v=V2.1.064" > /tmp/staging-editor-routing.js
@@ -1153,7 +1156,8 @@ jobs:
           grep -q 'GTFS-Candidate-SHA:' /tmp/staging-editor-api.js
           grep -q 'Erzeugungsvorschau (nicht gespeichert)' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/editor.css?v=V2.1.080" > /tmp/staging-editor.css
+            "$origin/editor.css?v=V2.1.081" > /tmp/staging-editor.css
+          grep -q '.route-data-toggle {' /tmp/staging-editor.css
           grep -q '.route-load-progress-track {' /tmp/staging-editor.css
           grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor.css
           grep -q '.gtfs-change-current-only' /tmp/staging-editor.css
