@@ -1186,6 +1186,10 @@ jobs:
           LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" <<'PHP'
           <?php
+          set_exception_handler(static function (Throwable $error): void {
+              fwrite(STDERR, 'Cottbus city postcheck failed: ' . $error->getMessage() . "\n");
+              exit(1);
+          });
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
           $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
           $files = [];
