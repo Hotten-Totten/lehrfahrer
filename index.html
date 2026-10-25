@@ -67,13 +67,18 @@
       <div class="menu-root">
         <button class="menu-button" type="button">Bearbeiten</button>
         <div class="menu-dropdown">
-          <button type="button" class="menu-item" data-click-target="undoBtn" title="Letzten Schritt rückgängig machen">Zurück</button>
-          <button type="button" class="menu-item" data-click-target="redoBtn" title="Rückgängig gemachten Schritt wiederherstellen">Vor</button>
-          <button type="button" class="menu-item" data-click-target="clearBtn" title="Alle Haltestellen, Routenpunkte und Felder löschen – komplett neu starten">Alles löschen</button>
+          <button type="button" class="menu-item" data-click-target="undoBtn" title="Letzten Schritt rückgängig machen">Rückgängig</button>
+          <button type="button" class="menu-item" data-click-target="redoBtn" title="Rückgängig gemachten Schritt wiederherstellen">Wiederholen</button>
           <hr class="menu-separator">
-          <button type="button" class="menu-item" data-click-target="loadAutosaveBtn" title="Den letzten automatisch gespeicherten lokalen Zwischenstand wiederherstellen">Autosave laden</button>
-          <button type="button" class="menu-item" data-click-target="clearAutosaveBtn" title="Den lokalen Autosave-Zwischenstand dauerhaft löschen">Autosave löschen</button>
-          <button type="button" class="menu-item" data-click-target="exportAutosaveBtn" title="Den aktuellen Autosave als JSON-Datei auf diesen Computer herunterladen">Autosave exportieren</button>
+          <button type="button" class="menu-item" data-click-target="clearBtn" title="Haltestellen, Fahrwegpunkte und Zeichnungen im aktuellen Editor löschen; gespeicherte Serverrouten bleiben erhalten">Routeninhalt löschen</button>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Wiederherstellung</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" data-click-target="loadAutosaveBtn" title="Den letzten automatisch gespeicherten lokalen Zwischenstand wiederherstellen">Autosave laden</button>
+              <button type="button" class="menu-item" data-click-target="clearAutosaveBtn" title="Den lokalen Autosave-Zwischenstand dauerhaft löschen">Autosave löschen</button>
+              <button type="button" class="menu-item" data-click-target="exportAutosaveBtn" title="Den aktuellen Editor-Arbeitsstand als JSON-Datei auf diesen Computer herunterladen">Arbeitsstand exportieren</button>
+            </div>
+          </div>
         </div>
       </div>
 
