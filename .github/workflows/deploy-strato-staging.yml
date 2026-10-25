@@ -1207,7 +1207,8 @@ jobs:
                   throw new RuntimeException('Existing Route ' . $number . ' is inconsistent.');
               }
               $stops = $data['stops'] ?? null;
-              $points = $data['routePoints'] ?? ($data['route']['original'] ?? null);
+              $points = isset($data['route']['original']) && is_array($data['route']['original'])
+                  ? $data['route']['original'] : ($data['routePoints'] ?? null);
               if (!is_array($stops) || count($stops) !== ($number === '01' ? 20 : 19) || !is_array($points)) {
                   throw new RuntimeException('Existing Route ' . $number . ' has invalid stops or route points.');
               }
