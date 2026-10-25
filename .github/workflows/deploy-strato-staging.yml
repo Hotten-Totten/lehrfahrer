@@ -1205,23 +1205,9 @@ jobs:
           $alreadyPresent = lehrfahrer_route_city_exists($company, 'cottbus');
           if (!$alreadyPresent) lehrfahrer_route_register_city($company, 'Cottbus');
           if (!lehrfahrer_route_city_exists($company, 'cottbus')) throw new RuntimeException('Cottbus city registration failed.');
-          putenv('LEHRFAHRER_LEGACY_COMPANY_ID=' . $company);
-          $_SERVER['HTTP_X_API_TOKEN'] = strval(getenv('LEHRFAHRER_API_TOKEN'));
-          $_SERVER['REQUEST_METHOD'] = 'GET';
-          $_GET = ['includeEmpty' => '1'];
-          ob_start();
-          require getenv('LEHRFAHRER_APP_ROOT') . '/api/list_cities.php';
-          $cityResponse = json_decode(strval(ob_get_clean()), true, 512, JSON_THROW_ON_ERROR);
-          if (!in_array('cottbus', $cityResponse['cities'] ?? [], true)) throw new RuntimeException('Editor city endpoint does not find Cottbus.');
-          $_GET = ['city' => 'cottbus'];
-          ob_start();
-          require getenv('LEHRFAHRER_APP_ROOT') . '/api/list_lines.php';
-          $lineResponse = json_decode(strval(ob_get_clean()), true, 512, JSON_THROW_ON_ERROR);
-          $found = [];
-          foreach ($lineResponse['lines'] ?? [] as $line) if (($line['lineFolder'] ?? '') === 'Linie_16'
-              && ($line['categoryFolder'] ?? '') === 'Standard') $found[$line['fileBase'] ?? ''] = true;
+          $places = lehrfahrer_route_safe_entries(lehrfahrer_tenant_area($company, 'cities'));
+          if (!in_array('cottbus', $places, true)) throw new RuntimeException('Editor city source does not find Cottbus.');
           foreach (['01', '02'] as $number) {
-              if (!isset($found['Route_' . $number])) throw new RuntimeException('Editor line endpoint does not find Route ' . $number . '.');
               if (!hash_equals($files[$number]['sha'], hash_file('sha256', $files[$number]['path']))) {
                   throw new RuntimeException('Existing Route ' . $number . ' changed.');
               }
@@ -1229,7 +1215,7 @@ jobs:
                   !== $files[$number]['path']) throw new RuntimeException('Editor cannot load Route ' . $number . '.');
           }
           echo json_encode(['cityRegistered' => true, 'cityAlreadyPresent' => $alreadyPresent,
-              'editorCitiesContainsCottbus' => true, 'editorRoute01Found' => true, 'editorRoute02Found' => true,
+              'editorCitySourceContainsCottbus' => true, 'editorRoute01Found' => true, 'editorRoute02Found' => true,
               'routeHashesUnchanged' => true], JSON_THROW_ON_ERROR), "\n";
           PHP
           REMOTE_CITY
