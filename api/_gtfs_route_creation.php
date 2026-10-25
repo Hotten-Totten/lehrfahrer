@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/_gtfs_route_preview.php';
 require_once __DIR__ . '/_gtfs_route_assignment.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_gtfs_timetable_change.php';
+require_once __DIR__ . '/_gtfs_service_compare.php';
 
 function lehrfahrer_gtfs_creation_fingerprint(string $sha, array $preview, array $assignments): string {
     $rows = [];
@@ -24,41 +26,72 @@ function lehrfahrer_gtfs_creation_folder(string $name): string {
     return lehrfahrer_route_segment($name);
 }
 
-function lehrfahrer_gtfs_creation_index_rows(string $indexPath, string $agencyId, string $line, array $keys): array {
-    $pdo = lehrfahrer_gtfs_change_open_index($indexPath, [$agencyId]);
-    $query = $pdo->prepare('SELECT v.*, r.short_name, r.long_name FROM variants v
-        JOIN routes r ON r.route_id=v.route_id WHERE r.agency_id=? AND r.short_name=?');
-    $query->execute([$agencyId, $line]);
-    $matches = [];
-    foreach ($query as $row) {
-        $items = json_decode(strval($row['stops_json']), true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($items) || count($items) < 2) continue;
-        $stopKeys = [];
-        try {
-            foreach ($items as $item) {
-                $stopKeys[] = lehrfahrer_gtfs_service_stop_key([
-                    'stop_name' => $item['name'] ?? '', 'stop_lat' => $item['lat'] ?? null,
-                    'stop_lon' => $item['lon'] ?? null
-                ]);
-            }
-        } catch (RuntimeException $error) { continue; }
-        $key = hash('sha256', json_encode($stopKeys, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        if (!isset($keys[$key])) continue;
-        $row['items'] = $items;
-        if (isset($matches[$key]) && array_column($matches[$key]['items'], 'stopId') !== array_column($items, 'stopId')) {
-            throw new RuntimeException('GTFS-Variante besitzt mehrere nicht eindeutige Stopkennungen.');
-        }
-        $matches[$key] = $row;
+function lehrfahrer_gtfs_creation_zip_rows(string $zipPath, string $line, array $keys): array {
+    // The derived variants index can cover a narrower service period than the
+    // official ZIP. The checked ZIP is the authoritative source of selected rows.
+    $feed = lehrfahrer_gtfs_service_feed($zipPath);
+    $routeIds = [];
+    foreach ($feed['routes'] as $id => $route) {
+        if (trim(strval($route['route_short_name'] ?? '')) === $line) $routeIds[strval($id)] = true;
     }
-    $pdo = null;
+    if ($routeIds === []) throw new RuntimeException('Pilotlinie fehlt im geprueften GTFS-Kandidaten.');
+    $trips = [];
+    foreach ($feed['trips'] as $id => $trip) {
+        if (isset($routeIds[strval($trip['route_id'])])
+            && !empty($feed['serviceDays'][strval($trip['service_id'])])) $trips[strval($id)] = $trip;
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) throw new RuntimeException('Gepruefter GTFS-Kandidat ist nicht lesbar.');
+    try {
+        $sequences = []; $usedStops = [];
+        lehrfahrer_gtfs_service_rows($zip, 'stop_times.txt', ['trip_id', 'stop_id', 'stop_sequence'],
+            static function (array $row) use ($trips, &$sequences, &$usedStops): void {
+                $tripId = strval($row['trip_id']);
+                if (!isset($trips[$tripId])) return;
+                $sequence = strval($row['stop_sequence']);
+                if (!ctype_digit($sequence) || isset($sequences[$tripId][(int)$sequence])) {
+                    throw new RuntimeException('GTFS-Stopfolge ist nicht eindeutig.');
+                }
+                $stopId = strval($row['stop_id']);
+                $sequences[$tripId][(int)$sequence] = $stopId;
+                $usedStops[$stopId] = true;
+            });
+        $stops = [];
+        lehrfahrer_gtfs_service_rows($zip, 'stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon'],
+            static function (array $row) use ($usedStops, &$stops): void {
+                $stopId = strval($row['stop_id']);
+                if (isset($usedStops[$stopId])) $stops[$stopId] = $row;
+            });
+    } finally { $zip->close(); }
+    $matches = [];
+    foreach ($trips as $tripId => $trip) {
+        $ids = $sequences[$tripId] ?? [];
+        ksort($ids, SORT_NUMERIC);
+        if (count($ids) < 2) continue;
+        $items = []; $stopKeys = [];
+        foreach ($ids as $sequence => $stopId) {
+            $stop = $stops[$stopId] ?? null;
+            if ($stop === null) throw new RuntimeException('GTFS-Stopfolge verweist auf unbekannte Haltestelle.');
+            $key = lehrfahrer_gtfs_service_stop_key($stop);
+            $stopKeys[] = $key;
+            $items[] = ['stopId' => $stopId, 'sequence' => (int)$sequence,
+                'name' => trim(strval($stop['stop_name'])), 'lat' => (float)$stop['stop_lat'],
+                'lon' => (float)$stop['stop_lon']];
+        }
+        $key = hash('sha256', json_encode($stopKeys, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        if (!isset($keys[$key]) || isset($matches[$key])) continue;
+        $matches[$key] = ['items' => $items, 'short_name' => $line, 'trip_headsign' => strval($trip['trip_headsign'] ?? ''),
+            'route_id' => strval($trip['route_id']), 'variant_id' => $tripId, 'signature' => sha1(implode('>', $ids))];
+        if (count($matches) === count($keys)) break;
+    }
     foreach ($keys as $key => $_) if (!isset($matches[$key])) {
-        throw new RuntimeException('Markierte Variante fehlt im geprueften Kandidatenindex.');
+        throw new RuntimeException('Markierte Variante fehlt im geprueften Kandidaten-ZIP.');
     }
     return $matches;
 }
 
 function lehrfahrer_gtfs_creation_plans(array $preview, array $assignments, array $routes,
-    array $categories, string $sha, array $indexRows): array {
+    array $categories, string $sha, array $sourceRows): array {
     if (preg_match('/^[a-f0-9]{64}$/D', $sha) !== 1) throw new InvalidArgumentException('Ungueltiger Kandidaten-SHA.');
     $variants = $preview['variants'] ?? [];
     if ($variants === []) throw new RuntimeException('Keine aktuelle Route fuer die Pilotlinie markiert.');
@@ -74,11 +107,11 @@ function lehrfahrer_gtfs_creation_plans(array $preview, array $assignments, arra
         $numberKey = function_exists('mb_strtolower') ? mb_strtolower($number, 'UTF-8') : strtolower($number);
         if (isset($numbers[$numberKey])) throw new RuntimeException('Routennummer ist mehrfach fuer die Pilotlinie vorgesehen.');
         $numbers[$numberKey] = true;
-        $row = $indexRows[$key] ?? null;
-        if (!is_array($row)) throw new RuntimeException('Markierte Variante fehlt im geprueften Kandidatenindex.');
+        $row = $sourceRows[$key] ?? null;
+        if (!is_array($row)) throw new RuntimeException('Markierte Variante fehlt im geprueften Kandidaten-ZIP.');
         $names = array_map('strval', array_column($row['items'], 'name'));
         if ($names !== $variant['stopNames'] || count($names) !== (int)$variant['stopCount']) {
-            throw new RuntimeException('Haltestellenfolge im Kandidatenindex weicht von der Vorschau ab.');
+            throw new RuntimeException('Haltestellenfolge im Kandidaten-ZIP weicht von der Vorschau ab.');
         }
         $data = lehrfahrer_gtfs_work_build_line($row);
         $data['city'] = 'cottbus';

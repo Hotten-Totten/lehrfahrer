@@ -35,6 +35,26 @@ $row = static fn(array $names, string $id): array => ['short_name' => '16', 'tri
 $rows = [$key1 => $row($preview['variants'][0]['stopNames'], 'v1'),
     $key2 => $row($preview['variants'][1]['stopNames'], 'v2')];
 
+mkdir($private, 0700);
+$zipPath = $private . '/candidate-fixture.zip';
+$zip = new ZipArchive();
+if ($zip->open($zipPath, ZipArchive::CREATE) !== true) throw new RuntimeException('Fixture-ZIP nicht anlegbar.');
+$zip->addFromString('agency.txt', "agency_id,agency_name\n287,Cottbusverkehr\n");
+$zip->addFromString('routes.txt', "route_id,agency_id,route_short_name,route_type\nr16,287,16,3\n");
+$zip->addFromString('trips.txt', "trip_id,route_id,service_id,trip_headsign\nt1,r16,s1,Stadthalle Puschkinpromenade\nt2,r16,s1,Uhlandstraße\n");
+$zip->addFromString('calendar.txt', "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\ns1,1,1,1,1,1,1,1,20261020,20261118\n");
+$zip->addFromString('calendar_dates.txt', "service_id,date,exception_type\n");
+$zip->addFromString('stop_times.txt', "trip_id,stop_id,stop_sequence\nt1,u,1\nt1,p,2\nt2,p,1\nt2,u,2\n");
+$zip->addFromString('stops.txt', "stop_id,stop_name,stop_lat,stop_lon\nu,Uhlandstraße,51.75,14.32\np,Stadthalle Puschkinpromenade,51.751,14.321\n");
+$zip->close();
+$u = lehrfahrer_gtfs_service_stop_key(['stop_name' => 'Uhlandstraße', 'stop_lat' => 51.75, 'stop_lon' => 14.32]);
+$p = lehrfahrer_gtfs_service_stop_key(['stop_name' => 'Stadthalle Puschkinpromenade', 'stop_lat' => 51.751, 'stop_lon' => 14.321]);
+$zipKeys = [hash('sha256', json_encode([$u, $p], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)) => true,
+    hash('sha256', json_encode([$p, $u], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)) => true];
+$zipRows = lehrfahrer_gtfs_creation_zip_rows($zipPath, '16', $zipKeys);
+creation_check(count($zipRows) === 2 && array_column(array_values($zipRows)[0]['items'], 'stopId') === ['u', 'p'],
+    'checked ZIP supplies exact marked stop IDs and order');
+
 creation_check(lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments)
     !== lehrfahrer_gtfs_creation_fingerprint(str_repeat('d', 64), $preview, $assignments), 'candidate SHA binds plan');
 creation_check(lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments)
@@ -127,5 +147,6 @@ try {
     rmdir(lehrfahrer_tenant_area($company, 'cities'));
     rmdir(lehrfahrer_tenant_root($company));
     rmdir($private . '/companies');
+    unlink($zipPath);
     rmdir($private);
 }

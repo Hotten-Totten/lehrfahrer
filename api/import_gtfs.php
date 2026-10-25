@@ -683,8 +683,7 @@ function gtfs_candidate_create_routes(): void {
         gtfs_error(409, 'Vorbereitete Routenauswahl wurde geaendert; Vorschau neu laden.');
     }
     $keys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
-    $indexRows = lehrfahrer_gtfs_creation_index_rows(gtfs_candidate_dir() . '/variants.sqlite',
-        $ready['agencyId'], '16', $keys);
+    $indexRows = lehrfahrer_gtfs_creation_zip_rows(gtfs_candidate_dir() . '/candidate.zip', '16', $keys);
     $categories = lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes);
     $plans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $routes, $categories, $sha, $indexRows);
     $cityRoot = lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus');

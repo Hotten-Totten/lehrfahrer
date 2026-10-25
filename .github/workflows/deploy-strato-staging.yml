@@ -1225,8 +1225,8 @@ jobs:
                   'stopCount' => $variant['stopCount']];
           }
           $creationKeys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
-          $creationRows = lehrfahrer_gtfs_creation_index_rows($dir . '/variants.sqlite',
-              $ready['agencyId'], '16', $creationKeys);
+          $creationStart = microtime(true);
+          $creationRows = lehrfahrer_gtfs_creation_zip_rows($dir . '/candidate.zip', '16', $creationKeys);
           $creationPlans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $existing,
               $categories, $beforeCandidate, $creationRows);
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
@@ -1238,7 +1238,8 @@ jobs:
                       static fn(array $variant): bool => isset($variant['creationPreview']))),
                   'results' => array_count_values(array_column($preview['variants'], 'result')),
                   'assignmentRows' => $assignmentRows],
-              'creationDryRun' => ['planCount' => count($creationPlans), 'noRouteWrites' => true],
+              'creationDryRun' => ['planCount' => count($creationPlans), 'noRouteWrites' => true,
+                  'seconds' => round(microtime(true) - $creationStart, 1)],
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP
