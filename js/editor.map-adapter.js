@@ -2210,8 +2210,10 @@
     mapLibreObjectDragMouseDownHandler = event => {
       if (event.button !== 0 || mapLibreObjectDragState) return;
       if (event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const target = event.target;
-      if (target && typeof target.closest === "function" && target.closest(`#${TEST_LABEL_ID}`)) return;
+      if (!isMapLibreEditorSurfaceEvent(event, container)) {
+        mapLibreEditorInteractionFocused = false;
+        return;
+      }
       const rect = container.getBoundingClientRect();
       const inside = event.clientX >= rect.left && event.clientX <= rect.right
         && event.clientY >= rect.top && event.clientY <= rect.bottom;
@@ -2306,6 +2308,16 @@
     return true;
   }
 
+  function isMapLibreEditorSurfaceEvent(event, container) {
+    const target = event && event.target;
+    if (!target || !container || typeof container.contains !== "function" || !container.contains(target)) {
+      return false;
+    }
+    if (typeof target.closest !== "function") return false;
+    // Only the map canvas and map markers are editor targets, not controls or overlaid UI.
+    return target === container || !!target.closest(".maplibregl-canvas, .maplibregl-marker");
+  }
+
   function startHitTestDiagnostics() {
     if (!MAPLIBRE_MIGRATION_ENABLED || !managedMap || !global.document) return false;
     const container = getTestContainer();
@@ -2327,6 +2339,12 @@
         if (mapLibreObjectDragState) {
           pendingHitTestPoint = null;
           clearEditorHoverHighlight();
+          return;
+        }
+        if (!isMapLibreEditorSurfaceEvent(event, container)) {
+          pendingHitTestPoint = null;
+          clearEditorHoverHighlight();
+          closeMapLibreFeatureTooltip();
           return;
         }
         const rect = container.getBoundingClientRect();
@@ -2356,14 +2374,16 @@
 
     if (!hitTestDiagnosticClickHandler) {
       hitTestDiagnosticClickHandler = event => {
+        if (!isMapLibreEditorSurfaceEvent(event, container)) {
+          mapLibreEditorInteractionFocused = false;
+          return;
+        }
         if (suppressNextMapLibreClick) {
           suppressNextMapLibreClick = false;
           event.preventDefault();
           event.stopImmediatePropagation();
           return;
         }
-        const target = event.target;
-        if (target && typeof target.closest === "function" && target.closest(`#${TEST_LABEL_ID}`)) return;
         const rect = container.getBoundingClientRect();
         const inside = event.clientX >= rect.left && event.clientX <= rect.right
           && event.clientY >= rect.top && event.clientY <= rect.bottom;
