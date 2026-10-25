@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../api/_gtfs_route_preview.php';
+require_once __DIR__ . '/../api/_gtfs_route_assignment.php';
+require_once __DIR__ . '/../api/_route_categories.php';
 
 function preview_check(bool $condition, string $label): void {
     if (!$condition) throw new RuntimeException($label);
@@ -85,4 +87,36 @@ try {
         'existing route files unchanged');
 } finally {
     unlink($line16); unlink($line17); rmdir($root . '/16'); rmdir($root);
+}
+
+$storage = sys_get_temp_dir() . '/gtfs-assignment-' . bin2hex(random_bytes(8));
+mkdir($storage, 0700);
+try {
+    $sha = str_repeat('d', 64);
+    $id = lehrfahrer_gtfs_route_selection_id('16', $keyA);
+    $existing = [['id' => 'cottbus/16/Standard/Route_01', 'routeNumber' => '01']];
+    $categories = lehrfahrer_route_category_defaults();
+    $draft = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '', 'category' => 'Standard'], $existing, $categories);
+    preview_check(!$draft['ready'], 'new route requires manual number');
+    $duplicate = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '01', 'category' => 'Standard'], $existing, $categories);
+    preview_check($duplicate['duplicate'] && !$duplicate['ready'], 'duplicate number never implies overwrite');
+    $new = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '01a', 'category' => 'Standard'], $existing, $categories);
+    preview_check($new['ready'], 'unique manual route number is ready');
+    $replace = lehrfahrer_gtfs_assignment_validate(['action' => 'replace', 'targetRoute' => $existing[0]['id'], 'category' => 'Standard'], $existing, $categories);
+    preview_check($replace['ready'], 'explicit same-line replacement is ready');
+    try {
+        lehrfahrer_gtfs_assignment_validate(['action' => 'replace', 'targetRoute' => 'cottbus/17/Route_01', 'category' => 'Standard'], $existing, $categories);
+        throw new RuntimeException('foreign target accepted');
+    } catch (InvalidArgumentException $expected) { preview_check(true, 'foreign line target rejected'); }
+    lehrfahrer_gtfs_assignment_set($storage, $sha, $id, $new);
+    preview_check(lehrfahrer_gtfs_assignment_read($storage, $sha)[$id]['routeNumber'] === '01a', 'assignment survives reload');
+    preview_check(lehrfahrer_gtfs_assignment_read($storage, str_repeat('e', 64)) === [], 'new candidate SHA has no assignments');
+    $categoryFile = $storage . '/route_categories.json';
+    $updated = lehrfahrer_route_categories_add($categoryFile, 'Pilotkategorie');
+    preview_check(in_array('Pilotkategorie', $updated, true)
+        && in_array('Pilotkategorie', lehrfahrer_route_categories_read($categoryFile), true), 'new category stored centrally');
+} finally {
+    foreach (glob($storage . '/*') ?: [] as $file) unlink($file);
+    foreach (glob($storage . '/.*') ?: [] as $file) if (is_file($file)) unlink($file);
+    rmdir($storage);
 }

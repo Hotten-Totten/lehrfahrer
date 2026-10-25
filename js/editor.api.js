@@ -1252,6 +1252,23 @@ async function postGtfsImport(fields) {
   return result;
 }
 
+// Keep the normal editor's category selectors in sync with the same tenant list
+// used by the GTFS assignment pilot, including categories added after reload.
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const result = await postGtfsImport({ action: "routeCategoryList" });
+    for (const id of ["variantCategory", "saveConfirmVariantCategorySelect"]) {
+      const select = document.getElementById(id);
+      if (!select) continue;
+      const selected = select.value;
+      for (const name of result.categories || []) {
+        if (![...select.options].some(option => option.value === name)) select.add(new Option(name, name));
+      }
+      select.value = selected;
+    }
+  } catch (_) { /* Existing editor categories remain available offline. */ }
+});
+
 async function runGtfsImport(loadSource, initialMessage) {
   showVbbImportProgressPopup("", "GTFS-ZIP-Import");
   try {
@@ -1591,6 +1608,21 @@ async function openGtfsRoutePreview(candidateId) {
     const response = await postGtfsImport({ action: "candidatePreview", candidateId });
     if (modal.classList.contains("hidden")) return;
     const preview = response.preview;
+    let categories = response.categories || [];
+    const existingRoutes = response.existingRoutes || [];
+    const previewCategorySelects = [];
+    const syncCentralCategories = () => {
+      for (const id of ["variantCategory", "saveConfirmVariantCategorySelect"]) {
+        const select = document.getElementById(id);
+        if (!select) continue;
+        const current = select.value;
+        for (const name of categories) if (![...select.options].some(option => option.value === name)) {
+          select.add(new Option(name, name));
+        }
+        select.value = current;
+      }
+    };
+    syncCentralCategories();
     summary.textContent = `${preview.selectedVariantCount} markierte Varianten · ${preview.existingRouteCount} vorhandene Lehrfahrer-Routen gelesen · nur Vorschau`;
     (preview.variants || []).forEach(variant => {
       const card = gtfsChangeElement("div", "gtfs-route-preview-card");
@@ -1628,6 +1660,82 @@ async function openGtfsRoutePreview(candidateId) {
         );
         card.appendChild(creation);
       }
+      const assignment = variant.assignment || { action: "new", routeNumber: "", targetRoute: "", category: "", ready: false };
+      const mapping = gtfsChangeElement("section", "gtfs-route-creation-preview");
+      const actionLabel = gtfsChangeElement("label", "", "Routenaktion ");
+      const action = document.createElement("select");
+      action.append(new Option("Neue Route anlegen", "new"), new Option("Bestehende Route ersetzen", "replace"));
+      action.value = assignment.action;
+      actionLabel.appendChild(action);
+      const numberLabel = gtfsChangeElement("label", "", "Routennummer ");
+      const number = document.createElement("input");
+      number.type = "text"; number.maxLength = 32; number.placeholder = "z. B. 01 oder 01a";
+      number.value = assignment.routeNumber || "";
+      numberLabel.appendChild(number);
+      const targetLabel = gtfsChangeElement("label", "", "Bestehende Route ");
+      const target = document.createElement("select");
+      target.add(new Option("Route auswählen", ""));
+      existingRoutes.forEach(route => target.add(new Option(
+        `Route ${route.routeNumber || "?"} · ${route.startStop} → ${route.destination}`, route.id)));
+      target.value = assignment.targetRoute || "";
+      targetLabel.appendChild(target);
+      const categoryLabel = gtfsChangeElement("label", "", "Kategorie ");
+      const category = document.createElement("select");
+      const fillCategories = selected => {
+        category.replaceChildren(new Option("Kategorie auswählen", ""));
+        categories.forEach(name => category.add(new Option(name, name)));
+        category.value = selected || "";
+      };
+      fillCategories(assignment.category);
+      previewCategorySelects.push({ select: category, fill: fillCategories });
+      categoryLabel.appendChild(category);
+      const addCategory = gtfsChangeElement("button", "", "+ Neue Kategorie");
+      addCategory.type = "button";
+      const readiness = gtfsChangeElement("strong", "gtfs-route-assignment-readiness");
+      const warning = gtfsChangeElement("div", "gtfs-route-assignment-warning");
+      const existingNumbers = [...new Set(existingRoutes.map(route => route.routeNumber).filter(Boolean))];
+      const numbers = gtfsChangeElement("small", "", existingNumbers.length
+        ? `Vorhandene Routennummern: ${existingNumbers.join(", ")}` : "Keine bestehenden Routennummern dieser Linie");
+      const showAssignment = saved => {
+        numberLabel.hidden = action.value !== "new";
+        targetLabel.hidden = action.value !== "replace";
+        warning.textContent = saved.duplicate
+          ? "Diese Routennummer existiert bereits. Für ein Ersetzen bitte bewusst ‚Bestehende Route ersetzen‘ wählen."
+          : "";
+        readiness.textContent = saved.ready ? "BEREIT ZUR ÜBERNAHME" : "ANGABEN UNVOLLSTÄNDIG";
+      };
+      showAssignment(assignment);
+      let saveSerial = 0;
+      const saveAssignment = async () => {
+        const serial = ++saveSerial;
+        readiness.textContent = "Zuordnung wird gespeichert …";
+        try {
+          const result = await postGtfsImport({ action: "candidateAssignment", candidateId,
+            variantKey: variant.selectionKey, routeAction: action.value, routeNumber: number.value.trim(),
+            targetRoute: target.value, category: category.value });
+          if (serial === saveSerial) showAssignment(result.assignment);
+        } catch (error) {
+          if (serial === saveSerial) { readiness.textContent = "ANGABEN UNVOLLSTÄNDIG"; warning.textContent = error.message; }
+        }
+      };
+      action.onchange = () => { showAssignment({ ready: false, duplicate: false }); void saveAssignment(); };
+      number.onchange = saveAssignment;
+      target.onchange = saveAssignment;
+      category.onchange = saveAssignment;
+      addCategory.onclick = async () => {
+        const name = window.prompt("Name der neuen Lehrfahrer-Kategorie:");
+        if (!name?.trim()) return;
+        try {
+          const result = await postGtfsImport({ action: "candidateCategoryAdd", candidateId, name: name.trim() });
+          categories = result.categories;
+          syncCentralCategories();
+          previewCategorySelects.forEach(entry => entry.fill(entry.select.value));
+          fillCategories(name.trim());
+          await saveAssignment();
+        } catch (error) { warning.textContent = error.message; }
+      };
+      mapping.append(actionLabel, numberLabel, targetLabel, categoryLabel, addCategory, numbers, readiness, warning);
+      card.appendChild(mapping);
       list.appendChild(card);
     });
   } catch (err) {

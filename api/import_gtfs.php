@@ -8,6 +8,8 @@ require_once __DIR__ . '/_gtfs_version.php';
 require_once __DIR__ . '/_gtfs_candidate.php';
 require_once __DIR__ . '/_gtfs_route_selection.php';
 require_once __DIR__ . '/_gtfs_route_preview.php';
+require_once __DIR__ . '/_gtfs_route_assignment.php';
+require_once __DIR__ . '/_route_categories.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -571,6 +573,31 @@ function gtfs_route_selection_dir(): string {
     return lehrfahrer_tenant_ensure_directory(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate/route-selections');
 }
 
+function gtfs_route_assignment_dir(): string {
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'imports', 'gtfs/candidate/route-assignments');
+}
+
+function gtfs_route_categories_path(): string {
+    return lehrfahrer_tenant_path(LEHRFAHRER_GTFS_COMPANY_ID, 'settings', 'route_categories.json');
+}
+
+function gtfs_pilot_context(): array {
+    gtfs_require_cottbus_change_scope();
+    if (strtolower(trim(strval(getenv('LEHRFAHRER_ENV')))) !== 'staging') {
+        gtfs_error(403, 'Die Pilotzuordnung ist nur auf Staging verfuegbar.');
+    }
+    $candidateId = trim(strval($_POST['candidateId'] ?? ''));
+    $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
+    $sha = $ready['manifest']['checkedSourceSha256'];
+    if (!hash_equals($sha, $candidateId) || !hash_equals(basename(gtfs_candidate_dir()), $sha)) {
+        gtfs_error(409, 'GTFS-Kandidat wurde gewechselt; bitte neu laden.');
+    }
+    $selected = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
+    $routes = lehrfahrer_gtfs_preview_route_files(
+        lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus'), '16');
+    return [$ready, $sha, $selected, $routes];
+}
+
 function gtfs_candidate_status(): void {
     gtfs_require_cottbus_change_scope();
     try {
@@ -623,20 +650,52 @@ function gtfs_candidate_selection(): void {
 }
 
 function gtfs_candidate_preview(): void {
-    gtfs_require_cottbus_change_scope();
-    if (strtolower(trim(strval(getenv('LEHRFAHRER_ENV')))) !== 'staging') {
-        gtfs_error(403, 'Die Pilotvorschau ist nur auf Staging verfuegbar.');
-    }
-    $candidateId = trim(strval($_POST['candidateId'] ?? ''));
-    $ready = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
-    $sha = $ready['manifest']['checkedSourceSha256'];
-    if (!hash_equals($sha, $candidateId)) gtfs_error(409, 'GTFS-Kandidat wurde gewechselt; bitte neu laden.');
-    $selected = lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha);
-    $routes = lehrfahrer_gtfs_preview_route_files(
-        lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus'), '16');
+    [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
     $preview = lehrfahrer_gtfs_preview_creation_proposals(
         lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16'), $sha);
-    gtfs_reply(['ok' => true, 'candidateId' => $sha, 'preview' => $preview]);
+    $categories = lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes);
+    $assignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
+    foreach ($preview['variants'] as &$variant) {
+        $id = lehrfahrer_gtfs_route_selection_id('16', $variant['selectionKey']);
+        $saved = $assignments[$id] ?? ['action' => 'new', 'routeNumber' => '', 'targetRoute' => '', 'category' => ''];
+        try { $variant['assignment'] = lehrfahrer_gtfs_assignment_validate($saved, $routes, $categories); }
+        catch (InvalidArgumentException $error) { $variant['assignment'] = lehrfahrer_gtfs_assignment_validate([], $routes, $categories); }
+    }
+    unset($variant);
+    $existing = array_map(static fn(array $route): array => ['id' => $route['id'], 'routeNumber' => $route['routeNumber'],
+        'startStop' => $route['stopNames'][0] ?? '', 'destination' => $route['stopNames'][count($route['stopNames']) - 1] ?? ''], $routes);
+    gtfs_reply(['ok' => true, 'candidateId' => $sha, 'preview' => $preview,
+        'existingRoutes' => $existing, 'categories' => $categories]);
+}
+
+function gtfs_candidate_assignment(): void {
+    [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
+    $key = trim(strval($_POST['variantKey'] ?? ''));
+    try { $id = lehrfahrer_gtfs_route_selection_id('16', $key); }
+    catch (InvalidArgumentException $error) { gtfs_error(400, $error->getMessage()); }
+    if (!isset($selected[$id])) gtfs_error(409, 'Variante ist nicht als aktuelle Route markiert.');
+    $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
+    if (!in_array($key, array_column($preview['variants'], 'selectionKey'), true)) gtfs_error(400, 'Variante fehlt.');
+    try {
+        $assignment = lehrfahrer_gtfs_assignment_validate([
+            'action' => $_POST['routeAction'] ?? 'new', 'routeNumber' => $_POST['routeNumber'] ?? '',
+            'targetRoute' => $_POST['targetRoute'] ?? '', 'category' => $_POST['category'] ?? ''
+        ], $routes, lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes));
+        lehrfahrer_gtfs_assignment_set(gtfs_route_assignment_dir(), $sha, $id, $assignment);
+    } catch (InvalidArgumentException $error) { gtfs_error(400, $error->getMessage()); }
+    gtfs_reply(['ok' => true, 'assignment' => $assignment]);
+}
+
+function gtfs_candidate_category_add(): void {
+    gtfs_pilot_context();
+    try { $categories = lehrfahrer_route_categories_add(gtfs_route_categories_path(), strval($_POST['name'] ?? '')); }
+    catch (InvalidArgumentException $error) { gtfs_error(400, $error->getMessage()); }
+    gtfs_reply(['ok' => true, 'categories' => $categories]);
+}
+
+function gtfs_route_category_list(): void {
+    gtfs_require_cottbus_change_scope();
+    gtfs_reply(['ok' => true, 'categories' => lehrfahrer_route_categories_read(gtfs_route_categories_path())]);
 }
 
 function gtfs_candidate_adopt(): void {
@@ -1584,6 +1643,9 @@ try {
     if ($action === 'candidatestatus') gtfs_candidate_status();
     if ($action === 'candidateselection') gtfs_candidate_selection();
     if ($action === 'candidatepreview') gtfs_candidate_preview();
+    if ($action === 'candidateassignment') gtfs_candidate_assignment();
+    if ($action === 'candidatecategoryadd') gtfs_candidate_category_add();
+    if ($action === 'routecategorylist') gtfs_route_category_list();
     if ($action === 'candidateadopt') gtfs_candidate_adopt();
     if ($action === 'workinventory') gtfs_work_inventory_response(false);
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);

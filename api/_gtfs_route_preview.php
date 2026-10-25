@@ -35,6 +35,7 @@ function lehrfahrer_gtfs_preview_route_files(string $cityRoot, string $line): ar
             if ($name !== '') $names[] = $name;
         }
         $routes[] = ['id' => 'cottbus/' . preg_replace('/\.json$/i', '', $relative),
+            'routeNumber' => trim(preg_replace('/^Route\s+/iu', '', strval($data['routeName'] ?? ($data['line']['routeName'] ?? '')))),
             'variantName' => strval($data['variantName'] ?? ($data['line']['variantName'] ?? '')),
             'category' => strval($data['variantCategory'] ?? ($data['line']['variantCategory'] ?? '')),
             'stopNames' => $names, 'stopCount' => count($names)];
@@ -108,7 +109,7 @@ function lehrfahrer_gtfs_preview_line(array $analysis, array $selected, array $r
         $matches = $exact !== [] ? $exact : $plausible;
         $status = count($matches) > 1 ? 'KONFLIKT'
             : ($exact !== [] ? 'IDENTISCH' : ($matches !== [] ? 'ANPASSUNG_NOETIG' : 'NEUE_ROUTE_ERFORDERLICH'));
-        $result = ['line' => $line, 'startStop' => $names[0] ?? '',
+        $result = ['line' => $line, 'selectionKey' => $key, 'startStop' => $names[0] ?? '',
             'destination' => $names[count($names) - 1] ?? '', 'stopCount' => count($names),
             'stopNames' => $names, 'result' => $status, 'matches' => []];
         foreach ($matches as $route) {

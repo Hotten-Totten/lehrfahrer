@@ -466,3 +466,20 @@ test('AA: Erzeugungsvorschau zeigt Routenvorschlag und Herkunft ohne Speichern',
   assert.match(endpoint, /lehrfahrer_gtfs_preview_creation_proposals\(/);
   assert.doesNotMatch(ui, /candidateAdopt|saveLine|loadLineFromData|workPrepareAll/);
 });
+
+test('AB: Pilotzuordnung bleibt kandidatengebunden und schreibt keine Lehrfahrer-Route', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const endpoint = fs.readFileSync(path.join(root, 'api', 'import_gtfs.php'), 'utf8');
+  const assignment = fs.readFileSync(path.join(root, 'api', '_gtfs_route_assignment.php'), 'utf8');
+  const ui = editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText'));
+  assert.match(ui, /Neue Route anlegen/);
+  assert.match(ui, /Bestehende Route ersetzen/);
+  assert.match(ui, /candidateAssignment/);
+  assert.match(ui, /candidateCategoryAdd/);
+  assert.match(ui, /BEREIT ZUR ÜBERNAHME/);
+  assert.match(ui, /ANGABEN UNVOLLSTÄNDIG/);
+  assert.match(endpoint, /lehrfahrer_gtfs_route_selection_id\('16', \$key\)/);
+  assert.match(endpoint, /lehrfahrer_gtfs_assignment_read\(gtfs_route_assignment_dir\(\), \$sha\)/);
+  assert.match(assignment, /'candidate_sha256' => \$sha/);
+  assert.doesNotMatch(ui, /candidateAdopt|saveLine|workPrepareAll/);
+});

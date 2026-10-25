@@ -3406,6 +3406,10 @@ button.danger:hover {
 .gtfs-route-preview-match { margin-top: 8px; font-size: 0.85rem; }
 .gtfs-route-creation-preview { margin-top: 12px; padding: 12px; border-left: 4px solid #2457d6; background: #fff; line-height: 1.6; }
 .gtfs-route-creation-sha { margin-top: 8px; color: #58657a; font-size: 0.78rem; overflow-wrap: anywhere; }
+.gtfs-route-creation-preview label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 7px 0; }
+.gtfs-route-creation-preview label select, .gtfs-route-creation-preview label input { min-width: 210px; max-width: 65%; padding: 6px; border: 1px solid #bbc8d9; border-radius: 5px; }
+.gtfs-route-assignment-readiness { margin-top: 10px; color: #1454bd; }
+.gtfs-route-assignment-warning { color: #a33d2b; }
 .gtfs-change-badge { border-radius: 999px; padding: 4px 9px; background: #edf1f6; font-size: 0.78rem; font-weight: 750; }
 .gtfs-change-variants { display: grid; gap: 8px; padding: 0 16px 14px; }
 .gtfs-change-variant { padding: 10px 12px; border-radius: 9px; background: #f3f6fa; }
