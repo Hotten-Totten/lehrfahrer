@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.075">
+<link rel="stylesheet" href="editor.css?v=V2.1.076">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -724,6 +724,25 @@
     </div>
   </div>
 
+  <div id="gtfsNewCategoryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gtfsNewCategoryTitle">
+    <div class="save-confirm-box">
+      <div class="save-confirm-header"><h3 id="gtfsNewCategoryTitle">Neue Kategorie anlegen</h3></div>
+      <form id="gtfsNewCategoryForm">
+        <div class="save-confirm-body">
+          <label class="save-confirm-row" for="gtfsNewCategoryName">
+            <span class="save-confirm-label">Name der Kategorie</span>
+            <input id="gtfsNewCategoryName" class="save-confirm-input" type="text" maxlength="80" required>
+          </label>
+          <div id="gtfsNewCategoryError" class="gtfs-route-assignment-warning" role="alert"></div>
+        </div>
+        <div class="save-confirm-actions">
+          <button id="gtfsNewCategoryCancel" class="save-confirm-btn-cancel" type="button">Abbrechen</button>
+          <button id="gtfsNewCategorySubmit" class="save-confirm-btn-ok" type="submit">Kategorie anlegen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="gtfsWorkModal" class="modal-overlay hidden" aria-live="polite">
     <div class="gtfs-work-box">
       <div class="gtfs-change-header">
@@ -847,7 +866,7 @@
   <script src="js/editor.routing.js?v=V2.1.063"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>
-  <script src="js/editor.api.js?v=V2.1.079"></script>
+  <script src="js/editor.api.js?v=V2.1.080"></script>
   <script src="js/editor.lineBrowser.js?v=V2.1.063"></script>
   <script src="js/editor.driverDocuments.js?v=V2.1.063"></script>
   <script src="js/editor.academy.js?v=V2.1.063"></script>

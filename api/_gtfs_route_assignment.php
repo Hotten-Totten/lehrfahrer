@@ -53,17 +53,23 @@ function lehrfahrer_gtfs_assignment_validate(array $assignment, array $routes, a
     $target = strval($assignment['targetRoute'] ?? '');
     $category = trim(strval($assignment['category'] ?? ''));
     if (!in_array($action, ['new', 'replace'], true)) throw new InvalidArgumentException('Ungueltige Routenaktion.');
-    if ($number !== '' && preg_match('/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,31}$/uD', $number) !== 1) {
+    if ($action === 'new' && $number !== '' && preg_match('/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,31}$/uD', $number) !== 1) {
         throw new InvalidArgumentException('Ungueltige Routennummer.');
     }
     if ($category !== '' && !in_array($category, $categories, true)) throw new InvalidArgumentException('Kategorie nicht vorhanden.');
-    $duplicate = false; $targetValid = false;
+    if ($action === 'replace' && $routes === []) throw new InvalidArgumentException('Keine bestehende Route dieser Linie vorhanden.');
+    $duplicate = false; $targetRoute = null;
     foreach ($routes as $route) {
         if ($number !== '' && strcasecmp(strval($route['routeNumber'] ?? ''), $number) === 0) $duplicate = true;
-        if ($target !== '' && hash_equals(strval($route['id']), $target)) $targetValid = true;
+        if ($target !== '' && hash_equals(strval($route['id']), $target)) $targetRoute = $route;
     }
-    if ($action === 'replace' && $target !== '' && !$targetValid) throw new InvalidArgumentException('Zielroute gehoert nicht zu dieser Linie.');
-    return ['action' => $action, 'routeNumber' => $number, 'targetRoute' => $action === 'replace' ? $target : '',
+    if ($action === 'replace' && $target !== '' && $targetRoute === null) throw new InvalidArgumentException('Zielroute gehoert nicht zu dieser Linie.');
+    $missing = [];
+    if ($action === 'new' && $number === '') $missing[] = 'Routennummer fehlt';
+    if ($action === 'replace' && $targetRoute === null) $missing[] = 'Bestehende Route auswählen';
+    if ($category === '') $missing[] = 'Kategorie fehlt';
+    return ['action' => $action, 'routeNumber' => $action === 'replace' ? strval($targetRoute['routeNumber'] ?? '') : $number,
+        'targetRoute' => $action === 'replace' ? $target : '',
         'category' => $category, 'duplicate' => $action === 'new' && $duplicate,
-        'ready' => $category !== '' && ($action === 'new' ? $number !== '' && !$duplicate : $targetValid)];
+        'missing' => $missing, 'ready' => $missing === [] && !$duplicate];
 }

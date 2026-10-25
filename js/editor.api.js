@@ -1593,6 +1593,53 @@ function gtfsChangeVariantEndpoints(stopNames) {
   return `${stops[0] || "–"} → ${stops[stops.length - 1] || "–"}`;
 }
 
+function openGtfsNewCategoryDialog(candidateId) {
+  const modal = document.getElementById("gtfsNewCategoryModal");
+  const form = document.getElementById("gtfsNewCategoryForm");
+  const input = document.getElementById("gtfsNewCategoryName");
+  const error = document.getElementById("gtfsNewCategoryError");
+  const submit = document.getElementById("gtfsNewCategorySubmit");
+  const cancel = document.getElementById("gtfsNewCategoryCancel");
+  if (!modal || !form || !input || !error || !submit || !cancel) return Promise.resolve(null);
+  const priorFocus = document.activeElement;
+  input.value = "";
+  error.textContent = "";
+  submit.disabled = false;
+  modal.classList.remove("hidden");
+  input.focus();
+  return new Promise(resolve => {
+    const finish = value => {
+      modal.classList.add("hidden");
+      form.onsubmit = null;
+      cancel.onclick = null;
+      modal.onclick = null;
+      modal.removeEventListener("keydown", onKeydown);
+      if (priorFocus?.focus) priorFocus.focus();
+      resolve(value);
+    };
+    const onKeydown = event => {
+      if (event.key === "Escape" && !submit.disabled) { event.preventDefault(); finish(null); }
+    };
+    modal.addEventListener("keydown", onKeydown);
+    cancel.onclick = () => { if (!submit.disabled) finish(null); };
+    modal.onclick = event => { if (event.target === modal && !submit.disabled) finish(null); };
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (!name) { error.textContent = "Name der Kategorie fehlt"; input.focus(); return; }
+      submit.disabled = true;
+      error.textContent = "";
+      try {
+        const result = await postGtfsImport({ action: "candidateCategoryAdd", candidateId, name });
+        finish({ name, categories: result.categories || [] });
+      } catch (failure) {
+        error.textContent = failure.message || "Kategorie konnte nicht angelegt werden.";
+        submit.disabled = false;
+      }
+    };
+  });
+}
+
 async function openGtfsRoutePreview(candidateId) {
   const modal = document.getElementById("gtfsRoutePreviewModal");
   const summary = document.getElementById("gtfsRoutePreviewSummary");
@@ -1665,12 +1712,15 @@ async function openGtfsRoutePreview(candidateId) {
       const actionLabel = gtfsChangeElement("label", "", "Routenaktion ");
       const action = document.createElement("select");
       action.append(new Option("Neue Route anlegen", "new"), new Option("Bestehende Route ersetzen", "replace"));
-      action.value = assignment.action;
+      action.options[1].disabled = existingRoutes.length === 0;
+      action.value = existingRoutes.length === 0 ? "new" : assignment.action;
       actionLabel.appendChild(action);
+      const noExistingRoute = gtfsChangeElement("small", "", "Keine bestehende Route dieser Linie vorhanden.");
+      noExistingRoute.hidden = existingRoutes.length !== 0;
       const numberLabel = gtfsChangeElement("label", "", "Routennummer ");
       const number = document.createElement("input");
       number.type = "text"; number.maxLength = 32; number.placeholder = "z. B. 01 oder 01a";
-      number.value = assignment.routeNumber || "";
+      number.value = assignment.action === "new" ? (assignment.routeNumber || "") : "";
       numberLabel.appendChild(number);
       const targetLabel = gtfsChangeElement("label", "", "Bestehende Route ");
       const target = document.createElement("select");
@@ -1702,7 +1752,11 @@ async function openGtfsRoutePreview(candidateId) {
         warning.textContent = saved.duplicate
           ? "Diese Routennummer existiert bereits. Für ein Ersetzen bitte bewusst ‚Bestehende Route ersetzen‘ wählen."
           : "";
-        readiness.textContent = saved.ready ? "BEREIT ZUR ÜBERNAHME" : "ANGABEN UNVOLLSTÄNDIG";
+        const missing = saved.missing || [];
+        readiness.textContent = saved.ready ? "BEREIT ZUR ÜBERNAHME"
+          : missing.length === 2 && missing.includes("Routennummer fehlt") && missing.includes("Kategorie fehlt")
+            ? "Routennummer und Kategorie fehlen"
+            : missing.join(" · ") || "ANGABEN UNVOLLSTÄNDIG";
       };
       showAssignment(assignment);
       let saveSerial = 0;
@@ -1711,7 +1765,8 @@ async function openGtfsRoutePreview(candidateId) {
         readiness.textContent = "Zuordnung wird gespeichert …";
         try {
           const result = await postGtfsImport({ action: "candidateAssignment", candidateId,
-            variantKey: variant.selectionKey, routeAction: action.value, routeNumber: number.value.trim(),
+            variantKey: variant.selectionKey, routeAction: action.value,
+            routeNumber: action.value === "new" ? number.value.trim() : "",
             targetRoute: target.value, category: category.value });
           if (serial === saveSerial) showAssignment(result.assignment);
         } catch (error) {
@@ -1723,18 +1778,15 @@ async function openGtfsRoutePreview(candidateId) {
       target.onchange = saveAssignment;
       category.onchange = saveAssignment;
       addCategory.onclick = async () => {
-        const name = window.prompt("Name der neuen Lehrfahrer-Kategorie:");
-        if (!name?.trim()) return;
-        try {
-          const result = await postGtfsImport({ action: "candidateCategoryAdd", candidateId, name: name.trim() });
-          categories = result.categories;
-          syncCentralCategories();
-          previewCategorySelects.forEach(entry => entry.fill(entry.select.value));
-          fillCategories(name.trim());
-          await saveAssignment();
-        } catch (error) { warning.textContent = error.message; }
+        const result = await openGtfsNewCategoryDialog(candidateId);
+        if (!result) return;
+        categories = result.categories;
+        syncCentralCategories();
+        previewCategorySelects.forEach(entry => entry.fill(entry.select.value));
+        fillCategories(result.name);
+        await saveAssignment();
       };
-      mapping.append(actionLabel, numberLabel, targetLabel, categoryLabel, addCategory, numbers, readiness, warning);
+      mapping.append(actionLabel, noExistingRoute, numberLabel, targetLabel, categoryLabel, addCategory, numbers, readiness, warning);
       card.appendChild(mapping);
       list.appendChild(card);
     });

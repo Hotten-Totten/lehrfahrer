@@ -97,13 +97,23 @@ try {
     $existing = [['id' => 'cottbus/16/Standard/Route_01', 'routeNumber' => '01']];
     $categories = lehrfahrer_route_category_defaults();
     $draft = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '', 'category' => 'Standard'], $existing, $categories);
-    preview_check(!$draft['ready'], 'new route requires manual number');
+    preview_check(!$draft['ready'] && $draft['missing'] === ['Routennummer fehlt'], 'new route requires manual number');
+    $empty = lehrfahrer_gtfs_assignment_validate(['action' => 'new'], [], $categories);
+    preview_check($empty['missing'] === ['Routennummer fehlt', 'Kategorie fehlt'], 'missing details are explicit');
+    $noCategory = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '02'], [], $categories);
+    preview_check($noCategory['missing'] === ['Kategorie fehlt'], 'missing category is explicit');
     $duplicate = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '01', 'category' => 'Standard'], $existing, $categories);
     preview_check($duplicate['duplicate'] && !$duplicate['ready'], 'duplicate number never implies overwrite');
     $new = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '01a', 'category' => 'Standard'], $existing, $categories);
     preview_check($new['ready'], 'unique manual route number is ready');
     $replace = lehrfahrer_gtfs_assignment_validate(['action' => 'replace', 'targetRoute' => $existing[0]['id'], 'category' => 'Standard'], $existing, $categories);
-    preview_check($replace['ready'], 'explicit same-line replacement is ready');
+    preview_check($replace['ready'] && $replace['routeNumber'] === '01', 'replacement retains existing number without manual input');
+    $replaceDraft = lehrfahrer_gtfs_assignment_validate(['action' => 'replace', 'category' => 'Standard'], $existing, $categories);
+    preview_check($replaceDraft['missing'] === ['Bestehende Route auswählen'], 'replacement needs existing route');
+    try {
+        lehrfahrer_gtfs_assignment_validate(['action' => 'replace'], [], $categories);
+        throw new RuntimeException('replacement without routes accepted');
+    } catch (InvalidArgumentException $expected) { preview_check(true, 'replacement without same-line routes rejected'); }
     try {
         lehrfahrer_gtfs_assignment_validate(['action' => 'replace', 'targetRoute' => 'cottbus/17/Route_01', 'category' => 'Standard'], $existing, $categories);
         throw new RuntimeException('foreign target accepted');
@@ -115,6 +125,11 @@ try {
     $updated = lehrfahrer_route_categories_add($categoryFile, 'Pilotkategorie');
     preview_check(in_array('Pilotkategorie', $updated, true)
         && in_array('Pilotkategorie', lehrfahrer_route_categories_read($categoryFile), true), 'new category stored centrally');
+    $withCategory = lehrfahrer_gtfs_assignment_validate(['action' => 'new', 'routeNumber' => '02',
+        'category' => 'Pilotkategorie'], [], lehrfahrer_route_categories_read($categoryFile));
+    lehrfahrer_gtfs_assignment_set($storage, $sha, $id, $withCategory);
+    preview_check(lehrfahrer_gtfs_assignment_read($storage, $sha)[$id]['category'] === 'Pilotkategorie'
+        && $withCategory['ready'], 'new category assignment survives reload and is ready');
 } finally {
     foreach (glob($storage . '/*') ?: [] as $file) unlink($file);
     foreach (glob($storage . '/.*') ?: [] as $file) if (is_file($file)) unlink($file);

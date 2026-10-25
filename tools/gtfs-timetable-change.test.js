@@ -475,11 +475,29 @@ test('AB: Pilotzuordnung bleibt kandidatengebunden und schreibt keine Lehrfahrer
   assert.match(ui, /Neue Route anlegen/);
   assert.match(ui, /Bestehende Route ersetzen/);
   assert.match(ui, /candidateAssignment/);
-  assert.match(ui, /candidateCategoryAdd/);
+  assert.match(editor, /candidateCategoryAdd/);
   assert.match(ui, /BEREIT ZUR ÜBERNAHME/);
   assert.match(ui, /ANGABEN UNVOLLSTÄNDIG/);
   assert.match(endpoint, /lehrfahrer_gtfs_route_selection_id\('16', \$key\)/);
   assert.match(endpoint, /lehrfahrer_gtfs_assignment_read\(gtfs_route_assignment_dir\(\), \$sha\)/);
   assert.match(assignment, /'candidate_sha256' => \$sha/);
   assert.doesNotMatch(ui, /candidateAdopt|saveLine|workPrepareAll/);
+});
+
+test('AC: Routenauswahl und eigener Kategorien-Dialog zeigen konkrete Bereitschaft', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const preview = editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText'));
+  const dialog = editor.slice(editor.indexOf('function openGtfsNewCategoryDialog'), editor.indexOf('async function openGtfsRoutePreview'));
+  assert.match(preview, /action\.options\[1\]\.disabled = existingRoutes\.length === 0/);
+  assert.match(preview, /Keine bestehende Route dieser Linie vorhanden/);
+  assert.match(preview, /Routennummer und Kategorie fehlen/);
+  assert.match(preview, /missing\.join/);
+  assert.match(preview, /fillCategories\(result\.name\);\s*await saveAssignment\(\)/);
+  assert.match(html, /id="gtfsNewCategoryModal"[\s\S]*Neue Kategorie anlegen[\s\S]*Name der Kategorie/);
+  assert.match(html, /id="gtfsNewCategoryCancel"[\s\S]*Abbrechen/);
+  assert.match(html, /id="gtfsNewCategorySubmit"[\s\S]*Kategorie anlegen/);
+  assert.match(dialog, /form\.onsubmit = async event/);
+  assert.match(dialog, /event\.key === "Escape"/);
+  assert.doesNotMatch(dialog + preview, /\b(?:prompt|alert|confirm)\s*\(/);
 });
