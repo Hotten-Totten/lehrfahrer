@@ -104,3 +104,50 @@ test('Punktführung ohne längere Straßenberechnung behält ihren bisherigen Pf
   await work;
   assert.equal(app.runs, 1);
 });
+
+test('segmentweiser Aufbau mit Haltestellen und Fahrwegpunkt liefert weiterhin die Routengeometrie', async () => {
+  const phases = [];
+  let mapRefreshes = 0;
+  let segmentCalls = 0;
+  let visible = false;
+  const state = {
+    stops: [1, 2, 3].map(id => ({ id, name: `Halt ${id}`, lat: id, lon: id })),
+    routePoints: [{ lat: 1.5, lon: 1.5, sourceType: 'manual' }],
+    routingMode: 'guidedStreet', preserveManualChains: true,
+    lastRoutedStopCount: 0, lastRoutedStopIds: null,
+    specialTracks: [], simplifiedRoutePoints: []
+  };
+  const context = {
+    state, streetRoutingRunning: false, routingAbortController: null,
+    historyRestoreRunning: false,
+    normalizeEditorRoutingMode: value => value,
+    buildRoutingAnchorsFromCurrentRoute: () => [{ kind: 'manual', lat: 1.5, lon: 1.5 }],
+    buildRoutingStepsFromAnchors: () => [
+      { from: { lat: 1, lon: 1 }, to: { lat: 2, lon: 2 }, label: 'A' },
+      { from: { lat: 2, lon: 2 }, to: { lat: 3, lon: 3 }, label: 'B' }
+    ],
+    buildEditorStreetRouteItemsViaAnchors: async ([from, to]) => {
+      segmentCalls++;
+      return [from, to].map(anchor => ({ coord: [anchor.lon, anchor.lat], sourceType: 'street' }));
+    },
+    buildStreetRouteBtn: { disabled: false }, cancelRoutingBtn: { style: { display: 'none' } },
+    clearRouteMultiSelection() {}, pushHistorySnapshot() {},
+    removeAllRoutePointMarkers() { state.routePoints = []; },
+    createRoutePointObject(lat, lon, silent, sourceType) { state.routePoints.push({ lat, lon, sourceType }); },
+    refreshRouteLine() { mapRefreshes++; }, updateStats() {}, updateRouteStats() {},
+    setStatus() {}, debug() {}, error(err) { throw err; },
+    showRouteProgress() { visible = true; }, hideRouteProgress() { visible = false; },
+    setRouteLoadPhase(phase) { phases.push(phase); },
+    waitForRouteLoadPaint: async () => {},
+    AbortController
+  };
+  vm.runInNewContext(routing.slice(routingStart) + '\nglobalThis.testBuild = buildStreetRouteFromStops;', context);
+  await context.testBuild();
+  assert.equal(visible, false);
+  assert.equal(segmentCalls, 2);
+  assert.equal(mapRefreshes, 1);
+  assert.equal(JSON.stringify(state.routePoints.map(point => [point.lat, point.lon])), '[[1,1],[2,2],[3,3]]');
+  assert.equal(JSON.stringify(state.lastRoutedStopIds), '[1,2,3]');
+  assert.ok(phases.some(phase => phase.includes('Abschnitt 2 von 2')));
+  assert.ok(phases.includes('Karte wird aktualisiert …'));
+});
