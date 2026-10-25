@@ -1118,11 +1118,11 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.080' /tmp/staging-editor.html
-          grep -q 'editor.css?v=V2.1.076' /tmp/staging-editor.html
+          grep -q 'js/editor.api.js?v=V2.1.081' /tmp/staging-editor.html
+          grep -q 'editor.css?v=V2.1.077' /tmp/staging-editor.html
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.080" > /tmp/staging-editor-api.js
+            "$origin/js/editor.api.js?v=V2.1.081" > /tmp/staging-editor-api.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
           grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-api.js
           grep -q 'action: "candidateSelection"' /tmp/staging-editor-api.js
@@ -1131,7 +1131,7 @@ jobs:
           grep -q 'GTFS-Candidate-SHA:' /tmp/staging-editor-api.js
           grep -q 'Erzeugungsvorschau (nicht gespeichert)' /tmp/staging-editor-api.js
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/editor.css?v=V2.1.076" > /tmp/staging-editor.css
+            "$origin/editor.css?v=V2.1.077" > /tmp/staging-editor.css
           grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor.css
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/staging.cookies -D /tmp/staging-cities.headers \
@@ -1176,6 +1176,8 @@ jobs:
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_candidate.php';
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_tenant_route_storage.php';
           require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_route_preview.php';
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_gtfs_route_assignment.php';
+          require_once getenv('LEHRFAHRER_APP_ROOT') . '/api/_route_categories.php';
           $company = 'cmp_2ff1b82166c99988ed6f7eb51cca7b56';
           $root = lehrfahrer_tenant_path($company, 'imports', 'gtfs/candidate');
           $dir = lehrfahrer_gtfs_candidate_active_dir($root);
@@ -1208,6 +1210,18 @@ jobs:
           $existing = lehrfahrer_gtfs_preview_route_files(lehrfahrer_route_line_city_path($company, 'cottbus'), '16');
           $preview = lehrfahrer_gtfs_preview_creation_proposals(
               lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $existing, '16'), $beforeCandidate);
+          $assignments = lehrfahrer_gtfs_assignment_read($root . '/route-assignments', $beforeCandidate);
+          $categories = lehrfahrer_route_categories_read(
+              lehrfahrer_tenant_path($company, 'settings', 'route_categories.json'), $existing);
+          $assignmentRows = [];
+          foreach ($preview['variants'] as $variant) {
+              $id = lehrfahrer_gtfs_route_selection_id('16', $variant['selectionKey']);
+              $assignment = lehrfahrer_gtfs_assignment_validate($assignments[$id] ?? [], $existing, $categories);
+              $assignmentRows[] = ['routeNumber' => $assignment['routeNumber'], 'category' => $assignment['category'],
+                  'action' => $assignment['action'], 'ready' => $assignment['ready'],
+                  'startStop' => $variant['startStop'], 'destination' => $variant['destination'],
+                  'stopCount' => $variant['stopCount']];
+          }
           echo json_encode(['comparisonMode' => $ready['analysis']['comparisonMode'],
               'referenceStatuses' => $referenceStatuses, 'lineTotal' => count($ready['analysis']['lines']),
               'lineCounts' => $ready['analysis']['lineCounts'],
@@ -1215,7 +1229,8 @@ jobs:
                   'existingRoutes' => $preview['existingRouteCount'],
                   'creationProposals' => count(array_filter($preview['variants'],
                       static fn(array $variant): bool => isset($variant['creationPreview']))),
-                  'results' => array_count_values(array_column($preview['variants'], 'result'))],
+                  'results' => array_count_values(array_column($preview['variants'], 'result')),
+                  'assignmentRows' => $assignmentRows],
               'manualAdoptionReady' => $ready['manualAdoptionReady'], 'candidateShaUnchanged' => true,
               'currentShaUnchanged' => true, 'cachedSeconds' => $cachedSeconds], JSON_THROW_ON_ERROR), "\n";
           PHP

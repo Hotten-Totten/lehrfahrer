@@ -501,3 +501,41 @@ test('AC: Routenauswahl und eigener Kategorien-Dialog zeigen konkrete Bereitscha
   assert.match(dialog, /event\.key === "Escape"/);
   assert.doesNotMatch(dialog + preview, /\b(?:prompt|alert|confirm)\s*\(/);
 });
+
+test('AD: Übernahme-Zusammenfassung zählt nur markierte Varianten und bleibt rein lesend', () => {
+  const editor = fs.readFileSync(path.join(root, 'js', 'editor.api.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const helper = editor.slice(editor.indexOf('function gtfsRouteAdoptionSummary'), editor.indexOf('function openGtfsAdoptionNoticeDialog'));
+  const summarize = new Function(`${helper}; return gtfsRouteAdoptionSummary;`)();
+  const variants = [
+    { line: '16', startStop: 'Uhlandstraße', destination: 'Stadthalle Puschkinpromenade', stopCount: 19,
+      assignment: { action: 'new', routeNumber: '01', category: 'Standard', ready: true } },
+    { line: '16', startStop: 'Stadthalle Puschkinpromenade', destination: 'Uhlandstraße', stopCount: 20,
+      assignment: { action: 'new', routeNumber: '02', category: 'Standard', ready: true } }
+  ];
+  const complete = summarize(variants);
+  assert.equal(complete.total, 2);
+  assert.equal(complete.readyCount, 2);
+  assert.equal(complete.allReady, true);
+  assert.deepEqual(complete.rows.map(row => row.routeNumber), ['01', '02']);
+  assert.deepEqual(complete.rows.map(row => row.stopCount), [19, 20]);
+  assert.deepEqual(complete.rows.map(row => [row.startStop, row.destination]), [
+    ['Uhlandstraße', 'Stadthalle Puschkinpromenade'],
+    ['Stadthalle Puschkinpromenade', 'Uhlandstraße']
+  ]);
+  assert.deepEqual(complete.rows.map(row => row.category), ['Standard', 'Standard']);
+  const partial = summarize([variants[0], { ...variants[1], assignment: { ...variants[1].assignment, ready: false } }]);
+  assert.equal(partial.readyCount, 1);
+  assert.equal(partial.allReady, false);
+  const replacement = summarize([{ ...variants[0], assignment: { action: 'replace', routeNumber: '03', category: 'Standard', ready: true } }]);
+  assert.equal(replacement.rows[0].action, 'ERSETZEN');
+  assert.equal(replacement.rows[0].routeNumber, '03');
+  const ui = editor.slice(editor.indexOf('async function openGtfsRoutePreview'), editor.indexOf('function gtfsChangeDiffText'));
+  const notice = editor.slice(editor.indexOf('function openGtfsAdoptionNoticeDialog'), editor.indexOf('async function openGtfsRoutePreview'));
+  assert.match(ui, /adoptionButton\.disabled = !result\.allReady/);
+  assert.match(ui, /adoptionButton\.onclick = openGtfsAdoptionNoticeDialog/);
+  assert.match(ui, /renderAdoptionSummary\(\)/);
+  assert.match(html, /id="gtfsRouteAdoptionSummary"[\s\S]*Übernahme-Zusammenfassung[\s\S]*id="gtfsRouteAdoptionButton"/);
+  assert.match(html, /Die tatsächliche Übernahme ist noch nicht freigeschaltet/);
+  assert.doesNotMatch(notice, /postGtfsImport|fetch\(|alert\(|prompt\(|confirm\(/);
+});

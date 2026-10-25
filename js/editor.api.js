@@ -1640,21 +1640,79 @@ function openGtfsNewCategoryDialog(candidateId) {
   });
 }
 
+function gtfsRouteAdoptionSummary(variants) {
+  const rows = (variants || []).map(variant => {
+    const assignment = variant.assignment || {};
+    return {
+      action: assignment.action === "replace" ? "ERSETZEN" : "NEU",
+      line: variant.line,
+      routeNumber: assignment.routeNumber || "–",
+      startStop: variant.startStop,
+      destination: variant.destination,
+      category: assignment.category || "–",
+      stopCount: Number(variant.stopCount || 0),
+      ready: assignment.ready === true
+    };
+  });
+  const readyCount = rows.filter(row => row.ready).length;
+  return { rows, readyCount, total: rows.length, allReady: rows.length > 0 && readyCount === rows.length };
+}
+
+function openGtfsAdoptionNoticeDialog() {
+  const modal = document.getElementById("gtfsAdoptionNoticeModal");
+  const closeButton = document.getElementById("gtfsAdoptionNoticeClose");
+  if (!modal || !closeButton) return;
+  const priorFocus = document.activeElement;
+  const close = () => {
+    modal.classList.add("hidden");
+    closeButton.onclick = null;
+    modal.onclick = null;
+    modal.removeEventListener("keydown", onKeydown);
+    if (priorFocus?.focus) priorFocus.focus();
+  };
+  const onKeydown = event => { if (event.key === "Escape") { event.preventDefault(); close(); } };
+  closeButton.onclick = close;
+  modal.onclick = event => { if (event.target === modal) close(); };
+  modal.addEventListener("keydown", onKeydown);
+  modal.classList.remove("hidden");
+  closeButton.focus();
+}
+
 async function openGtfsRoutePreview(candidateId) {
   const modal = document.getElementById("gtfsRoutePreviewModal");
   const summary = document.getElementById("gtfsRoutePreviewSummary");
   const list = document.getElementById("gtfsRoutePreviewList");
-  if (!modal || !summary || !list) return;
+  const adoption = document.getElementById("gtfsRouteAdoptionSummary");
+  const adoptionCount = document.getElementById("gtfsRouteAdoptionCount");
+  const adoptionRows = document.getElementById("gtfsRouteAdoptionRows");
+  const adoptionStatus = document.getElementById("gtfsRouteAdoptionStatus");
+  const adoptionButton = document.getElementById("gtfsRouteAdoptionButton");
+  if (!modal || !summary || !list || !adoption || !adoptionCount || !adoptionRows || !adoptionStatus || !adoptionButton) return;
   const close = () => modal.classList.add("hidden");
   document.getElementById("gtfsRoutePreviewCloseBtn").onclick = close;
   modal.onclick = event => { if (event.target === modal) close(); };
   summary.textContent = "Vorschau wird geladen …";
   list.replaceChildren();
+  adoption.classList.add("hidden");
   modal.classList.remove("hidden");
   try {
     const response = await postGtfsImport({ action: "candidatePreview", candidateId });
     if (modal.classList.contains("hidden")) return;
     const preview = response.preview;
+    const renderAdoptionSummary = () => {
+      const result = gtfsRouteAdoptionSummary(preview.variants);
+      adoptionCount.textContent = `${result.readyCount} von ${result.total} Routen bereit zur Übernahme`;
+      adoptionRows.replaceChildren();
+      result.rows.forEach(row => adoptionRows.appendChild(gtfsChangeElement("div", "gtfs-route-adoption-row",
+        `${row.action === "ERSETZEN" ? "Bestehende Route ersetzen" : "Neue Route anlegen"} · Linie ${row.line} · ` +
+        `${row.routeNumber} | ${row.startStop} → ${row.destination} | ${row.category} | ${row.stopCount} Stops | ${row.action} | ` +
+        (row.ready ? "BEREIT ZUR ÜBERNAHME" : "ANGABEN UNVOLLSTÄNDIG"))));
+      adoptionStatus.textContent = result.allReady ? "Alle Routen sind bereit zur Übernahme" : "Übernahme noch nicht möglich";
+      adoptionButton.textContent = `${result.total} Lehrfahrer-Routen übernehmen`;
+      adoptionButton.disabled = !result.allReady;
+      adoption.classList.remove("hidden");
+    };
+    adoptionButton.onclick = openGtfsAdoptionNoticeDialog;
     let categories = response.categories || [];
     const existingRoutes = response.existingRoutes || [];
     const previewCategorySelects = [];
@@ -1763,12 +1821,19 @@ async function openGtfsRoutePreview(candidateId) {
       const saveAssignment = async () => {
         const serial = ++saveSerial;
         readiness.textContent = "Zuordnung wird gespeichert …";
+        variant.assignment = { action: action.value, routeNumber: action.value === "new" ? number.value.trim() : "",
+          category: category.value, ready: false };
+        renderAdoptionSummary();
         try {
           const result = await postGtfsImport({ action: "candidateAssignment", candidateId,
             variantKey: variant.selectionKey, routeAction: action.value,
             routeNumber: action.value === "new" ? number.value.trim() : "",
             targetRoute: target.value, category: category.value });
-          if (serial === saveSerial) showAssignment(result.assignment);
+          if (serial === saveSerial) {
+            variant.assignment = result.assignment;
+            showAssignment(result.assignment);
+            renderAdoptionSummary();
+          }
         } catch (error) {
           if (serial === saveSerial) { readiness.textContent = "ANGABEN UNVOLLSTÄNDIG"; warning.textContent = error.message; }
         }
@@ -1790,6 +1855,7 @@ async function openGtfsRoutePreview(candidateId) {
       card.appendChild(mapping);
       list.appendChild(card);
     });
+    renderAdoptionSummary();
   } catch (err) {
     summary.textContent = err.message || "Übernahme-Vorschau konnte nicht geladen werden.";
   }
