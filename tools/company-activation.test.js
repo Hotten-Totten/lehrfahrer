@@ -245,10 +245,12 @@ test('Serverlogs enthalten weder Test-Token noch Klartextpasswort', () => {
 test('Staging-Push prüft migriertes Cottbus lesend und startet keinen Apply', () => {
   const workflow = fs.readFileSync(path.join(projectRoot, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
   const postcheck = fs.readFileSync(path.join(projectRoot, 'tools', 'cottbus-current-postcheck-staging.php'), 'utf8');
+  const gtfsPostcheck = fs.readFileSync(path.join(projectRoot, 'api', '_gtfs_current_postcheck.php'), 'utf8');
   assert.match(workflow, /cottbus_zip=.*imports\/gtfs\/latest\.zip/);
   assert.match(workflow, /-f "\$private_root\/cottbus-current-postcheck-staging\.php"/);
   assert.match(postcheck, /COTTBUS_CURRENT_POSTCHECK=OK/);
-  assert.match(postcheck, /indexMatchesZip/);
-  assert.doesNotMatch(postcheck, /cottbusApply\(|cottbusRun\(|rename\(/);
+  assert.match(postcheck, /_gtfs_current_postcheck\.php/);
+  assert.match(gtfsPostcheck, /indexMatchesZip/);
+  assert.doesNotMatch(postcheck + gtfsPostcheck, /cottbusApply\(|cottbusRun\(|rename\(/);
   assert.match(workflow, /github\.event_name == 'workflow_dispatch' && \(inputs\.preflight_cottbus \|\| inputs\.apply_cottbus\)/);
 });

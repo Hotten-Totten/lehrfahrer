@@ -11,39 +11,16 @@ try {
     require_once $appRoot . '/api/_gtfs_variant_index.php';
     require_once $appRoot . '/api/_gtfs_timetable_change.php';
     require_once $appRoot . '/api/_gtfs_version.php';
+    require_once $appRoot . '/api/_gtfs_current_postcheck.php';
     require_once $appRoot . '/api/_control_repositories.php';
 
     $zip = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/latest.zip');
     $index = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/variants.sqlite');
     $baseline = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/variants.sqlite.previous');
     $inventoryPath = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/work-inventory.json');
+    $workingSetPath = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'imports', 'gtfs/index/working-set.json');
     if (!is_file($baseline) || is_link($baseline) || !is_readable($baseline)) throw new RuntimeException('GTFS-Baseline fehlt.');
-    $agencyId = lehrfahrer_gtfs_operator_id_from_index($index);
-    $validated = lehrfahrer_gtfs_validate_variant_index($index, [$agencyId]);
-    if ($validated['routes'] !== 75 || $validated['variants'] !== 678) throw new RuntimeException('Cottbus-Index ist nicht 75/678.');
-    $version = lehrfahrer_gtfs_version_info($zip, $index, LEHRFAHRER_GTFS_COTTBUS_NAME);
-    if (preg_match('/^[a-f0-9]{64}$/D', strval($version['sha256'] ?? '')) !== 1
-        || preg_match('/^[a-f0-9]{64}$/D', strval($version['indexSourceSha256'] ?? '')) !== 1
-        || $version['indexMatchesZip'] !== true) {
-        throw new RuntimeException('GTFS-ZIP- und Index-Quell-SHA fehlen oder passen nicht zusammen.');
-    }
-    if (!is_file($inventoryPath) || is_link($inventoryPath)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
-    $inventory = json_decode((string)file_get_contents($inventoryPath), true, 512, JSON_THROW_ON_ERROR);
-    $complete = $inventory['completeness'] ?? [];
-    if (!is_array($inventory) || ($inventory['sourceIndexSha256'] ?? '') !== $validated['sha256']
-        || ($inventory['agencyIds'] ?? []) !== [$agencyId]
-        || ($complete['complete'] ?? false) !== true
-        || ($complete['capturedLineCount'] ?? null) !== 75
-        || ($complete['capturedVariantCount'] ?? null) !== 678) {
-        throw new RuntimeException('GTFS-Arbeitsvorrat ist nicht aktuell oder unvollstaendig.');
-    }
-    $entries = $inventory['entries'] ?? null;
-    if (!is_array($entries) || count($entries) !== 678) throw new RuntimeException('GTFS-Variantenbestand ist unvollstaendig.');
-    foreach ($entries as $entry) {
-        if (!is_array($entry) || !in_array($entry['status'] ?? null, ['UNGEPRUEFT', 'IN_BEARBEITUNG', 'GEPRUEFT', 'FREIGEGEBEN'], true)) {
-            throw new RuntimeException('GTFS-Freigabestatus ist ungueltig.');
-        }
-    }
+    $gtfs = lehrfahrer_gtfs_current_postcheck($zip, $index, $inventoryPath, $workingSetPath);
     $settingsPath = lehrfahrer_tenant_path(POSTCHECK_COMPANY, 'settings', 'city_settings.json');
     if (!is_file($settingsPath) || is_link($settingsPath)) throw new RuntimeException('Cottbus-Einstellungen fehlen.');
     $settingsRaw = (string)file_get_contents($settingsPath);
@@ -93,7 +70,7 @@ try {
         throw new RuntimeException('Inaktiver Admin besitzt keinen sicheren Token.');
     }
     echo 'COTTBUS_CURRENT_POSTCHECK=OK', PHP_EOL;
-    echo 'COTTBUS_CURRENT_GTFS=75/678', PHP_EOL;
+    echo 'COTTBUS_CURRENT_GTFS=', $gtfs['lines'], '/', $gtfs['variants'], PHP_EOL;
 } catch (Throwable $error) {
     file_put_contents('php://stderr', 'Cottbus-Postcheck: ' . $error->getMessage() . PHP_EOL);
     exit(1);
