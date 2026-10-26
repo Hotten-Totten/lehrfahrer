@@ -54,6 +54,8 @@ function buildHistorySnapshot() {
       lat: point.lat,
       lon: point.lon
     })),
+    selectedRoutePointIds: Array.from(state.selectedRoutePointIds),
+    selectedRoutePointId: state.selected?.type === "route" ? state.selected.ref.id : null,
 
     specialTracks: (state.specialTracks || []).map(track => ({
   id: track.id,
@@ -205,6 +207,13 @@ function applyHistorySnapshot(snapshot) {
     updateStats();
     renderStopOrderList();
     clearSelection();
+    state.selectedRoutePointIds.clear();
+    for (const id of snapshot.selectedRoutePointIds || []) {
+      if (state.routePoints.some(point => point.id === id)) state.selectedRoutePointIds.add(id);
+    }
+    const selectedRoutePoint = state.routePoints.find(point => point.id === snapshot.selectedRoutePointId);
+    if (selectedRoutePoint) selectRoutePoint(selectedRoutePoint);
+    applyRoutePointIcons();
     updateHistoryButtons();
   } finally {
     historyRestoreRunning = false;

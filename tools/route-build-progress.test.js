@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+require('./route-smoothing-undo.test.js');
 
 const root = path.join(__dirname, '..');
 const routing = fs.readFileSync(path.join(root, 'js/editor.routing.js'), 'utf8');

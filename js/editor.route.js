@@ -761,6 +761,7 @@ function smoothRoute(options = {}) {
   const previousRouteMode = state.routeMode;
 
   let totalRemoved = 0;
+  let undoSnapshotSaved = false;
 
   for (let round = 0; round < iterations; round++) {
     if (state.routePoints.length < 3) break;
@@ -813,6 +814,11 @@ function smoothRoute(options = {}) {
 
     if (!idsToDelete.size) {
       break;
+    }
+
+    if (!undoSnapshotSaved && !historyRestoreRunning) {
+      pushHistorySnapshot("Route geglättet");
+      undoSnapshotSaved = true;
     }
 
     original.forEach(point => {
@@ -892,9 +898,6 @@ function smoothRouteStrong() {
 
 function smoothRouteInteractive() {
   if (state.routePoints.length < 3) {
-    if (!historyRestoreRunning) {
-    pushHistorySnapshot("Route vereinfacht");
-  }  
     setStatus("Zu wenige Routenpunkte zum Glätten.");
     return;
   }
