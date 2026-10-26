@@ -86,6 +86,7 @@ jobs:
           php tools/gtfs-route-preview.test.php
           php tools/gtfs-route-creation.test.php
           python3 tools/gtfs-official-candidate-filter.test.py
+          python3 tools/staging-http-assets.test.py
 
           node --test \
             tools/company-activation.test.js \
@@ -1133,30 +1134,22 @@ jobs:
             -b /tmp/staging.cookies "$origin/" > /tmp/staging-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/staging-editor.html
           grep -q 'id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate()"' /tmp/staging-editor.html
-          grep -q 'js/editor.api.js?v=V2.1.085' /tmp/staging-editor.html
-          grep -q 'js/editor.routing.js?v=V2.1.064' /tmp/staging-editor.html
-          grep -q 'editor.css?v=V2.1.080' /tmp/staging-editor.html
           grep -q 'id="routeLoadProgressModal"' /tmp/staging-editor.html
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
-          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.api.js?v=V2.1.085" > /tmp/staging-editor-api.js
-          grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-api.js
-          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/js/editor.routing.js?v=V2.1.064" > /tmp/staging-editor-routing.js
-          grep -q 'showRouteProgress("Straßenroute aufbauen"' /tmp/staging-editor-routing.js
-          grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-api.js
-          grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-api.js
-          grep -q 'action: "candidateSelection"' /tmp/staging-editor-api.js
-          grep -q 'Im neuen Fahrplan nicht enthalten' /tmp/staging-editor-api.js
-          grep -q 'markedCount.classList.toggle("has-selection", count > 0)' /tmp/staging-editor-api.js
-          grep -q 'function openGtfsRoutePreview(candidateId)' /tmp/staging-editor-api.js
-          grep -q 'GTFS-Candidate-SHA:' /tmp/staging-editor-api.js
-          grep -q 'Erzeugungsvorschau (nicht gespeichert)' /tmp/staging-editor-api.js
-          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            "$origin/editor.css?v=V2.1.080" > /tmp/staging-editor.css
-          grep -q '.route-load-progress-track {' /tmp/staging-editor.css
-          grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor.css
-          grep -q '.gtfs-change-current-only' /tmp/staging-editor.css
+          python3 tools/staging-http-assets.py /tmp/staging-editor.html "$origin" /tmp/staging-editor-assets
+          grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'showRouteProgress("Straßenroute aufbauen"' /tmp/staging-editor-assets/js/editor.routing.js
+          grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'action: "candidateSelection"' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'Im neuen Fahrplan nicht enthalten' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'markedCount.classList.toggle("has-selection", count > 0)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'function openGtfsRoutePreview(candidateId)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'GTFS-Candidate-SHA:' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'Erzeugungsvorschau (nicht gespeichert)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q '.route-load-progress-track {' /tmp/staging-editor-assets/editor.css
+          grep -q '.gtfs-change-marked-count.has-selection { color: #1454bd; font-weight: 750; }' /tmp/staging-editor-assets/editor.css
+          grep -q '.gtfs-change-current-only' /tmp/staging-editor-assets/editor.css
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/staging.cookies -D /tmp/staging-cities.headers \
             "$origin/api/list_cities.php" > /dev/null
