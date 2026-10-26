@@ -86,18 +86,21 @@
         <button class="menu-button" type="button">Route</button>
         <div class="menu-dropdown">
           <button type="button" class="menu-item" data-click-target="buildStreetRouteBtn" title="Route mit dem aktuell gewählten Routingmodus erzeugen">Route erzeugen</button>
-          <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
-          <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
           <button type="button" class="menu-item" data-click-target="startDetourWizardBtn" title="Umleitung starten:&#10;1. Stopbereich in der Haltestellenliste auswählen.&#10;2. Bereich übernehmen.&#10;3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen.&#10;4. Routingart wählen:&#10;- Straßenrouting: Router berechnet zwischen Ersatzhaltestellen/Durchfahrpunkten.&#10;- Punktführung: Linie folgt exakt den gesetzten Fahrwegpunkten.&#10;- Straßenrouting über Fahrwegpunkte: Router berechnet über gesetzte Fahrwegpunkte als Zwangspunkte.&#10;5. Umleitung übernehmen.&#10;6. Abbrechen lässt Originalroute unverändert." aria-label="Umleitung starten: 1. Stopbereich in der Haltestellenliste auswählen. 2. Bereich übernehmen. 3. Ersatzhaltestellen, Durchfahrpunkte und Fahrwegpunkte setzen. 4. Routingart wählen: Straßenrouting berechnet zwischen Ersatzhaltestellen und Durchfahrpunkten; Punktführung folgt exakt den gesetzten Fahrwegpunkten; Straßenrouting über Fahrwegpunkte berechnet über gesetzte Fahrwegpunkte als Zwangspunkte. 5. Umleitung übernehmen. 6. Abbrechen lässt Originalroute unverändert.">Umleitung starten</button>
-          <hr class="menu-separator">
-          <div class="menu-section-label">Expertenfunktionen</div>
-          <label class="menu-color-item" title="Linienfarbe für die Anzeige auf der Karte">
-            <span>Linienfarbe</span>
-            <input id="lineColor" type="color" value="#d32f2f">
-          </label>
+          <button type="button" class="menu-item" data-click-target="rerouteSegmentBtn" title="Einen Teilabschnitt der Route neu berechnen">Teilstrecke neu berechnen</button>
           <button type="button" class="menu-item" data-click-target="startTrackBetweenStopsBtn" title="Sondertrasse zwischen zwei Haltestellen zeichnen">Sondertrasse zeichnen</button>
-          <button type="button" class="menu-item" data-click-target="startDetourDraftBtn" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
-          <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
+          <div class="menu-submenu">
+            <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Expertenfunktionen</button>
+            <div class="menu-submenu-panel">
+              <button type="button" class="menu-item" data-click-target="startDetourDraftBtn" title="Profi-Werkzeug: Zwei Routenpunkte auswählen, Umleitungspunkte auf der Karte setzen und RoutePoint-Abschnitt ersetzen. Haltestellen werden nicht automatisch verschoben." aria-label="RoutePoint-Umleitung: Zwei Routenpunkte auswählen, Umleitungspunkte setzen und Abschnitt ersetzen.">RoutePoint-Umleitung</button>
+              <button type="button" class="menu-item" data-click-target="simplifyRouteBtn" title="Routenpunkte reduzieren ohne die Form wesentlich zu verändern">Route vereinfachen</button>
+              <button type="button" class="menu-item" data-click-target="smoothRouteBtn" title="Kleine Ungenauigkeiten in der Route glätten">Route glätten</button>
+              <label class="menu-color-item" title="Linienfarbe für die Anzeige auf der Karte">
+                <span>Linienfarbe</span>
+                <input id="lineColor" type="color" value="#d32f2f">
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
