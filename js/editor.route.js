@@ -896,35 +896,56 @@ function smoothRouteStrong() {
   );
 }
 
+function showRouteSmoothingDialog(onChoice) {
+  const modal = document.getElementById("routeSmoothingModal");
+  const cancelButton = document.getElementById("routeSmoothingCancelBtn");
+  if (!modal || !cancelButton) {
+    setStatus("Glättungsdialog nicht verfügbar.", "error");
+    return;
+  }
+  if (!modal.classList.contains("hidden")) return;
+
+  const previousFocus = document.activeElement;
+  function close(choice) {
+    modal.classList.add("hidden");
+    modal.removeEventListener("click", onClick);
+    document.removeEventListener("keydown", onKeyDown, true);
+    previousFocus?.focus?.();
+    if (choice) onChoice(choice);
+    else setStatus("Glätten abgebrochen.");
+  }
+  function onClick(event) {
+    const choiceButton = event.target.closest?.("[data-smooth-strength]");
+    if (choiceButton && modal.contains(choiceButton)) {
+      close(choiceButton.dataset.smoothStrength);
+    } else if (event.target === cancelButton || event.target === modal) {
+      close(null);
+    }
+  }
+  function onKeyDown(event) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    close(null);
+  }
+
+  modal.addEventListener("click", onClick);
+  document.addEventListener("keydown", onKeyDown, true);
+  modal.classList.remove("hidden");
+  modal.focus();
+}
+
 function smoothRouteInteractive() {
   if (state.routePoints.length < 3) {
     setStatus("Zu wenige Routenpunkte zum Glätten.");
     return;
   }
 
-  const input = prompt(
-    "Route glätten:\n1 = weich\n2 = mittel\n3 = stark",
-    "2"
-  );
-
-  if (input === null) {
-    setStatus("Glätten abgebrochen.");
-    return;
-  }
-
-  const value = String(input).trim();
-
-  if (value === "1") {
-    smoothRouteWeak();
-    return;
-  }
-
-  if (value === "3") {
-    smoothRouteStrong();
-    return;
-  }
-
-  smoothRouteMedium();
+  showRouteSmoothingDialog(strength => {
+    if (strength === "weak") smoothRouteWeak();
+    else if (strength === "medium") smoothRouteMedium();
+    else if (strength === "strong") smoothRouteStrong();
+  });
 }
 
 // =========================

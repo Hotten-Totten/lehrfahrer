@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=V2.1.080&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
+<link rel="stylesheet" href="editor.css?v=3658aeffe6dd&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -585,6 +585,23 @@
     </div>
   </div>
 
+  <div id="routeSmoothingModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="routeSmoothingTitle" aria-describedby="routeSmoothingHint" tabindex="-1">
+    <div class="save-confirm-box">
+      <div class="save-confirm-header"><h3 id="routeSmoothingTitle">Route glätten</h3></div>
+      <div class="save-confirm-body">
+        <p id="routeSmoothingHint" class="route-smoothing-hint">Wie stark soll die Route geglättet werden?</p>
+        <div class="route-smoothing-choices">
+          <button type="button" class="save-confirm-btn-cancel" data-smooth-strength="weak">Weich</button>
+          <button type="button" class="save-confirm-btn-ok" data-smooth-strength="medium">Mittel</button>
+          <button type="button" class="save-confirm-btn-cancel" data-smooth-strength="strong">Stark</button>
+        </div>
+      </div>
+      <div class="save-confirm-actions">
+        <button id="routeSmoothingCancelBtn" type="button" class="save-confirm-btn-cancel">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Speichern-Bestätigungs-Dialog -->
   <div id="saveConfirmModal" class="modal-overlay hidden">
     <div class="save-confirm-box">
@@ -941,7 +958,7 @@
   <script src="js/editor.ui.js?v=V2.1.064"></script>
   <script src="js/editor.selection.js?v=V2.1.064"></script>
   <script src="js/editor.stops.js?v=V2.1.064"></script>
-  <script src="js/editor.route.js?v=1cbbb478e756"></script>
+  <script src="js/editor.route.js?v=ae9cd9928c5b"></script>
   <script src="js/editor.routing.js?v=V2.1.064"></script>
   <script src="js/editor.search.js?v=V2.1.063"></script>
   <script src="js/editor.autosave.js?v=V2.1.066"></script>

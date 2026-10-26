@@ -2845,6 +2845,11 @@ button.danger:hover {
 .save-confirm-btn-ok:hover { background: #1e40af; }
 .save-confirm-btn-ok:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.route-smoothing-hint { margin: 0 0 16px; color: #334155; font-size: 14px; }
+.route-smoothing-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-bottom: 14px; }
+.route-smoothing-choices button { width: 100%; padding-left: 8px; padding-right: 8px; }
+.route-smoothing-choices button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+
 /* =========================
    VBB-IMPORT-POPUP
 ========================= */
