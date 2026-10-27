@@ -680,6 +680,49 @@ button.danger:hover {
   min-height: 500px;
 }
 
+.test-drive-controls {
+  position: absolute;
+  z-index: 1001;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: min(calc(100% - 24px), 530px);
+  padding: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.18);
+}
+.test-drive-controls[hidden] { display: none; }
+.test-drive-controls button {
+  padding: 5px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+  cursor: pointer;
+}
+.test-drive-controls button.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+.test-drive-controls button:disabled { cursor: default; opacity: 0.6; }
+.test-drive-bus-marker, .test-drive-leaflet-icon {
+  width: 32px;
+  height: 48px;
+  pointer-events: none;
+}
+.test-drive-bus-rotor {
+  display: block;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 1px 3px rgba(15, 23, 42, 0.55));
+}
+
 .collapsible-metadata {
   padding: 0;
   overflow: hidden;

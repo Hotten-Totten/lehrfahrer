@@ -332,6 +332,7 @@ function buildRoutingAnchorsFromCurrentRoute(options = {}) {
 // =========================
 
 function refreshRouteLine() {
+  window.EditorTestDrive?.onRouteRender?.();
   if (routeLine) {
     removeRouteOverlay(routeLine);
     routeLine = null;
