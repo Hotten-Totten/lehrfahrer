@@ -1963,7 +1963,9 @@ function renderGtfsChangeAnalysis(analysis) {
   baseline.textContent = analysis.candidateReady
     ? "Geprüfter offizieller Kandidat im Vergleich zum aktuellen Staging-Stand"
     : (analysis.candidateChecked ? "Offizieller Kandidat geprüft; Übernahme fachlich gesperrt"
-      : "Aktueller Staging-Stand; Kandidatenprüfung läuft");
+      : (analysis.candidateState === "unavailable" ? "Aktueller Staging-Stand; kein gültiger Kandidat"
+        : (analysis.candidateState === "error" ? "Aktueller Staging-Stand; Kandidatenprüfung fehlgeschlagen"
+          : "Aktueller Staging-Stand; Kandidatenprüfung läuft")));
   const diagnostics = document.getElementById("gtfsChangeDiagnostics");
   if (diagnostics) diagnostics.textContent = analysis.candidateChecked ? [
     `CURRENT: ${analysis.currentPeriod?.start || "?"} – ${analysis.currentPeriod?.end || "?"} (${Number(analysis.currentValidLines || 0)} Linien)`,
@@ -1977,19 +1979,29 @@ function renderGtfsChangeAnalysis(analysis) {
     `Geprüft: ${analysis.candidateInfo?.checkedAt || "?"}`
   ].join("\n") : "";
   summary.replaceChildren();
-  const stats = [
-    [analysis.candidateValidLines ?? analysis.current?.routeCount, "Linien geprüft"],
-    [analysis.candidateVariantCount ?? analysis.current?.variantCount, "Varianten geprüft"],
-    [analysis.lineCounts?.NEU, "Linien neu"],
-    [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
-    [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"],
-    [analysis.lineCounts?.PRUEFEN, "Linien prüfen"]
-  ];
-  stats.forEach(([value, label]) => {
-    const card = gtfsChangeElement("div", "gtfs-change-stat");
-    card.append(gtfsChangeElement("strong", "", String(Number(value || 0))), gtfsChangeElement("span", "", label));
-    summary.appendChild(card);
-  });
+  summary.classList.toggle("gtfs-change-summary--empty", !analysis.candidateChecked);
+  if (!analysis.candidateChecked) {
+    const message = analysis.candidateState === "unavailable"
+      ? "Kein neuer Fahrplanstand zur Prüfung vorhanden."
+      : (analysis.candidateState === "error"
+        ? `Kandidatenprüfung fehlgeschlagen: ${analysis.candidateReason || "Unbekannter Fehler."}`
+        : "Kandidatenprüfung läuft …");
+    summary.appendChild(gtfsChangeElement("p", "gtfs-change-baseline", message));
+  } else {
+    const stats = [
+      [analysis.candidateValidLines ?? analysis.current?.routeCount, "Linien geprüft"],
+      [analysis.candidateVariantCount ?? analysis.current?.variantCount, "Varianten geprüft"],
+      [analysis.lineCounts?.NEU, "Linien neu"],
+      [analysis.lineCounts?.GEAENDERT, "Linien geändert"],
+      [analysis.lineCounts?.ENTFALLEN, "Linien entfallen"],
+      [analysis.lineCounts?.PRUEFEN, "Linien prüfen"]
+    ];
+    stats.forEach(([value, label]) => {
+      const card = gtfsChangeElement("div", "gtfs-change-stat");
+      card.append(gtfsChangeElement("strong", "", String(Number(value || 0))), gtfsChangeElement("span", "", label));
+      summary.appendChild(card);
+    });
+  }
 
   list.replaceChildren();
   (analysis.candidateChecked ? (analysis.lines || []) : []).forEach(line => {
@@ -2095,19 +2107,34 @@ function renderGtfsChangeAnalysis(analysis) {
   button.disabled = !analysis.candidateReady;
   candidateStatus.textContent = analysis.candidateReady
     ? "Offizieller Kandidat erneut validiert; Lehrfahrer-Routen bleiben unverändert."
-    : "Kein geprüfter offizieller Kandidat zur Übernahme freigegeben.";
-  const checkCandidate = () => postGtfsImport({ action: "candidateStatus" }).then(result => {
-      if (modal.classList.contains("hidden")) return;
-      if (result.changeAnalysis) {
-        renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateChecked: true,
-          candidateReady: result.ready, candidateId: result.candidateId, candidateInfo: result.candidateInfo });
-        if (!result.ready) candidateStatus.textContent = "Kandidat nicht zur Übernahme freigegeben.";
-      } else {
-        candidateStatus.textContent = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
-      }
-    }).catch(err => { candidateStatus.textContent = err.message || "Kandidatenprüfung fehlgeschlagen."; });
+    : (analysis.candidateReason || "Kein geprüfter offizieller Kandidat zur Übernahme freigegeben.");
+  const checkCandidate = () => {
+    button.disabled = true;
+    summary.classList.add("gtfs-change-summary--empty");
+    summary.replaceChildren(gtfsChangeElement("p", "gtfs-change-baseline", "Kandidatenprüfung läuft …"));
+    list.replaceChildren();
+    return postGtfsImport({ action: "candidateStatus" }).then(result => {
+        if (modal.classList.contains("hidden")) return;
+        if (result.changeAnalysis) {
+          renderGtfsChangeAnalysis({ ...result.changeAnalysis, candidateChecked: true,
+            candidateReady: result.ready, candidateId: result.candidateId, candidateInfo: result.candidateInfo });
+          if (!result.ready) candidateStatus.textContent = "Kandidat nicht zur Übernahme freigegeben.";
+        } else {
+          const reason = result.reason || "Kein geprüfter offizieller Kandidat vorhanden.";
+          const unavailable = !result.reason
+            || reason.startsWith("Kein persistierter GTFS-Kandidat")
+            || reason.startsWith("Gepruefter GTFS-Kandidat fehlt")
+            || reason.startsWith("Aktueller GTFS-Stand hat sich seit der Kandidatenpruefung");
+          renderGtfsChangeAnalysis({ candidateChecked: false, candidateReady: false,
+            candidateState: unavailable ? "unavailable" : "error", candidateReason: reason });
+        }
+      }).catch(err => {
+        if (!modal.classList.contains("hidden")) renderGtfsChangeAnalysis({ candidateChecked: false, candidateReady: false,
+          candidateState: "error", candidateReason: err.message || "Unbekannter Fehler." });
+      });
+  };
   document.getElementById("gtfsComparisonCheckBtn").onclick = () => { void checkCandidate(); };
-  if (!analysis.candidateChecked) {
+  if (!analysis.candidateChecked && !analysis.candidateState) {
     void checkCandidate();
   }
   button.onclick = async () => {

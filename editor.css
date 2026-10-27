@@ -3580,6 +3580,8 @@ button.danger:hover {
   gap: 10px;
   padding: 18px 24px 10px;
 }
+.gtfs-change-summary--empty { grid-template-columns: minmax(0, 1fr); }
+.gtfs-change-summary--empty p { margin: 0; }
 
 .gtfs-change-stat {
   padding: 13px 14px;
