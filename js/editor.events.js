@@ -197,7 +197,6 @@ if (operationalRouteTypeInput) {
 });
 if (startTrackBetweenStopsBtn) {
   startTrackBetweenStopsBtn.addEventListener("click", function () {
-    setMode("specialTrack", "Modus: Sondertrasse zeichnen");
     startSpecialTrackBetweenSelectedStops();
   });
 }

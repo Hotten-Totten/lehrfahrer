@@ -1186,10 +1186,25 @@ function removeLastPointFromSelectedSpecialTrack() {
 }
 
 function startSpecialTrackBetweenSelectedStops() {
-  const selectedStops = state.stops.filter(stop => state.selectedStopIds.has(stop.id));
+  const selectedIds = state.selectedStopIds;
+  const stops = Array.isArray(state.stops) ? state.stops : [];
+  const selectedIndexes = selectedIds?.size === 2 && typeof selectedIds.has === "function"
+    ? stops.flatMap((stop, index) => stop && selectedIds.has(stop.id) ? [index] : [])
+    : [];
+  const fromStop = stops[selectedIndexes[0]];
+  const toStop = stops[selectedIndexes[1]];
+  if (selectedIndexes.length !== 2 ||
+      selectedIndexes[1] !== selectedIndexes[0] + 1 ||
+      fromStop?.id == null || toStop?.id == null || fromStop.id === toStop.id) {
+    showInfoPopup({
+      title: "Sondertrasse zeichnen",
+      message: "Bitte genau zwei direkt aufeinanderfolgende Haltestellen auswählen.",
+      level: "warning"
+    });
+    return false;
+  }
 
-  const fromStop = selectedStops[0] || null;
-  const toStop = selectedStops[1] || null;
+  setMode("specialTrack", "Modus: Sondertrasse zeichnen");
 
   state.currentSpecialTrack = {
     id: "track_" + Date.now(),
