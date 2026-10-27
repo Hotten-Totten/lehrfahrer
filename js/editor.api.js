@@ -2214,7 +2214,8 @@ function renderGtfsWorkInventory(inventory) {
   completeness.textContent = `${Number(complete.capturedLineCount || 0)}/${Number(complete.expectedLineCount || 0)} Linien erfasst · ${Number(complete.capturedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten erfasst`;
   list.replaceChildren();
 
-  gtfsWorkDisplayRows(inventory.entries || []).forEach(({ entry, line, start, end, number }) => {
+  const currentEntries = (inventory.entries || []).filter(entry => entry.timetableStatus !== "ENTFALLEN");
+  gtfsWorkDisplayRows(currentEntries).forEach(({ entry, line, start, end, number }) => {
     const row = gtfsChangeElement("div", "gtfs-work-row");
     row.dataset.status = entry.status;
     row.dataset.timetableStatus = entry.timetableStatus || "";

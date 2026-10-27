@@ -62,14 +62,19 @@ test('Führungen zeigen beide echten Endpunkte und gruppieren je Linie und Fahrt
   assert.equal(rows.some(row => row.children.some(child => child.textContent === 'reverse')), false);
 });
 
-test('technische ID bleibt für Status und workOpen erhalten; entfallene Führung bleibt deaktiviert', async () => {
+test('technische ID bleibt für Status und workOpen erhalten; historische Einträge bleiben nur intern', async () => {
   const entries = [entry('internal-original', ['A', 'B', 'D']),
     entry('retired', [], { startStop: ' ', endStop: ' ', destination: 'Altes Ziel',
-      timetableStatus: 'ENTFALLEN', status: 'GEPRUEFT' })];
-  const inventory = { entries, completeness: {} };
+      timetableStatus: 'ENTFALLEN', status: 'IN_BEARBEITUNG', draftPrepared: true, savedRoute: 'Route 03' }),
+    entry('retired-saved', ['A', 'C'], { timetableStatus: 'ENTFALLEN', savedRoute: 'Route 04' })];
+  const inventory = { entries, completeness: { capturedLineCount: 77, expectedLineCount: 77,
+    capturedVariantCount: 757, expectedVariantCount: 757 } };
+  const before = JSON.stringify(inventory);
   const { renderGtfsWorkInventory, elements, calls } = setup(inventory);
   renderGtfsWorkInventory(inventory);
   const rows = elements.gtfsWorkList.children;
+  assert.equal(rows.length, 1);
+  assert.equal(elements.gtfsWorkCompleteness.textContent, '77/77 Linien erfasst · 757/757 Varianten erfasst');
   assert.match(html, /<span>Start → Ziel<\/span><span>Führung<\/span><span>Stops<\/span><span>Arbeitsstatus<\/span>/);
   assert.match(inventorySource, /'startStop' => strval\(\$variant\['startStop'\]\)/);
   assert.match(inventorySource, /'stopNames' => \$variant\['stopNames'\]/);
@@ -79,9 +84,23 @@ test('technische ID bleibt für Status und workOpen erhalten; entfallene Führun
   assert.equal(calls[0].variantId, 'internal-original');
   await active.children[5].onclick();
   assert.equal(calls[1].variantId, 'internal-original');
-  const retired = rows.find(row => row.dataset.timetableStatus === 'ENTFALLEN');
-  assert.equal(retired.children[4].disabled, true);
-  assert.equal(retired.children[5].disabled, true);
-  assert.equal(retired.children[1].textContent, 'Start unbekannt → Altes Ziel');
-  assert.equal(retired.children[2].textContent, 'Führung 1');
+  assert.equal(elements.gtfsWorkList.children.some(row => row.dataset.timetableStatus === 'ENTFALLEN'), false);
+  assert.equal(JSON.stringify(inventory), before);
+  assert.equal(entries[1].draftPrepared, true);
+  assert.equal(entries[1].savedRoute, 'Route 03');
+  assert.equal(entries[2].savedRoute, 'Route 04');
+});
+
+test('alle 757 CURRENT-Führungen aus 77 Linien bleiben trotz historischer Einträge sichtbar', () => {
+  const entries = Array.from({ length: 757 }, (_, index) => entry(`current-${index}`, ['Start', 'Ziel'],
+    { line: String(index % 77 + 1), routeId: `route-${index % 77 + 1}` }));
+  entries.push(entry('historic', ['Alt', 'Ziel'], { timetableStatus: 'ENTFALLEN', draftPrepared: true }));
+  const inventory = { entries, completeness: { capturedLineCount: 77, expectedLineCount: 77,
+    capturedVariantCount: 757, expectedVariantCount: 757 } };
+  const { renderGtfsWorkInventory, elements } = setup(inventory);
+  renderGtfsWorkInventory(inventory);
+  assert.equal(elements.gtfsWorkList.children.length, 757);
+  assert.equal(new Set(elements.gtfsWorkList.children.map(row => row.children[0].textContent)).size, 77);
+  assert.equal(elements.gtfsWorkCompleteness.textContent, '77/77 Linien erfasst · 757/757 Varianten erfasst');
+  assert.equal(entries.length, 758);
 });
