@@ -362,13 +362,27 @@ test('U: Server-Menü öffnet den bestehenden Fahrplan-Updater mit Kandidatenpr�
   const serverMenu = html.slice(html.indexOf('<button class="menu-button" type="button">Server</button>'),
     html.indexOf('<button class="menu-button" type="button">Bearbeiten</button>'));
   assert.match(serverMenu, /class="menu-item menu-submenu-trigger"[^>]*>Fahrplanwechsel<\/button>[\s\S]*id="gtfsFahrplanupdateMenuItem" onclick="openGtfsFahrplanupdate\(\)"[^>]*>Fahrplanupdate<\/button>/);
+  assert.match(serverMenu, /onclick="openGtfsWorkInventory\(\)"[^>]*>Arbeitsvorrat<\/button>/);
+  assert.match(html, /Aktueller Fahrplan \/ Linien bearbeiten[\s\S]*id="gtfsOpenWorkInventoryBtn"[^>]*>Arbeitsvorrat öffnen<\/button>[\s\S]*Neuer Fahrplanstand/);
   assert.match(editor, /function openGtfsFahrplanupdate\(\) \{\s*renderGtfsChangeAnalysis\(\{ candidateChecked: false/);
   assert.match(editor, /renderGtfsChangeAnalysis[\s\S]*postGtfsImport\(\{ action: "candidateStatus" \}\)/);
   const opener = editor.match(/function openGtfsFahrplanupdate\(\) \{[\s\S]*?\n\}/)?.[0];
   let opened = null;
-  new Function('renderGtfsChangeAnalysis', `${opener}; openGtfsFahrplanupdate();`)(analysis => { opened = analysis; });
+  let workInventoryOpens = 0;
+  let changeModalHidden = false;
+  const workButton = {};
+  const changeModal = { classList: { add(name) { if (name === 'hidden') changeModalHidden = true; } } };
+  const document = { getElementById(id) { return id === 'gtfsOpenWorkInventoryBtn' ? workButton : changeModal; } };
+  new Function('renderGtfsChangeAnalysis', 'document', 'openGtfsWorkInventory', `${opener}; openGtfsFahrplanupdate();`)(
+    analysis => { opened = analysis; }, document, () => { workInventoryOpens++; }
+  );
   assert.equal(opened.candidateChecked, false);
   assert.equal(opened.candidateReady, false);
+  assert.equal(typeof workButton.onclick, 'function');
+  workButton.onclick();
+  assert.equal(changeModalHidden, true);
+  assert.equal(workInventoryOpens, 1);
+  assert.equal(editor.match(/async function openGtfsWorkInventory\(\)/g)?.length, 1);
   for (const id of ['gtfsChangeVersionInfo', 'gtfsCandidateVersionInfo', 'gtfsChangeDiagnostics',
     'gtfsChangeList', 'gtfsCandidateAdoptBtn']) assert.match(html, new RegExp(`id="${id}"`));
 });

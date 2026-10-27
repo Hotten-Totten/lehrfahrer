@@ -2310,6 +2310,10 @@ async function openGtfsWorkInventory() {
 
 function openGtfsFahrplanupdate() {
   renderGtfsChangeAnalysis({ candidateChecked: false, candidateReady: false, lines: [], lineCounts: {} });
+  document.getElementById("gtfsOpenWorkInventoryBtn").onclick = () => {
+    document.getElementById("gtfsChangeModal").classList.add("hidden");
+    void openGtfsWorkInventory();
+  };
 }
 
 async function analyzeGtfsServerIndex() {
