@@ -2175,6 +2175,35 @@ function gtfsWorkStatusLabel(status) {
   })[status] || status;
 }
 
+function gtfsWorkDisplayRows(entries) {
+  const normalize = value => String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+  const rows = entries.map(entry => {
+    const names = Array.isArray(entry.stopNames) ? entry.stopNames : [];
+    const start = String(entry.startStop || "").trim() || String(names[0] || "").trim() || "Start unbekannt";
+    const end = String(entry.endStop || "").trim() || String(names[names.length - 1] || "").trim()
+      || String(entry.destination || "").trim() || "Ziel unbekannt";
+    const line = String(entry.line || entry.routeId || "");
+    return { entry, line, start, end, group: [line, start, end].map(normalize).join("\u0000"),
+      order: [normalize(line), normalize(start), normalize(end), Number(entry.stopCount || 0),
+        names.map(normalize).join("\u0000"), String(entry.variantId || ""), String(entry.routeId || "")] };
+  });
+  rows.sort((a, b) => {
+    for (let i = 0; i < a.order.length; i++) {
+      if (a.order[i] < b.order[i]) return -1;
+      if (a.order[i] > b.order[i]) return 1;
+    }
+    return 0;
+  });
+  let previousGroup = "";
+  let number = 0;
+  for (const row of rows) {
+    number = row.group === previousGroup ? number + 1 : 1;
+    row.number = number;
+    previousGroup = row.group;
+  }
+  return rows;
+}
+
 function renderGtfsWorkInventory(inventory) {
   const modal = document.getElementById("gtfsWorkModal");
   const completeness = document.getElementById("gtfsWorkCompleteness");
@@ -2185,14 +2214,14 @@ function renderGtfsWorkInventory(inventory) {
   completeness.textContent = `${Number(complete.capturedLineCount || 0)}/${Number(complete.expectedLineCount || 0)} Linien erfasst · ${Number(complete.capturedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten erfasst`;
   list.replaceChildren();
 
-  (inventory.entries || []).forEach(entry => {
+  gtfsWorkDisplayRows(inventory.entries || []).forEach(({ entry, line, start, end, number }) => {
     const row = gtfsChangeElement("div", "gtfs-work-row");
     row.dataset.status = entry.status;
     row.dataset.timetableStatus = entry.timetableStatus || "";
     row.append(
-      gtfsChangeElement("span", "", entry.line || entry.routeId),
-      gtfsChangeElement("span", "", [entry.directionId ? `Richtung ${entry.directionId}` : "", entry.destination || "ohne Zieltext"].filter(Boolean).join(" · ")),
-      gtfsChangeElement("span", "", entry.variantId),
+      gtfsChangeElement("span", "", line),
+      gtfsChangeElement("span", "", `${start} → ${end}`),
+      gtfsChangeElement("span", "", `Führung ${number}`),
       gtfsChangeElement("span", "", String(Number(entry.stopCount || 0)))
     );
     const status = document.createElement("select");

@@ -3659,7 +3659,7 @@ button.danger:hover {
 .gtfs-work-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-right: 24px; }
 .gtfs-work-toolbar > button, .gtfs-work-row button, .gtfs-work-row select { border: 1px solid #c7d0dd; border-radius: 8px; background: #fff; color: #243149; padding: 8px 10px; cursor: pointer; }
 .gtfs-work-toolbar .gtfs-change-primary { border-color: #174bbd; background: #2457d6; color: #fff; font-weight: 750; }
-.gtfs-work-table-head, .gtfs-work-row { display: grid; grid-template-columns: 90px minmax(180px, 1.5fr) minmax(190px, 1.5fr) 70px 170px 190px; gap: 10px; align-items: center; }
+.gtfs-work-table-head, .gtfs-work-row { display: grid; grid-template-columns: 90px minmax(240px, 1.8fr) minmax(100px, .7fr) 70px 170px 190px; gap: 10px; align-items: center; }
 .gtfs-work-table-head { position: sticky; top: 82px; z-index: 1; padding: 10px 24px; background: #e8edf4; font-size: .8rem; font-weight: 750; }
 .gtfs-work-list { padding: 8px 24px 20px; }
 .gtfs-work-row { padding: 9px 0; border-bottom: 1px solid #dce3ed; font-size: .86rem; }
