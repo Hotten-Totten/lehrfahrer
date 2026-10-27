@@ -265,6 +265,14 @@ const stops = state.stops.map((stop, index) => ({
     routingMode: normalizeEditorRoutingMode(state.routingMode),
     preserveManualChains: !!state.preserveManualChains,
     stops,
+    specialTracks: (state.specialTracks || []).map(track => ({
+      id: track.id,
+      fromStopId: track.fromStopId || null,
+      fromStopName: track.fromStopName || null,
+      toStopId: track.toStopId || null,
+      toStopName: track.toStopName || null,
+      points: track.points.map(point => [point[0], point[1]])
+    })),
     routePoints: routeOriginal.map(point => [point.lat, point.lon]),
     routePointsSimplified: routeSimplified
       ? routeSimplified.map(point => [point.lat, point.lon])
@@ -2852,12 +2860,43 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
 
 // Lädt Linien-Daten in den Editor (wird von loadLineFromServer und JSON-Import verwendet)
 // Füllt alle Felder und setzt State-Werte
+function readSavedSpecialTracks(data) {
+  if (data.specialTracks === undefined) return [];
+  if (!Array.isArray(data.specialTracks)) throw new Error("Ungültige Sondertrassen in der Routendatei.");
+  const ids = new Set();
+  return data.specialTracks.map(track => {
+    if (!track || typeof track !== "object" || Array.isArray(track) ||
+        typeof track.id !== "string" || !track.id.trim() || ids.has(track.id) ||
+        !Array.isArray(track.points) || track.points.length < 2 ||
+        !(track.fromStopId || track.fromStopName) || !(track.toStopId || track.toStopName)) {
+      throw new Error("Ungültige Sondertrasse in der Routendatei.");
+    }
+    const points = track.points.map(point => {
+      if (!Array.isArray(point) || point.length !== 2 ||
+          !point.every(Number.isFinite) || Math.abs(point[0]) > 90 || Math.abs(point[1]) > 180) {
+        throw new Error("Ungültige Sondertrassen-Koordinaten in der Routendatei.");
+      }
+      return [point[0], point[1]];
+    });
+    ids.add(track.id);
+    return {
+      id: track.id,
+      fromStopId: track.fromStopId || null,
+      fromStopName: track.fromStopName || null,
+      toStopId: track.toStopId || null,
+      toStopName: track.toStopName || null,
+      points
+    };
+  });
+}
+
 function loadLineFromData(data) {
     if (!data || typeof data !== "object") {
     error("loadLineFromData: ungültige Daten", data);
     setStatus("Linie konnte nicht geladen werden: ungültige Daten.", "error");
     return;
   }
+  const savedSpecialTracks = readSavedSpecialTracks(data);
   if (!historyRestoreRunning) {
     pushHistorySnapshot("Linie geladen");
   }
@@ -3007,6 +3046,22 @@ function loadLineFromData(data) {
       lon: point.lon
     };
   });
+
+  state.specialTracks = savedSpecialTracks.map(trackData => {
+    const track = {
+      ...trackData,
+      polyline: createRouteLineOverlay(trackData.points, {
+        color: "#aa00ff",
+        weight: 4,
+        dashArray: "6,6"
+      })
+    };
+    if (track.polyline && typeof track.polyline.on === "function") {
+      track.polyline.on("click", function () { selectSpecialTrack(track); });
+    }
+    return track;
+  });
+  window.EditorMapAdapter?.refreshEditorMapFeatures?.();
 
   stopIdCounter = Math.max(stopIdCounter, maxStopNum + 1);
   routePointIdCounter = Math.max(routePointIdCounter, maxRouteNum + 1);

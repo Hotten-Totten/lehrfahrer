@@ -15,7 +15,7 @@ const start = routeSource.indexOf('function smoothRoute(options = {})');
 const end = routeSource.indexOf('// SIMPLIFY', start);
 const renderStart = routeSource.indexOf('function refreshRouteLine()');
 const renderEnd = routeSource.indexOf('// ROUTE POINTS', renderStart);
-const loadStart = apiSource.indexOf('function loadLineFromData(data)');
+const loadStart = apiSource.indexOf('function readSavedSpecialTracks(data)');
 const loadEnd = apiSource.indexOf('function loadLineFromFile(file)', loadStart);
 assert.ok(start >= 0 && end > start && renderStart >= 0 && renderEnd > renderStart && loadStart >= 0 && loadEnd > loadStart);
 

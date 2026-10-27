@@ -701,17 +701,27 @@ function buildRoutingStepsFromAnchors(anchors) {
 
   for (let i = 0; i < anchors.length - 1; i++) {
     const from = anchors[i];
-    const to = anchors[i + 1];
+    const fromStop = findStopByAnchor(from);
+    let trackEndIndex = i + 1;
+    let match = null;
+    if (fromStop) {
+      for (let j = i + 1; j < anchors.length; j++) {
+        const nextStop = findStopByAnchor(anchors[j]);
+        if (!nextStop) continue;
+        match = findMatchingSpecialTrack(fromStop, nextStop);
+        if (match) trackEndIndex = j;
+        break;
+      }
+    }
+    const to = anchors[trackEndIndex];
 
     if (!from || !to) continue;
 
     const fromLabel = from.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(from)?.name || "Haltestelle");
     const toLabel = to.kind === "manual" ? "Pflichtpunkt" : (findStopByAnchor(to)?.name || "Haltestelle");
 
-    const fromStop = findStopByAnchor(from);
     const toStop = findStopByAnchor(to);
 
-    const match = fromStop && toStop ? findMatchingSpecialTrack(fromStop, toStop) : null;
     if (match) {
       const rawPoints = match.reversed
         ? match.track.points.slice().reverse()
@@ -727,6 +737,7 @@ function buildRoutingStepsFromAnchors(anchors) {
         label: `${fromStop.name} => ${toStop.name}`,
         trackId: match.track.id
       });
+      i = trackEndIndex - 1;
       continue;
     }
 

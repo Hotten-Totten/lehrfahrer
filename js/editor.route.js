@@ -278,6 +278,18 @@ function buildRoutingAnchorsFromCurrentRoute(options = {}) {
   const anchors = anchorEntries.map(entry => entry.anchor);
 
   const deduped = [];
+  const isSpecialTrackEndpoint = candidate => {
+    if (candidate.kind !== "stop") return false;
+    const stop = state.stops.find(item => item.id === candidate.refId);
+    return (state.specialTracks || []).some(track =>
+      (track.fromStopId
+        ? track.fromStopId === candidate.refId
+        : stop && track.fromStopName === stop.name) ||
+      (track.toStopId
+        ? track.toStopId === candidate.refId
+        : stop && track.toStopName === stop.name)
+    );
+  };
   anchors.forEach(anchor => {
     const prev = deduped[deduped.length - 1];
     if (!prev) {
@@ -291,6 +303,10 @@ function buildRoutingAnchorsFromCurrentRoute(options = {}) {
     );
 
     if (dist < 3) {
+      if (isSpecialTrackEndpoint(prev) || isSpecialTrackEndpoint(anchor)) {
+        deduped.push(anchor);
+        return;
+      }
       if (
         preserveManualChains &&
         anchor.kind === "manual" &&
