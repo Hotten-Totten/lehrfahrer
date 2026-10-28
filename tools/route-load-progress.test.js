@@ -11,7 +11,8 @@ const css = fs.readFileSync(path.join(root, 'editor.css'), 'utf8');
 const start = api.indexOf('let routeLoadInProgress = false;');
 const end = api.indexOf('// Löscht eine Linie vom Server', start);
 assert.ok(start >= 0 && end > start);
-const source = api.slice(start, end) + '\nglobalThis.testLoadLineFromServer = loadLineFromServer;';
+const identity = api.slice(api.indexOf('function routeStorageIdentity('), api.indexOf('function isLoadedServerRouteTarget('));
+const source = identity + api.slice(start, end) + '\nglobalThis.testLoadLineFromServer = loadLineFromServer;';
 
 function setup(payload, responseOk = true) {
   const modalClasses = new Set(['hidden']);
@@ -32,6 +33,7 @@ function setup(payload, responseOk = true) {
   let finishFetch;
   const fetchGate = new Promise(resolve => { finishFetch = resolve; });
   const context = {
+    state: { loadedServerRouteSource: null },
     document: { getElementById(id) {
       return id === 'routeLoadProgressModal' ? modal
         : id === 'routeLoadProgressTitle' ? heading
@@ -58,7 +60,7 @@ function setup(payload, responseOk = true) {
     encodeURIComponent
   };
   vm.runInNewContext(source, context);
-  return { modal, step, statuses, loaded, get fetchCount() { return fetchCount; }, finishFetch, load: context.testLoadLineFromServer };
+  return { modal, step, statuses, loaded, state: context.state, get fetchCount() { return fetchCount; }, finishFetch, load: context.testLoadLineFromServer };
 }
 
 test('bestehendes Design zeigt einen unbestimmten, barrierefrei beschrifteten Ladezustand', () => {
@@ -86,6 +88,7 @@ test('Route 01 und punktreiche Route 02 laden einmalig und unverändert', async 
     assert.equal(JSON.stringify(line), initial, 'Routendaten bleiben unverändert');
     assert.equal(app.loaded[0].stops.length, stops);
     assert.equal(app.loaded[0].routePoints.length, points);
+    assert.equal(app.state.loadedServerRouteSource.fileBase, `Route_${route}`);
     assert.equal(app.modal.classList.contains('hidden'), true);
     assert.equal(app.step.textContent, 'Route ist bereit');
   }

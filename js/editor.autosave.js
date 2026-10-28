@@ -131,6 +131,7 @@ function exportAutosaveFile() {
 function clearEditorData() {
   window.EditorTestDrive?.stop?.();
   state.gtfsWork = null;
+  state.loadedServerRouteSource = null;
   // Alle Stop-Marker von der Karte entfernen
   if (Array.isArray(state.stops)) {
     state.stops.forEach(stop => {

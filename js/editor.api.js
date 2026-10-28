@@ -368,6 +368,18 @@ function exportJson() {
 
 // Speichert die Linie auf dem Server (PHP API)
 // Zeigt zuerst einen Bestätigungs-Dialog, dann wird gespeichert
+function routeStorageIdentity(city, lineFolder, categoryFolder, fileBase) {
+  const parts = [city, lineFolder, categoryFolder, fileBase].map(value => String(value || '').trim());
+  if (parts.some(part => !part)) return null;
+  return { city: parts[0], lineFolder: parts[1], categoryFolder: parts[2], fileBase: parts[3] };
+}
+
+function isLoadedServerRouteTarget(target) {
+  const source = state.loadedServerRouteSource;
+  return !!source && !!target && ['city', 'lineFolder', 'categoryFolder', 'fileBase']
+    .every(key => source[key] === target[key]);
+}
+
 async function saveLineToServer() {
   const SAVE_TARGET_STORAGE_KEY = "lehrfahrer_last_save_target";
   const initialData = buildExportData();
@@ -404,12 +416,14 @@ async function saveLineToServer() {
   let forceOverwrite = false;
   const existingEntry = await findExistingLineEntry(city, lineFolder, categoryFolder, fileBase);
   if (existingEntry) {
-    const overwriteOk = confirm(
-      `Diese Datei existiert bereits:\n${lineFolder}/${categoryFolder}/${fileBase}.json\n\nWirklich überschreiben?`
-    );
-    if (!overwriteOk) {
-      setStatus("Speichern abgebrochen (Überschreiben nicht bestätigt).", "warn");
-      return;
+    if (!isLoadedServerRouteTarget(routeStorageIdentity(city, lineFolder, categoryFolder, fileBase))) {
+      const overwriteOk = confirm(
+        `Diese Datei existiert bereits:\n${lineFolder}/${categoryFolder}/${fileBase}.json\n\nWirklich überschreiben?`
+      );
+      if (!overwriteOk) {
+        setStatus("Speichern abgebrochen (Überschreiben nicht bestätigt).", "warn");
+        return;
+      }
     }
     forceOverwrite = true;
   }
@@ -620,6 +634,10 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFol
 
     // Vom Server tatsächlich verwendeten fileBase übernehmen (kann abweichen bei Konfliktvermeidung)
     const actualFileBase = result.fileBase || fileBase;
+    state.loadedServerRouteSource = routeStorageIdentity(
+      result.city || city, result.lineFolder || lineFolder,
+      result.categoryFolder || categoryFolder, actualFileBase
+    );
 
     // ---------- GPX erzeugen + speichern ----------
     const gpx = buildGpxString();
@@ -2761,6 +2779,7 @@ async function loadLineFromServer(lineId = null, lineFolder = null, cityOverride
     setRouteLoadPhase("Haltestellen und Fahrweg werden aufgebaut …");
     await waitForRouteLoadPaint();
     loadLineFromData(lineData);
+    state.loadedServerRouteSource = routeStorageIdentity(city, lineFolder, categoryFolder, normalizedLineId);
     if (typeof setRouteDataExpanded === "function") setRouteDataExpanded(false);
     setRouteLoadPhase("Karte wird aktualisiert …");
     await waitForRouteLoadPaint();

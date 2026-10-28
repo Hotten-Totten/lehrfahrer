@@ -80,6 +80,7 @@ function readOperationalRouteFields(source = {}) {
 
 const state = {
   gtfsWork: null,
+  loadedServerRouteSource: null,
   stops: [],
   routePoints: [],
   simplifiedRoutePoints: [],
