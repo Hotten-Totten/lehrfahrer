@@ -4,6 +4,7 @@ require_once __DIR__ . '/_professional_pdf.php';
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_route_content_comparison.php';
 $companyId = lehrfahrer_route_authorize('routes.write', true, true);
 
 function sanitizeForFilesystem(string $value): string {
@@ -600,6 +601,18 @@ if (file_exists($filePath) && !$forceOverwrite) {
     }
 }
 
+$changeType = 'NEW';
+if (is_file($filePath)) {
+    $existingRaw = @file_get_contents($filePath);
+    $existingRoute = $existingRaw === false ? null : json_decode($existingRaw, true);
+    if (!is_array($existingRoute)) {
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'error' => 'Vorhandene Route kann nicht verglichen werden'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $changeType = lehrfahrer_route_content_change($existingRoute, $data);
+}
+
 $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 if ($json === false) {
@@ -690,5 +703,6 @@ echo json_encode([
     'lineFolder' => $lineFolder,
     'categoryFolder' => $categoryFolder,
     'city' => $city,
-    'savedAt' => $data['savedAt']
+    'savedAt' => $data['savedAt'],
+    'changeType' => $changeType
 ], JSON_UNESCAPED_UNICODE);

@@ -308,3 +308,99 @@ test('Stadt und Linie werden nur bei A erstellt, umbenannt und geloescht', async
   assert.equal((await request('/api/list_lines.php?city=stadt-umbenannt')).status, 404);
   assert.equal((await request('/api/list_lines.php', {}, sessionB)).json().lines[0].fileBase, 'Route_B');
 });
+
+test('Speichern meldet NEW, UNCHANGED und fachliche Änderungen am tatsächlichen Ziel', async () => {
+  const route = {
+    city: 'stadt-a', lineFolder: 'Linie_42', categoryFolder: 'Standard',
+    fileBase: 'Route_Semantic', lineName: 'Linie 42', routeName: 'Route Semantic',
+    directionName: 'Nord',
+    stops: [
+      { name: 'A', lat: 51.7, lon: 14.3, order: 1 },
+      { name: 'B', lat: 51.71, lon: 14.31, order: 2 }
+    ],
+    routePoints: [[51.7, 14.3], [51.71, 14.31]],
+    specialTracks: [{ fromStopName: 'A', toStopName: 'B', points: [[51.7, 14.3], [51.71, 14.31]] }],
+    meta: { formatVersion: '1.2', exportedAt: '2026-01-01T00:00:00Z' }
+  };
+  const save = async (data, expected) => {
+    const response = await request('/api/save_line.php', { json: data });
+    assert.equal(response.status, 200, response.body);
+    assert.equal(response.json().changeType, expected);
+  };
+  await save(route, 'NEW');
+  await save({ ...route, forceOverwrite: true, mapView: { zoom: 14 }, bounds: [1, 2],
+    meta: { ...route.meta, exportedAt: '2026-02-01T00:00:00Z', source: 'Lehrfahrer Linien-Editor' } }, 'UNCHANGED');
+  const reordered = Object.fromEntries(Object.entries(route).reverse());
+  await save({ ...reordered, forceOverwrite: true }, 'UNCHANGED');
+  await save({ ...route, forceOverwrite: true, routePoints: [[51.7, 14.3], [51.72, 14.32]] }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true, stops: [...route.stops].reverse() }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true, specialTracks: [{ ...route.specialTracks[0], points: [[51.7, 14.3], [51.72, 14.32]] }] }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true, directionName: 'Süd' }, 'CHANGED');
+  const changedLine = await request('/api/load_line.php?city=stadt-a&line=Route_Semantic&lineFolder=Linie_42&categoryFolder=Standard');
+  assert.equal(changedLine.status, 200, changedLine.body);
+  assert.equal(changedLine.json().line.directionName, 'Süd');
+  await save({ ...route, forceOverwrite: true }, 'CHANGED');
+  await save({ ...route, forceOverwrite: true, routeMode: 'manual' }, 'CHANGED');
+  const loaded = await request('/api/load_line.php?city=stadt-a&line=Route_Semantic&lineFolder=Linie_42&categoryFolder=Standard');
+  assert.equal(loaded.status, 200, loaded.body);
+  assert.equal(loaded.json().line.directionName, 'Nord');
+});
+
+test('Unlesbare vorhandene Zieldatei wird nicht als NEW klassifiziert oder überschrieben', async () => {
+  const filePath = path.join(privateRoot, 'companies', companyA.id, 'lines', 'stadt-a', 'Linie_44', 'Standard', 'Route_Broken.json');
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, '{broken');
+  const response = await request('/api/save_line.php', { json: {
+    city: 'stadt-a', lineFolder: 'Linie_44', categoryFolder: 'Standard', fileBase: 'Route_Broken',
+    lineName: 'Linie 44', routeName: 'Route Broken', forceOverwrite: true,
+    stops: [], routePoints: []
+  } });
+  assert.equal(response.status, 409, response.body);
+  assert.equal(fs.readFileSync(filePath, 'utf8'), '{broken');
+});
+
+test('Konfliktvermeidung klassifiziert den tatsächlich neu angelegten Umleitungszielpfad als NEW', async () => {
+  const route = {
+    city: 'stadt-a', lineFolder: 'Linie_45', categoryFolder: 'Standard',
+    fileBase: 'Route_Detour', lineName: 'Linie 45', routeName: 'Route Detour',
+    directionName: 'Nord', stops: [], routePoints: []
+  };
+  const first = await request('/api/save_line.php', { json: route });
+  assert.equal(first.status, 200, first.body);
+  assert.equal(first.json().changeType, 'NEW');
+  const second = await request('/api/save_line.php', { json: route });
+  assert.equal(second.status, 200, second.body);
+  assert.equal(second.json().changeType, 'NEW');
+  assert.notEqual(second.json().fileBase, first.json().fileBase);
+});
+
+test('Änderungserkennung lässt GEPRUEFT und FREIGEGEBEN im GTFS-Arbeitsstatus unverändert', async () => {
+  const inventoryPath = path.join(privateRoot, 'companies', companyA.id, 'imports', 'gtfs', 'index', 'work-inventory.json');
+  fs.mkdirSync(path.dirname(inventoryPath), { recursive: true });
+  const entries = ['GEPRUEFT', 'FREIGEGEBEN'].map((status, index) => ({
+    routeId: `route-status-${index}`, variantId: `variant-status-${index}`, status, timetableStatus: 'UNVERAENDERT'
+  }));
+  fs.writeFileSync(inventoryPath, JSON.stringify({ entries }));
+  for (const [index, entry] of entries.entries()) {
+    const base = {
+      city: 'stadt-a', lineFolder: 'Linie_43', categoryFolder: 'Standard',
+      fileBase: `Route_Status_${index}`, lineName: 'Linie 43', routeName: `Route Status ${index}`,
+      stops: [{ name: 'A', lat: 51.7, lon: 14.3 }, { name: 'B', lat: 51.71, lon: 14.31 }],
+      routePoints: [[51.7, 14.3], [51.71, 14.31]],
+      meta: { gtfsWork: { routeId: entry.routeId, variantId: entry.variantId } }
+    };
+    for (const [payload, expected] of [[base, 'NEW'], [{ ...base, forceOverwrite: true }, 'UNCHANGED'],
+      [{ ...base, forceOverwrite: true, routePoints: [[51.7, 14.3], [51.72, 14.32]] }, 'CHANGED'],
+      [{ ...base, forceOverwrite: true, routePoints: [[51.7, 14.3], [51.72, 14.32]],
+        meta: { gtfsWork: { ...base.meta.gtfsWork, signature: 'changed' } } }, 'CHANGED']]) {
+      const response = await request('/api/save_line.php', { json: payload });
+      assert.equal(response.status, 200, response.body);
+      assert.equal(response.json().changeType, expected);
+      const inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
+      assert.equal(inventory.entries[index].status, entry.status);
+    }
+  }
+});
