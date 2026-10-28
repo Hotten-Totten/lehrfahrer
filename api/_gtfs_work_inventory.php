@@ -37,6 +37,25 @@ function lehrfahrer_gtfs_work_write_json(string $path, array $payload): void {
     }
 }
 
+function lehrfahrer_gtfs_work_with_inventory_lock(string $companyId, callable $operation) {
+    $path = lehrfahrer_gtfs_work_inventory_path($companyId);
+    $directory = dirname($path);
+    if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+        throw new RuntimeException('GTFS-Arbeitsvorrat kann nicht vorbereitet werden.');
+    }
+    $lockPath = $path . '.lock';
+    if (is_link($lockPath)) throw new RuntimeException('GTFS-Arbeitsvorrats-Sperre ist ungueltig.');
+    $lock = fopen($lockPath, 'c');
+    if ($lock === false) throw new RuntimeException('GTFS-Arbeitsvorrat kann nicht gesperrt werden.');
+    try {
+        if (!flock($lock, LOCK_EX)) throw new RuntimeException('GTFS-Arbeitsvorrat kann nicht gesperrt werden.');
+        return $operation();
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
 function lehrfahrer_gtfs_work_existing_entries(string $companyId): array {
     $inventory = lehrfahrer_gtfs_work_read_json(lehrfahrer_gtfs_work_inventory_path($companyId));
     $result = [];
@@ -51,6 +70,11 @@ function lehrfahrer_gtfs_work_existing_entries(string $companyId): array {
 }
 
 function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, array $agencyIds): array {
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static fn(): array =>
+        lehrfahrer_gtfs_work_reconcile_locked($companyId, $indexPath, $agencyIds));
+}
+
+function lehrfahrer_gtfs_work_reconcile_locked(string $companyId, string $indexPath, array $agencyIds): array {
     $index = lehrfahrer_gtfs_change_read_index($indexPath, $agencyIds);
     $comparisonStatuses = [];
     $previousKeys = [];
@@ -88,6 +112,7 @@ function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, ar
             $oldKey = isset($oldEntries[$key]) ? $key : ($previousKeys[$key] ?? $key);
             $currentKeys[$oldKey] = true;
             $old = $oldEntries[$oldKey] ?? null;
+            $identicalOld = $oldEntries[$key] ?? null;
             $status = is_array($old) && in_array(($old['status'] ?? ''), LEHRFAHRER_GTFS_WORK_STATUSES, true)
                 ? strval($old['status']) : 'UNGEPRUEFT';
             $timetableStatus = $comparisonStatuses[$key] ?? ($old === null ? 'NEU' : 'UNVERAENDERT');
@@ -106,6 +131,7 @@ function lehrfahrer_gtfs_work_reconcile(string $companyId, string $indexPath, ar
                 'signature' => strval($variant['signature']),
                 'status' => $status,
                 'timetableStatus' => $timetableStatus,
+                'archived' => is_array($identicalOld) && ($identicalOld['archived'] ?? false) === true,
                 'reviewRequired' => $status !== 'FREIGEGEBEN',
                 'draftPrepared' => is_file(lehrfahrer_gtfs_work_drafts_dir($companyId) . DIRECTORY_SEPARATOR . $key . '.json'),
                 'savedRoute' => is_array($old) ? ($old['savedRoute'] ?? null) : null,
@@ -206,23 +232,56 @@ function lehrfahrer_gtfs_work_prepare_all(string $companyId, string $indexPath, 
     return $count;
 }
 
-function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update): array {
-    $path = lehrfahrer_gtfs_work_inventory_path($companyId);
-    $inventory = lehrfahrer_gtfs_work_read_json($path);
-    if (!is_array($inventory)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
-    $found = false;
-    foreach ($inventory['entries'] as &$entry) {
-        if (strval($entry['routeId'] ?? '') !== $routeId || strval($entry['variantId'] ?? '') !== $variantId) continue;
-        $entry = $update($entry);
-        $entry['updatedAt'] = date('c');
-        $found = true;
-        break;
-    }
-    unset($entry);
-    if (!$found) throw new RuntimeException('GTFS-Arbeitsvariante fehlt.');
-    $inventory['updatedAt'] = date('c');
-    lehrfahrer_gtfs_work_write_json($path, $inventory);
-    return $inventory;
+function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update, bool $requireUnique = false, bool $touchEntry = true): array {
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $routeId, $variantId, $update, $requireUnique, $touchEntry): array {
+        $path = lehrfahrer_gtfs_work_inventory_path($companyId);
+        $inventory = lehrfahrer_gtfs_work_read_json($path);
+        if (!is_array($inventory)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
+        if ($requireUnique) {
+            $matches = count(array_filter($inventory['entries'] ?? [], static fn($entry): bool =>
+                is_array($entry) && strval($entry['routeId'] ?? '') === $routeId && strval($entry['variantId'] ?? '') === $variantId));
+            if ($matches !== 1) throw new RuntimeException('GTFS-Fuehrung ist nicht eindeutig im Arbeitsvorrat vorhanden.');
+        }
+        $found = false;
+        foreach ($inventory['entries'] as &$entry) {
+            if (strval($entry['routeId'] ?? '') !== $routeId || strval($entry['variantId'] ?? '') !== $variantId) continue;
+            $entry = $update($entry, $inventory);
+            if ($touchEntry) $entry['updatedAt'] = date('c');
+            $found = true;
+            break;
+        }
+        unset($entry);
+        if (!$found) throw new RuntimeException('GTFS-Arbeitsvariante fehlt.');
+        $inventory['updatedAt'] = date('c');
+        lehrfahrer_gtfs_work_write_json($path, $inventory);
+        return $inventory;
+    });
+}
+
+function lehrfahrer_gtfs_work_set_archived(string $companyId, string $indexPath, string $routeId, string $variantId, bool $archived, bool $confirmed = false): array {
+    if ($routeId === '' || $variantId === '') throw new InvalidArgumentException('GTFS-Fuehrung fehlt.');
+    return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId,
+        static function (array $entry, array $inventory) use ($indexPath, $routeId, $variantId, $archived, $confirmed): array {
+            if (($entry['timetableStatus'] ?? '') === 'ENTFALLEN') throw new RuntimeException('GTFS-Fuehrung ist nicht mehr im CURRENT.');
+            $index = lehrfahrer_gtfs_change_read_index($indexPath, [lehrfahrer_gtfs_operator_id_from_index($indexPath)]);
+            if (!hash_equals(strval($inventory['sourceIndexSha256'] ?? ''), strval($index['sha256']))) {
+                throw new RuntimeException('GTFS-Arbeitsvorrat gehoert nicht zum aktuellen Index.');
+            }
+            $matches = 0;
+            foreach ($index['routes'] as $route) {
+                if (strval($route['routeId']) !== $routeId) continue;
+                foreach ($route['variants'] as $variant) {
+                    if (strval($variant['variantId']) === $variantId) $matches++;
+                }
+            }
+            if ($matches !== 1) throw new RuntimeException('GTFS-Fuehrung ist im CURRENT nicht eindeutig vorhanden.');
+            if ($archived && !$confirmed && (($entry['status'] ?? '') !== 'UNGEPRUEFT'
+                || ($entry['draftPrepared'] ?? false) === true || !empty($entry['savedRoute']))) {
+                throw new RuntimeException('Bearbeitete GTFS-Fuehrung erfordert eine bestaetigte Archivierung.');
+            }
+            $entry['archived'] = $archived;
+            return $entry;
+        }, true, false);
 }
 
 function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, string $variantId, string $status): array {

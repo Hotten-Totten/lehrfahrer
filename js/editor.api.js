@@ -2175,6 +2175,8 @@ function gtfsWorkStatusLabel(status) {
   })[status] || status;
 }
 
+let gtfsWorkShowArchive = false;
+
 function gtfsWorkDisplayRows(entries) {
   const normalize = value => String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   const rows = entries.map(entry => {
@@ -2209,13 +2211,22 @@ function renderGtfsWorkInventory(inventory) {
   const completeness = document.getElementById("gtfsWorkCompleteness");
   const list = document.getElementById("gtfsWorkList");
   const report = document.getElementById("gtfsWorkReport");
+  const archiveView = document.getElementById("gtfsWorkArchiveBtn");
   if (!modal || !completeness || !list || !report) return;
   const complete = inventory.completeness || {};
   completeness.textContent = `${Number(complete.capturedLineCount || 0)}/${Number(complete.expectedLineCount || 0)} Linien erfasst · ${Number(complete.capturedVariantCount || 0)}/${Number(complete.expectedVariantCount || 0)} Varianten erfasst`;
   list.replaceChildren();
 
   const currentEntries = (inventory.entries || []).filter(entry => entry.timetableStatus !== "ENTFALLEN");
-  gtfsWorkDisplayRows(currentEntries).forEach(({ entry, line, start, end, number }) => {
+  if (archiveView) {
+    archiveView.textContent = gtfsWorkShowArchive ? "Arbeitsvorrat" : "Archiv";
+    archiveView.setAttribute("aria-pressed", String(gtfsWorkShowArchive));
+    archiveView.onclick = () => {
+      gtfsWorkShowArchive = !gtfsWorkShowArchive;
+      renderGtfsWorkInventory(inventory);
+    };
+  }
+  gtfsWorkDisplayRows(currentEntries).filter(({ entry }) => (entry.archived === true) === gtfsWorkShowArchive).forEach(({ entry, line, start, end, number }) => {
     const row = gtfsChangeElement("div", "gtfs-work-row");
     row.dataset.status = entry.status;
     row.dataset.timetableStatus = entry.timetableStatus || "";
@@ -2263,7 +2274,36 @@ function renderGtfsWorkInventory(inventory) {
         report.textContent = err.message || "Lehrfahrer-Route konnte nicht erstellt werden.";
       }
     };
-    row.append(status, create);
+    const actions = gtfsChangeElement("span", "gtfs-work-actions");
+    if (!gtfsWorkShowArchive) actions.appendChild(create);
+    const archive = document.createElement("button");
+    archive.type = "button";
+    archive.className = "gtfs-work-archive-action";
+    archive.textContent = gtfsWorkShowArchive ? "Wiederherstellen" : "Archivieren";
+    archive.onclick = async () => {
+      const archiveTarget = !gtfsWorkShowArchive;
+      const needsConfirmation = entry.status !== "UNGEPRUEFT" || entry.draftPrepared === true || Boolean(entry.savedRoute);
+      let confirmed = false;
+      if (archiveTarget && needsConfirmation) {
+        const accepted = await showConfirmDialog({ title: "Führung archivieren",
+          message: "Diese Führung enthält bereits einen Arbeitsstand oder eine Lehrfahrer-Route. Beim Archivieren wird nichts gelöscht oder zurückgesetzt. Die Führung wird lediglich aus dem normalen Arbeitsvorrat ausgeblendet.",
+          okText: "Archivieren", cancelText: "Abbrechen" });
+        if (!accepted) return;
+        confirmed = true;
+      }
+      archive.disabled = true;
+      try {
+        const result = await postGtfsImport({ action: "workArchive", routeId: entry.routeId,
+          variantId: entry.variantId, archived: archiveTarget ? "1" : "0", confirmed: confirmed ? "1" : "0" });
+        renderGtfsWorkInventory(result.inventory);
+      } catch (err) {
+        archive.disabled = false;
+        report.className = "gtfs-change-report warn";
+        report.textContent = err.message || "Archivstatus konnte nicht gespeichert werden.";
+      }
+    };
+    actions.appendChild(archive);
+    row.append(status, actions);
     list.appendChild(row);
   });
 
@@ -2331,6 +2371,7 @@ async function loadGtfsVersionInfo(boxId, compact = false) {
 async function openGtfsWorkInventory() {
   try {
     const result = await postGtfsImport({ action: "workInventory" });
+    gtfsWorkShowArchive = false;
     renderGtfsWorkInventory(result.inventory);
     void loadGtfsVersionInfo("gtfsVersionInfo");
   } catch (err) {

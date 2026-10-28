@@ -3663,6 +3663,9 @@ button.danger:hover {
 .gtfs-work-table-head { position: sticky; top: 82px; z-index: 1; padding: 10px 24px; background: #e8edf4; font-size: .8rem; font-weight: 750; }
 .gtfs-work-list { padding: 8px 24px 20px; }
 .gtfs-work-row { padding: 9px 0; border-bottom: 1px solid #dce3ed; font-size: .86rem; }
+.gtfs-work-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gtfs-work-actions .gtfs-work-archive-action { border: 0; background: transparent; color: #51627d; padding: 5px 2px; font-size: .8rem; }
+.gtfs-work-actions .gtfs-work-archive-action:hover { color: #174bbd; text-decoration: underline; }
 .gtfs-work-row[data-timetable-status="ENTFALLEN"] { opacity: .65; text-decoration: line-through; }
 .gtfs-work-row button:disabled, .gtfs-work-row select:disabled { opacity: .55; cursor: wait; }
 

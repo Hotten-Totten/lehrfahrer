@@ -858,6 +858,25 @@ function gtfs_work_status(): void {
     gtfs_reply(['ok' => true, 'inventory' => $inventory]);
 }
 
+function gtfs_work_archive(): void {
+    gtfs_require_cottbus_change_scope();
+    $auth = lehrfahrer_api_require_session();
+    lehrfahrer_auth_require_capability($auth, 'routes.import');
+    lehrfahrer_auth_require_same_origin();
+    lehrfahrer_auth_require_csrf($auth['session']);
+    $routeId = trim(strval($_POST['routeId'] ?? ''));
+    $variantId = trim(strval($_POST['variantId'] ?? ''));
+    $archived = strval($_POST['archived'] ?? '');
+    $confirmed = strval($_POST['confirmed'] ?? '0');
+    if ($routeId === '' || $variantId === '' || !in_array($archived, ['0', '1'], true)
+        || !in_array($confirmed, ['0', '1'], true)) {
+        gtfs_error(400, 'Ungueltige GTFS-Archivaktion.');
+    }
+    $inventory = lehrfahrer_gtfs_work_set_archived(LEHRFAHRER_GTFS_COMPANY_ID,
+        gtfs_index_path(), $routeId, $variantId, $archived === '1', $confirmed === '1');
+    gtfs_reply(['ok' => true, 'inventory' => $inventory]);
+}
+
 function gtfs_require_sqlite(): void {
     if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers(), true)) {
         gtfs_error(501, 'GTFS-Turboindex benötigt PHP PDO_SQLite.');
@@ -1711,6 +1730,7 @@ try {
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);
     if ($action === 'workopen') gtfs_work_open();
     if ($action === 'workstatus') gtfs_work_status();
+    if ($action === 'workarchive') gtfs_work_archive();
     if ($action === 'indexstart') {
         $agencyIds = json_decode(strval($_POST['agencyIds'] ?? '[]'), true);
         if (!is_array($agencyIds)) gtfs_error(400, 'agencyIds muss eine JSON-Liste sein.');
