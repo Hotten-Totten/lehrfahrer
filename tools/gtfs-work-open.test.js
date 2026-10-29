@@ -54,6 +54,10 @@ test('savedRoute verweist nur auf die exakte Tenant-Datei mit passenden GTFS-Ken
       assert.notEqual(run(reference).status, 0, 'ungültiges JSON abgewiesen');
       fs.writeFileSync(file, JSON.stringify({ meta: good.meta }));
       assert.notEqual(run(reference).status, 0, 'kein Route-JSON abgewiesen');
+      fs.writeFileSync(file, JSON.stringify({ ...good, routePoints: [[51, 14]] }));
+      assert.notEqual(run(reference).status, 0, 'Route mit weniger als zwei Routenpunkten abgewiesen');
+      fs.writeFileSync(file, JSON.stringify({ ...good, routePoints: [[51, 14]], route: { original: [[51, 14], [52, 15]] } }));
+      assert.notEqual(run(reference).status, 0, 'route.original ersetzt keine routePoints');
     } finally { fs.rmSync(privateRoot, { recursive: true, force: true }); }
   });
 
@@ -61,11 +65,16 @@ test('workOpen trennt Entwurf und Serverroute und bewahrt Status beim bloßen Ö
   const workOpen = endpoint.slice(endpoint.indexOf('function gtfs_work_open(): void {'),
     endpoint.indexOf('function gtfs_work_status(): void {'));
   assert.match(workOpen, /lehrfahrer_gtfs_work_load_saved_route/);
+  assert.match(workOpen, /lehrfahrer_gtfs_work_unique_entry/);
+  assert.doesNotMatch(workOpen, /lehrfahrer_gtfs_work_reconcile/);
+  assert.match(workOpen, /lehrfahrer_gtfs_work_read_json\(lehrfahrer_gtfs_work_inventory_path/);
+  const inventoryEndpoint = endpoint.slice(endpoint.indexOf('function gtfs_work_inventory_response('),
+    endpoint.indexOf('function gtfs_work_open(): void {'));
+  assert.match(inventoryEndpoint, /lehrfahrer_gtfs_work_reconcile/);
   assert.match(workOpen, /if \(\$reference !== null && \$reference !== ''\)/);
   assert.match(workOpen, /gtfs_reply\(\['ok' => true, 'line' => \$saved\['line'\], 'source' => \$saved\['source'\]/);
   assert.match(workOpen, /lehrfahrer_gtfs_work_prepare/);
-  assert.match(workOpen, /lehrfahrer_gtfs_work_set_status\([^;]*'IN_BEARBEITUNG'\)/);
-  assert.ok(workOpen.indexOf("'source' => $saved['source']") < workOpen.indexOf('lehrfahrer_gtfs_work_set_status'));
+  assert.doesNotMatch(workOpen, /lehrfahrer_gtfs_work_set_status/);
   assert.match(workOpen, /gtfs_error\(409, 'Die gespeicherte Lehrfahrer-Route/);
 });
 
@@ -78,10 +87,14 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
       class WorkReply extends Exception { public array $payload; function __construct(array $payload) { $this->payload = $payload; } }
       function gtfs_require_cottbus_change_scope() {}
       function gtfs_index_path() { return 'index'; }
-      function lehrfahrer_gtfs_operator_id_from_index($path) { return 'agency'; }
-      function lehrfahrer_gtfs_work_reconcile($company, $path, $agencies) {
-        return ['entries' => [['routeId'=>'r10', 'variantId'=>'v2', 'status'=>$GLOBALS['status'],
-          'timetableStatus'=>'UNVERAENDERT', 'savedRoute'=>$GLOBALS['reference']]]];
+      function lehrfahrer_gtfs_work_inventory_path($company) { return $GLOBALS['inventoryPath']; }
+      function lehrfahrer_gtfs_work_read_json($path) { return json_decode(file_get_contents($path),true); }
+      function lehrfahrer_gtfs_work_reconcile($company,$path,$agencies) { throw new Exception('Unzulässiger Reconcile'); }
+      function lehrfahrer_gtfs_work_unique_entry($inventory,$routeId,$variantId) {
+        $matches=array_values(array_filter($inventory['entries'], static fn($entry) =>
+          $entry['routeId']===$routeId && $entry['variantId']===$variantId));
+        if (count($matches)!==1) throw new RuntimeException('Nicht eindeutig');
+        return $matches[0];
       }
       function lehrfahrer_gtfs_work_load_saved_route($company, $reference, $routeId, $variantId) {
         $GLOBALS['loads'][] = 'saved';
@@ -99,28 +112,45 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
       function gtfs_error($status, $message) { gtfs_reply(['ok'=>false,'error'=>$message],$status); }
       ${workOpen}
       $_POST = ['routeId'=>'r10','variantId'=>'v2']; $results = [];
+      $GLOBALS['inventoryPath']=tempnam(sys_get_temp_dir(),'lf-work-open-');
       foreach ([['UNGEPRUEFT',null],['IN_BEARBEITUNG','valid'],['GEPRUEFT','valid'],
-        ['FREIGEGEBEN','valid'],['GEPRUEFT','invalid']] as [$status,$reference]) {
+        ['FREIGEGEBEN','valid'],['GEPRUEFT','invalid'],['GEPRUEFT','valid'],['GEPRUEFT','valid']] as $index=>[$status,$reference]) {
         $GLOBALS['status']=$status; $GLOBALS['reference']=$reference;
+        $GLOBALS['duplicate']=$index===5;
+        $entry=['routeId'=>'r10','variantId'=>'v2','status'=>$status,
+          'timetableStatus'=>'UNVERAENDERT','savedRoute'=>$reference];
+        $entries=$index===6 ? [] : ($GLOBALS['duplicate'] ? [$entry,$entry] : [$entry]);
+        file_put_contents($GLOBALS['inventoryPath'],json_encode(['entries'=>$entries]));
+        $before=file_get_contents($GLOBALS['inventoryPath']);
         $GLOBALS['loads']=[]; $GLOBALS['statusChanges']=[];
         try { gtfs_work_open(); } catch (WorkReply $reply) { $response=$reply->payload; }
-        $results[]=['response'=>$response,'loads'=>$GLOBALS['loads'],'statusChanges'=>$GLOBALS['statusChanges']];
+        $results[]=['response'=>$response,'loads'=>$GLOBALS['loads'],'statusChanges'=>$GLOBALS['statusChanges'],
+          'inventoryUnchanged'=>file_get_contents($GLOBALS['inventoryPath'])===$before];
       }
+      unlink($GLOBALS['inventoryPath']);
       echo json_encode($results);`;
     const result = spawnSync(php, ['-r', code], { cwd: root, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     const rows = JSON.parse(result.stdout);
     assert.deepEqual(rows[0].loads, ['draft']);
-    assert.deepEqual(rows[0].statusChanges, ['IN_BEARBEITUNG']);
+    assert.deepEqual(rows[0].statusChanges, []);
+    assert.equal(rows[0].inventoryUnchanged, true);
     for (const row of rows.slice(1, 4)) {
       assert.deepEqual(row.loads, ['saved']);
       assert.deepEqual(row.statusChanges, []);
+      assert.equal(row.inventoryUnchanged, true);
       assert.equal(row.response.line.kind, 'saved');
       assert.equal(row.response.source.fileBase, 'Route_02');
     }
     assert.equal(rows[4].response.httpStatus, 409);
     assert.deepEqual(rows[4].loads, ['saved']);
     assert.deepEqual(rows[4].statusChanges, []);
+    assert.equal(rows[5].response.httpStatus, 409);
+    assert.deepEqual(rows[5].loads, []);
+    assert.deepEqual(rows[5].statusChanges, []);
+    assert.equal(rows[5].inventoryUnchanged, true);
+    assert.equal(rows[6].response.httpStatus, 409);
+    assert.equal(rows[6].inventoryUnchanged, true);
   });
 
 test('Frontend setzt Ladequelle nur nach gespeicherter Route und berechnet nur Entwurf neu', async () => {
@@ -137,9 +167,14 @@ test('Frontend setzt Ladequelle nur nach gespeicherter Route und berechnet nur E
   const state = { loadedServerRouteSource: null };
   let builds = 0;
   let response;
+  const requests = [];
   const context = { state, document: { getElementById: id => nodes[id], createElement: node },
     gtfsChangeElement(_tag, _class, text) { const item = node(); item.textContent = text; return item; },
-    postGtfsImport: async () => response, loadLineFromData() { state.loadedServerRouteSource = null; },
+    postGtfsImport: async request => {
+      requests.push(request);
+      return request.action === 'workStatus' ? { inventory: { entries: [], completeness: {} } } : response;
+    },
+    loadLineFromData() { state.loadedServerRouteSource = null; },
     buildStreetRouteFromStops: async () => { builds++; } };
   vm.runInNewContext(identity + api.slice(begin, end) + '\nglobalThis.render = renderGtfsWorkInventory;', context);
   const entry = { routeId: 'r10', variantId: 'v2', line: '10', stopNames: ['A', 'B'], stopCount: 2,
@@ -157,6 +192,15 @@ test('Frontend setzt Ladequelle nur nach gespeicherter Route und berechnet nur E
   assert.equal(state.loadedServerRouteSource, null);
   assert.equal(builds, 1);
   assert.equal(entry.status, 'GEPRUEFT');
+  assert.equal(requests.filter(request => request.action === 'workStatus').length, 0);
+  const draft = { ...entry, status: 'UNGEPRUEFT', draftPrepared: false, savedRoute: null };
+  context.render({ entries: [draft], completeness: {} });
+  const create = nodes.gtfsWorkList.children[0].children[5].children[0];
+  response = { line: { stops: [], routePoints: [] }, inventory: { entries: [draft], completeness: {} } };
+  await create.onclick();
+  assert.equal(requests.at(-1).action, 'workStatus');
+  assert.equal(requests.at(-1).status, 'IN_BEARBEITUNG');
+  assert.equal(builds, 2);
 });
 
 test('aktualisierter API-Cache-Key entspricht der Datei', () => {

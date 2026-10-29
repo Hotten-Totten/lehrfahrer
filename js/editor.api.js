@@ -2255,14 +2255,20 @@ function renderGtfsWorkInventory(inventory) {
       gtfsChangeElement("span", "", String(Number(entry.stopCount || 0)))
     );
     const status = document.createElement("select");
-    ["UNGEPRUEFT", "IN_BEARBEITUNG", "GEPRUEFT", "FREIGEGEBEN"].forEach(value => {
+    const nextStatus = {
+      UNGEPRUEFT: "IN_BEARBEITUNG",
+      IN_BEARBEITUNG: "GEPRUEFT",
+      GEPRUEFT: "FREIGEGEBEN"
+    }[entry.status];
+    [entry.status, nextStatus].filter(Boolean).forEach(value => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = gtfsWorkStatusLabel(value);
       status.appendChild(option);
     });
     status.value = entry.status;
-    status.disabled = entry.timetableStatus === "ENTFALLEN";
+    const statusUnavailable = entry.timetableStatus === "ENTFALLEN" || !nextStatus;
+    status.disabled = statusUnavailable;
     status.onchange = async () => {
       status.disabled = true;
       try {
@@ -2270,7 +2276,7 @@ function renderGtfsWorkInventory(inventory) {
         renderGtfsWorkInventory(result.inventory);
       } catch (err) {
         status.value = entry.status;
-        status.disabled = false;
+        status.disabled = statusUnavailable;
         report.className = "gtfs-change-report warn";
         report.textContent = err.message || "Status konnte nicht gespeichert werden.";
       }
@@ -2283,6 +2289,13 @@ function renderGtfsWorkInventory(inventory) {
       create.disabled = true;
       try {
         const result = await postGtfsImport({ action: "workOpen", routeId: entry.routeId, variantId: entry.variantId });
+        const openedEntry = result.inventory?.entries?.find(item =>
+          item.routeId === entry.routeId && item.variantId === entry.variantId);
+        if (!result.source && openedEntry?.status === "UNGEPRUEFT") {
+          const started = await postGtfsImport({ action: "workStatus", routeId: entry.routeId,
+            variantId: entry.variantId, status: "IN_BEARBEITUNG" });
+          renderGtfsWorkInventory(started.inventory);
+        }
         loadLineFromData(result.line);
         if (result.source) {
           const source = result.source;

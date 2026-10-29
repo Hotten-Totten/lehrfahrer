@@ -237,8 +237,11 @@ function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $refere
     }
     if (!is_file($path)) throw new RuntimeException('Gespeicherte Lehrfahrer-Route wurde nicht gefunden.');
     $line = lehrfahrer_gtfs_work_read_json($path);
+    $points = $line['routePoints'] ?? null;
     if ($line === null || !is_array($line['stops'] ?? null)
-        || !is_array($line['routePoints'] ?? ($line['route']['original'] ?? null))) {
+        || !is_array($points) || count(array_filter($points, static fn($point): bool =>
+            is_array($point) && is_numeric($point['lat'] ?? ($point[0] ?? null))
+                && is_numeric($point['lon'] ?? ($point[1] ?? null)))) < 2) {
         throw new RuntimeException('Gespeicherte Lehrfahrer-Route ist kein gueltiges Route-JSON.');
     }
     $work = $line['meta']['gtfsWork'] ?? null;
@@ -262,20 +265,26 @@ function lehrfahrer_gtfs_work_prepare_all(string $companyId, string $indexPath, 
     return $count;
 }
 
-function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update, bool $requireUnique = false, bool $touchEntry = true): array {
-    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $routeId, $variantId, $update, $requireUnique, $touchEntry): array {
+function lehrfahrer_gtfs_work_unique_entry(array $inventory, string $routeId, string $variantId): array {
+    $matches = array_values(array_filter($inventory['entries'] ?? [], static fn($entry): bool =>
+        is_array($entry) && strval($entry['routeId'] ?? '') === $routeId
+            && strval($entry['variantId'] ?? '') === $variantId));
+    if (count($matches) !== 1) throw new RuntimeException('GTFS-Fuehrung ist nicht eindeutig im Arbeitsvorrat vorhanden.');
+    return $matches[0];
+}
+
+function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update, bool $requireUnique = false, bool $touchEntry = true, bool $skipUnchanged = false): array {
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $routeId, $variantId, $update, $requireUnique, $touchEntry, $skipUnchanged): array {
         $path = lehrfahrer_gtfs_work_inventory_path($companyId);
         $inventory = lehrfahrer_gtfs_work_read_json($path);
         if (!is_array($inventory)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
-        if ($requireUnique) {
-            $matches = count(array_filter($inventory['entries'] ?? [], static fn($entry): bool =>
-                is_array($entry) && strval($entry['routeId'] ?? '') === $routeId && strval($entry['variantId'] ?? '') === $variantId));
-            if ($matches !== 1) throw new RuntimeException('GTFS-Fuehrung ist nicht eindeutig im Arbeitsvorrat vorhanden.');
-        }
+        if ($requireUnique) lehrfahrer_gtfs_work_unique_entry($inventory, $routeId, $variantId);
         $found = false;
         foreach ($inventory['entries'] as &$entry) {
             if (strval($entry['routeId'] ?? '') !== $routeId || strval($entry['variantId'] ?? '') !== $variantId) continue;
-            $entry = $update($entry, $inventory);
+            $updated = $update($entry, $inventory);
+            if ($skipUnchanged && $updated === $entry) return $inventory;
+            $entry = $updated;
             if ($touchEntry) $entry['updatedAt'] = date('c');
             $found = true;
             break;
@@ -316,32 +325,38 @@ function lehrfahrer_gtfs_work_set_archived(string $companyId, string $indexPath,
 
 function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, string $variantId, string $status): array {
     if (!in_array($status, LEHRFAHRER_GTFS_WORK_STATUSES, true)) throw new InvalidArgumentException('Ungueltiger Freigabestatus.');
-    $hasSavedRoute = !in_array($status, ['GEPRUEFT', 'FREIGEGEBEN'], true)
-        || lehrfahrer_gtfs_work_has_saved_route($companyId, $routeId, $variantId);
-    return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry) use ($status, $hasSavedRoute): array {
-        if (!$hasSavedRoute) {
-            throw new RuntimeException('Vor Pruefung oder Freigabe muss eine Lehrfahrer-Route gespeichert sein.');
+    return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry) use ($companyId, $routeId, $variantId, $status): array {
+        $current = strval($entry['status'] ?? '');
+        if (!in_array($current, LEHRFAHRER_GTFS_WORK_STATUSES, true)) {
+            throw new RuntimeException('Bisheriger GTFS-Arbeitsstatus ist ungueltig.');
+        }
+        if ($status === $current) return $entry;
+        $next = [
+            'UNGEPRUEFT' => 'IN_BEARBEITUNG',
+            'IN_BEARBEITUNG' => 'GEPRUEFT',
+            'GEPRUEFT' => 'FREIGEGEBEN',
+        ];
+        if (($next[$current] ?? null) !== $status) {
+            throw new RuntimeException('Dieser GTFS-Arbeitsstatus kann nicht direkt gesetzt werden.');
+        }
+        if (in_array($status, ['GEPRUEFT', 'FREIGEGEBEN'], true)) {
+            if (($entry['timetableStatus'] ?? '') === 'ENTFALLEN') {
+                throw new RuntimeException('GTFS-Fuehrung ist nicht mehr im CURRENT.');
+            }
+            $reference = $entry['savedRoute'] ?? null;
+            if (!is_string($reference) || $reference === '') {
+                throw new RuntimeException('Vor Pruefung oder Freigabe muss eine gueltige Lehrfahrer-Route gespeichert sein.');
+            }
+            try {
+                lehrfahrer_gtfs_work_load_saved_route($companyId, $reference, $routeId, $variantId);
+            } catch (Throwable $error) {
+                throw new RuntimeException('Vor Pruefung oder Freigabe muss eine gueltige Lehrfahrer-Route gespeichert sein.', 0, $error);
+            }
         }
         $entry['status'] = $status;
         $entry['reviewRequired'] = $status !== 'FREIGEGEBEN';
         return $entry;
-    });
-}
-
-function lehrfahrer_gtfs_work_has_saved_route(string $companyId, string $routeId, string $variantId): bool {
-    $root = lehrfahrer_tenant_area($companyId, 'lines');
-    if (!is_dir($root) || is_link($root)) return false;
-    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
-    foreach ($iterator as $file) {
-        if ($file->isLink() || !$file->isFile() || strtolower($file->getExtension()) !== 'json') continue;
-        $data = json_decode(strval(@file_get_contents($file->getPathname())), true);
-        if (!is_array($data)) continue;
-        $work = $data['meta']['gtfsWork'] ?? null;
-        if (!is_array($work) || strval($work['routeId'] ?? '') !== $routeId || strval($work['variantId'] ?? '') !== $variantId) continue;
-        $points = $data['routePoints'] ?? ($data['route']['original'] ?? []);
-        if (is_array($points) && count($points) >= 2) return true;
-    }
-    return false;
+    }, true, true, true);
 }
 
 function lehrfahrer_gtfs_work_mark_saved(string $companyId, array $data, string $routeReference): void {

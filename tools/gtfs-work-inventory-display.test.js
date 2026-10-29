@@ -30,7 +30,7 @@ function node() {
     querySelectorAll() { return []; } };
 }
 
-function setup(inventory, confirmation = true) {
+function setup(inventory, confirmation = true, statusError = false) {
   const ids = ['gtfsWorkModal', 'gtfsWorkCompleteness', 'gtfsWorkList', 'gtfsWorkReport',
     'gtfsWorkCloseBtn', 'gtfsWorkPrepareAllBtn', 'gtfsWorkArchiveBtn'];
   const elements = Object.fromEntries(ids.map(id => [id, node()]));
@@ -45,6 +45,7 @@ function setup(inventory, confirmation = true) {
         target.archived = request.archived === '1';
         return { inventory };
       }
+      if (request.action === 'workStatus' && statusError) throw new Error('Uebergang abgelehnt');
       return request.action === 'workStatus' ? { inventory } : { line: {} };
     },
     showConfirmDialog: async options => { confirmCalls.push(options); return confirmation; },
@@ -52,6 +53,26 @@ function setup(inventory, confirmation = true) {
   const api = vm.runInNewContext(`${source.slice(start, end)}; ({ gtfsWorkDisplayRows, renderGtfsWorkInventory })`, context);
   return { ...api, elements, calls, confirmCalls };
 }
+
+test('Statusauswahl bietet nur die nächste Stufe an und behält den Status bei Server-Ablehnung', async () => {
+  const entries = ['UNGEPRUEFT', 'IN_BEARBEITUNG', 'GEPRUEFT', 'FREIGEGEBEN']
+    .map((status, index) => entry(`status-${index}`, ['A', 'B'], { status }));
+  const inventory = { entries, completeness: {} };
+  const { renderGtfsWorkInventory, elements } = setup(inventory, true, true);
+  renderGtfsWorkInventory(inventory);
+  const selectors = elements.gtfsWorkList.children.map(row => row.children[4]);
+  assert.deepEqual(selectors.map(select => select.children.map(option => option.value)), [
+    ['UNGEPRUEFT', 'IN_BEARBEITUNG'], ['IN_BEARBEITUNG', 'GEPRUEFT'],
+    ['GEPRUEFT', 'FREIGEGEBEN'], ['FREIGEGEBEN']
+  ]);
+  assert.equal(selectors[3].disabled, true);
+  selectors[1].value = 'GEPRUEFT';
+  await selectors[1].onchange();
+  assert.equal(selectors[1].value, 'IN_BEARBEITUNG');
+  assert.equal(selectors[1].disabled, false);
+  assert.equal(entries[1].status, 'IN_BEARBEITUNG');
+  assert.match(elements.gtfsWorkReport.textContent, /Uebergang abgelehnt/);
+});
 
 test('Führungen zeigen beide echten Endpunkte und gruppieren je Linie und Fahrtrichtung', () => {
   const entries = [

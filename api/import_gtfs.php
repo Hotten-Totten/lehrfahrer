@@ -842,12 +842,15 @@ function gtfs_work_open(): void {
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
-    $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [lehrfahrer_gtfs_operator_id_from_index(gtfs_index_path())]);
-    $matches = array_values(array_filter($inventory['entries'], static fn(array $entry): bool =>
-        strval($entry['routeId'] ?? '') === $routeId && strval($entry['variantId'] ?? '') === $variantId
-            && ($entry['timetableStatus'] ?? '') !== 'ENTFALLEN'));
-    if (count($matches) !== 1) gtfs_error(409, 'GTFS-Fuehrung ist im aktuellen Arbeitsvorrat nicht eindeutig vorhanden.');
-    $reference = $matches[0]['savedRoute'] ?? null;
+    $inventory = lehrfahrer_gtfs_work_read_json(lehrfahrer_gtfs_work_inventory_path(LEHRFAHRER_GTFS_COMPANY_ID));
+    if (!is_array($inventory)) gtfs_error(409, 'GTFS-Arbeitsvorrat fehlt.');
+    try {
+        $entry = lehrfahrer_gtfs_work_unique_entry($inventory, $routeId, $variantId);
+    } catch (RuntimeException $error) {
+        gtfs_error(409, 'GTFS-Fuehrung ist im aktuellen Arbeitsvorrat nicht eindeutig vorhanden.');
+    }
+    if (($entry['timetableStatus'] ?? '') === 'ENTFALLEN') gtfs_error(409, 'GTFS-Fuehrung ist im aktuellen Arbeitsvorrat nicht eindeutig vorhanden.');
+    $reference = $entry['savedRoute'] ?? null;
     if ($reference !== null && $reference !== '') {
         try {
             if (!is_string($reference)) throw new RuntimeException('Ungueltige Routenreferenz.');
@@ -858,7 +861,6 @@ function gtfs_work_open(): void {
         gtfs_reply(['ok' => true, 'line' => $saved['line'], 'source' => $saved['source'], 'inventory' => $inventory]);
     }
     $line = lehrfahrer_gtfs_work_prepare(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), $routeId, $variantId);
-    $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, 'IN_BEARBEITUNG');
     gtfs_reply(['ok' => true, 'line' => $line, 'inventory' => $inventory]);
 }
 
@@ -868,7 +870,20 @@ function gtfs_work_status(): void {
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     $status = strtoupper(trim(strval($_POST['status'] ?? '')));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
-    $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, $status);
+    try {
+        $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, $status);
+    } catch (InvalidArgumentException $error) {
+        gtfs_error(400, 'Ungueltiger Freigabestatus.');
+    } catch (RuntimeException $error) {
+        if (in_array($error->getMessage(), [
+            'Bisheriger GTFS-Arbeitsstatus ist ungueltig.',
+            'GTFS-Fuehrung ist nicht eindeutig im Arbeitsvorrat vorhanden.',
+            'GTFS-Fuehrung ist nicht mehr im CURRENT.',
+            'Dieser GTFS-Arbeitsstatus kann nicht direkt gesetzt werden.',
+            'Vor Pruefung oder Freigabe muss eine gueltige Lehrfahrer-Route gespeichert sein.',
+        ], true)) gtfs_error(409, $error->getMessage());
+        throw $error;
+    }
     gtfs_reply(['ok' => true, 'inventory' => $inventory]);
 }
 
