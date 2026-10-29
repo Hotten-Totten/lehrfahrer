@@ -415,20 +415,6 @@ async function saveLineToServer() {
 
   let forceOverwrite = false;
   const existingEntry = await findExistingLineEntry(city, lineFolder, categoryFolder, fileBase);
-  const loadedSource = state.loadedServerRouteSource;
-  const saveTarget = routeStorageIdentity(city, lineFolder, categoryFolder, fileBase);
-  const sameLoadedServerRoute = isLoadedServerRouteTarget(saveTarget);
-  console.debug("[LF SAVE DEBUG]", {
-    loadedServerRouteSource: loadedSource ? { ...loadedSource } : null,
-    saveTarget,
-    sameCity: !!loadedSource && loadedSource.city === city,
-    sameLineFolder: !!loadedSource && loadedSource.lineFolder === lineFolder,
-    sameCategoryFolder: !!loadedSource && loadedSource.categoryFolder === categoryFolder,
-    sameFileBase: !!loadedSource && loadedSource.fileBase === fileBase,
-    sameLoadedServerRoute,
-    existingEntryFound: !!existingEntry,
-    confirmTriggered: !!existingEntry && !sameLoadedServerRoute
-  });
   if (existingEntry) {
     if (!isLoadedServerRouteTarget(routeStorageIdentity(city, lineFolder, categoryFolder, fileBase))) {
       const overwriteOk = confirm(
@@ -2305,12 +2291,6 @@ function renderGtfsWorkInventory(inventory) {
           );
           if (!state.loadedServerRouteSource) throw new Error("Gespeicherte Routenquelle ist unvollständig.");
         }
-        console.debug("[LF WORKOPEN DEBUG]", {
-          kind: result.source ? "savedRoute" : "draft",
-          savedRoutePath: result.source ? entry.savedRoute || null : null,
-          routeLoaded: true,
-          loadedServerRouteSource: state.loadedServerRouteSource ? { ...state.loadedServerRouteSource } : null
-        });
         modal.classList.add("hidden");
         if (!result.source) await buildStreetRouteFromStops();
       } catch (err) {
