@@ -2277,15 +2277,22 @@ function renderGtfsWorkInventory(inventory) {
     };
     const create = document.createElement("button");
     create.type = "button";
-    create.textContent = entry.draftPrepared ? "Route öffnen" : "Lehrfahrer-Route erstellen";
+    create.textContent = entry.savedRoute || entry.draftPrepared ? "Route öffnen" : "Lehrfahrer-Route erstellen";
     create.disabled = entry.timetableStatus === "ENTFALLEN";
     create.onclick = async () => {
       create.disabled = true;
       try {
         const result = await postGtfsImport({ action: "workOpen", routeId: entry.routeId, variantId: entry.variantId });
         loadLineFromData(result.line);
+        if (result.source) {
+          const source = result.source;
+          state.loadedServerRouteSource = routeStorageIdentity(
+            source.city, source.lineFolder, source.categoryFolder, source.fileBase
+          );
+          if (!state.loadedServerRouteSource) throw new Error("Gespeicherte Routenquelle ist unvollständig.");
+        }
         modal.classList.add("hidden");
-        await buildStreetRouteFromStops();
+        if (!result.source) await buildStreetRouteFromStops();
       } catch (err) {
         create.disabled = false;
         report.className = "gtfs-change-report warn";

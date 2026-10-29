@@ -222,6 +222,36 @@ function lehrfahrer_gtfs_work_prepare(string $companyId, string $indexPath, stri
     return $draft;
 }
 
+function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $reference, string $routeId, string $variantId): array {
+    $parts = explode('/', $reference);
+    if (count($parts) !== 4 || !str_ends_with($parts[3], '.json')) {
+        throw new RuntimeException('Gespeicherte Lehrfahrer-Route hat einen ungueltigen Pfad.');
+    }
+    try {
+        [$city, $lineFolder, $categoryFolder, $file] = $parts;
+        $fileBase = substr($file, 0, -5);
+        if ($fileBase === '') throw new InvalidArgumentException('Leerer Routenname.');
+        $path = lehrfahrer_route_file($companyId, $city, $fileBase, 'json', $lineFolder, $categoryFolder);
+    } catch (InvalidArgumentException $error) {
+        throw new RuntimeException('Gespeicherte Lehrfahrer-Route hat einen ungueltigen Pfad.', 0, $error);
+    }
+    if (!is_file($path)) throw new RuntimeException('Gespeicherte Lehrfahrer-Route wurde nicht gefunden.');
+    $line = lehrfahrer_gtfs_work_read_json($path);
+    if ($line === null || !is_array($line['stops'] ?? null)
+        || !is_array($line['routePoints'] ?? ($line['route']['original'] ?? null))) {
+        throw new RuntimeException('Gespeicherte Lehrfahrer-Route ist kein gueltiges Route-JSON.');
+    }
+    $work = $line['meta']['gtfsWork'] ?? null;
+    if (!is_array($work) || strval($work['routeId'] ?? '') !== $routeId
+        || strval($work['variantId'] ?? '') !== $variantId) {
+        throw new RuntimeException('Gespeicherte Lehrfahrer-Route gehoert nicht zu dieser GTFS-Fuehrung.');
+    }
+    return ['line' => $line, 'source' => [
+        'city' => $city, 'lineFolder' => $lineFolder,
+        'categoryFolder' => $categoryFolder, 'fileBase' => $fileBase,
+    ]];
+}
+
 function lehrfahrer_gtfs_work_prepare_all(string $companyId, string $indexPath, array $inventory): int {
     $count = 0;
     foreach ($inventory['entries'] as $entry) {
