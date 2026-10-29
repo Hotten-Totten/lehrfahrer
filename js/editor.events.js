@@ -321,7 +321,14 @@ if (showSimplifiedRouteBtn) {
 
 // ---------- Daten ----------
 
-clearBtn.addEventListener("click", () => {
+clearBtn.addEventListener("click", event => {
+  console.debug("[LF CLEAR DEBUG]", {
+    isTrusted: event.isTrusted,
+    type: event.type,
+    target: { tag: event.target?.tagName || null, id: event.target?.id || null },
+    currentTarget: { tag: event.currentTarget?.tagName || null, id: event.currentTarget?.id || null },
+    stack: new Error().stack?.split("\n").slice(0, 6).join("\n") || null
+  });
   if (!confirm("Wirklich alle Linien-Daten löschen?")) return;
 
   if (!historyRestoreRunning) pushHistorySnapshot("Alles gelöscht");
