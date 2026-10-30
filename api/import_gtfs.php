@@ -854,7 +854,12 @@ function gtfs_work_open(): void {
     if ($reference !== null && $reference !== '') {
         try {
             if (!is_string($reference)) throw new RuntimeException('Ungueltige Routenreferenz.');
-            $saved = lehrfahrer_gtfs_work_load_saved_route(LEHRFAHRER_GTFS_COMPANY_ID, $reference, $routeId, $variantId);
+            try {
+                $saved = lehrfahrer_gtfs_work_load_saved_route(LEHRFAHRER_GTFS_COMPANY_ID, $reference, $routeId, $variantId);
+            } catch (Throwable $error) {
+                $saved = lehrfahrer_gtfs_work_load_saved_route_for_repair(
+                    LEHRFAHRER_GTFS_COMPANY_ID, $inventory, $entry, $routeId, $variantId);
+            }
         } catch (Throwable $error) {
             gtfs_error(409, 'Die gespeicherte Lehrfahrer-Route konnte nicht eindeutig geoeffnet werden. Bitte die Routenreferenz pruefen.');
         }

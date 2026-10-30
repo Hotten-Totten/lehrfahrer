@@ -634,10 +634,14 @@ if ($isGtfsWork) {
         echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
         exit;
     }
-} elseif (file_put_contents($filePath, $json) === false) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Datei konnte nicht gespeichert werden'], JSON_UNESCAPED_UNICODE);
-    exit;
+} else {
+    try {
+        lehrfahrer_gtfs_work_save_manual_route($companyId, $filePath, $json);
+    } catch (Throwable $error) {
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
 $pdfSaved = false;

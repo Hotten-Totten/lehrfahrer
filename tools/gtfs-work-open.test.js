@@ -61,6 +61,76 @@ test('savedRoute verweist nur auf die exakte Tenant-Datei mit passenden GTFS-Ken
     } finally { fs.rmSync(privateRoot, { recursive: true, force: true }); }
   });
 
+test('eindeutige alte savedRoute erhaelt ihre GTFS-Identitaet erst beim bewussten Speichern zurueck',
+  { skip: !php && 'PHP nicht verfuegbar' }, () => {
+    const privateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'lehrfahrer-work-repair-'));
+    try {
+      const code = `require ${JSON.stringify(path.join(root, 'api/_tenant_route_storage.php').replaceAll('\\', '/'))};
+        require ${JSON.stringify(path.join(root, 'api/_gtfs_work_inventory.php').replaceAll('\\', '/'))};
+        require ${JSON.stringify(path.join(root, 'api/_route_content_comparison.php').replaceAll('\\', '/'))};
+        $company='${company}'; $routeId='689'; $variantId='|22c45734836f36653054e30e7ced0558c0d2a570';
+        $reference='cottbus/Linie_10/Standard/Route_02.json';
+        $file=lehrfahrer_route_file($company,'cottbus','Route_02','json','Linie_10','Standard',true);
+        $inventoryPath=lehrfahrer_gtfs_work_inventory_path($company);
+        $entry=['routeId'=>$routeId,'variantId'=>$variantId,'signature'=>'signature-1',
+          'status'=>'IN_BEARBEITUNG','timetableStatus'=>'UNVERAENDERT','savedRoute'=>$reference];
+        $inventory=['entries'=>[$entry]];
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$inventory);
+        $legacy=['stops'=>[['name'=>'Schloss Branitz'],['name'=>'Freier Halt','isGhostPoint'=>true],
+          ['name'=>'Hauptbahnhof']], 'routePoints'=>[[51,14],[52,15]],
+          'meta'=>['source'=>'Lehrfahrer Linien-Editor']];
+        file_put_contents($file,json_encode($legacy));
+        $before=file_get_contents($file);
+        try { lehrfahrer_gtfs_work_save_manual_route($company,$file,json_encode($legacy));
+          throw new Exception('Manueller Save ueberschreibt GTFS-savedRoute'); }
+        catch (RuntimeException $error) {
+          if ($error->getMessage()==='Manueller Save ueberschreibt GTFS-savedRoute') throw $error;
+        }
+        if (file_get_contents($file)!==$before) throw new Exception('GTFS-Datei veraendert');
+        $manualFile=lehrfahrer_route_file($company,'cottbus','Manual','json','Linie_99','Standard',true);
+        lehrfahrer_gtfs_work_save_manual_route($company,$manualFile,json_encode($legacy));
+        if (!is_file($manualFile)) throw new Exception('Manuelle Route blockiert');
+        $opened=lehrfahrer_gtfs_work_load_saved_route_for_repair($company,$inventory,$entry,$routeId,$variantId);
+        if (($opened['line']['meta']['gtfsWork']['routeId'] ?? '')!==$routeId
+            || ($opened['line']['meta']['gtfsWork']['variantId'] ?? '')!==$variantId
+            || ($opened['line']['meta']['gtfsWork']['signature'] ?? '')!=='signature-1'
+            || count($opened['line']['stops'])!==3 || file_get_contents($file)!==$before)
+            throw new Exception('Reparatur beim Oeffnen ungueltig oder schreibend');
+        try { lehrfahrer_gtfs_work_set_status($company,$routeId,$variantId,'GEPRUEFT');
+          throw new Exception('Unreparierte Datei geprueft'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Unreparierte Datei geprueft') throw $error; }
+        $duplicate=$inventory; $duplicate['entries'][]=$entry;
+        try { lehrfahrer_gtfs_work_load_saved_route_for_repair($company,$duplicate,$entry,$routeId,$variantId);
+          throw new Exception('Doppelter Eintrag akzeptiert'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Doppelter Eintrag akzeptiert') throw $error; }
+        $other=$entry; $other['routeId']='another'; $duplicate=['entries'=>[$entry,$other]];
+        try { lehrfahrer_gtfs_work_load_saved_route_for_repair($company,$duplicate,$entry,$routeId,$variantId);
+          throw new Exception('Doppelte Dateireferenz akzeptiert'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Doppelte Dateireferenz akzeptiert') throw $error; }
+        $wrong=$legacy; $wrong['meta']['gtfsWork']=['routeId'=>'wrong','variantId'=>$variantId];
+        file_put_contents($file,json_encode($wrong));
+        try { lehrfahrer_gtfs_work_load_saved_route_for_repair($company,$inventory,$entry,$routeId,$variantId);
+          throw new Exception('Falsche Identitaet akzeptiert'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Falsche Identitaet akzeptiert') throw $error; }
+        file_put_contents($file,$before);
+        $saved=$opened['line']; $saved['savedAt']='2026-10-30T12:00:00+00:00';
+        $result=lehrfahrer_gtfs_work_save_route($company,$saved,$reference,$file,json_encode($saved));
+        if ($result!=='CHANGED' || count(lehrfahrer_gtfs_work_read_json($file)['stops'])!==3)
+          throw new Exception('GTFS-Identitaet nicht gespeichert');
+        lehrfahrer_gtfs_work_set_status($company,$routeId,$variantId,'GEPRUEFT');
+        if (lehrfahrer_gtfs_work_read_json($inventoryPath)['entries'][0]['status']!=='GEPRUEFT')
+          throw new Exception('Pruefung nach Reparatur fehlgeschlagen');
+        lehrfahrer_gtfs_work_set_status($company,$routeId,$variantId,'FREIGEGEBEN');
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)===null)
+          throw new Exception('Reparierte Freigabe im Driver-Scope fehlt');
+        echo 'OK';`;
+      const result = spawnSync(php, ['-r', code], { cwd: root, encoding: 'utf8',
+        env: { ...process.env, LEHRFAHRER_PRIVATE_DATA_DIR: privateRoot } });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, 'OK');
+    } finally { fs.rmSync(privateRoot, { recursive: true, force: true }); }
+  });
+
 test('workOpen trennt Entwurf und Serverroute und bewahrt Status beim bloßen Öffnen', () => {
   const workOpen = endpoint.slice(endpoint.indexOf('function gtfs_work_open(): void {'),
     endpoint.indexOf('function gtfs_work_status(): void {'));
@@ -76,6 +146,8 @@ test('workOpen trennt Entwurf und Serverroute und bewahrt Status beim bloßen Ö
   assert.match(workOpen, /lehrfahrer_gtfs_work_prepare/);
   assert.doesNotMatch(workOpen, /lehrfahrer_gtfs_work_set_status/);
   assert.match(workOpen, /gtfs_error\(409, 'Die gespeicherte Lehrfahrer-Route/);
+  assert.match(fs.readFileSync(path.join(root, 'api/save_line.php'), 'utf8'),
+    /lehrfahrer_gtfs_work_save_manual_route\(\$companyId, \$filePath, \$json\)/);
 });
 
 test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten Statuswerte',
@@ -102,6 +174,12 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
         return ['line'=>['kind'=>'saved'], 'source'=>['city'=>'cottbus','lineFolder'=>'Linie_10',
           'categoryFolder'=>'Standard','fileBase'=>'Route_02']];
       }
+      function lehrfahrer_gtfs_work_load_saved_route_for_repair($company,$inventory,$entry,$routeId,$variantId) {
+        $GLOBALS['loads'][] = 'repair';
+        if ($entry['status']!=='IN_BEARBEITUNG') throw new RuntimeException('not repairable');
+        return ['line'=>['kind'=>'repaired','meta'=>['gtfsWork'=>['routeId'=>$routeId,'variantId'=>$variantId]]],
+          'source'=>['city'=>'cottbus','lineFolder'=>'Linie_10','categoryFolder'=>'Standard','fileBase'=>'Route_02']];
+      }
       function lehrfahrer_gtfs_work_prepare($company, $path, $routeId, $variantId) {
         $GLOBALS['loads'][] = 'draft'; return ['kind'=>'draft'];
       }
@@ -114,7 +192,8 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
       $_POST = ['routeId'=>'r10','variantId'=>'v2']; $results = [];
       $GLOBALS['inventoryPath']=tempnam(sys_get_temp_dir(),'lf-work-open-');
       foreach ([['UNGEPRUEFT',null],['IN_BEARBEITUNG','valid'],['GEPRUEFT','valid'],
-        ['FREIGEGEBEN','valid'],['GEPRUEFT','invalid'],['GEPRUEFT','valid'],['GEPRUEFT','valid']] as $index=>[$status,$reference]) {
+        ['FREIGEGEBEN','valid'],['GEPRUEFT','invalid'],['GEPRUEFT','valid'],['GEPRUEFT','valid'],
+        ['IN_BEARBEITUNG','invalid']] as $index=>[$status,$reference]) {
         $GLOBALS['status']=$status; $GLOBALS['reference']=$reference;
         $GLOBALS['duplicate']=$index===5;
         $entry=['routeId'=>'r10','variantId'=>'v2','status'=>$status,
@@ -143,7 +222,7 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
       assert.equal(row.response.source.fileBase, 'Route_02');
     }
     assert.equal(rows[4].response.httpStatus, 409);
-    assert.deepEqual(rows[4].loads, ['saved']);
+    assert.deepEqual(rows[4].loads, ['saved', 'repair']);
     assert.deepEqual(rows[4].statusChanges, []);
     assert.equal(rows[5].response.httpStatus, 409);
     assert.deepEqual(rows[5].loads, []);
@@ -151,6 +230,9 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
     assert.equal(rows[5].inventoryUnchanged, true);
     assert.equal(rows[6].response.httpStatus, 409);
     assert.equal(rows[6].inventoryUnchanged, true);
+    assert.deepEqual(rows[7].loads, ['saved', 'repair']);
+    assert.equal(rows[7].response.line.kind, 'repaired');
+    assert.equal(rows[7].inventoryUnchanged, true);
   });
 
 test('Frontend setzt Ladequelle nur nach gespeicherter Route und berechnet nur Entwurf neu', async () => {
