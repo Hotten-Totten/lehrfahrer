@@ -314,8 +314,8 @@ test('Q: Fahrer-App fordert explizit nur freigegebene Routen an', () => {
   assert.match(app, /load_line\.php\?scope=driver/);
   assert.doesNotMatch(app, /load_line\.php\?city=/);
   assert.doesNotMatch(app, /result\.lines\.length === 0/);
-  assert.match(list, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
-  assert.match(load, /!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released/);
+  assert.match(list, /lehrfahrer_gtfs_work_load_driver_route\(\$companyId, \$file\)/);
+  assert.match(load, /lehrfahrer_gtfs_work_load_driver_route\(\$companyId, \$filePath\)/);
   assert.match(editor, /Alle Varianten vorbereiten|workPrepareAll/);
   assert.match(editor, /buildStreetRouteFromStops\(\)/);
 });

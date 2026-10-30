@@ -45,6 +45,11 @@ function setup(inventory, confirmation = true, statusError = false, statusReques
         target.archived = request.archived === '1';
         return { inventory };
       }
+      if (request.action === 'workRevoke') {
+        const target = inventory.entries.find(item => item.routeId === request.routeId && item.variantId === request.variantId);
+        target.status = 'IN_BEARBEITUNG';
+        return { inventory };
+      }
       if (request.action === 'workStatus' && statusError) throw new Error('Uebergang abgelehnt');
       if (request.action === 'workStatus' && statusRequest) return statusRequest;
       return request.action === 'workStatus' ? { inventory } : { line: {} };
@@ -195,17 +200,38 @@ test('bearbeitete oder freigegebene Führung verlangt Bestätigung und behält i
   const before = JSON.stringify(current);
   const cancelled = setup(inventory, false);
   cancelled.renderGtfsWorkInventory(inventory);
-  await cancelled.elements.gtfsWorkList.children[0].children[5].children[1].onclick();
+  await cancelled.elements.gtfsWorkList.children[0].children[5].children.find(button => button.textContent === 'Archivieren').onclick();
   assert.equal(cancelled.confirmCalls.length, 1);
   assert.equal(cancelled.calls.length, 0);
   assert.equal(JSON.stringify(current), before);
   const accepted = setup(inventory);
   accepted.renderGtfsWorkInventory(inventory);
-  await accepted.elements.gtfsWorkList.children[0].children[5].children[1].onclick();
+  await accepted.elements.gtfsWorkList.children[0].children[5].children.find(button => button.textContent === 'Archivieren').onclick();
   assert.equal(accepted.confirmCalls.length, 1);
   assert.equal(accepted.calls[0].confirmed, '1');
   assert.equal(current.status, 'FREIGEGEBEN');
   assert.equal(current.draftPrepared, true);
   assert.equal(current.savedRoute, 'Route 01');
   assert.deepEqual(current.meta, { note: 'unverändert' });
+});
+
+test('Freigabe zurücknehmen verlangt Bestätigung und sendet nur die exakte Führung', async () => {
+  const current = entry('released', ['A', 'B'], { status: 'FREIGEGEBEN' });
+  const inventory = { entries: [current], completeness: {} };
+  const cancelled = setup(inventory, false);
+  cancelled.renderGtfsWorkInventory(inventory);
+  const cancelButton = cancelled.elements.gtfsWorkList.children[0].children[5].children
+    .find(button => button.textContent === 'Freigabe zurücknehmen');
+  await cancelButton.onclick();
+  assert.equal(cancelled.calls.length, 0);
+  assert.equal(current.status, 'FREIGEGEBEN');
+  const accepted = setup(inventory);
+  accepted.renderGtfsWorkInventory(inventory);
+  const button = accepted.elements.gtfsWorkList.children[0].children[5].children
+    .find(item => item.textContent === 'Freigabe zurücknehmen');
+  await button.onclick();
+  assert.equal(accepted.calls[0].action, 'workRevoke');
+  assert.equal(accepted.calls[0].routeId, current.routeId);
+  assert.equal(accepted.calls[0].variantId, current.variantId);
+  assert.equal(current.status, 'IN_BEARBEITUNG');
 });

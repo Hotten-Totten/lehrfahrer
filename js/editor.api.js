@@ -2318,6 +2318,27 @@ function renderGtfsWorkInventory(inventory) {
     };
     const actions = gtfsChangeElement("span", "gtfs-work-actions");
     if (!gtfsWorkShowArchive) actions.appendChild(create);
+    if (entry.status === "FREIGEGEBEN") {
+      const revoke = document.createElement("button");
+      revoke.type = "button";
+      revoke.textContent = "Freigabe zurücknehmen";
+      revoke.onclick = async () => {
+        const accepted = await showConfirmDialog({ title: "Freigabe zurücknehmen",
+          message: "Diese Route ist danach für Fahrer nicht mehr verfügbar und muss erneut geprüft und freigegeben werden.",
+          okText: "Freigabe zurücknehmen", cancelText: "Abbrechen" });
+        if (!accepted) return;
+        revoke.disabled = true;
+        try {
+          const result = await postGtfsImport({ action: "workRevoke", routeId: entry.routeId, variantId: entry.variantId });
+          renderGtfsWorkInventory(result.inventory);
+        } catch (err) {
+          revoke.disabled = false;
+          report.className = "gtfs-change-report warn";
+          report.textContent = err.message || "Freigabe konnte nicht zurückgenommen werden.";
+        }
+      };
+      actions.appendChild(revoke);
+    }
     const archive = document.createElement("button");
     archive.type = "button";
     archive.className = "gtfs-work-archive-action";

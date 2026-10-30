@@ -132,9 +132,9 @@ foreach ($cities as $city) {
                     $categoryFiles = glob($categoryPath . '/*.json');
                     foreach ($categoryFiles as $file) {
                         if (is_link($file)) continue;
-                        $content = file_get_contents($file);
-                        $data    = json_decode($content, true);
-                        if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
+                        $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
+                            : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
+                        if (!is_array($data)) continue;
 
                         $fileBase = pathinfo($file, PATHINFO_FILENAME);
                         $fileMtime = @filemtime($file);
@@ -195,9 +195,9 @@ foreach ($cities as $city) {
             $files = glob($subPath . '/*.json');
             foreach ($files as $file) {
                 if (is_link($file)) continue;
-                $content = file_get_contents($file);
-                $data    = json_decode($content, true);
-                if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
+                $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
+                    : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
+                if (!is_array($data)) continue;
 
                 $fileBase = pathinfo($file, PATHINFO_FILENAME);
                 $fileMtime = @filemtime($file);
@@ -259,9 +259,9 @@ foreach ($cities as $city) {
     $oldFiles = glob($cityDir . '/*.json');
     foreach ($oldFiles as $file) {
         if (is_link($file)) continue;
-        $content = file_get_contents($file);
-        $data    = json_decode($content, true);
-        if (!is_array($data) || (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data))) continue;
+        $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
+            : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
+        if (!is_array($data)) continue;
 
         $fileBase = pathinfo($file, PATHINFO_FILENAME);
         $fileMtime = @filemtime($file);

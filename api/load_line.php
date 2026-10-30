@@ -71,20 +71,16 @@ if (!$filePath || !file_exists($filePath)) {
     exit;
 }
 
-$content = file_get_contents($filePath);
-$data = json_decode($content, true);
+$data = $includeUnreleased
+    ? lehrfahrer_gtfs_work_read_json($filePath)
+    : lehrfahrer_gtfs_work_load_driver_route($companyId, $filePath);
 
 if (!$data || !is_array($data)) {
-    http_response_code(500);
+    http_response_code($includeUnreleased ? 500 : 404);
     echo json_encode([
         'ok' => false,
-        'error' => 'Dateiinhalt ist ungültig'
+        'error' => $includeUnreleased ? 'Dateiinhalt ist ungültig' : 'Linie nicht gefunden'
     ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-if (!$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released($companyId, $data)) {
-    http_response_code(404);
-    echo json_encode(['ok' => false, 'error' => 'Linie nicht gefunden'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

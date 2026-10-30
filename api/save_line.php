@@ -601,8 +601,9 @@ if (file_exists($filePath) && !$forceOverwrite) {
     }
 }
 
+$isGtfsWork = isset($data['meta']['gtfsWork']);
 $changeType = 'NEW';
-if (is_file($filePath)) {
+if (!$isGtfsWork && is_file($filePath)) {
     $existingRaw = @file_get_contents($filePath);
     $existingRoute = $existingRaw === false ? null : json_decode($existingRaw, true);
     if (!is_array($existingRoute)) {
@@ -624,14 +625,18 @@ if ($json === false) {
     exit;
 }
 
-$result = file_put_contents($filePath, $json);
-
-if ($result === false) {
+if ($isGtfsWork) {
+    try {
+        $changeType = lehrfahrer_gtfs_work_save_route($companyId, $data,
+            $city . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json', $filePath, $json);
+    } catch (Throwable $error) {
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+} elseif (file_put_contents($filePath, $json) === false) {
     http_response_code(500);
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Datei konnte nicht gespeichert werden'
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => 'Datei konnte nicht gespeichert werden'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -683,12 +688,6 @@ try {
 } catch (Throwable $pdfException) {
     $pdfError = $pdfException->getMessage();
 }
-
-lehrfahrer_gtfs_work_mark_saved(
-    $companyId,
-    $data,
-    $city . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json'
-);
 
 echo json_encode([
     'ok' => true,

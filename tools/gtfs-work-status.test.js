@@ -16,6 +16,7 @@ test('Statusfolge und gespeicherte Route werden serverseitig durchgesetzt',
       const code = `
         require ${JSON.stringify(path.join(root, 'api/_tenant_route_storage.php').replaceAll('\\', '/'))};
         require ${JSON.stringify(path.join(root, 'api/_gtfs_work_inventory.php').replaceAll('\\', '/'))};
+        require ${JSON.stringify(path.join(root, 'api/_route_content_comparison.php').replaceAll('\\', '/'))};
         $company='cmp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
         $routeId='route-10'; $variantId='variant-a';
         $inventoryPath=lehrfahrer_gtfs_work_inventory_path($company);
@@ -95,16 +96,68 @@ test('Statusfolge und gespeicherte Route werden serverseitig durchgesetzt',
         if (file_get_contents($inventoryPath)!==$beforeIdempotent) throw new Exception('Idempotenter Status hat Inventory geschrieben');
         $opened=lehrfahrer_gtfs_work_load_saved_route($company,$reference,$routeId,$variantId);
         if (($opened['source']['fileBase'] ?? null)!=='Route_01') throw new Exception('workOpen-Validierung abweichend');
-        if (lehrfahrer_gtfs_work_route_is_released($company,$route)) throw new Exception('Zu frueh freigegeben');
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Zu frueh freigegeben');
         $reject('IN_BEARBEITUNG','GEPRUEFT');
         unlink($file);
         $reject('FREIGEGEBEN','GEPRUEFT');
         file_put_contents($file,json_encode($route));
         $advance('FREIGEGEBEN','FREIGEGEBEN');
-        if (!lehrfahrer_gtfs_work_route_is_released($company,$route)) throw new Exception('Freigabe fehlt');
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)===null) throw new Exception('Freigabe fehlt');
         $reject('GEPRUEFT','FREIGEGEBEN');
         $advance('FREIGEGEBEN','FREIGEGEBEN');
         if ($current()['reviewRequired']!==false) throw new Exception('Freigabe falsch markiert');
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$other)!==null) throw new Exception('Andere Datei wurde freigegeben');
+        $snapshot=lehrfahrer_gtfs_work_read_json($inventoryPath);
+        $duplicate=$snapshot; $duplicate['entries'][]=$duplicate['entries'][0];
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$duplicate);
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Duplikat wurde freigegeben');
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$snapshot);
+        $wrong=$snapshot; $wrong['entries'][0]['savedRoute']='cottbus/Linie_10/Standard/Route_02.json';
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$wrong);
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Falsche savedRoute wurde freigegeben');
+        $wrong['entries'][0]['savedRoute']='../cottbus/Linie_10/Standard/Route_01.json';
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$wrong);
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Ungueltiger savedRoute-Pfad wurde freigegeben');
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$snapshot);
+        $wrongRoute=$route; $wrongRoute['meta']['gtfsWork']['variantId']='wrong';
+        file_put_contents($file,json_encode($wrongRoute));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Falsche GTFS-Metadaten wurden freigegeben');
+        file_put_contents($file,json_encode($route));
+        unlink($file);
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Fehlende Datei wurde freigegeben');
+        file_put_contents($file,json_encode($route));
+        $foreign='cmp_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        if (lehrfahrer_gtfs_work_load_driver_route($foreign,$file)!==null) throw new Exception('Fremder Tenant wurde freigegeben');
+        lehrfahrer_gtfs_work_revoke_release($company,$routeId,$variantId);
+        if ($current()['status']!=='IN_BEARBEITUNG' || lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null)
+            throw new Exception('Freigabe-Ruecknahme fehlgeschlagen');
+        $advance('GEPRUEFT','GEPRUEFT');
+        $advance('FREIGEGEBEN','FREIGEGEBEN');
+        $same=$route; $same['savedAt']='2026-10-30T12:00:00+00:00';
+        if (lehrfahrer_gtfs_work_save_route($company,$same,$reference,$file,json_encode($same))!=='UNCHANGED'
+            || $current()['status']!=='FREIGEGEBEN') throw new Exception('UNCHANGED hat Freigabe veraendert');
+        $changed=$route; $changed['routePoints'][1]=[53,16];
+        $inventoryBefore=lehrfahrer_gtfs_work_read_json($inventoryPath);
+        $wrongReference=$inventoryBefore;
+        $wrongReference['entries'][0]['savedRoute']='cottbus/Linie_10/Standard/Route_02.json';
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$wrongReference);
+        try { lehrfahrer_gtfs_work_save_route($company,$changed,$reference,$file,json_encode($changed));
+            throw new Exception('Save mit fremder savedRoute akzeptiert'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Save mit fremder savedRoute akzeptiert') throw $error; }
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$inventoryBefore);
+        $duplicate=$inventoryBefore; $duplicate['entries'][]=$duplicate['entries'][0];
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$duplicate);
+        try { lehrfahrer_gtfs_work_save_route($company,$changed,$reference,$file,json_encode($changed));
+            throw new Exception('Save mit Duplikat akzeptiert'); }
+        catch (RuntimeException $error) { if ($error->getMessage()==='Save mit Duplikat akzeptiert') throw $error; }
+        if (file_get_contents($file)!==json_encode($same)) throw new Exception('Fehlgeschlagener Save hat Route geaendert');
+        lehrfahrer_gtfs_work_write_json($inventoryPath,$inventoryBefore);
+        if (lehrfahrer_gtfs_work_save_route($company,$changed,$reference,$file,json_encode($changed))!=='CHANGED'
+            || $current()['status']!=='IN_BEARBEITUNG'
+            || lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null)
+            throw new Exception('CHANGED hat Freigabe nicht sicher zurueckgestuft');
+        $advance('GEPRUEFT','GEPRUEFT');
+        $advance('FREIGEGEBEN','FREIGEGEBEN');
         echo 'OK';`;
       const result = spawnSync(php, ['-r', code], { cwd: root, encoding: 'utf8',
         env: { ...process.env, LEHRFAHRER_PRIVATE_DATA_DIR: privateRoot } });
@@ -115,8 +168,12 @@ test('Statusfolge und gespeicherte Route werden serverseitig durchgesetzt',
 
 test('Fahrer-Ladepfad behält die bestehende FREIGEGEBEN-Sperre', () => {
   const loader = fs.readFileSync(path.join(root, 'api/load_line.php'), 'utf8');
+  const download = fs.readFileSync(path.join(root, 'api/_tenant_route_download.php'), 'utf8');
   assert.match(loader, /\$driverOnly = .*scope.*driver/);
-  assert.match(loader, /if \(!\$includeUnreleased && !lehrfahrer_gtfs_work_route_is_released\(\$companyId, \$data\)\)/);
+  assert.match(loader, /lehrfahrer_gtfs_work_load_driver_route\(\$companyId, \$filePath\)/);
+  assert.match(download, /!lehrfahrer_auth_has_capability\(\$auth, 'routes.write'\)/);
+  assert.match(download, /lehrfahrer_gtfs_work_load_driver_route\(\$companyId, \$path\)/);
+  assert.match(download, /echo json_encode\(\$route/);
 });
 
 test('workStatus meldet unzulässige Übergänge verständlich mit HTTP 409', () => {
@@ -126,4 +183,15 @@ test('workStatus meldet unzulässige Übergänge verständlich mit HTTP 409', ()
   assert.match(section, /gtfs_error\(409, \$error->getMessage\(\)\)/);
   assert.match(section, /Dieser GTFS-Arbeitsstatus kann nicht direkt gesetzt werden/);
   assert.match(section, /Vor Pruefung oder Freigabe muss eine gueltige Lehrfahrer-Route gespeichert sein/);
+});
+
+test('Freigabe-Rücknahme erfordert Session, Importrecht, CSRF und Cottbus-Scope', () => {
+  const endpoint = fs.readFileSync(path.join(root, 'api/import_gtfs.php'), 'utf8');
+  const section = endpoint.slice(endpoint.indexOf('function gtfs_work_revoke(): void {'),
+    endpoint.indexOf('function gtfs_work_archive(): void {'));
+  assert.match(section, /gtfs_require_cottbus_change_scope\(\)/);
+  assert.match(section, /lehrfahrer_api_require_session\(\)/);
+  assert.match(section, /lehrfahrer_auth_require_capability\(\$auth, 'routes.import'\)/);
+  assert.match(section, /lehrfahrer_auth_require_csrf\(\$auth\['session'\]\)/);
+  assert.match(endpoint, /if \(\$action === 'workrevoke'\) gtfs_work_revoke\(\)/);
 });

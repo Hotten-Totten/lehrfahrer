@@ -222,7 +222,7 @@ function lehrfahrer_gtfs_work_prepare(string $companyId, string $indexPath, stri
     return $draft;
 }
 
-function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $reference, string $routeId, string $variantId): array {
+function lehrfahrer_gtfs_work_reference_target(string $companyId, string $reference): array {
     $parts = explode('/', $reference);
     if (count($parts) !== 4 || !str_ends_with($parts[3], '.json')) {
         throw new RuntimeException('Gespeicherte Lehrfahrer-Route hat einen ungueltigen Pfad.');
@@ -235,6 +235,15 @@ function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $refere
     } catch (InvalidArgumentException $error) {
         throw new RuntimeException('Gespeicherte Lehrfahrer-Route hat einen ungueltigen Pfad.', 0, $error);
     }
+    return ['path' => $path, 'source' => [
+        'city' => $city, 'lineFolder' => $lineFolder,
+        'categoryFolder' => $categoryFolder, 'fileBase' => $fileBase,
+    ]];
+}
+
+function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $reference, string $routeId, string $variantId): array {
+    $target = lehrfahrer_gtfs_work_reference_target($companyId, $reference);
+    $path = $target['path'];
     if (!is_file($path)) throw new RuntimeException('Gespeicherte Lehrfahrer-Route wurde nicht gefunden.');
     $line = lehrfahrer_gtfs_work_read_json($path);
     $points = $line['routePoints'] ?? null;
@@ -249,10 +258,7 @@ function lehrfahrer_gtfs_work_load_saved_route(string $companyId, string $refere
         || strval($work['variantId'] ?? '') !== $variantId) {
         throw new RuntimeException('Gespeicherte Lehrfahrer-Route gehoert nicht zu dieser GTFS-Fuehrung.');
     }
-    return ['line' => $line, 'source' => [
-        'city' => $city, 'lineFolder' => $lineFolder,
-        'categoryFolder' => $categoryFolder, 'fileBase' => $fileBase,
-    ]];
+    return ['line' => $line, 'source' => $target['source']];
 }
 
 function lehrfahrer_gtfs_work_prepare_all(string $companyId, string $indexPath, array $inventory): int {
@@ -359,30 +365,179 @@ function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, str
     }, true, true, true);
 }
 
-function lehrfahrer_gtfs_work_mark_saved(string $companyId, array $data, string $routeReference): void {
-    $work = $data['meta']['gtfsWork'] ?? null;
-    if (!is_array($work)) return;
-    $routeId = trim(strval($work['routeId'] ?? ''));
-    $variantId = trim(strval($work['variantId'] ?? ''));
-    if ($routeId === '' || $variantId === '') return;
-    lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry) use ($routeReference): array {
-        $entry['savedRoute'] = $routeReference;
-        if (($entry['status'] ?? '') === 'UNGEPRUEFT') $entry['status'] = 'IN_BEARBEITUNG';
+function lehrfahrer_gtfs_work_revoke_release(string $companyId, string $routeId, string $variantId): array {
+    return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry): array {
+        if (($entry['status'] ?? '') !== 'FREIGEGEBEN') {
+            throw new RuntimeException('Nur eine freigegebene GTFS-Fuehrung kann zurueckgenommen werden.');
+        }
+        $entry['status'] = 'IN_BEARBEITUNG';
         $entry['reviewRequired'] = true;
         return $entry;
+    }, true);
+}
+
+function lehrfahrer_gtfs_work_prepare_route_file(string $path, string $json, string $routeId, string $variantId, ?callable $writer = null): string {
+    $temporary = $path . '.tmp-' . bin2hex(random_bytes(8));
+    $handle = @fopen($temporary, 'x+b');
+    if ($handle === false) throw new RuntimeException('Routendatei kann nicht vorbereitet werden.');
+    $complete = false;
+    try {
+        $expected = strlen($json);
+        $written = $writer === null ? @fwrite($handle, $json) : $writer($handle, $json);
+        if ($written !== $expected || !@fflush($handle)) {
+            throw new RuntimeException('Routendatei wurde nicht vollstaendig geschrieben.');
+        }
+        if (!@fclose($handle)) {
+            $handle = null;
+            throw new RuntimeException('Routendatei konnte nicht geschlossen werden.');
+        }
+        $handle = null;
+        clearstatcache(true, $temporary);
+        $actual = @file_get_contents($temporary);
+        if ($actual === false || strlen($actual) !== $expected || !hash_equals($json, $actual)) {
+            throw new RuntimeException('Vorbereitete Routendatei ist unvollstaendig.');
+        }
+        $decoded = json_decode($actual, true);
+        $work = is_array($decoded) ? ($decoded['meta']['gtfsWork'] ?? null) : null;
+        if (!is_array($decoded) || !is_array($decoded['stops'] ?? null)
+            || !is_array($decoded['routePoints'] ?? null) || !is_array($work)
+            || strval($work['routeId'] ?? '') !== $routeId
+            || strval($work['variantId'] ?? '') !== $variantId) {
+            throw new RuntimeException('Vorbereitete GTFS-Routendatei ist ungueltig.');
+        }
+        @chmod($temporary, 0600);
+        $complete = true;
+        return $temporary;
+    } finally {
+        if (is_resource($handle)) @fclose($handle);
+        if (!$complete) @unlink($temporary);
+    }
+}
+
+// The inventory lock is the transaction boundary for GTFS route saves and driver reads.
+function lehrfahrer_gtfs_work_save_route(string $companyId, array $data, string $reference, string $path, string $json): string {
+    $work = $data['meta']['gtfsWork'] ?? null;
+    $routeId = trim(strval($work['routeId'] ?? ''));
+    $variantId = trim(strval($work['variantId'] ?? ''));
+    if ($routeId === '' || $variantId === '') throw new RuntimeException('GTFS-Routenkennung fehlt.');
+    $target = lehrfahrer_gtfs_work_reference_target($companyId, $reference);
+    if (!lehrfahrer_tenant_same_path($target['path'], $path)) {
+        throw new RuntimeException('GTFS-Speicherziel stimmt nicht mit der Routenreferenz ueberein.');
+    }
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $data, $reference, $path, $json, $routeId, $variantId): string {
+        $inventoryPath = lehrfahrer_gtfs_work_inventory_path($companyId);
+        $inventory = lehrfahrer_gtfs_work_read_json($inventoryPath);
+        if (!is_array($inventory)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
+        lehrfahrer_gtfs_work_unique_entry($inventory, $routeId, $variantId);
+        foreach ($inventory['entries'] as $index => $entry) {
+            if (strval($entry['routeId'] ?? '') !== $routeId || strval($entry['variantId'] ?? '') !== $variantId) continue;
+            if (($entry['timetableStatus'] ?? '') === 'ENTFALLEN') throw new RuntimeException('GTFS-Fuehrung ist nicht mehr im CURRENT.');
+            $current = strval($entry['status'] ?? '');
+            if (!in_array($current, LEHRFAHRER_GTFS_WORK_STATUSES, true)) throw new RuntimeException('GTFS-Arbeitsstatus ist ungueltig.');
+            $oldReference = $entry['savedRoute'] ?? null;
+            if ($oldReference !== null && $oldReference !== '') {
+                if (!is_string($oldReference)) throw new RuntimeException('Gespeicherte GTFS-Routenreferenz ist ungueltig.');
+                lehrfahrer_gtfs_work_load_saved_route($companyId, $oldReference, $routeId, $variantId);
+            }
+            if (in_array($current, ['GEPRUEFT', 'FREIGEGEBEN'], true)) {
+                if (!is_string($oldReference) || !hash_equals($oldReference, $reference)) {
+                    throw new RuntimeException('Freigegebene Route darf nicht unter anderem Ziel gespeichert werden.');
+                }
+            }
+            if (is_link($path) || (file_exists($path) && !is_file($path))) {
+                throw new RuntimeException('GTFS-Routenziel ist ungueltig.');
+            }
+            $oldRaw = is_file($path) ? @file_get_contents($path) : null;
+            if ($oldRaw === false) throw new RuntimeException('Vorhandene Route kann nicht gelesen werden.');
+            $oldRoute = $oldRaw === null ? null : json_decode($oldRaw, true);
+            if ($oldRaw !== null && !is_array($oldRoute)) throw new RuntimeException('Vorhandene Route kann nicht verglichen werden.');
+            if (is_array($oldRoute)) {
+                $oldWork = $oldRoute['meta']['gtfsWork'] ?? null;
+                if (!is_array($oldWork) || strval($oldWork['routeId'] ?? '') !== $routeId
+                    || strval($oldWork['variantId'] ?? '') !== $variantId) {
+                    throw new RuntimeException('Zieldatei gehoert zu einer anderen GTFS-Fuehrung.');
+                }
+            }
+            $changeType = $oldRoute === null ? 'NEW' : lehrfahrer_route_content_change($oldRoute, $data);
+            $temporary = lehrfahrer_gtfs_work_prepare_route_file($path, $json, $routeId, $variantId);
+            $demoted = $changeType === 'CHANGED' && in_array($current, ['GEPRUEFT', 'FREIGEGEBEN'], true);
+            $beforeInventory = $inventory;
+            try {
+                if ($demoted) {
+                    $inventory['entries'][$index]['status'] = 'IN_BEARBEITUNG';
+                    $inventory['entries'][$index]['reviewRequired'] = true;
+                    $inventory['entries'][$index]['updatedAt'] = date('c');
+                    $inventory['updatedAt'] = date('c');
+                    lehrfahrer_gtfs_work_write_json($inventoryPath, $inventory);
+                }
+                if (!@rename($temporary, $path)) {
+                    throw new RuntimeException('Routendatei kann nicht atomar aktiviert werden.');
+                }
+            } catch (Throwable $error) {
+                @unlink($temporary);
+                if ($demoted && $oldRaw !== null && is_file($path)
+                    && hash_equals(hash('sha256', $oldRaw), strval(@hash_file('sha256', $path)))) {
+                    lehrfahrer_gtfs_work_write_json($inventoryPath, $beforeInventory);
+                }
+                throw $error;
+            }
+            $inventory['entries'][$index]['savedRoute'] = $reference;
+            if ($current === 'UNGEPRUEFT') $inventory['entries'][$index]['status'] = 'IN_BEARBEITUNG';
+            $inventory['entries'][$index]['reviewRequired'] = $inventory['entries'][$index]['status'] !== 'FREIGEGEBEN';
+            $inventory['entries'][$index]['updatedAt'] = date('c');
+            $inventory['updatedAt'] = date('c');
+            lehrfahrer_gtfs_work_write_json($inventoryPath, $inventory);
+            return $changeType;
+        }
+        throw new RuntimeException('GTFS-Arbeitsvariante fehlt.');
     });
 }
 
-function lehrfahrer_gtfs_work_route_is_released(string $companyId, array $data): bool {
-    $inventory = lehrfahrer_gtfs_work_read_json(lehrfahrer_gtfs_work_inventory_path($companyId));
-    if (!is_array($inventory)) return true;
-    $work = $data['meta']['gtfsWork'] ?? null;
-    if (!is_array($work)) return false;
-    foreach ($inventory['entries'] as $entry) {
-        if (strval($entry['routeId'] ?? '') === strval($work['routeId'] ?? '')
-            && strval($entry['variantId'] ?? '') === strval($work['variantId'] ?? '')) {
-            return ($entry['status'] ?? '') === 'FREIGEGEBEN' && ($entry['timetableStatus'] ?? '') !== 'ENTFALLEN';
+function lehrfahrer_gtfs_work_load_driver_route(string $companyId, string $filePath): ?array {
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $filePath): ?array {
+        try {
+            $checkedPath = lehrfahrer_route_checked_path($companyId, $filePath);
+            if (is_link($checkedPath) || !is_file($checkedPath)) return null;
+            $data = lehrfahrer_gtfs_work_read_json($checkedPath);
+            if (!is_array($data)) return null;
+            $inventory = lehrfahrer_gtfs_work_read_json(lehrfahrer_gtfs_work_inventory_path($companyId));
+            if (!is_array($inventory) || !isset($inventory['entries']) || !is_array($inventory['entries'])
+                || !array_is_list($inventory['entries'])) return null;
+            $seen = [];
+            $referenced = false;
+            foreach ($inventory['entries'] as $entry) {
+                if (!is_array($entry)) return null;
+                $entryRouteId = trim(strval($entry['routeId'] ?? ''));
+                $entryVariantId = trim(strval($entry['variantId'] ?? ''));
+                if ($entryRouteId === '' || $entryVariantId === '') return null;
+                $key = lehrfahrer_gtfs_work_key($entryRouteId, $entryVariantId);
+                if (isset($seen[$key])) return null;
+                $seen[$key] = true;
+                $reference = $entry['savedRoute'] ?? null;
+                if ($reference === null || $reference === '') continue;
+                if (!is_string($reference)) return null;
+                $target = lehrfahrer_gtfs_work_reference_target($companyId, $reference);
+                if (lehrfahrer_tenant_same_path($checkedPath, $target['path'])) $referenced = true;
+            }
+            $meta = $data['meta'] ?? null;
+            if (is_array($meta) && array_key_exists('gtfsWork', $meta) && !is_array($meta['gtfsWork'])) return null;
+            $work = is_array($meta) ? ($meta['gtfsWork'] ?? null) : null;
+            if (!is_array($work)) return $referenced ? null : $data;
+            $routeId = trim(strval($work['routeId'] ?? ''));
+            $variantId = trim(strval($work['variantId'] ?? ''));
+            if ($routeId === '' || $variantId === '') return null;
+            $entry = lehrfahrer_gtfs_work_unique_entry($inventory, $routeId, $variantId);
+            if (($entry['status'] ?? '') !== 'FREIGEGEBEN' || ($entry['timetableStatus'] ?? '') === 'ENTFALLEN') return null;
+            $reference = $entry['savedRoute'] ?? null;
+            if (!is_string($reference) || $reference === '') return null;
+            $saved = lehrfahrer_gtfs_work_load_saved_route($companyId, $reference, $routeId, $variantId);
+            $source = $saved['source'];
+            $expected = lehrfahrer_route_file($companyId, $source['city'], $source['fileBase'], 'json',
+                $source['lineFolder'], $source['categoryFolder']);
+            if (!lehrfahrer_tenant_same_path($checkedPath, $expected)) return null;
+            return $data;
+        } catch (Throwable $error) {
+            return null;
         }
-    }
-    return false;
+    });
 }

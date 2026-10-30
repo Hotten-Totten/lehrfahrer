@@ -377,14 +377,15 @@ test('Konfliktvermeidung klassifiziert den tatsächlich neu angelegten Umleitung
   assert.notEqual(second.json().fileBase, first.json().fileBase);
 });
 
-test('Änderungserkennung lässt GEPRUEFT und FREIGEGEBEN im GTFS-Arbeitsstatus unverändert', async () => {
+test('Semantischer Save erhält UNCHANGED-Status und stuft CHANGED zurück', async () => {
   const inventoryPath = path.join(privateRoot, 'companies', companyA.id, 'imports', 'gtfs', 'index', 'work-inventory.json');
   fs.mkdirSync(path.dirname(inventoryPath), { recursive: true });
   const entries = ['GEPRUEFT', 'FREIGEGEBEN'].map((status, index) => ({
-    routeId: `route-status-${index}`, variantId: `variant-status-${index}`, status, timetableStatus: 'UNVERAENDERT'
+    routeId: `route-status-${index}`, variantId: `variant-status-${index}`, status: 'IN_BEARBEITUNG', timetableStatus: 'UNVERAENDERT'
   }));
   fs.writeFileSync(inventoryPath, JSON.stringify({ entries }));
   for (const [index, entry] of entries.entries()) {
+    const status = index === 0 ? 'GEPRUEFT' : 'FREIGEGEBEN';
     const base = {
       city: 'stadt-a', lineFolder: 'Linie_43', categoryFolder: 'Standard',
       fileBase: `Route_Status_${index}`, lineName: 'Linie 43', routeName: `Route Status ${index}`,
@@ -400,7 +401,19 @@ test('Änderungserkennung lässt GEPRUEFT und FREIGEGEBEN im GTFS-Arbeitsstatus 
       assert.equal(response.status, 200, response.body);
       assert.equal(response.json().changeType, expected);
       const inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
-      assert.equal(inventory.entries[index].status, entry.status);
+      if (expected === 'NEW') {
+        inventory.entries[index].status = status;
+        inventory.entries[index].reviewRequired = status !== 'FREIGEGEBEN';
+        fs.writeFileSync(inventoryPath, JSON.stringify(inventory));
+      } else {
+        assert.equal(inventory.entries[index].status, expected === 'UNCHANGED' ? status : 'IN_BEARBEITUNG');
+        const driverLoad = await request(`/api/load_line.php?scope=driver&city=stadt-a&line=${base.fileBase}&lineFolder=Linie_43&categoryFolder=Standard`);
+        assert.equal(driverLoad.status, expected === 'UNCHANGED' && status === 'FREIGEGEBEN' ? 200 : 404);
+        const driverList = await request('/api/list_lines.php?scope=driver&city=stadt-a');
+        assert.equal(driverList.status, 200, driverList.body);
+        assert.equal(driverList.json().lines.some(line => line.fileBase === base.fileBase),
+          expected === 'UNCHANGED' && status === 'FREIGEGEBEN');
+      }
     }
   }
 });

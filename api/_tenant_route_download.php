@@ -1,9 +1,11 @@
 <?php
 
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_gtfs_work_inventory.php';
 
 function lehrfahrer_download_tenant_route(string $extension): never {
-    $companyId = lehrfahrer_route_authorize('routes.read');
+    $auth = lehrfahrer_api_authorize('routes.read');
+    $companyId = lehrfahrer_route_company_id($auth);
     $city = strtolower(trim((string)($_GET['city'] ?? '')));
     $line = trim((string)($_GET['line'] ?? ''));
     $line = preg_replace('/\.(json|gpx)$/i', '', $line);
@@ -25,6 +27,19 @@ function lehrfahrer_download_tenant_route(string $extension): never {
     }
     if ($path === null) {
         http_response_code(404);
+        exit;
+    }
+    if ($extension === 'json' && !lehrfahrer_auth_has_capability($auth, 'routes.write')) {
+        $route = lehrfahrer_gtfs_work_load_driver_route($companyId, $path);
+        if ($route === null) {
+            http_response_code(404);
+            exit;
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $line . '.json"');
+        header('Cache-Control: no-store');
+        header('X-Content-Type-Options: nosniff');
+        echo json_encode($route, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
     header('Content-Type: ' . ($extension === 'json' ? 'application/json' : 'application/gpx+xml') . '; charset=utf-8');

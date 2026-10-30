@@ -887,6 +887,23 @@ function gtfs_work_status(): void {
     gtfs_reply(['ok' => true, 'inventory' => $inventory]);
 }
 
+function gtfs_work_revoke(): void {
+    gtfs_require_cottbus_change_scope();
+    $auth = lehrfahrer_api_require_session();
+    lehrfahrer_auth_require_capability($auth, 'routes.import');
+    lehrfahrer_auth_require_same_origin();
+    lehrfahrer_auth_require_csrf($auth['session']);
+    $routeId = trim(strval($_POST['routeId'] ?? ''));
+    $variantId = trim(strval($_POST['variantId'] ?? ''));
+    if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
+    try {
+        $inventory = lehrfahrer_gtfs_work_revoke_release(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId);
+    } catch (RuntimeException $error) {
+        gtfs_error(409, $error->getMessage());
+    }
+    gtfs_reply(['ok' => true, 'inventory' => $inventory]);
+}
+
 function gtfs_work_archive(): void {
     gtfs_require_cottbus_change_scope();
     $auth = lehrfahrer_api_require_session();
@@ -1759,6 +1776,7 @@ try {
     if ($action === 'workprepareall') gtfs_work_inventory_response(true);
     if ($action === 'workopen') gtfs_work_open();
     if ($action === 'workstatus') gtfs_work_status();
+    if ($action === 'workrevoke') gtfs_work_revoke();
     if ($action === 'workarchive') gtfs_work_archive();
     if ($action === 'indexstart') {
         $agencyIds = json_decode(strval($_POST['agencyIds'] ?? '[]'), true);

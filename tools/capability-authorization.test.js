@@ -239,6 +239,28 @@ test('Rollenmatrix enthält die erwarteten positiven und negativen Rechte', () =
   assert.equal(sessions.ADMIN.capabilities.length, 24);
 });
 
+test('Direkter JSON-Pfad kann eine zurückgenommene GTFS-Route nicht an Fahrer ausliefern', async () => {
+  const tenant = path.join(privateRoot, 'companies', companyA.id);
+  const lineDir = path.join(tenant, 'lines', 'cottbus', 'Linie_10', 'Standard');
+  const inventoryPath = path.join(tenant, 'imports', 'gtfs', 'index', 'work-inventory.json');
+  fs.mkdirSync(path.join(tenant, 'cities', 'cottbus'), { recursive: true });
+  fs.mkdirSync(lineDir, { recursive: true });
+  fs.mkdirSync(path.dirname(inventoryPath), { recursive: true });
+  const route = { stops: [{ name: 'A' }, { name: 'B' }], routePoints: [[51, 14], [52, 15]],
+    meta: { gtfsWork: { routeId: 'route-10', variantId: 'variant-a' } } };
+  fs.writeFileSync(path.join(lineDir, 'Route_01.json'), JSON.stringify(route));
+  const inventory = { entries: [{ routeId: 'route-10', variantId: 'variant-a', status: 'FREIGEGEBEN',
+    timetableStatus: 'UNVERAENDERT', savedRoute: 'cottbus/Linie_10/Standard/Route_01.json' }] };
+  fs.writeFileSync(inventoryPath, JSON.stringify(inventory));
+  const apiCase = { method: 'GET', path: '/api/download_line_json.php?city=cottbus&line=Route_01&lineFolder=Linie_10&categoryFolder=Standard' };
+  const driver = () => request(apiCase, { cookie: sessions.FAHRER.cookie });
+  assert.equal((await driver()).response.status, 200);
+  inventory.entries[0].status = 'IN_BEARBEITUNG';
+  fs.writeFileSync(inventoryPath, JSON.stringify(inventory));
+  assert.equal((await driver()).response.status, 404);
+  assert.equal((await request(apiCase, { cookie: sessions.EDITOR.cookie })).response.status, 200);
+});
+
 test('company_id aus einem Request überschreibt den Session-Mandanten nicht', async () => {
   const apiCase = { method: 'GET', path: `/api/list_lines.php?company_id=${encodeURIComponent(companyB.id)}` };
   const result = await request(apiCase, { cookie: sessions.FAHRER.cookie });
