@@ -60,7 +60,10 @@ test('Driver-Scope sperrt fehlendes, ungültiges und mehrdeutiges Inventory ohne
         $legacy=lehrfahrer_route_file($company,'cottbus','Legacy','json','Linie_9','Standard',true);
         $route=['stops'=>[], 'routePoints'=>[[51,14],[52,15]],
           'meta'=>['gtfsWork'=>['routeId'=>'r','variantId'=>'v']]];
-        file_put_contents($file,json_encode($route)); file_put_contents($legacy,json_encode(['stops'=>[],'routePoints'=>[]]));
+        file_put_contents($file,json_encode($route));
+        $manual=['stops'=>[['name'=>'A'],['name'=>'B']], 'routePoints'=>[[51,14],[52,15]],
+          'meta'=>['source'=>'Lehrfahrer Linien-Editor']];
+        file_put_contents($legacy,json_encode($manual));
         $path=lehrfahrer_gtfs_work_inventory_path($company);
         if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Ohne Inventory freigegeben');
         file_put_contents($path,'{broken');
@@ -72,6 +75,29 @@ test('Driver-Scope sperrt fehlendes, ungültiges und mehrdeutiges Inventory ohne
         lehrfahrer_gtfs_work_write_json($path,['entries'=>[$entry]]);
         if (lehrfahrer_gtfs_work_load_driver_route($company,$file)===null) throw new Exception('Freigabe blockiert');
         if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)===null) throw new Exception('Nicht-GTFS blockiert');
+        $candidate=$manual;
+        $candidate['routePoints']=[];
+        $candidate['meta']=['source'=>'GTFS-Fahrplanwechsel',
+          'candidateSha256'=>str_repeat('a',64),'importedAt'=>'2026-10-25T13:32:13+01:00',
+          'reviewRequired'=>true];
+        file_put_contents($legacy,json_encode($candidate));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)!==null)
+          throw new Exception('GTFS-Fahrplanwechsel ohne gtfsWork freigegeben');
+        unset($candidate['meta']['source']);
+        file_put_contents($legacy,json_encode($candidate));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)!==null)
+          throw new Exception('Candidate-Marker ohne Quelle freigegeben');
+        unset($candidate['meta']['candidateSha256']);
+        file_put_contents($legacy,json_encode($candidate));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)!==null)
+          throw new Exception('Review-Marker ohne Quelle freigegeben');
+        $candidate['meta']=['source'=>'GTFS ZIP import'];
+        file_put_contents($legacy,json_encode($candidate));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)!==null)
+          throw new Exception('GTFS-Import ohne gtfsWork freigegeben');
+        file_put_contents($legacy,json_encode($manual));
+        if (lehrfahrer_gtfs_work_load_driver_route($company,$legacy)===null)
+          throw new Exception('Manuelle Route nach Candidate-Pruefung blockiert');
         $stripped=$route; unset($stripped['meta']['gtfsWork']); file_put_contents($file,json_encode($stripped));
         if (lehrfahrer_gtfs_work_load_driver_route($company,$file)!==null) throw new Exception('Meta-Strip umgeht Freigabe');
         echo 'OK';`;

@@ -493,6 +493,18 @@ function lehrfahrer_gtfs_work_save_route(string $companyId, array $data, string 
     });
 }
 
+function lehrfahrer_gtfs_work_has_legacy_gtfs_provenance(array $data): bool {
+    $meta = $data['meta'] ?? null;
+    if (!is_array($meta)) return false;
+    $source = $meta['source'] ?? null;
+    if (is_string($source) && stripos($source, 'GTFS') !== false) return true;
+    // Older candidate routes predate gtfsWork but still carry their import provenance.
+    foreach (['candidateSha256', 'reviewRequired'] as $key) {
+        if (array_key_exists($key, $meta)) return true;
+    }
+    return false;
+}
+
 function lehrfahrer_gtfs_work_load_driver_route(string $companyId, string $filePath): ?array {
     return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $filePath): ?array {
         try {
@@ -522,7 +534,9 @@ function lehrfahrer_gtfs_work_load_driver_route(string $companyId, string $fileP
             $meta = $data['meta'] ?? null;
             if (is_array($meta) && array_key_exists('gtfsWork', $meta) && !is_array($meta['gtfsWork'])) return null;
             $work = is_array($meta) ? ($meta['gtfsWork'] ?? null) : null;
-            if (!is_array($work)) return $referenced ? null : $data;
+            if (!is_array($work)) {
+                return $referenced || lehrfahrer_gtfs_work_has_legacy_gtfs_provenance($data) ? null : $data;
+            }
             $routeId = trim(strval($work['routeId'] ?? ''));
             $variantId = trim(strval($work['variantId'] ?? ''));
             if ($routeId === '' || $variantId === '') return null;
