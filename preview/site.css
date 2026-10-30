@@ -26,3 +26,22 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3{font-family:'Manrope',Arial,sans-serif}h1{font-
 @media(max-width:760px){.wrap{width:min(calc(100% - 40px),var(--max))}.site-header{height:auto;position:relative}.header-inner{min-height:71px;flex-wrap:wrap;gap:10px 18px;padding-block:12px}.site-header nav{order:3;width:100%;overflow-x:auto;gap:22px;padding:8px 0;scrollbar-width:thin}.site-header nav a{white-space:nowrap}.header-login{margin-left:auto}.hero-grid,.split,.split-wide,.app-layout,.knowledge-grid,.test-layout{grid-template-columns:1fr;gap:43px}.hero-grid{padding-top:75px}.hero-visual{padding:0 12px 42px 0}.hero-visual .media-card{min-height:390px}.hero-floating{right:0}.hero-bottom{font-size:9px}.section{padding-block:80px}.feature-layout{grid-template-columns:1fr}.feature-side{min-height:0}.mini-media{margin-top:22px}.four-up,.people-grid,.help-grid,.phase-grid{grid-template-columns:repeat(2,1fr)}.four-up>div:nth-child(2){border-right:0}.four-up>div:nth-child(3){padding-left:0}.app-layout .tablet-shell{max-width:620px}.media-card-a4{min-height:0}.route-panel{min-height:430px}.test-card{padding:35px}.footer-grid{grid-template-columns:repeat(2,1fr);gap:36px}}
 @media(max-width:470px){.stage-banner{font-size:8px;letter-spacing:.09em}.wrap{width:calc(100% - 32px)}.brand{font-size:11px;gap:7px}.brand img{width:28px;height:28px}.brand-mark{font-size:14px}.header-login{padding-left:10px;font-size:11px}.hero-grid{padding-top:56px}.hero h1{font-size:clamp(30px,7.5vw,36px)}.hero-intro{font-size:18px}.button-row{display:grid}.button{width:100%}.hero-visual .media-card{min-height:285px}.hero-floating{padding:14px 17px;min-width:190px}.hero-floating strong{font-size:15px}.hero-bottom span:nth-child(2){display:none}.route-panel{grid-template-columns:60px 1fr;padding:65px 18px 25px;min-height:380px}.route-line{margin-left:14px;height:255px}.route-notes{gap:11px}.route-notes p{font-size:13px!important;gap:8px}.feature-main-caption{padding:18px}.media-card-editor,.media-card-wide{height:300px;min-height:300px}.tablet-shell{border-width:9px;padding:6px;border-radius:22px}.tablet-screen{height:270px}.four-up,.people-grid,.help-grid,.phase-grid{grid-template-columns:1fr}.four-up>div,.four-up>div:not(:first-child),.phase-grid div,.phase-grid div:first-child{padding:17px 0;border-right:0;border-bottom:1px solid var(--line)}.people-grid div,.help-grid div{min-height:95px}.knowledge-graphic{padding:25px}.knowledge-graphic div{min-width:180px}.knowledge-signature{font-size:16px!important;letter-spacing:.09em}.test-card{padding:25px}.footer-grid{grid-template-columns:1fr 1fr;gap:25px}.footer-grid .footer-brand{grid-column:1/-1}.closing{padding:85px 0}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* V1.1: targeted layout adjustments within the isolated preview. */
+.hero-grid{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(32px,5vw,70px);padding-bottom:105px}
+.hero-visual{padding:0}
+.media-card-hero{min-height:600px}
+.testfahrt-layout{grid-template-columns:minmax(0,.84fr) minmax(0,1.16fr);gap:clamp(40px,5vw,80px)}
+.media-card-testfahrt{width:100%;min-height:430px;aspect-ratio:16/10}
+.people-grid>div{min-height:215px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:12px}
+.people-grid strong{font:800 14px/1.4 'Manrope',Arial,sans-serif}
+.people-grid p{margin:0;color:#43576c;font:500 13px/1.5 'DM Sans',Arial,sans-serif;letter-spacing:0}
+.phase-grid p{margin:12px 0 0;color:#53667b;font:500 14px/1.45 'DM Sans',Arial,sans-serif}
+.test-card .button:disabled{opacity:.7;cursor:not-allowed;transform:none}
+.closing{background:#fff;color:var(--navy);padding:85px 0 105px}
+.closing-logo{width:min(100%,960px);height:auto;margin:0 auto 44px}
+.closing h2{font-size:clamp(40px,5vw,68px);margin-bottom:12px}
+.closing p{color:#52657a}
+.closing .button{margin-top:22px}
+@media(max-width:760px){.hero-grid,.testfahrt-layout{grid-template-columns:1fr}.hero-grid{padding-bottom:65px}.media-card-hero{min-height:390px}.media-card-testfahrt{min-height:340px}.people-grid>div{min-height:185px}.closing{padding:65px 0 85px}}
+@media(max-width:470px){.media-card-hero{min-height:290px}.media-card-testfahrt{min-height:250px}.people-grid>div{min-height:145px}.closing-logo{margin-bottom:28px}}

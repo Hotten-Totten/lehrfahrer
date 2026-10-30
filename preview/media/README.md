@@ -10,3 +10,9 @@ Produktvideos können später lokal ergänzt und per `data-src` am jeweiligen
 `video` eingebunden werden. Der Hero lädt sofort; andere Videos laden erst
 nahe dem sichtbaren Bereich. Bei reduzierter Bewegung starten sie nicht
 automatisch.
+
+`lehrfahrer-hauptlogo.png` ist eine unveränderte Kopie des bereitgestellten
+Originals `Idee_Homepage/Lehrfahrer_ Bus und Tram über Cottbus.png`.
+Die Quelldatei bleibt unberührt. Das große Hauptlogo wird ausschließlich
+im hellen Abschlussbereich verwendet; das kleine LF-Zeichen bleibt im
+Header und Footer.
