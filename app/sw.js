@@ -18,7 +18,7 @@ const APP_SHELL = [
   './js/app.js?v=V2.1.065',
   './js/map.js?v=V2.1.063',
   './js/local-bus-routing-storage.js',
-  './js/debug-helper.js?v=V2.1.063',
+  './js/debug-helper.js?v=dda409171b33',
   './js/local-bus-router.js?v=V2.1.063',
   './js/local-bus-router.js',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
