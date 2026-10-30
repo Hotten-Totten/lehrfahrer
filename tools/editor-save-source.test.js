@@ -177,7 +177,9 @@ test('Ladequelle bleibt ausschließlich Editorzustand und gelangt nicht in Route
 
 test('Geänderte Scripts besitzen passende Cache-Schlüssel', () => {
   for (const file of ['js/editor.state.js', 'js/editor.autosave.js', 'js/editor.api.js']) {
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 12);
+    const source = fs.readFileSync(path.join(root, file));
+    const content = file === 'js/editor.api.js' ? source.toString('utf8').replace(/\r\n/g, '\n') : source;
+    const hash = crypto.createHash('sha256').update(content).digest('hex').slice(0, 12);
     assert.ok(editor.includes(`${file}?v=${hash}`), `${file} Cache-Schlüssel ${hash} fehlt`);
   }
 });

@@ -204,7 +204,7 @@ test('Frontend setzt Ladequelle nur nach gespeicherter Route und berechnet nur E
 });
 
 test('aktualisierter API-Cache-Key entspricht der Datei', () => {
-  const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'js/editor.api.js')))
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'js/editor.api.js'), 'utf8').replace(/\r\n/g, '\n'))
     .digest('hex').slice(0, 12);
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, new RegExp(`js/editor\\.api\\.js\\?v=${hash}`));
