@@ -96,7 +96,7 @@ function showInfoPopup({ title = "Hinweis", message = "", level = "info" } = {})
 }
 
 // Zeigt einen kurzen Toast nach dem Speichern an.
-// info = { fileBase, city, stopCount, routePointCount, gpxSaved, pdfSaved, savedAt }
+// info = { fileBase, city, stopCount, routePointCount, gpxSaved, pdfSaved, changeType, savedAt }
 let _saveToastTimer = null;
 function showSaveToast(info) {
   let toast = document.getElementById("saveToast");
@@ -113,7 +113,10 @@ function showSaveToast(info) {
   toast.replaceChildren();
   const title = document.createElement("div");
   title.className = "toast-title";
-  title.textContent = "✓ Gespeichert";
+  const saveLabels = { NEW: "Neu gespeichert", UNCHANGED: "Unverändert gespeichert",
+    CHANGED: "Geändert gespeichert" };
+  const saveLabel = Object.hasOwn(saveLabels, info.changeType) ? saveLabels[info.changeType] : "Gespeichert";
+  title.textContent = `✓ ${saveLabel}`;
   toast.appendChild(title);
 
   const appendRow = (label, value) => {

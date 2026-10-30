@@ -19,9 +19,9 @@ function section(start, end) {
 }
 
 function harness() {
-  const calls = { confirms: 0, saves: [], loads: [] };
-  const settings = { target: null, existing: false, saveOk: true, saveFileBase: null, confirmOk: true };
-  const state = { loadedServerRouteSource: null };
+  const calls = { confirms: 0, saves: [], loads: [], toasts: [] };
+  const settings = { target: null, existing: false, saveOk: true, saveFileBase: null, confirmOk: true, changeType: null };
+  const state = { loadedServerRouteSource: null, stops: [], routePoints: [] };
   const context = {
     state, console,
     citySelect: { value: 'cottbus' }, lineNameInput: { value: '16' },
@@ -43,14 +43,14 @@ function harness() {
         const payload = JSON.parse(options.body);
         calls.saves.push(payload);
         return { ok: settings.saveOk, json: async () => settings.saveOk
-          ? { ok: true, fileBase: settings.saveFileBase || payload.fileBase }
+          ? { ok: true, fileBase: settings.saveFileBase || payload.fileBase, changeType: settings.changeType }
           : { ok: false, error: 'Testfehler' } };
       }
       calls.loads.push(url);
       return { ok: true, text: async () => JSON.stringify({ ok: true, line: { stops: [], routePoints: [] } }) };
     },
     buildGpxString: () => '<gpx/>', saveGpxToServer: async () => ({ ok: true }),
-    showSaveToast() {}, debug() {}, warn() {}, error() {},
+    showSaveToast(info) { calls.toasts.push(info); }, debug() {}, warn() {}, error() {},
     showRouteProgress() {}, hideRouteProgress() {}, setRouteLoadPhase() {},
     waitForRouteLoadPaint: async () => {},
     loadLineFromData: () => { state.loadedServerRouteSource = null; },
@@ -62,6 +62,26 @@ function harness() {
 }
 
 const own = { city: 'cottbus', lineFolder: 'Linie_16', categoryFolder: 'Standard', fileBase: 'Route_01_Nord' };
+
+test('Save reicht changeType an denselben Erfolgstoast weiter', async () => {
+  const h = harness();
+  h.settings.target = own;
+  for (const changeType of ['NEW', 'UNCHANGED', 'CHANGED', undefined, 'UNKNOWN']) {
+    h.settings.changeType = changeType;
+    await h.context.saveLineToServer();
+  }
+  assert.deepEqual(h.calls.toasts.map(info => info.changeType),
+    ['NEW', 'UNCHANGED', 'CHANGED', undefined, 'UNKNOWN']);
+  assert.equal(h.calls.toasts.length, 5);
+  assert.ok(h.calls.toasts.every(info => info.fileBase === own.fileBase && info.gpxSaved));
+});
+
+test('Dauerhaft deaktivierter Arbeitsstatus ist passiv; laufender Status-Request zeigt wait', () => {
+  const css = fs.readFileSync(path.join(root, 'editor.css'), 'utf8');
+  assert.match(css, /\.gtfs-work-row select:disabled\s*\{\s*cursor:\s*default;\s*\}/);
+  assert.match(css, /\.gtfs-work-row select:disabled\.gtfs-work-status-pending\s*\{\s*cursor:\s*wait;\s*\}/);
+  assert.match(css, /\.gtfs-work-row button:disabled\s*\{\s*cursor:\s*wait;\s*\}/);
+});
 
 test('Geladene Route speichert identisches Ziel mit und ohne fachliche Änderung ohne Überschreiben-Warnung', async () => {
   const h = harness();

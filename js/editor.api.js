@@ -678,6 +678,7 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFol
         routePointCount: state.routePoints.length,
         gpxSaved,
         pdfSaved,
+        changeType: result.changeType,
         savedAt: result.savedAt || new Date().toISOString()
       });
     }
@@ -2270,6 +2271,7 @@ function renderGtfsWorkInventory(inventory) {
     const statusUnavailable = entry.timetableStatus === "ENTFALLEN" || !nextStatus;
     status.disabled = statusUnavailable;
     status.onchange = async () => {
+      status.classList.add("gtfs-work-status-pending");
       status.disabled = true;
       try {
         const result = await postGtfsImport({ action: "workStatus", routeId: entry.routeId, variantId: entry.variantId, status: status.value });
@@ -2279,6 +2281,8 @@ function renderGtfsWorkInventory(inventory) {
         status.disabled = statusUnavailable;
         report.className = "gtfs-change-report warn";
         report.textContent = err.message || "Status konnte nicht gespeichert werden.";
+      } finally {
+        status.classList.remove("gtfs-work-status-pending");
       }
     };
     const create = document.createElement("button");

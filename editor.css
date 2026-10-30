@@ -3667,7 +3667,10 @@ button.danger:hover {
 .gtfs-work-actions .gtfs-work-archive-action { border: 0; background: transparent; color: #51627d; padding: 5px 2px; font-size: .8rem; }
 .gtfs-work-actions .gtfs-work-archive-action:hover { color: #174bbd; text-decoration: underline; }
 .gtfs-work-row[data-timetable-status="ENTFALLEN"] { opacity: .65; text-decoration: line-through; }
-.gtfs-work-row button:disabled, .gtfs-work-row select:disabled { opacity: .55; cursor: wait; }
+.gtfs-work-row button:disabled, .gtfs-work-row select:disabled { opacity: .55; }
+.gtfs-work-row button:disabled { cursor: wait; }
+.gtfs-work-row select:disabled { cursor: default; }
+.gtfs-work-row select:disabled.gtfs-work-status-pending { cursor: wait; }
 
 @media (max-width: 800px) {
   .gtfs-change-summary { grid-template-columns: repeat(2, minmax(120px, 1fr)); }

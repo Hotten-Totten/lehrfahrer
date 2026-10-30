@@ -30,7 +30,7 @@ function node() {
     querySelectorAll() { return []; } };
 }
 
-function setup(inventory, confirmation = true, statusError = false) {
+function setup(inventory, confirmation = true, statusError = false, statusRequest = null) {
   const ids = ['gtfsWorkModal', 'gtfsWorkCompleteness', 'gtfsWorkList', 'gtfsWorkReport',
     'gtfsWorkCloseBtn', 'gtfsWorkPrepareAllBtn', 'gtfsWorkArchiveBtn'];
   const elements = Object.fromEntries(ids.map(id => [id, node()]));
@@ -46,6 +46,7 @@ function setup(inventory, confirmation = true, statusError = false) {
         return { inventory };
       }
       if (request.action === 'workStatus' && statusError) throw new Error('Uebergang abgelehnt');
+      if (request.action === 'workStatus' && statusRequest) return statusRequest;
       return request.action === 'workStatus' ? { inventory } : { line: {} };
     },
     showConfirmDialog: async options => { confirmCalls.push(options); return confirmation; },
@@ -121,6 +122,27 @@ test('technische ID bleibt für Status und workOpen erhalten; historische Eintr�
   assert.equal(entries[1].draftPrepared, true);
   assert.equal(entries[1].savedRoute, 'Route 03');
   assert.equal(entries[2].savedRoute, 'Route 04');
+});
+
+test('Arbeitsstatus unterscheidet dauerhafte Sperre und laufenden Request', async () => {
+  const inventory = { entries: [entry('active', ['A', 'B'], { status: 'IN_BEARBEITUNG' }),
+    entry('terminal', ['A', 'B'], { status: 'FREIGEGEBEN' })], completeness: {} };
+  let finishRequest;
+  const statusRequest = new Promise(resolve => { finishRequest = resolve; });
+  const { renderGtfsWorkInventory, elements } = setup(inventory, true, false, statusRequest);
+  renderGtfsWorkInventory(inventory);
+  const active = elements.gtfsWorkList.children[0].children[4];
+  const terminal = elements.gtfsWorkList.children[1].children[4];
+  assert.equal(terminal.disabled, true);
+  assert.equal(terminal.classList.contains('gtfs-work-status-pending'), false);
+  const request = active.onchange();
+  assert.equal(active.disabled, true);
+  assert.equal(active.classList.contains('gtfs-work-status-pending'), true);
+  finishRequest({ inventory });
+  await request;
+  assert.equal(active.classList.contains('gtfs-work-status-pending'), false);
+  assert.equal(elements.gtfsWorkList.children[1].children[4].disabled, true);
+  assert.equal(elements.gtfsWorkList.children[1].children[4].classList.contains('gtfs-work-status-pending'), false);
 });
 
 test('alle 757 CURRENT-Führungen aus 77 Linien bleiben trotz historischer Einträge sichtbar', () => {

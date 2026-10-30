@@ -167,6 +167,18 @@ test('gleichartiger Editor-Speichern-Toast interpretiert fileBase und city nicht
 
   assert.equal(windowObject.__xss_test, 0);
   assert.match(nodeText(toast), new RegExp(payload.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const [changeType, label] of [
+    ['NEW', 'Neu gespeichert'], ['UNCHANGED', 'Unverändert gespeichert'],
+    ['CHANGED', 'Geändert gespeichert'], ['UNKNOWN', 'Gespeichert'], [undefined, 'Gespeichert']
+  ]) {
+    context.showSaveToast({ fileBase: 'Route_01', city: 'cottbus', stopCount: 20,
+      routePointCount: 150, gpxSaved: true, pdfSaved: true, changeType });
+    assert.equal(toast.children[0].textContent, `✓ ${label}`);
+    assert.match(nodeText(toast), /Route_01/);
+    assert.match(nodeText(toast), /JSON/);
+    assert.match(nodeText(toast), /GPX/);
+    assert.match(nodeText(toast), /PDF/);
+  }
 });
 
 test('gleichartiger Editor-Eingabedialog trennt statisches HTML von Ortsnamen', () => {
