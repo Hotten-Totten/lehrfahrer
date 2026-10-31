@@ -6,7 +6,7 @@
 //   API-Calls   → Network-First, Cache als Offline-Fallback
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21065';
+const CACHE_APP = 'lehrfahrer-app-v21065-a4412782eb26';
 const CACHE_API  = 'lehrfahrer-api-v1';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
@@ -15,7 +15,7 @@ const APP_SHELL = [
   './index.html',
   './manifest.json',
   './css/app.css?v=V2.1.063',
-  './js/app.js?v=V2.1.065',
+  './js/app.js?v=V2.1.065-a4412782eb26',
   './js/map.js?v=V2.1.063',
   './js/local-bus-routing-storage.js',
   './js/debug-helper.js?v=dda409171b33',
@@ -57,6 +57,11 @@ self.addEventListener('fetch', event => {
 
   // API-Anfragen: Network-first, Cache als Fallback
   if (url.pathname.includes('/api/')) {
+    // Der Verbindungscheck muss den Server erreichen und darf keinen API-Cache lesen.
+    if (url.pathname.endsWith('/api/list_cities.php') && url.searchParams.has('lf-connection-check')) {
+      event.respondWith(fetch(event.request));
+      return;
+    }
     event.respondWith(networkFirstAPI(event.request));
     return;
   }

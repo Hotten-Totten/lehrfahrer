@@ -1647,8 +1647,29 @@ async function autoDownloadAllLines() {
   }
 }
 
-// ── Offline-Erkennung (per echtem Fetch-Test, nicht navigator.onLine) ────────
+// ── Offline-Erkennung (per authentifiziertem GET, nicht navigator.onLine) ────────
 function detectOffline() {
+  let latestCheck = 0;
+  function showConnectionState(state) {
+    if (state === 'online') {
+      offlineBadge.classList.add('hidden');
+      return;
+    }
+    const labels = {
+      offline: ['● Offline', 'Server nicht erreichbar – lokale Daten bleiben nutzbar'],
+      auth: ['● Anmeldung erforderlich', 'Die Lehrfahrer-Sitzung ist nicht gültig'],
+      forbidden: ['● Zugriff verweigert', 'Keine Berechtigung zum Lesen der Lehrfahrer-Routen'],
+      server: ['● Serverfehler', 'Die Lehrfahrer-API antwortet nicht erfolgreich']
+    };
+    const [label, title] = labels[state] || labels.server;
+    offlineBadge.textContent = label;
+    offlineBadge.title = title;
+    offlineBadge.classList.remove('hidden');
+    if (state === 'offline') {
+      renderLineDataStatus(availableLinesCatalog.length ? 'offline' : 'none', availableLinesCatalog.length);
+    }
+  }
+
   function createTimeoutSignal(ms) {
     if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
       return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
@@ -1667,22 +1688,36 @@ function detectOffline() {
   }
 
   async function checkOnline() {
+    const checkId = ++latestCheck;
+    const showCurrent = state => {
+      if (checkId === latestCheck) showConnectionState(state);
+    };
     const timeout = createTimeoutSignal(4000);
     try {
-      const response = await fetch('../api/list_cities.php', { method: 'HEAD', cache: 'no-store', signal: timeout.signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      offlineBadge.classList.add('hidden');
+      const response = await fetch(`${API_BASE}/list_cities.php?lf-connection-check=${Date.now()}`, {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: timeout.signal
+      });
+      if (response.status === 401) showCurrent('auth');
+      else if (response.status === 403) showCurrent('forbidden');
+      else if (!response.ok) showCurrent('server');
+      else {
+        let result;
+        try { result = await response.json(); }
+        catch (error) {
+          if (error?.name === 'AbortError' || error?.name === 'TimeoutError') throw error;
+          showCurrent('server');
+          return;
+        }
+        showCurrent(result?.ok === true && Array.isArray(result.cities) ? 'online' : 'server');
+      }
     } catch {
-      offlineBadge.classList.remove('hidden');
+      showCurrent('offline');
     } finally {
       timeout.cleanup();
     }
   }
-  window.addEventListener('online',  checkOnline);
-  window.addEventListener('offline', () => {
-    offlineBadge.classList.remove('hidden');
-    renderLineDataStatus(availableLinesCatalog.length ? 'offline' : 'none', availableLinesCatalog.length);
-  });
+  window.addEventListener('online', checkOnline);
+  window.addEventListener('offline', checkOnline);
   checkOnline();
 }
 

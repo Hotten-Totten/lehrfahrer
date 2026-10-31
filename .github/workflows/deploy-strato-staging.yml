@@ -99,6 +99,7 @@ jobs:
             tools/security-sensitive-storage.test.js \
             tools/tenant-storage.test.js \
             tools/tenant-lines-cities.test.js \
+            tools/app-online-status.test.js \
             tools/route-load-progress.test.js \
             tools/route-build-progress.test.js \
             tools/tenant-personnel.test.js \
