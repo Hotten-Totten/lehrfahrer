@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__);
 require_once $appRoot . '/api/_control_database.php';
+require_once $appRoot . '/api/_auth_cutover_gate.php';
 require_once __DIR__ . '/_control-db-restore-point.php';
 
 function lehrfahrer_recovery_fail(string $message): never {
@@ -41,13 +42,21 @@ function lehrfahrer_control_db_fingerprint(array $configuration): string {
     return hash_final($hash);
 }
 
-function lehrfahrer_latest_restore_point(string $privateRoot): array {
+function lehrfahrer_latest_restore_point(string $privateRoot, ?string $restoreId = null): array {
     $base = $privateRoot . DIRECTORY_SEPARATOR . 'backups' . DIRECTORY_SEPARATOR . 'control-db';
     if (!is_dir($base) || is_link($base)) throw new RuntimeException('Control-DB-Backup-Verzeichnis fehlt oder ist unsicher.');
-    $directories = array_values(array_filter(glob($base . DIRECTORY_SEPARATOR . '*') ?: [], static fn(string $path): bool => is_dir($path) && !is_link($path)));
-    rsort($directories, SORT_STRING);
-    if ($directories === []) throw new RuntimeException('Kein Control-DB-Restore-Punkt vorhanden.');
-    $directory = $directories[0];
+    if ($restoreId !== null) {
+        if (!preg_match('/^20[0-9]{6}T[0-9]{6}Z-[0-9a-f]{12}$/D', $restoreId)) {
+            throw new RuntimeException('Restore-Punkt-ID ist ungueltig.');
+        }
+        $directory = $base . DIRECTORY_SEPARATOR . $restoreId;
+        if (!is_dir($directory) || is_link($directory)) throw new RuntimeException('Restore-Punkt fehlt oder ist unsicher.');
+    } else {
+        $directories = array_values(array_filter(glob($base . DIRECTORY_SEPARATOR . '*') ?: [], static fn(string $path): bool => is_dir($path) && !is_link($path)));
+        rsort($directories, SORT_STRING);
+        if ($directories === []) throw new RuntimeException('Kein Control-DB-Restore-Punkt vorhanden.');
+        $directory = $directories[0];
+    }
     $manifestPath = $directory . DIRECTORY_SEPARATOR . 'manifest.json';
     $dumpPath = $directory . DIRECTORY_SEPARATOR . 'control.sql';
     if (!is_file($manifestPath) || is_link($manifestPath) || !is_file($dumpPath) || is_link($dumpPath)) {
@@ -131,9 +140,10 @@ function lehrfahrer_run_control_db_recovery_drill(): array {
         }
 
         $testPdo = cottbusPdoConnection($targetConfiguration);
-        $update = $testPdo->prepare('UPDATE control_metadata SET value = ?, updated_at = ? WHERE `key` = ?');
-        $update->execute(['LOCKED', gmdate('c'), 'auth_cutover_lock']);
-        if ($update->rowCount() !== 1) throw new RuntimeException('Isolierter Fehlerzustand konnte nicht gesetzt werden.');
+        lehrfahrer_auth_cutover_set_lock($testPdo, 'LOCKED');
+        if (lehrfahrer_auth_cutover_state($testPdo)['lock'] !== 'LOCKED') {
+            throw new RuntimeException('Isolierter Fehlerzustand konnte nicht gesetzt werden.');
+        }
         $mutated = lehrfahrer_control_db_fingerprint($targetConfiguration);
         if (hash_equals($restored, $mutated)) throw new RuntimeException('Isolierter Fehlerzustand hat den Fingerprint nicht veraendert.');
 

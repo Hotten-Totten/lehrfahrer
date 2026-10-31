@@ -14,7 +14,7 @@ on:
         default: false
         type: boolean
       verify_control_db_recovery:
-        description: Restore the fresh Control-DB backup into an isolated temporary DB and verify rollback recovery
+        description: Verify isolated restore and controlled recovery on real staging MariaDB
         required: true
         default: false
         type: boolean
@@ -453,6 +453,7 @@ jobs:
             tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
             tools/control-db-recovery-drill.php \
+            tools/control-db-live-recovery.php \
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
             tools/control-account-migrate.php \
@@ -506,6 +507,7 @@ jobs:
             "$private_root/prepare-cottbus-gtfs-work-staging.php" \
             "$private_root/_control-db-restore-point.php" \
             "$private_root/control-db-recovery-drill.php" \
+            "$private_root/control-db-live-recovery.php" \
             "$private_root/control-account-preflight.php" \
             "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
@@ -1895,12 +1897,11 @@ jobs:
 
           docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
           before="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
-            -e "SELECT CONCAT(\`key\`,'=',value) FROM control_metadata WHERE \`key\` IN ('auth_mode','auth_cutover_lock') ORDER BY \`key\`;" | tr -d '\r')"
-          printf '%s\n' "$before" | grep -Fxq 'auth_cutover_lock=OPEN'
-          printf '%s\n' "$before" | grep -Fxq 'auth_mode=PARALLEL'
+            -e "SELECT CONCAT(COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_mode'),'PARALLEL'),'/',COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock'),'OPEN'));" | tr -d '\r')"
+          if [ "$before" != 'PARALLEL/OPEN' ]; then echo "Isolierter Ausgangszustand: $before" >&2; exit 1; fi
 
           docker exec "$container" mariadb -uroot -p"$root_password" control_recovery \
-            -e "UPDATE control_metadata SET value='LOCKED' WHERE \`key\`='auth_cutover_lock';"
+            -e "INSERT INTO control_metadata (\`key\`,value,updated_at) VALUES ('auth_cutover_lock','LOCKED',UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE value='LOCKED',updated_at=UTC_TIMESTAMP();"
           locked="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
             -e "SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock';" | tr -d '\r')"
           test "$locked" = LOCKED
@@ -1922,6 +1923,111 @@ jobs:
               isolated_database:"ephemeral-github-mariadb",initial_restore:true,
               fault_injected:"auth_cutover_lock=LOCKED",rollback_restored_auth_state:"PARALLEL/OPEN",
               expected_tables_restored:true,staging_database_touched:false}'
+
+      - name: Verify controlled recovery on real staging MariaDB
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_control_db_recovery }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          origin='https://staging.lehrfahrer.de'
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_base+=(-i ~/.ssh/id_rsa)
+            ssh_run=("${ssh_base[@]}")
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          recovery() {
+            "${ssh_run[@]}" "$remote" \
+              "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' '$1'" <<'REMOTE_RECOVERY'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          case "$private_root/" in "$webroot/"*) exit 1 ;; esac
+          test "$(stat -c '%a' "$private_root")" = 700
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_RECOVERY_RUN_ID="$3" LEHRFAHRER_RECOVERY_ACTION="$4" \
+          LEHRFAHRER_RECOVERY_RUN=1 \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-db-live-recovery.php"
+          REMOTE_RECOVERY
+          }
+          locked=0
+          cleanup() {
+            if [ "$locked" -eq 1 ]; then
+              recovery recover || recovery cancel || echo 'Recovery erfordert administrativen Eingriff.' >&2
+            fi
+            rm -f /tmp/lf-recovery-login.json /tmp/lf-recovery-result.json \
+              /tmp/lf-recovery-relogin.json /tmp/lf-recovery-cookies \
+              /tmp/lf-recovery-new-cookies /tmp/lf-recovery-select.json
+          }
+          trap cleanup EXIT
+          recovery inspect | jq -e '.ok == true and .engine == "mariadb" and .mode == "PARALLEL" and .lock == "OPEN" and .restore_point_valid == true and .marker_present == false' >/dev/null
+          if recovery recover >/dev/null 2>&1; then echo 'Recovery ohne aktiven Drill wurde erlaubt.' >&2; exit 1; fi
+          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/lf-recovery-login.json
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/lf-recovery-cookies --data-binary @/tmp/lf-recovery-login.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/lf-recovery-result.json
+          jq -e '.ok == true and .context == "TENANT"' /tmp/lf-recovery-result.json >/dev/null
+          membership_id="$(jq -r '.membershipId' /tmp/lf-recovery-result.json)"
+          csrf="$(jq -r '.csrfToken' /tmp/lf-recovery-result.json)"
+          jq -n --arg membershipId "$membership_id" '{membershipId:$membershipId}' > /tmp/lf-recovery-select.json
+          locked=1
+          recovery lock | jq -e '.ok == true and .mode == "PARALLEL" and .lock == "LOCKED"' >/dev/null
+          for action in login select switch; do
+            if [ "$action" = login ]; then
+              status="$(curl --silent --show-error --output /tmp/lf-recovery-result.json --write-out '%{http_code}' \
+                -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+                --data-binary @/tmp/lf-recovery-login.json "$origin/api/auth/account_test.php?action=login")"
+            else
+              status="$(curl --silent --show-error --output /tmp/lf-recovery-result.json --write-out '%{http_code}' \
+                -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/lf-recovery-cookies \
+                -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' \
+                --data-binary @/tmp/lf-recovery-select.json "$origin/api/auth/account_test.php?action=$action")"
+            fi
+            test "$status" = 503
+            jq -e '.ok == false' /tmp/lf-recovery-result.json >/dev/null
+          done
+          recovery recover | jq -e '.ok == true and .mode == "PARALLEL" and .lock == "OPEN"' >/dev/null
+          locked=0
+          recovery inspect | jq -e '.ok == true and .mode == "PARALLEL" and .lock == "OPEN" and .marker_present == false' >/dev/null
+          if recovery recover >/dev/null 2>&1; then echo 'Erneuter Recovery wurde erlaubt.' >&2; exit 1; fi
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/lf-recovery-new-cookies --data-binary @/tmp/lf-recovery-login.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/lf-recovery-relogin.json
+          jq -e '.ok == true and .context == "TENANT"' /tmp/lf-recovery-relogin.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/lf-recovery-new-cookies "$origin/" | grep -q '<title>Linien-Editor</title>'
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/lf-recovery-new-cookies "$origin/api/list_lines.php?scope=driver" \
+            | jq -e '.ok == true' >/dev/null
+          new_csrf="$(jq -r '.csrfToken' /tmp/lf-recovery-relogin.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/lf-recovery-new-cookies -c /tmp/lf-recovery-new-cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $new_csrf" -X POST \
+            "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/lf-recovery-new-cookies --data-binary @/tmp/lf-recovery-login.json \
+            "$origin/api/auth/account_test.php?action=login" \
+            | jq -e '.ok == true and .context == "TENANT"' >/dev/null
+          echo 'REAL_STAGING_AUTH_RECOVERY=OK'
 
       - name: Migrate legacy accounts 1:1 on staging
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.migrate_accounts }}
