@@ -1888,8 +1888,8 @@ jobs:
             -e MARIADB_DATABASE=control_recovery \
             mariadb:11 >/dev/null
           for attempt in $(seq 1 60); do
-            if docker exec "$container" mariadb-admin ping -uroot -p"$root_password" --silent >/dev/null 2>&1; then break; fi
-            if [ "$attempt" -eq 60 ]; then echo 'Ephemere MariaDB startet nicht.' >&2; exit 1; fi
+            if docker exec "$container" mariadb -uroot -p"$root_password" -N -B -e 'SELECT 1' >/dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 60 ]; then echo 'Ephemere MariaDB ist nicht authentifiziert bereit.' >&2; exit 1; fi
             sleep 1
           done
 
