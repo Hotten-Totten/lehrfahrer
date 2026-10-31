@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      diagnose_driver_api:
+        description: P2.4c read-only Driver API checks using a fresh staging account session
+        required: true
+        default: false
+        type: boolean
       migrate_accounts:
         description: Run the approved one-time staging account 1:1 migration after a private restore point
         required: true
@@ -103,6 +108,18 @@ jobs:
           fi
           if [ "${{ inputs.diagnose_account_cutover }}" = true ]; then
             test "${{ inputs.perform_account_cutover }}" != true
+            test "${{ inputs.migrate_accounts }}" != true
+            test "${{ inputs.apply_cottbus }}" != true
+            test "${{ inputs.check_official_cottbus }}" != true
+            test "${{ inputs.preflight_cottbus }}" != true
+            test "${{ inputs.stamp_cottbus_source_sha }}" != true
+            test "${{ inputs.verify_gtfs_routes_v1 }}" != true
+            test "${{ inputs.repair_cottbus_city }}" != true
+            test "${{ inputs.verify_control_db_recovery }}" != true
+          fi
+          if [ "${{ inputs.diagnose_driver_api }}" = true ]; then
+            test "${{ inputs.perform_account_cutover }}" != true
+            test "${{ inputs.diagnose_account_cutover }}" != true
             test "${{ inputs.migrate_accounts }}" != true
             test "${{ inputs.apply_cottbus }}" != true
             test "${{ inputs.check_official_cottbus }}" != true
@@ -1549,6 +1566,116 @@ jobs:
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/primary-account.cookies "$origin/api/list_lines.php?scope=driver")"
           test "$post_logout" = 401
           echo 'ACCOUNT_PRIMARY_AUTH=OK'
+
+      - name: Diagnose Driver API with fresh staging account session
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_driver_api && steps.auth_preflight.outputs.mode == 'PARALLEL' }}
+        shell: bash
+        env:
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          origin='https://staging.lehrfahrer.de'
+          trap 'rm -f /tmp/p24c-*.json /tmp/p24c-*.cookies /tmp/p24c-*.html' EXIT
+          failure=0
+          echo '15A ACCOUNT_SESSION: START expected=HTTP_200 Account TENANT'
+          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/p24c-login.json
+          status="$(curl --silent --show-error --output /tmp/p24c-session.json --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/p24c-account.cookies --data-binary @/tmp/p24c-login.json \
+            "$origin/api/auth/account_test.php?action=login")" || status=000
+          if [ "$status" = 200 ] && jq -e '.ok == true and .context == "TENANT" and (.membershipId | type == "string")' /tmp/p24c-session.json >/dev/null; then
+            echo "15A ACCOUNT_SESSION: PASS HTTP=$status"
+          else
+            echo "15A ACCOUNT_SESSION: FAIL HTTP=$status error_class=ACCOUNT_SESSION_INVALID" >&2
+            exit 1
+          fi
+          echo '15B LIST_CITIES: START expected=HTTP_200 valid_JSON'
+          status="$(curl --silent --show-error --output /tmp/p24c-cities.json --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24c-account.cookies \
+            "$origin/api/list_cities.php")" || status=000
+          if [ "$status" = 200 ] && jq -e '.ok == true' /tmp/p24c-cities.json >/dev/null; then
+            echo "15B LIST_CITIES: PASS HTTP=$status"
+          else
+            echo "15B LIST_CITIES: FAIL HTTP=$status error_class=API_OR_JSON" >&2
+            failure=1
+          fi
+          echo '15C LIST_LINES_DRIVER: START expected=HTTP_200 valid_driver_catalog'
+          status="$(curl --silent --show-error --output /tmp/p24c-lines.json --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24c-account.cookies \
+            "$origin/api/list_lines.php?scope=driver")" || status=000
+          catalog_valid=0
+          if [ "$status" = 200 ] && jq -e '.ok == true and (.lines | type == "array")' /tmp/p24c-lines.json >/dev/null; then
+            catalog_valid=1
+            count="$(jq '.lines | length' /tmp/p24c-lines.json)"
+            echo "15C LIST_LINES_DRIVER: PASS HTTP=$status count=$count"
+          else
+            echo "15C LIST_LINES_DRIVER: FAIL HTTP=$status error_class=API_OR_JSON" >&2
+            failure=1
+          fi
+          echo '15D RELEASED_ROUTE_DISCOVERY: START expected=driver_route_with_two_points'
+          route=''
+          if [ "$catalog_valid" -eq 1 ]; then
+            route="$(jq -c '.lines | map(select((.routePointCount // 0) >= 2)) | first // empty' /tmp/p24c-lines.json)"
+            eligible="$(jq '[.lines[] | select((.routePointCount // 0) >= 2)] | length' /tmp/p24c-lines.json)"
+            if [ -n "$route" ]; then
+              echo "15D RELEASED_ROUTE_DISCOVERY: PASS HTTP=200 total=$count eligible=$eligible"
+            else
+              echo "15D RELEASED_ROUTE_DISCOVERY: FAIL HTTP=200 error_class=NO_ROUTE_WITH_TWO_POINTS total=$count eligible=$eligible" >&2
+              failure=1
+            fi
+          else
+            echo '15D RELEASED_ROUTE_DISCOVERY: FAIL HTTP=unknown error_class=CATALOG_UNAVAILABLE' >&2
+            failure=1
+          fi
+          echo '15E RELEASED_ROUTE_FETCH: START expected=HTTP_200 valid_route_JSON'
+          if [ -n "$route" ]; then
+            city="$(printf '%s' "$route" | jq -r '.city')"
+            file_base="$(printf '%s' "$route" | jq -r '.fileBase')"
+            line_folder="$(printf '%s' "$route" | jq -r '.lineFolder // ""')"
+            category_folder="$(printf '%s' "$route" | jq -r '.categoryFolder // ""')"
+            status="$(curl --silent --show-error --get --output /tmp/p24c-route.json --write-out '%{http_code}' \
+              -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24c-account.cookies \
+              --data-urlencode 'scope=driver' --data-urlencode "city=$city" \
+              --data-urlencode "line=$file_base" --data-urlencode "lineFolder=$line_folder" \
+              --data-urlencode "categoryFolder=$category_folder" \
+              "$origin/api/load_line.php")" || status=000
+            if [ "$status" = 200 ] && jq -e '.ok == true and (.line | type == "object")' /tmp/p24c-route.json >/dev/null; then
+              echo "15E RELEASED_ROUTE_FETCH: PASS HTTP=$status"
+            else
+              echo "15E RELEASED_ROUTE_FETCH: FAIL HTTP=$status error_class=ROUTE_FETCH_OR_JSON" >&2
+              failure=1
+            fi
+          else
+            echo '15E RELEASED_ROUTE_FETCH: FAIL HTTP=not_attempted error_class=NO_DISCOVERED_ROUTE' >&2
+            failure=1
+          fi
+          echo '15F TENANT_CONTEXT: START expected=same_account_membership_company'
+          status="$(curl --silent --show-error --output /tmp/p24c-me.json --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24c-account.cookies \
+            "$origin/api/auth/account_test.php?action=me")" || status=000
+          if [ "$status" = 200 ] && jq -e --slurpfile login /tmp/p24c-session.json \
+            '.ok == true and .context == "TENANT" and .accountId == $login[0].accountId and .membershipId == $login[0].membershipId and .companyId == $login[0].companyId' \
+            /tmp/p24c-me.json >/dev/null; then
+            echo "15F TENANT_CONTEXT: PASS HTTP=$status"
+          else
+            echo "15F TENANT_CONTEXT: FAIL HTTP=$status error_class=CONTEXT_MISMATCH" >&2
+            failure=1
+          fi
+          echo '15G NO_LEGACY_FALLBACK: START expected=account_cookie_only'
+          if grep -q '__Host-lehrfahrer_account_test' /tmp/p24c-account.cookies \
+            && ! grep -q '__Host-lehrfahrer_session' /tmp/p24c-account.cookies; then
+            echo '15G NO_LEGACY_FALLBACK: PASS HTTP=not_applicable account_cookie_only=true'
+          else
+            echo '15G NO_LEGACY_FALLBACK: FAIL HTTP=not_applicable error_class=COOKIE_SOURCE_MISMATCH' >&2
+            failure=1
+          fi
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/app/index.html" > /tmp/p24c-app.html
+          grep -q '<title>Lehrfahrer</title>' /tmp/p24c-app.html
+          test "$failure" -eq 0
 
       - name: Register missing Cottbus city without changing existing routes
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_cottbus_city }}
