@@ -45,3 +45,11 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3{font-family:'Manrope',Arial,sans-serif}h1{font-
 .closing .button{margin-top:22px}
 @media(max-width:760px){.hero-grid,.testfahrt-layout{grid-template-columns:1fr}.hero-grid{padding-bottom:65px}.media-card-hero{min-height:390px}.media-card-testfahrt{min-height:340px}.people-grid>div{min-height:185px}.closing{padding:65px 0 85px}}
 @media(max-width:470px){.media-card-hero{min-height:290px}.media-card-testfahrt{min-height:250px}.people-grid>div{min-height:145px}.closing-logo{margin-bottom:28px}}
+
+/* V1.2: real product footage uses its native widescreen framing. */
+.media-card-hero,.media-card-editor,.media-card-testfahrt{aspect-ratio:16/9;min-height:0;height:auto}
+.mini-media{aspect-ratio:16/9;min-height:0}
+.media-card video[data-src],.mini-media video[data-src]{object-position:center}
+@media(max-width:760px){.hero-visual .media-card.media-card-hero,.media-card-testfahrt{min-height:0}}
+@media(max-width:760px){.hero-grid,.testfahrt-layout{grid-template-columns:minmax(0,1fr)}.hero-copy,.hero-visual{min-width:0}}
+@media(max-width:470px){.hero-visual .media-card.media-card-hero,.media-card-editor,.media-card-testfahrt{min-height:0;height:auto}.media-label{left:12px;right:12px;gap:5px;font-size:8px;letter-spacing:.1em}.media-label span:last-child{font-size:8px;white-space:nowrap}}

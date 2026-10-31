@@ -4,6 +4,7 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const videos = [...document.querySelectorAll('video[data-src]')];
   if (!videos.length) return;
+  if (reduceMotion) videos.forEach(video => video.removeAttribute('autoplay'));
   const load = video => {
     if (video.dataset.loaded === 'true') return;
     video.src = video.dataset.src;
