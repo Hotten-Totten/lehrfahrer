@@ -231,7 +231,8 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
 }
 
 if (getenv('LEHRFAHRER_CUTOVER_PREFLIGHT_RUN') === '1') {
-    if (PHP_SAPI !== 'cli' || lehrfahrer_environment() !== 'staging') exit(2);
+    if (!in_array(PHP_SAPI, ['cli', 'cgi-fcgi'], true) || isset($_SERVER['REQUEST_METHOD'])
+        || lehrfahrer_environment() !== 'staging') exit(2);
     try {
         $configuration = lehrfahrer_control_mysql_configuration();
         $pdo = new PDO($configuration['dsn'], $configuration['user'], $configuration['password'], $configuration['options']);
@@ -243,7 +244,7 @@ if (getenv('LEHRFAHRER_CUTOVER_PREFLIGHT_RUN') === '1') {
         exit($result['status'] === 'BLOCKER' ? 1 : 0);
     } catch (Throwable $error) {
         if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-        fwrite(STDERR, "Cutover-Preflight fehlgeschlagen.\n");
+        file_put_contents('php://stderr', "Cutover-Preflight fehlgeschlagen.\n");
         exit(1);
     }
 }
