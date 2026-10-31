@@ -1977,7 +1977,8 @@ jobs:
             fi
             rm -f /tmp/lf-recovery-login.json /tmp/lf-recovery-result.json \
               /tmp/lf-recovery-relogin.json /tmp/lf-recovery-cookies \
-              /tmp/lf-recovery-new-cookies /tmp/lf-recovery-select.json
+              /tmp/lf-recovery-new-cookies /tmp/lf-recovery-select.json \
+              /tmp/lf-recovery-editor.html
           }
           trap cleanup EXIT
           recovery inspect | jq -e '.ok == true and .engine == "mariadb" and .mode == "PARALLEL" and .lock == "OPEN" and .restore_point_valid == true and .marker_present == false' >/dev/null
@@ -2017,7 +2018,8 @@ jobs:
             "$origin/api/auth/account_test.php?action=login" > /tmp/lf-recovery-relogin.json
           jq -e '.ok == true and .context == "TENANT"' /tmp/lf-recovery-relogin.json >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/lf-recovery-new-cookies "$origin/" | grep -q '<title>Linien-Editor</title>'
+            -b /tmp/lf-recovery-new-cookies "$origin/" > /tmp/lf-recovery-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/lf-recovery-editor.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/lf-recovery-new-cookies "$origin/api/list_lines.php?scope=driver" \
             | jq -e '.ok == true' >/dev/null
