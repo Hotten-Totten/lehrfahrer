@@ -1861,7 +1861,7 @@ jobs:
           test -d "$base" && test ! -L "$base"
           latest="$(find "$base" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | head -n1)"
           case "$latest" in
-            20????????T??????Z-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            20??????T??????Z-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
             *) echo 'Kein sicherer Restore-Punkt gefunden.' >&2; exit 1 ;;
           esac
           test -f "$base/$latest/control.sql" && test ! -L "$base/$latest/control.sql"
