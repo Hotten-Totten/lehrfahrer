@@ -58,6 +58,22 @@ try {
         || (int)$pdo->query('SELECT COUNT(*) FROM account_sessions WHERE revoked_at IS NULL')->fetchColumn() !== 0) {
         throw new RuntimeException('Recovery hat Sessions oder Modus nicht gesichert.');
     }
+    $pdo->exec("INSERT INTO account_sessions (environment,revoked_at) VALUES ('staging',NULL)");
+    $before = lehrfahrer_cutover_unrevoked_sessions($pdo);
+    lehrfahrer_auth_cutover_set_lock($pdo, 'LOCKED', '123-2');
+    if (lehrfahrer_auth_cutover_state($pdo) !== ['mode' => 'PARALLEL', 'lock' => 'LOCKED']) {
+        throw new RuntimeException('Diagnose-Lock veraenderte den Modus.');
+    }
+    $blocked = false;
+    try { lehrfahrer_with_auth_mutation_gate($pdo, static fn(): bool => true); }
+    catch (LehrfahrerAuthCutoverBusy $error) { $blocked = true; }
+    if (!$blocked) throw new RuntimeException('Diagnose-Lock blockierte Auth-Mutation nicht.');
+    lehrfahrer_auth_cutover_set_lock($pdo, 'OPEN', '123-2');
+    $pdo->prepare('DELETE FROM control_metadata WHERE `key` = ?')->execute(['auth_cutover_owner']);
+    if (lehrfahrer_auth_cutover_state($pdo) !== ['mode' => 'PARALLEL', 'lock' => 'OPEN']
+        || $before !== lehrfahrer_cutover_unrevoked_sessions($pdo)) {
+        throw new RuntimeException('Diagnose-Dry-Run veraenderte Sitzungen oder Auth-Modus.');
+    }
     echo "PASS: MariaDB cutover lock, revocation, primary mode and recovery\n";
 } finally {
     $server->exec('DROP DATABASE `' . $database . '`');

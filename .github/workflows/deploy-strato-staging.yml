@@ -23,6 +23,11 @@ on:
         required: true
         default: false
         type: boolean
+      diagnose_account_cutover:
+        description: P2.4b dry-run of cutover lock and recovery without mode switch or session revocation
+        required: true
+        default: false
+        type: boolean
       migrate_accounts:
         description: Run the approved one-time staging account 1:1 migration after a private restore point
         required: true
@@ -96,6 +101,17 @@ jobs:
               test "$selected" != true
             done
           fi
+          if [ "${{ inputs.diagnose_account_cutover }}" = true ]; then
+            test "${{ inputs.perform_account_cutover }}" != true
+            test "${{ inputs.migrate_accounts }}" != true
+            test "${{ inputs.apply_cottbus }}" != true
+            test "${{ inputs.check_official_cottbus }}" != true
+            test "${{ inputs.preflight_cottbus }}" != true
+            test "${{ inputs.stamp_cottbus_source_sha }}" != true
+            test "${{ inputs.verify_gtfs_routes_v1 }}" != true
+            test "${{ inputs.repair_cottbus_city }}" != true
+            test "${{ inputs.verify_control_db_recovery }}" != true
+          fi
           if [ "${{ inputs.migrate_accounts }}" = true ]; then
             test "${{ inputs.apply_cottbus }}" != true
             test "${{ inputs.preflight_cottbus }}" != true
@@ -135,6 +151,7 @@ jobs:
             tools/control-user-numbers.test.js \
             tools/control-account-preflight.test.js \
             tools/account-cutover-preflight.test.js \
+            tools/account-cutover-observability.test.js \
             tools/auth-cutover-race.test.js \
             tools/control-db-recovery-drill.test.js \
             tools/control-account-migrate.test.js \
@@ -1137,6 +1154,8 @@ jobs:
           LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
         run: |
           set -euo pipefail
+          echo 'CUTOVER-01 PRECHECK: START expected=PASS_or_WARNING mutation=false recovery_required=false'
+          trap 'code=$?; echo "CUTOVER-01 PRECHECK: FAIL exit_code=$code expected=PASS_or_WARNING actual=unknown mutation=false recovery_required=false" >&2' ERR
           REMOTE="$STRATO_USER@$STRATO_HOST"
           SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
@@ -1172,6 +1191,8 @@ jobs:
           printf '%s\n' "$report"
           mode="$(printf '%s\n' "$report" | jq -er '.auth.mode | select(. == "PARALLEL" or . == "ACCOUNT_PRIMARY")')"
           printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+          echo 'CUTOVER-01 PRECHECK: PASS'
+          trap - ERR
 
       - name: Staging HTTP, runtime, login and session smoke test
         shell: bash
@@ -1738,7 +1759,7 @@ jobs:
           REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.perform_account_cutover || inputs.migrate_accounts) }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.perform_account_cutover || inputs.diagnose_account_cutover || inputs.migrate_accounts) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -1751,6 +1772,8 @@ jobs:
           LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
         run: |
           set -euo pipefail
+          echo 'CUTOVER-02 RESTORE_POINT: START expected=validated_private_point mutation=false recovery_required=false'
+          trap 'code=$?; echo "CUTOVER-02 RESTORE_POINT: FAIL exit_code=$code expected=validated_private_point actual=unknown mutation=false recovery_required=false" >&2' ERR
           REMOTE="$STRATO_USER@$STRATO_HOST"
           SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
@@ -1908,6 +1931,102 @@ jobs:
           cat "$result"
           rm -f -- "$runner" "$result"
           REMOTE_SCRIPT
+          echo 'CUTOVER-02 RESTORE_POINT: PASS'
+          trap - ERR
+
+      - name: Diagnose cutover lock and recovery without mode switch
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_account_cutover }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          origin='https://staging.lehrfahrer.de'
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_base+=(-i ~/.ssh/id_rsa)
+            ssh_run=("${ssh_base[@]}")
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          cutover() {
+            "${ssh_run[@]}" "$remote" \
+              "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' '$1'" <<'REMOTE_CUTOVER'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          case "$private_root/" in "$webroot/"*) exit 1 ;; esac
+          test "$(stat -c '%a' "$private_root")" = 700
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_CUTOVER_RUN_ID="$3" LEHRFAHRER_CUTOVER_ACTION="$4" \
+          LEHRFAHRER_CUTOVER_RUN=1 \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-account-cutover-staging.php"
+          REMOTE_CUTOVER
+          }
+          locked=0
+          current_phase='CUTOVER-01 PRECHECK'
+          cleanup() {
+            code=$?
+            if [ "$code" -ne 0 ]; then
+              echo "$current_phase: FAIL exit_code=$code expected=PARALLEL/OPEN actual=unknown mutation=$locked recovery_required=$locked" >&2
+            fi
+            if [ "$locked" -eq 1 ]; then
+              if cutover diagnostic-unlock | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null; then
+                echo 'RECOVERY RESULT: PASS AUTH MODE: PARALLEL LOCK STATE: OPEN' >&2
+              else
+                echo 'RECOVERY RESULT: FAIL AUTH MODE: UNKNOWN LOCK STATE: UNKNOWN' >&2
+              fi
+            fi
+            rm -f /tmp/p24b-*.json
+            exit "$code"
+          }
+          trap cleanup EXIT
+          echo "$current_phase: START expected=PARALLEL/OPEN mutation=false recovery_required=false"
+          cutover inspect > /tmp/p24b-before.json
+          jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN" and .restore_point_valid == true and .marker_present == false' /tmp/p24b-before.json >/dev/null
+          echo "$current_phase: PASS"
+          current_phase='CUTOVER-02 RESTORE_POINT'
+          echo "$current_phase: START expected=validated_private_point mutation=false recovery_required=false"
+          jq -e '.restore_point_valid == true' /tmp/p24b-before.json >/dev/null
+          echo "$current_phase: PASS"
+          current_phase='CUTOVER SERVER_DIAGNOSTIC_LOCK'
+          locked=1
+          cutover diagnostic-lock | jq -e '.ok == true and .dry_run == true and .auth.mode == "PARALLEL" and .auth.lock == "LOCKED"' >/dev/null
+          current_phase='CUTOVER-04 LOCK_VERIFY'
+          cutover inspect | jq -e '.auth.mode == "PARALLEL" and .auth.lock == "LOCKED" and .marker_present == true' >/dev/null
+          current_phase='CUTOVER-05 AUTH_MUTATION_BLOCK_VERIFY'
+          echo "$current_phase: START expected=HTTP_503 mutation=true recovery_required=true"
+          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/p24b-login.json
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/p24b-login.json "$origin/api/auth/account_test.php?action=login")"
+          test "$status" = 503
+          echo "$current_phase: PASS actual=HTTP_503"
+          current_phase='RECOVERY-01 STATE_READ'
+          cutover diagnostic-unlock | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
+          locked=0
+          current_phase='RECOVERY-06 FINAL_VERIFY'
+          cutover inspect > /tmp/p24b-after.json
+          jq -e '.auth.mode == "PARALLEL" and .auth.lock == "OPEN" and .marker_present == false' /tmp/p24b-after.json >/dev/null
+          before="$(jq -c '.unrevoked_sessions' /tmp/p24b-before.json)"
+          after="$(jq -c '.unrevoked_sessions' /tmp/p24b-after.json)"
+          test "$before" = "$after"
+          echo 'RECOVERY-06 FINAL_VERIFY: PASS AUTH MODE: PARALLEL LOCK STATE: OPEN sessions_unchanged=true'
+          trap - EXIT
+          rm -f /tmp/p24b-*.json
 
       - name: Perform controlled ACCOUNT_PRIMARY cutover on staging
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.perform_account_cutover }}
@@ -1952,20 +2071,26 @@ jobs:
           REMOTE_CUTOVER
           }
           started=0
+          current_phase='CUTOVER-01 PRECHECK'
           cleanup() {
             result=$?
+            if [ "$result" -ne 0 ]; then
+              echo "$current_phase: FAIL exit_code=$result expected=phase_postcondition actual=unknown mutation=$started recovery_required=$started" >&2
+            fi
             if [ "$started" -eq 1 ]; then
               if cutover recover | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null; then
-                echo 'ACCOUNT_PRIMARY_CUTOVER_ROLLBACK=PARALLEL/OPEN' >&2
+                echo 'RECOVERY RESULT: PASS AUTH MODE: PARALLEL LOCK STATE: OPEN' >&2
               else
-                echo 'ACCOUNT_PRIMARY_CUTOVER_ROLLBACK=FAILED; administrativer Eingriff erforderlich.' >&2
+                echo 'RECOVERY RESULT: FAIL AUTH MODE: UNKNOWN LOCK STATE: UNKNOWN' >&2
               fi
             fi
             rm -f /tmp/p24-*.json /tmp/p24-*.cookies /tmp/p24-*.html
             exit "$result"
           }
           trap cleanup EXIT
+          echo "$current_phase: START expected=PARALLEL/OPEN mutation=false recovery_required=false"
           cutover inspect | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN" and .restore_point_valid == true and .marker_present == false' >/dev/null
+          echo "$current_phase: PASS"
           jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/p24-account.json
           jq -n --arg password "$ADMIN_PASSWORD" '{company:"lehrfahrer-test",login:"staging-admin",password:$password}' > /tmp/p24-legacy.json
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
@@ -1977,7 +2102,10 @@ jobs:
           csrf="$(jq -r '.csrfToken' /tmp/p24-old-account.json)"
           jq -n --arg membershipId "$membership_id" '{membershipId:$membershipId}' > /tmp/p24-select.json
           started=1
+          current_phase='CUTOVER SERVER_BEGIN'
           cutover begin | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "LOCKED"' >/dev/null
+          current_phase='CUTOVER-05 AUTH_MUTATION_BLOCK_VERIFY'
+          echo "$current_phase: START expected=HTTP_503 mutation=true recovery_required=true"
           for action in login select switch; do
             if [ "$action" = login ]; then
               status="$(curl --silent --show-error --output /tmp/p24-result.json --write-out '%{http_code}' \
@@ -1991,16 +2119,19 @@ jobs:
             fi
             test "$status" = 503
           done
+          echo "$current_phase: PASS actual=HTTP_503"
+          current_phase='CUTOVER-08 SESSION_VERIFY'
+          echo "$current_phase: START expected=old_session_HTTP_401 mutation=true recovery_required=true"
           old_session_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24-old-account.cookies \
             "$origin/api/auth/account_test.php?action=me")"
           test "$old_session_status" = 401
+          echo "$current_phase: PASS actual=HTTP_401"
+          current_phase='CUTOVER-11 LOCK_RELEASE'
           cutover open | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"' >/dev/null
           cutover inspect | jq -e '.auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN" and .marker_present == true' >/dev/null
-          legacy_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
-            --data-binary @/tmp/p24-legacy.json "$origin/api/auth/login.php")"
-          test "$legacy_status" = 403
+          current_phase='CUTOVER-12 ACCOUNT_LOGIN_SMOKE'
+          echo "$current_phase: START expected=account_login_TENANT mutation=true recovery_required=true"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/account-login.php" > /tmp/p24-login.html
           grep -q 'id="accountLoginForm"' /tmp/p24-login.html
@@ -2011,9 +2142,22 @@ jobs:
             "$origin/api/auth/account_test.php?action=login" > /tmp/p24-new-account.json
           jq -e '.ok == true and .context == "TENANT" and (.tenantCapabilities | index("routes.read"))
             and .platformRoles == [] and .platformCapabilities == []' /tmp/p24-new-account.json >/dev/null
+          echo "$current_phase: PASS"
+          current_phase='CUTOVER-13 LEGACY_LOGIN_BLOCK_SMOKE'
+          echo "$current_phase: START expected=HTTP_403 mutation=true recovery_required=true"
+          legacy_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/p24-legacy.json "$origin/api/auth/login.php")"
+          test "$legacy_status" = 403
+          echo "$current_phase: PASS actual=HTTP_403"
+          current_phase='CUTOVER-14 EDITOR_AUTH_SMOKE'
+          echo "$current_phase: START expected=authorized_editor mutation=true recovery_required=true"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/p24-new-account.cookies "$origin/" > /tmp/p24-editor.html
           grep -q '<title>Linien-Editor</title>' /tmp/p24-editor.html
+          echo "$current_phase: PASS"
+          current_phase='CUTOVER-15 DRIVER_API_SMOKE'
+          echo "$current_phase: START expected=driver_API_and_route mutation=true recovery_required=true"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/p24-new-account.cookies "$origin/app/index.html" > /tmp/p24-app.html
           grep -q '<title>Lehrfahrer</title>' /tmp/p24-app.html
@@ -2037,6 +2181,9 @@ jobs:
             --data-urlencode "line=$file_base" --data-urlencode "lineFolder=$line_folder" \
             --data-urlencode "categoryFolder=$category_folder" \
             "$origin/api/load_line.php" | jq -e '.ok == true and (.line | type == "object")' >/dev/null
+          echo "$current_phase: PASS"
+          current_phase='CUTOVER-16 FINAL_STATE_VERIFY'
+          echo "$current_phase: START expected=ACCOUNT_PRIMARY/OPEN_and_logout mutation=true recovery_required=true"
           csrf="$(jq -r '.csrfToken' /tmp/p24-new-account.json)"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/p24-new-account.cookies -c /tmp/p24-new-account.cookies \
@@ -2047,6 +2194,7 @@ jobs:
           test "$post_logout" = 302
           cutover finalize | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"' >/dev/null
           started=0
+          echo "$current_phase: PASS actual=ACCOUNT_PRIMARY/OPEN"
           echo 'STAGING_ACCOUNT_PRIMARY_CUTOVER=OK'
 
       - name: Verify Control-DB recovery drill in isolated ephemeral MariaDB
