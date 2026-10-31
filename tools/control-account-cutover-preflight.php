@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__);
 require_once $appRoot . '/api/_control_database.php';
+require_once $appRoot . '/api/_control_repositories.php';
 require_once $appRoot . '/api/_auth_cutover_gate.php';
 
 /** Read-only check of the already migrated account inventory. No identity values leave this function. */

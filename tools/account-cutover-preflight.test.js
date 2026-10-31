@@ -21,8 +21,9 @@ function fixture(mutation = '') {
 putenv('LEHRFAHRER_ENV=dev'); putenv('LEHRFAHRER_DB_DRIVER=sqlite');
 putenv('LEHRFAHRER_PRIVATE_DATA_DIR=' . ${q(folder)});
 $_SERVER['DOCUMENT_ROOT']=${q(path.join(folder, 'webroot'))};
-require ${q(path.join(root, 'api/_account_auth.php'))};
 require ${q(path.join(root, 'tools/control-account-cutover-preflight.php'))};
+if (!function_exists('lehrfahrer_control_normalize_login')) throw new RuntimeException('Preflight-Abhängigkeit fehlt.');
+require ${q(path.join(root, 'api/_account_auth.php'))};
 $pdo=lehrfahrer_control_database();
 $companies=new LehrfahrerCompanyRepository($pdo);
 $users=new LehrfahrerUserRepository($pdo);
