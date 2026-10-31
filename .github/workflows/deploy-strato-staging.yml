@@ -1622,14 +1622,14 @@ jobs:
           else
             ssh_run=(sshpass -e "${ssh_base[@]}")
           fi
-          remote_command="LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT='./$STAGING_TARGET_PATH' LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=inspect php -q -d auto_prepend_file='./$STAGING_PRIVATE_PATH/runtime-env.php' -f './$STAGING_PRIVATE_PATH/control-driver-smoke-staging.php'"
+          remote_command="bash -c 'set -e; webroot=\$(cd \"./${STAGING_TARGET_PATH#./}\" && pwd -P); private_root=\$(cd \"./${STAGING_PRIVATE_PATH#./}\" && pwd -P); LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT=\"\$webroot\" LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=inspect php -q -d \"auto_prepend_file=\$private_root/runtime-env.php\" -f \"\$private_root/control-driver-smoke-staging.php\"'"
           inspection="$("${ssh_run[@]}" "$remote" "$remote_command")"
           printf '%s\n' "$inspection" | jq -e '.ok == true and .releasedRoutes > 0 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
           echo "DRIVER_SMOKE_INSPECT=PASS released_routes=$(printf '%s\n' "$inspection" | jq -r '.releasedRoutes')"
           if [ "$PROVISION_DRIVER_SMOKE" != true ]; then exit 0; fi
           printf '%s\n' "$inspection" | jq -e '.smokeAccountPresent == false' >/dev/null
           test -n "$DRIVER_SMOKE_PASSWORD"
-          provision_command="LEHRFAHRER_STAGING_DRIVER_SMOKE_PASSWORD=\$(cat) LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT='./$STAGING_TARGET_PATH' LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=provision php -q -d auto_prepend_file='./$STAGING_PRIVATE_PATH/runtime-env.php' -f './$STAGING_PRIVATE_PATH/control-driver-smoke-staging.php'"
+          provision_command="bash -c 'set -e; webroot=\$(cd \"./${STAGING_TARGET_PATH#./}\" && pwd -P); private_root=\$(cd \"./${STAGING_PRIVATE_PATH#./}\" && pwd -P); LEHRFAHRER_STAGING_DRIVER_SMOKE_PASSWORD=\$(cat) LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT=\"\$webroot\" LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=provision php -q -d \"auto_prepend_file=\$private_root/runtime-env.php\" -f \"\$private_root/control-driver-smoke-staging.php\"'"
           result="$(printf '%s' "$DRIVER_SMOKE_PASSWORD" | "${ssh_run[@]}" "$remote" "$provision_command")"
           printf '%s\n' "$result" | jq -e '.ok == true and .releasedRoutes > 0 and .smokeAccountPresent == true and .smokeAccountValid == true and .userNumber > 100 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
           echo "DRIVER_SMOKE_PROVISION=PASS user_number=$(printf '%s\n' "$result" | jq -r '.userNumber')"
