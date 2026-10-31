@@ -13,6 +13,7 @@
   const membershipChoices = document.getElementById('membershipChoices');
   const accountSection = document.getElementById('accountSection');
   const activeCompany = document.getElementById('activeCompany');
+  const accountDetails = document.getElementById('accountDetails');
   const continueTarget = document.getElementById('continueTarget');
   const switchCompany = document.getElementById('switchCompany');
   const message = document.getElementById('message');
@@ -86,6 +87,8 @@
   function sessionExpired() {
     csrfToken = '';
     membershipChoices.replaceChildren();
+    accountDetails.replaceChildren();
+    activeCompany.textContent = '';
     window.LehrfahrerTenantCache.clearForLogout().catch(() => {});
     show('login');
     notice('Sitzung abgelaufen. Bitte erneut anmelden.');
@@ -107,7 +110,19 @@
       }
       const current = (memberships.body.memberships || []).find(
         item => item.id === memberships.body.currentMembershipId);
-      activeCompany.textContent = current?.name || 'Aktive Gesellschaft';
+      activeCompany.textContent = body.companyName || current?.name || 'Aktive Gesellschaft';
+      accountDetails.replaceChildren();
+      const row = (label, value) => {
+        if (!value) return;
+        const item = document.createElement('div');
+        item.textContent = `${label}: ${value}`;
+        accountDetails.append(item);
+      };
+      row('Benutzer', body.displayName);
+      row('Benutzernummer', body.userNumber);
+      row('Gesellschaft', body.companyName || current?.name);
+      row('Rolle', Array.isArray(body.tenantRoles) ? body.tenantRoles.join(' / ') : '');
+      row('Plattformrolle', Array.isArray(body.platformRoles) ? body.platformRoles.join(' / ') : '');
       switchCompany.hidden = (memberships.body.memberships || []).length < 2;
       show('account');
       notice('');
@@ -115,6 +130,8 @@
     }
     if (body.context === 'SELECTION_PENDING' || body.context === 'NO_MEMBERSHIP') {
       await window.LehrfahrerTenantCache.clearForLogout();
+      accountDetails.replaceChildren();
+      activeCompany.textContent = '';
       await renderMemberships('select');
       return;
     }
@@ -152,6 +169,8 @@
         return;
       }
       csrfToken = '';
+      accountDetails.replaceChildren();
+      activeCompany.textContent = '';
       await window.LehrfahrerTenantCache.clearForLogout();
       window.location.replace('account-login.php');
     } catch (_error) {

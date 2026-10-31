@@ -395,6 +395,7 @@ function showConfirmDialog({
 function updateApiTokenStatusUI() {
   const el = document.getElementById("apiTokenStatus");
   if (!el) return;
+  if (el.classList.contains('identity-status') || el.classList.contains('identity-unavailable')) return;
 
   if (getSessionCsrfToken()) {
     el.classList.add("token-status-on");

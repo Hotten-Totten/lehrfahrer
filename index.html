@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=971e22ea45c8&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
+<link rel="stylesheet" href="editor.css?v=d9e285cd73cf&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -175,6 +175,7 @@
       <div class="menu-root" id="accountMenuRoot" style="display:none">
         <button class="menu-button" type="button">Konto</button>
         <div class="menu-dropdown">
+          <div id="accountContextDetails" class="account-context-details" hidden></div>
           <button type="button" class="menu-item" onclick="location.assign('account-login.php?mode=manage&amp;next=%2F')">Gesellschaft wechseln / Abmelden</button>
         </div>
       </div>
@@ -999,8 +1000,9 @@
   <script src="js/editor.help.js?v=V2.1.063"></script>
   <script src="js/editor.history.js?v=f4374ba1d606"></script>
   <script src="js/editor.linelogic.js?v=V2.1.063"></script>
-  <script src="js/editor.main.js?v=V2.1.065"></script>
+  <script src="js/editor.main.js?v=38c820109750"></script>
   <script src="js/editor.events.js?v=809a630723c3"></script>
+  <script src="js/editor.identity.js?v=2d70b2bfcde2"></script>
   <script src="js/editor.test-drive.js?v=54cf512502fa"></script>
   <script src="js/editor.fetchStops.js?v=V2.1.063"></script>
   <script>

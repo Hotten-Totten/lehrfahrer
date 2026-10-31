@@ -213,6 +213,37 @@ button.detour-phase-build {
   user-select: none;
 }
 
+.identity-status {
+  flex: 0 1 auto !important;
+  min-width: 0;
+  max-width: min(42vw, 560px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-context-details {
+  padding: 8px 12px;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+#accountMenuRoot .menu-dropdown {
+  left: auto;
+  right: 0;
+  max-width: min(320px, calc(100vw - 16px));
+}
+
+@media (max-width: 700px) {
+  .identity-status { max-width: 46vw; }
+  .identity-role-separator,
+  .identity-tenant-role,
+  .identity-platform-separator,
+  .identity-platform-role { display: none; }
+}
+
 .version-badge {
   align-self: center;
   padding: 4px 10px;

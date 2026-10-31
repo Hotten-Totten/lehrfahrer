@@ -110,6 +110,7 @@ jobs:
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
             tools/account-login-ui.test.js \
+            tools/editor-identity.test.js \
             tools/tenant-cache-boundary.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
@@ -1216,6 +1217,7 @@ jobs:
           grep -q 'id="gtfsRoutePreviewModal"' /tmp/staging-editor.html
           python3 tools/staging-http-assets.py /tmp/staging-editor.html "$origin" /tmp/staging-editor-assets
           grep -q 'function setRouteLoadPhase(message)' /tmp/staging-editor-assets/js/editor.api.js
+          grep -q 'function renderIdentity(data)' /tmp/staging-editor-assets/js/editor.identity.js
           grep -q 'showRouteProgress("Straßenroute aufbauen"' /tmp/staging-editor-assets/js/editor.routing.js
           grep -q 'function openGtfsFahrplanupdate()' /tmp/staging-editor-assets/js/editor.api.js
           grep -q 'function gtfsChangeVariantEndpoints(stopNames)' /tmp/staging-editor-assets/js/editor.api.js
@@ -1286,7 +1288,11 @@ jobs:
             -b /tmp/parallel-auth.cookies -c /tmp/parallel-auth.cookies \
             --data-binary @/tmp/parallel-account-login.json \
             "$origin/api/auth/account_test.php?action=login" > /tmp/parallel-account-result.json
-          jq -e '.ok == true and .context == "TENANT" and (.tenantCapabilities | index("routes.read")) and .platformCapabilities == []' \
+          jq -e '.ok == true and .context == "TENANT" and (.tenantCapabilities | index("routes.read")) and .platformCapabilities == []
+            and (.companyName | type) == "string" and (.companyName | length) > 0
+            and (.displayName | type) == "string" and (.displayName | length) > 0
+            and (.userNumber | test("^[0-9]{5,}$"))
+            and (.tenantRoles | type) == "array" and .platformRoles == []' \
             /tmp/parallel-account-result.json >/dev/null
           grep -q '__Host-lehrfahrer_session' /tmp/parallel-auth.cookies
           grep -q '__Host-lehrfahrer_account_test' /tmp/parallel-auth.cookies
@@ -1301,11 +1307,17 @@ jobs:
           done
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-account-only.cookies "$origin/" > /tmp/parallel-account-editor.html
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-account-only.cookies "$origin/" > /tmp/parallel-account-editor-reload.html
+          grep -q 'js/editor.identity.js?v=' /tmp/parallel-account-editor-reload.html
           grep -q 'id="accountMenuRoot"' /tmp/parallel-account-editor.html
           if grep -q 'id="accountMenuRoot" style="display:none"' /tmp/parallel-account-editor.html; then
             echo 'Account-Kontomenü wurde nicht eingeblendet.' >&2
             exit 1
           fi
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-account-only.cookies "$origin/account-login.php?mode=manage&next=%2F" \
+            | grep -q 'id="accountDetails"'
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-legacy-only.cookies "$origin/" > /tmp/parallel-legacy-editor.html
           grep -q 'id="accountMenuRoot" style="display:none"' /tmp/parallel-legacy-editor.html
@@ -1314,7 +1326,8 @@ jobs:
             | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=me" \
-            | jq -e '.ok == true and .context == "TENANT"' >/dev/null
+            | jq -e '.ok == true and .context == "TENANT" and (.userNumber | test("^[0-9]{5,}$"))
+              and (.companyName | length) > 0 and (.tenantRoles | type) == "array"' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=memberships" \
             | jq -e '.ok == true and (.memberships | length) == 1 and .currentMembershipId == .memberships[0].id' >/dev/null

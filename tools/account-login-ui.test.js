@@ -138,7 +138,9 @@ test('Keine Membership zeigt Hinweis und erlaubt Logout ohne Tenant-Redirect', a
 
 test('Manage-Modus zeigt Wechsel nur bei mehreren Memberships und Logout widerruft Session', async () => {
   const h = harness('?mode=manage&next=%2F', {
-    me: { status: 200, body: { ok: true, context: 'TENANT', csrfToken: 'csrf' } },
+    me: { status: 200, body: { ok: true, context: 'TENANT', csrfToken: 'csrf',
+      displayName: 'Frank Fudeus', userNumber: '00101', companyName: 'Cottbusverkehr GmbH',
+      tenantRoles: ['ADMIN'], platformRoles: [] } },
     memberships: { status: 200, body: { ok: true, currentMembershipId: 'one',
       memberships: [{ id: 'one', name: 'Cottbusverkehr GmbH' }, { id: 'two', name: 'Andere' }] } },
     logout: { status: 200, body: { ok: true } }
@@ -146,8 +148,13 @@ test('Manage-Modus zeigt Wechsel nur bei mehreren Memberships und Logout widerru
   await h.settle(); await h.settle();
   assert.equal(h.element('accountSection').hidden, false);
   assert.equal(h.element('activeCompany').textContent, 'Cottbusverkehr GmbH');
+  assert.deepEqual(h.element('accountDetails').children.map(item => item.textContent), [
+    'Benutzer: Frank Fudeus', 'Benutzernummer: 00101',
+    'Gesellschaft: Cottbusverkehr GmbH', 'Rolle: ADMIN'
+  ]);
   assert.equal(h.element('switchCompany').hidden, false);
   await h.element('accountLogout').listeners.click();
+  assert.equal(h.element('accountDetails').children.length, 0);
   assert.equal(h.requests.find(request => request.action === 'logout').options.headers['X-CSRF-Token'], 'csrf');
   assert.deepEqual(h.redirects, ['account-login.php']);
 });
@@ -168,6 +175,22 @@ test('Gesellschaftswechsel zeigt nur andere erlaubte Membership und nutzt P2.2-S
   assert.equal(sent.options.headers['X-CSRF-Token'], 'csrf');
   assert.deepEqual(JSON.parse(sent.options.body), { membershipId: 'two' });
   assert.deepEqual(h.redirects, ['/']);
+});
+
+test('Kontoansicht trennt Plattformrolle und rendert fremde Texte ohne HTML', async () => {
+  const h = harness('?mode=manage', {
+    me: { status: 200, body: { ok: true, context: 'TENANT', csrfToken: 'csrf',
+      displayName: '<img src=x>', userNumber: '00001', companyName: 'Firma',
+      tenantRoles: ['ADMIN', 'FAHRER'], platformRoles: ['SYSOP'] } },
+    memberships: { status: 200, body: { ok: true, currentMembershipId: 'one',
+      memberships: [{ id: 'one', name: 'Firma' }] } }
+  });
+  await h.settle(); await h.settle();
+  assert.deepEqual(h.element('accountDetails').children.map(item => item.textContent), [
+    'Benutzer: <img src=x>', 'Benutzernummer: 00001', 'Gesellschaft: Firma',
+    'Rolle: ADMIN / FAHRER', 'Plattformrolle: SYSOP'
+  ]);
+  assert.doesNotMatch(script, /innerHTML/);
 });
 
 test('Server lehnt manipulierte Membership ab; UI übernimmt keinen Zielkontext', async () => {

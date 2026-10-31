@@ -44,6 +44,7 @@ if ($method === 'HEAD') exit;
     #message { min-height: 24px; margin: 14px 0 0; color: #9b1c2b; }
     #runtime, #legacyFallback { margin-top: 18px; color: #66717d; font-size: .82rem; }
     #legacyFallback a { color: #3f5264; }
+    #accountDetails { margin: 0 0 18px; color: #334155; font-size: .94rem; line-height: 1.55; }
   </style>
 </head>
 <body>
@@ -65,6 +66,7 @@ if ($method === 'HEAD') exit;
     <section id="accountSection" aria-labelledby="accountTitle" hidden>
       <h2 id="accountTitle">Konto</h2>
       <p id="activeCompany"></p>
+      <div id="accountDetails"></div>
       <a id="continueTarget" class="link-button" href="/">Zum Editor</a>
       <button id="switchCompany" class="secondary" type="button">Gesellschaft wechseln</button>
       <button id="accountLogout" class="secondary" type="button">Abmelden</button>
@@ -74,6 +76,6 @@ if ($method === 'HEAD') exit;
     <p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=6634065b152a" defer></script>
+  <script src="js/account-login.js?v=f3e29b4c762a" defer></script>
 </body>
 </html>

@@ -171,17 +171,43 @@ function lehrfahrer_account_public_session(PDO $pdo, array $session): array {
     $memberships = $context === 'PENDING' ? lehrfahrer_account_memberships($pdo, $accountId) : [];
     $tenantCapabilities = $context === 'TENANT'
         ? lehrfahrer_account_tenant_capabilities($pdo, $accountId, (string)$session['membership_id']) : [];
+    $accountQuery = $pdo->prepare('SELECT display_name FROM accounts WHERE id = ? AND active = 1');
+    $accountQuery->execute([$accountId]);
+    $displayName = $accountQuery->fetchColumn();
+    if (!is_string($displayName)) throw new RuntimeException('Account ungültig.');
+    $number = lehrfahrer_control_user_number_for_account($pdo, $accountId);
     $companyId = null;
+    $companyName = null;
+    $tenantRoles = [];
     if ($context === 'TENANT') {
-        $company = $pdo->prepare('SELECT company_id FROM account_memberships WHERE id = ? AND account_id = ? AND status = ?');
-        $company->execute([(string)$session['membership_id'], $accountId, 'active']);
-        $companyId = $company->fetchColumn();
-        if (!is_string($companyId) || $companyId === '') throw new RuntimeException('Mandantenkontext ungültig.');
+        $company = $pdo->prepare('SELECT c.id, c.name FROM account_memberships m
+            JOIN companies c ON c.id = m.company_id
+            WHERE m.id = ? AND m.account_id = ? AND m.status = ? AND c.status = ?');
+        $company->execute([(string)$session['membership_id'], $accountId, 'active', 'active']);
+        $companyRow = $company->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($companyRow)) throw new RuntimeException('Mandantenkontext ungültig.');
+        $companyId = (string)$companyRow['id'];
+        $companyName = (string)$companyRow['name'];
+        $roles = $pdo->prepare('SELECT DISTINCT r.code FROM membership_roles mr
+            JOIN roles r ON r.id = mr.role_id WHERE mr.membership_id = ? ORDER BY r.code');
+        $roles->execute([(string)$session['membership_id']]);
+        $tenantRoles = $roles->fetchAll(PDO::FETCH_COLUMN);
     }
+    $sysop = $pdo->prepare('SELECT 1 FROM sysop_assignment WHERE account_id = ?');
+    $sysop->execute([$accountId]);
+    $cosysop = $pdo->prepare("SELECT 1 FROM account_platform_roles WHERE account_id = ? AND role_code = 'COSYSOP'");
+    $cosysop->execute([$accountId]);
+    $platformRoles = array_merge($sysop->fetchColumn() === false ? [] : ['SYSOP'],
+        $cosysop->fetchColumn() === false ? [] : ['COSYSOP']);
     $platformCapabilities = lehrfahrer_account_platform_capabilities($pdo, $accountId);
     return ['ok' => true,
         'accountId' => $accountId,
         'companyId' => $companyId,
+        'displayName' => $displayName,
+        'userNumber' => $number === null ? null : lehrfahrer_control_format_user_number($number),
+        'companyName' => $companyName,
+        'tenantRoles' => $tenantRoles,
+        'platformRoles' => $platformRoles,
         'context' => $context === 'PENDING'
             ? ($memberships === [] ? 'NO_MEMBERSHIP' : 'SELECTION_PENDING') : $context,
         'membershipId' => $context === 'TENANT' ? $session['membership_id'] : null,

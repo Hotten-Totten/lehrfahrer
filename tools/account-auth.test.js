@@ -74,6 +74,34 @@ echo json_encode(['context'=>$public['context'],'member'=>$public['membershipId'
     idle: 1800, absolute: 43200 });
 });
 
+test('Benutzernummer 00001 allein erzeugt keine Plattformrolle; nur echte Zuweisung wird angezeigt', () => {
+  const data = fixture(String.raw`
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+$session=lehrfahrer_account_current_session($pdo,false);
+$before=lehrfahrer_account_public_session($pdo,$session);
+$pdo->prepare('INSERT INTO sysop_assignment (singleton_key,account_id,assigned_at) VALUES (1,?,?)')
+  ->execute([$accountA,gmdate('c')]);
+$after=lehrfahrer_account_public_session($pdo,$session);
+echo json_encode(['number'=>$before['userNumber'],'before'=>$before['platformRoles'],
+  'after'=>$after['platformRoles']], JSON_THROW_ON_ERROR);`, String.raw`
+$pdo->prepare('INSERT INTO account_user_numbers (user_number,issued_to_account_id,current_account_id,issued_at)
+  VALUES (1,?,?,?)')->execute([$accountA,$accountA,gmdate('c')]);`);
+  assert.deepEqual(data, { number: '00001', before: [], after: ['SYSOP'] });
+});
+
+test('Mehrere Tenantrollen werden ohne Prioritätsauswahl aus der aktiven Membership geliefert', () => {
+  const data = fixture(String.raw`
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+$public=lehrfahrer_account_public_session($pdo,lehrfahrer_account_current_session($pdo,false));
+echo json_encode($public['tenantRoles'], JSON_THROW_ON_ERROR);`, String.raw`
+$admin=$pdo->query("SELECT id FROM roles WHERE code='ADMIN'")->fetchColumn();
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')
+  ->execute([$membershipA,$admin]);`);
+  assert.deepEqual(data, ['ADMIN', 'FAHRER']);
+});
+
 test('Authorization-Brücke nutzt Legacy allein und Account allein aus derselben Identität', () => {
   const legacy = fixture(String.raw`
 putenv('LEHRFAHRER_ENV=staging');
@@ -363,6 +391,11 @@ echo json_encode(['beforeAdmin'=>in_array('users.manage',$before['tenantCapabili
   'atBAdmin'=>in_array('users.manage',$atB['tenantCapabilities'],true),
   'backAdmin'=>in_array('users.manage',$atA['tenantCapabilities'],true),
   'memberB'=>$atB['membershipId']===$membershipExtra,'memberA'=>$atA['membershipId']===$membershipA,
+  'roleBefore'=>$before['tenantRoles']===['FAHRER'],
+  'roleB'=>$atB['tenantRoles']===['ADMIN'],
+  'numberStable'=>$before['userNumber']==='00101' && $atB['userNumber']===$before['userNumber']
+    && $atA['userNumber']===$before['userNumber'],
+  'companies'=>$before['companyName']==='A' && $atB['companyName']==='B' && $atA['companyName']==='A',
   'oldRevoked'=>$oldRevoked,'oldRejected'=>$oldRejected,'newCsrf'=>$switched['csrf']!==$selected['csrf'],
   'newToken'=>$switched['token']!==$selected['token'],
   'platformUnchanged'=>$before['platformCapabilities']===$atB['platformCapabilities']
@@ -371,10 +404,12 @@ echo json_encode(['beforeAdmin'=>in_array('users.manage',$before['tenantCapabili
     && $switched['contextEvent']['fromMembershipId']===$membershipA
     && $switched['contextEvent']['toMembershipId']===$membershipExtra], JSON_THROW_ON_ERROR);`, String.raw`
 $membershipExtra=lehrfahrer_control_id('mem');
+$pdo->beginTransaction(); lehrfahrer_control_allocate_user_number($pdo,$accountA); $pdo->commit();
 $pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at) VALUES (?,?,?,'active',?,?)")->execute([$membershipExtra,$accountA,$companyB['id'],gmdate('c'),gmdate('c')]);
 $roleB=$pdo->query('SELECT role_id FROM membership_roles WHERE membership_id=' . $pdo->quote($membershipB))->fetchColumn();
 $pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$membershipExtra,$roleB]);`);
   assert.deepEqual(data, { beforeAdmin: false, atBAdmin: true, backAdmin: false,
+    roleBefore: true, roleB: true, numberStable: true, companies: true,
     memberB: true, memberA: true, oldRevoked: true, oldRejected: true, newCsrf: true, newToken: true,
     platformUnchanged: true, switchEvent: true });
 });
