@@ -126,6 +126,14 @@ try {
         }
     }
 
+    $accountCount = (int)$pdo->query('SELECT COUNT(*) FROM accounts')->fetchColumn();
+    $numberedCount = (int)$pdo->query('SELECT COUNT(*) FROM account_user_numbers WHERE current_account_id IS NOT NULL')->fetchColumn();
+    $nextNumber = (int)$pdo->query('SELECT next_number FROM account_user_number_allocator WHERE singleton_key = 1')->fetchColumn();
+    $maxNumber = (int)$pdo->query('SELECT COALESCE(MAX(user_number), 100) FROM account_user_numbers')->fetchColumn();
+    if ($numberedCount !== $accountCount || $nextNumber <= $maxNumber) {
+        throw new RuntimeException('Staging-Accountnummern sind inkonsistent.');
+    }
+
     $json = json_encode([
         'ok' => true,
         'company_id' => $company['id'],
@@ -137,6 +145,14 @@ try {
         'null_inventory' => true,
         'tls' => true,
         'minimal_database_scope' => true,
+        'accounts' => $accountCount,
+        'account_memberships' => (int)$pdo->query('SELECT COUNT(*) FROM account_memberships')->fetchColumn(),
+        'membership_roles' => (int)$pdo->query('SELECT COUNT(*) FROM membership_roles')->fetchColumn(),
+        'numbered_accounts' => $numberedCount,
+        'next_user_number' => $nextNumber,
+        'reserved_user_numbers' => (int)$pdo->query('SELECT COUNT(*) FROM account_user_numbers WHERE user_number BETWEEN 1 AND 100')->fetchColumn(),
+        'sysop_assignments' => (int)$pdo->query('SELECT COUNT(*) FROM sysop_assignment')->fetchColumn(),
+        'account_platform_roles' => (int)$pdo->query('SELECT COUNT(*) FROM account_platform_roles')->fetchColumn(),
     ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
     if ($cgiSmoke) {
         $temporaryResult = $resultFile . '.tmp.' . getmypid();
