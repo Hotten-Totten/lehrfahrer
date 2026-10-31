@@ -664,6 +664,11 @@ jobs:
           set -e
           chmod 600 "$private_root/smoke-stdout.raw" "$private_root/smoke-stderr.raw"
           if [ "$smoke_status" -ne 0 ]; then
+            if grep -Fq 'Staging-Datenbank enthaelt unerwartete Tabellen.' "$private_root/smoke-stderr.raw"; then
+              echo 'Staging-Smoke: erwartete Control-DB-Tabellenliste stimmt nicht.' >&2
+            elif grep -Eiq 'trigger.*denied|command denied.*trigger' "$private_root/smoke-stderr.raw"; then
+              echo 'Staging-Smoke: MariaDB verweigert Trigger-Rechte.' >&2
+            fi
             echo 'Staging-Smoke ist fehlgeschlagen; Roh-Ausgaben bleiben privat und werden nicht geloggt.' >&2
             exit "$smoke_status"
           fi

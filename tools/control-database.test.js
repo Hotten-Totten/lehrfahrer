@@ -143,7 +143,8 @@ test('Schema-Migration ist wiederholt idempotent', () => {
     'role_capabilities', 'user_roles', 'control_metadata', 'sessions',
     'user_activation_tokens', 'accounts', 'account_memberships', 'membership_roles',
     'platform_roles', 'platform_capabilities', 'platform_role_capabilities',
-    'account_platform_roles', 'sysop_assignment', 'account_sessions', 'account_activation_tokens'
+    'account_platform_roles', 'sysop_assignment', 'account_sessions', 'account_activation_tokens',
+    'account_user_number_allocator', 'account_user_numbers'
   ]) {
     assert.ok(fixture.tableNames.includes(table), table);
   }

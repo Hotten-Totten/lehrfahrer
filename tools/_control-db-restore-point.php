@@ -7,6 +7,7 @@ const COTTBUS_CONTROL_DB_EXPECTED_TABLES = [
     'accounts', 'account_memberships', 'membership_roles', 'platform_roles',
     'platform_capabilities', 'platform_role_capabilities', 'account_platform_roles',
     'sysop_assignment', 'account_sessions', 'account_activation_tokens',
+    'account_user_number_allocator', 'account_user_numbers',
 ];
 
 function cottbusExecutable(array $names): ?string {

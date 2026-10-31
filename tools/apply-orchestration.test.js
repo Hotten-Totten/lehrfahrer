@@ -71,13 +71,13 @@ test('Fehler vor und während des Indexbaus hinterlassen keinen Index', () => {
 test('DB-Restore-Punkt enthält Manifest, Hash und keine Secrets', () => {
   const privateRoot = path.join(sandbox, 'private');
   fs.mkdirSync(privateRoot);
-  const dump = [...['capabilities','companies','control_metadata','role_capabilities','roles','schema_migrations','sessions','user_activation_tokens','user_roles','users','accounts','account_memberships','membership_roles','platform_roles','platform_capabilities','platform_role_capabilities','account_platform_roles','sysop_assignment','account_sessions','account_activation_tokens']]
+  const dump = [...['capabilities','companies','control_metadata','role_capabilities','roles','schema_migrations','sessions','user_activation_tokens','user_roles','users','accounts','account_memberships','membership_roles','platform_roles','platform_capabilities','platform_role_capabilities','account_platform_roles','sysop_assignment','account_sessions','account_activation_tokens','account_user_number_allocator','account_user_numbers']]
     .map(name => `CREATE TABLE \`${name}\` (id INT);`).join('\n');
   const encodedDump = Buffer.from(dump).toString('base64');
   const code = `$cfg=['dsn'=>'mysql:host=db.example;port=3306;dbname=control;charset=utf8mb4','user'=>'app','password'=>'TOP-SECRET'];` +
     `$cap=['DB_BACKUP_CAPABLE'=>'YES','DB_RESTORE_PATH_VALID'=>'YES','dump_binary'=>'fake-dump','restore_binary'=>'fake-restore'];` +
     `$runner=function($cmd,$password,$stdin,$stdout){file_put_contents($stdout,base64_decode('${encodedDump}'));return ['status'=>0,'stdout'=>'','stderr_present'=>false];};` +
-    `$r=cottbusCreateControlDbRestorePoint($cfg,${p(privateRoot)},$cap,'5',$runner);echo json_encode($r);`;
+    `$r=cottbusCreateControlDbRestorePoint($cfg,${p(privateRoot)},$cap,'6',$runner);echo json_encode($r);`;
   const result = run(backupTool, code);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
@@ -89,7 +89,7 @@ test('DB-Restore-Punkt enthält Manifest, Hash und keine Secrets', () => {
     assert.equal(fs.statSync(payload.dump).mode & 0o777, 0o600);
     assert.equal(fs.statSync(payload.manifest).mode & 0o777, 0o600);
   }
-  assert.equal(manifest.schema_version, '5');
+  assert.equal(manifest.schema_version, '6');
   assert.equal(manifest.sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(payload.dump)).digest('hex'));
   assert.doesNotMatch(JSON.stringify(manifest), /TOP-SECRET/);
   assert.equal(manifest.restore.client_validated, true);
