@@ -1896,24 +1896,28 @@ jobs:
           done
 
           docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
+          echo 'RECOVERY_ISOLATED_IMPORT=OK'
           before="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
             -e "SELECT CONCAT(COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_mode'),'PARALLEL'),'/',COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock'),'OPEN'));" | tr -d '\r')"
           if [ "$before" != 'PARALLEL/OPEN' ]; then echo "Isolierter Ausgangszustand: $before" >&2; exit 1; fi
+          echo 'RECOVERY_ISOLATED_INITIAL_STATE=OK'
 
           docker exec "$container" mariadb -uroot -p"$root_password" control_recovery \
             -e "INSERT INTO control_metadata (\`key\`,value,updated_at) VALUES ('auth_cutover_lock','LOCKED',UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE value='LOCKED',updated_at=UTC_TIMESTAMP();"
           locked="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
             -e "SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock';" | tr -d '\r')"
-          test "$locked" = LOCKED
+          if [ "$locked" != LOCKED ]; then echo 'Isolierter Lock konnte nicht gesetzt werden.' >&2; exit 1; fi
+          echo 'RECOVERY_ISOLATED_LOCK=OK'
 
           docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
           after="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
             -e "SELECT CONCAT(\`key\`,'=',value) FROM control_metadata WHERE \`key\` IN ('auth_mode','auth_cutover_lock') ORDER BY \`key\`;" | tr -d '\r')"
-          test "$after" = "$before"
+          if [ "$after" != "$before" ]; then echo "Isolierter Restore-Zustand: $after" >&2; exit 1; fi
+          echo 'RECOVERY_ISOLATED_ROLLBACK=OK'
           table_count="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
             -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='control_recovery' AND table_type='BASE TABLE';" | tr -d '\r')"
           expected_table_count="$(jq -er '.expected_tables | length' "$temp_dir/manifest.json")"
-          test "$table_count" = "$expected_table_count"
+          if [ "$table_count" != "$expected_table_count" ]; then echo 'Isolierte Tabellenzahl nach Restore ungueltig.' >&2; exit 1; fi
 
           jq -n \
             --arg restore_point_id "$restore_id" \
