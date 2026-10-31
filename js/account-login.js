@@ -10,6 +10,9 @@
   const passwordInput = document.getElementById('accountPassword');
   const loginButton = document.getElementById('accountLoginButton');
   const membershipSection = document.getElementById('membershipSection');
+  const mfaSection = document.getElementById('mfaSection');
+  const mfaDescription = document.getElementById('mfaDescription');
+  const mfaButton = document.getElementById('mfaButton');
   const membershipChoices = document.getElementById('membershipChoices');
   const accountSection = document.getElementById('accountSection');
   const activeCompany = document.getElementById('activeCompany');
@@ -19,6 +22,7 @@
   const message = document.getElementById('message');
   let csrfToken = '';
   let busy = false;
+  let mfaPurpose = '';
 
   continueTarget.href = target;
   continueTarget.textContent = target.startsWith('/app/') ? 'Zur Fahrer-App'
@@ -27,6 +31,7 @@
   function show(section) {
     form.hidden = section !== 'login';
     membershipSection.hidden = section !== 'memberships';
+    mfaSection.hidden = section !== 'mfa';
     accountSection.hidden = section !== 'account';
     if (section === 'login') loginInput.focus();
   }
@@ -45,6 +50,103 @@
     const response = await fetch(`api/auth/account_test.php?action=${action}`, options);
     const body = await response.json().catch(() => ({}));
     return { response, body };
+  }
+
+  async function mfaRequest(action, payload = {}) {
+    const response = await fetch(`api/auth/account_mfa.php?action=${action}`, {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify(payload)
+    });
+    return { response, body: await response.json().catch(() => ({})) };
+  }
+
+  function decodeBase64Url(value) {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+    return Uint8Array.from(bytes, char => char.charCodeAt(0));
+  }
+
+  function encodeBase64Url(value) {
+    const bytes = new Uint8Array(value);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  function showMfa(purpose) {
+    mfaPurpose = purpose;
+    mfaDescription.textContent = purpose === 'ENROLL'
+      ? 'Für das Systemkonto ist ein Passkey erforderlich.'
+      : 'Bitte bestätigen Sie die Anmeldung mit Ihrem Passkey.';
+    mfaButton.textContent = purpose === 'ENROLL' ? 'Passkey einrichten' : 'Mit Passkey bestätigen';
+    notice('');
+    show('mfa');
+  }
+
+  async function completeMfa() {
+    if (busy || !csrfToken || !['ENROLL', 'AUTH'].includes(mfaPurpose)) return;
+    if (!window.PublicKeyCredential || !navigator.credentials) {
+      notice('Dieser Browser unterstützt Passkeys nicht.');
+      return;
+    }
+    busy = true;
+    mfaButton.disabled = true;
+    notice('');
+    try {
+      const begun = await mfaRequest('begin');
+      if (!begun.response.ok || !begun.body.ok || begun.body.purpose !== mfaPurpose) {
+        notice('Sicherheitsprüfung konnte nicht gestartet werden. Bitte erneut anmelden.');
+        return;
+      }
+      const options = begun.body.options?.publicKey;
+      if (!options || typeof options.challenge !== 'string') throw new Error('Invalid options');
+      options.challenge = decodeBase64Url(options.challenge);
+      let credential;
+      if (mfaPurpose === 'ENROLL') {
+        options.user.id = decodeBase64Url(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map(item => ({
+          ...item, id: decodeBase64Url(item.id)
+        }));
+        credential = await navigator.credentials.create({ publicKey: options });
+      } else {
+        options.allowCredentials = (options.allowCredentials || []).map(item => ({
+          ...item, id: decodeBase64Url(item.id)
+        }));
+        credential = await navigator.credentials.get({ publicKey: options });
+      }
+      if (!credential) throw new Error('No credential');
+      const response = credential.response;
+      const payload = { id: encodeBase64Url(credential.rawId),
+        clientDataJSON: encodeBase64Url(response.clientDataJSON) };
+      if (mfaPurpose === 'ENROLL') payload.attestationObject = encodeBase64Url(response.attestationObject);
+      else {
+        payload.authenticatorData = encodeBase64Url(response.authenticatorData);
+        payload.signature = encodeBase64Url(response.signature);
+        payload.userHandle = response.userHandle ? encodeBase64Url(response.userHandle) : null;
+      }
+      const finished = await mfaRequest('finish', payload);
+      if (!finished.response.ok || !finished.body.ok) {
+        notice('Passkey-Bestätigung fehlgeschlagen. Bitte erneut versuchen.');
+        return;
+      }
+      if (finished.body.enrolled === true) {
+        csrfToken = '';
+        mfaPurpose = '';
+        show('login');
+        notice('Passkey eingerichtet. Bitte melden Sie sich jetzt mit Passwort und Passkey neu an.');
+      } else {
+        mfaPurpose = '';
+        await handleSession(finished.body);
+      }
+    } catch (error) {
+      notice(error?.name === 'NotAllowedError'
+        ? 'Passkey-Vorgang abgebrochen. Sie können es erneut versuchen.'
+        : 'Sicherheitsprüfung fehlgeschlagen. Bitte erneut versuchen.');
+    } finally {
+      busy = false;
+      mfaButton.disabled = false;
+    }
   }
 
   async function expiredAfterRejection(response) {
@@ -195,6 +297,11 @@
         notice('Anmeldung nicht möglich. Bitte Loginname und Passwort prüfen.');
         return;
       }
+      if (body.mfaPending === true && ['ENROLL', 'AUTH'].includes(body.purpose)) {
+        csrfToken = typeof body.csrfToken === 'string' ? body.csrfToken : '';
+        showMfa(body.purpose);
+        return;
+      }
       await handleSession(body);
     } catch (_error) {
       passwordInput.value = '';
@@ -206,6 +313,13 @@
   });
 
   document.getElementById('membershipLogout').addEventListener('click', logout);
+  mfaButton.addEventListener('click', completeMfa);
+  document.getElementById('mfaCancel').addEventListener('click', () => {
+    csrfToken = '';
+    mfaPurpose = '';
+    show('login');
+    notice('Sicherheitsprüfung abgebrochen. Bitte erneut anmelden.');
+  });
   document.getElementById('accountLogout').addEventListener('click', logout);
   switchCompany.addEventListener('click', () => renderMemberships('switch').catch(() => {
     notice('Gesellschaftsauswahl ist derzeit nicht möglich.');

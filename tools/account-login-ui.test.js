@@ -79,6 +79,23 @@ test('Single-Membership-Login leitet zum erlaubten Ziel; Passwort wird geleert',
   assert.ok(h.requests.every(request => !request.url.includes('secret') && !request.url.includes('csrf')));
 });
 
+test('SYSOP-Passwort startet nur den begrenzten Passkey-Schritt', async () => {
+  const h = harness('?next=%2F', {
+    login: { status: 200, body: { ok: true, mfaPending: true, purpose: 'ENROLL', csrfToken: 'pending-csrf' } }
+  });
+  await h.settle();
+  h.element('accountLogin').value = 'sysop';
+  h.element('accountPassword').value = 'secret';
+  await h.element('accountLoginForm').listeners.submit({ preventDefault() {} });
+  assert.equal(h.element('mfaSection').hidden, false);
+  assert.equal(h.element('accountSection').hidden, true);
+  assert.equal(h.element('accountPassword').value, '');
+  assert.deepEqual(h.redirects, []);
+  assert.equal(h.element('mfaButton').textContent, 'Passkey einrichten');
+  h.element('mfaCancel').listeners.click();
+  assert.equal(h.element('accountLoginForm').hidden, false);
+});
+
 test('Externe und unerlaubte Return-Ziele werden auf den Editor begrenzt', async () => {
   for (const unsafe of ['https://evil.example/', '//evil.example/', '/%2e%2e/app/', '/unknown']) {
     const h = harness(`?next=${encodeURIComponent(unsafe)}`, {

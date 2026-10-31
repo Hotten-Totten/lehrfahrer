@@ -65,6 +65,12 @@ try {
       <input id="accountPassword" name="password" type="password" autocomplete="current-password" required>
       <button id="accountLoginButton" type="submit">Anmelden</button>
     </form>
+    <section id="mfaSection" aria-labelledby="mfaTitle" hidden>
+      <h2 id="mfaTitle">Sicherheitsprüfung</h2>
+      <p id="mfaDescription"></p>
+      <button id="mfaButton" type="button"></button>
+      <button id="mfaCancel" class="secondary" type="button">Abbrechen</button>
+    </section>
     <section id="membershipSection" aria-labelledby="membershipTitle" hidden>
       <h2 id="membershipTitle">Gesellschaft auswählen</h2>
       <div id="membershipChoices"></div>
@@ -83,6 +89,6 @@ try {
     <?php if ($legacyFallbackVisible): ?><p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p><?php endif; ?>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=f3e29b4c762a" defer></script>
+  <script src="js/account-login.js?v=25b478929d5f" defer></script>
 </body>
 </html>

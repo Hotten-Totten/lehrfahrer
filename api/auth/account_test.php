@@ -27,6 +27,14 @@ try {
             usleep(random_int(20000, 50000));
             lehrfahrer_auth_json_response(401, ['ok' => false, 'error' => 'Anmeldung nicht möglich.']);
         }
+        if (($created['mfaPending'] ?? false) === true) {
+            lehrfahrer_account_clear_cookie();
+            unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
+            lehrfahrer_sysop_mfa_set_cookie($created['token'], $created['expiresAt']);
+            $_COOKIE[LEHRFAHRER_SYSOP_MFA_COOKIE] = $created['token'];
+            lehrfahrer_auth_json_response(200, ['ok' => true, 'mfaPending' => true,
+                'purpose' => $created['purpose'], 'csrfToken' => $created['csrf']]);
+        }
         lehrfahrer_account_set_cookie($created['token'], $created['absoluteExpiresAt']);
         $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $created['token'];
     } elseif ($action === 'select' || $action === 'switch') {
