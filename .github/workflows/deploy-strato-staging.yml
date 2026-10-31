@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      migrate_accounts:
+        description: Run the approved one-time staging account 1:1 migration after a private restore point
+        required: true
+        default: false
+        type: boolean
       apply_cottbus:
         description: Run the one-time approved Cottbus staging migration after all preflights
         required: true
@@ -64,6 +69,12 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "staging"
+          if [ "${{ inputs.migrate_accounts }}" = true ]; then
+            test "${{ inputs.apply_cottbus }}" != true
+            test "${{ inputs.preflight_cottbus }}" != true
+            test "${{ inputs.check_official_cottbus }}" != true
+            test "${{ inputs.stamp_cottbus_source_sha }}" != true
+          fi
           git diff --check
 
           while IFS= read -r -d '' file; do
@@ -95,6 +106,7 @@ jobs:
             tools/control-database.test.js \
             tools/control-phase2-schema.test.js \
             tools/control-account-preflight.test.js \
+            tools/control-account-migrate.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
             tools/legacy-auth-observation.test.js \
@@ -382,6 +394,7 @@ jobs:
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
           PREPARE_GTFS_WORK: ${{ github.event_name == 'workflow_dispatch' && inputs.preflight_cottbus }}
           STAMP_COTTBUS_SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.stamp_cottbus_source_sha }}
+          MIGRATE_ACCOUNTS: ${{ github.event_name == 'workflow_dispatch' && inputs.migrate_accounts }}
         run: |
           set -euo pipefail
           REMOTE="$STRATO_USER@$STRATO_HOST"
@@ -427,6 +440,7 @@ jobs:
             tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
             tools/control-account-preflight.php \
+            tools/control-account-migrate.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
 
@@ -434,7 +448,7 @@ jobs:
             "$REMOTE:./$STAGING_AUTH_PATH/"
 
           "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH' '$PREPARE_GTFS_WORK' '$STAMP_COTTBUS_SOURCE_SHA'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$STAGING_AUTH_PATH' '$LIVE_TARGET_PATH' '$PREPARE_GTFS_WORK' '$STAMP_COTTBUS_SOURCE_SHA' '$MIGRATE_ACCOUNTS'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
@@ -442,6 +456,7 @@ jobs:
           live_target="${4#/}"
           prepare_gtfs_work="$5"
           stamp_cottbus_source_sha="$6"
+          migrate_accounts="$7"
           webroot="$(cd "./$staging_target" && pwd -P)"
           private_root="$(cd "./$staging_private" && pwd -P)"
           auth_root="$(cd "./$staging_auth" && pwd -P)"
@@ -476,6 +491,7 @@ jobs:
             "$private_root/prepare-cottbus-gtfs-work-staging.php" \
             "$private_root/_control-db-restore-point.php" \
             "$private_root/control-account-preflight.php" \
+            "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
           mv "$private_root/lehrfahrer-staging-runtime-env.php" "$private_root/runtime-env.php"
           mv "$private_root/lehrfahrer-staging-provision-secret.php" "$private_root/.provision-secret.php"
@@ -1017,6 +1033,10 @@ jobs:
           fi
           printf '%s\n' "$account_preflight_report"
           printf 'ACCOUNT_MIGRATION_PREFLIGHT_EXIT=%s\n' "$account_preflight_status"
+          if [ "$migrate_accounts" = true ] && [ "$account_preflight_status" -ne 0 ]; then
+            echo 'Account-Migration wegen Preflight-Blocker gestoppt.' >&2
+            exit 2
+          fi
           if [ "$account_preflight_status" -gt 1 ]; then
             echo 'Read-only Account-Preflight konnte nicht sicher ausgeführt werden.' >&2
             exit "$account_preflight_status"
@@ -1393,7 +1413,7 @@ jobs:
           REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_control_db_restore_point }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.migrate_accounts) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -1563,6 +1583,79 @@ jobs:
           cat "$result"
           rm -f -- "$runner" "$result"
           REMOTE_SCRIPT
+
+      - name: Migrate legacy accounts 1:1 on staging
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.migrate_accounts }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          REMOTE="$STRATO_USER@$STRATO_HOST"
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SSH_RUN=("${SSH_BASE[@]}")
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          live_target="${3#/}"
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_webroot="$(pwd -P)"
+          else
+            live_webroot="$(cd "./$live_target" && pwd -P)"
+          fi
+          test "$webroot" != "$live_webroot"
+          case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
+          test -f "$private_root/control-account-migrate.php"
+          test "$(stat -c '%a' "$private_root/control-account-migrate.php")" = 600
+          LEHRFAHRER_ACCOUNT_MIGRATE_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-account-migrate.php"
+          REMOTE_SCRIPT
+          origin='https://staging.lehrfahrer.de'
+          jq -n --arg password "$ADMIN_PASSWORD" '{
+            company: "lehrfahrer-test", login: "staging-admin", password: $password,
+            deviceLabel: "GitHub Post-Migration Smoke"
+          }' > /tmp/staging-account-migration-login.json
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/staging-account-migration.cookies \
+            --data-binary @/tmp/staging-account-migration-login.json \
+            "$origin/api/auth/login.php" > /tmp/staging-account-migration-login-result.json
+          jq -e '.ok == true and .company.slug == "lehrfahrer-test" and (.user.roles | index("ADMIN"))' \
+            /tmp/staging-account-migration-login-result.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging-account-migration.cookies "$origin/api/auth/me.php" \
+            | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging-account-migration.cookies "$origin/" \
+            > /tmp/staging-account-migration-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/staging-account-migration-editor.html
+          csrf="$(jq -r '.csrfToken' /tmp/staging-account-migration-login-result.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/staging-account-migration.cookies -H "Origin: $origin" -H "X-CSRF-Token: $csrf" \
+            -X POST "$origin/api/auth/logout.php" | jq -e '.ok == true' >/dev/null
+          rm -f /tmp/staging-account-migration-login.json /tmp/staging-account-migration-login-result.json \
+            /tmp/staging-account-migration.cookies /tmp/staging-account-migration-editor.html
+          echo 'POST_MIGRATION_AUTH_SMOKE=OK'
 
       - name: Preflight or apply approved Cottbus migration
         if: ${{ github.event_name == 'workflow_dispatch' && (inputs.preflight_cottbus || inputs.apply_cottbus) }}
