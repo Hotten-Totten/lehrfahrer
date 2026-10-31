@@ -1129,11 +1129,8 @@ jobs:
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/control-account-cutover-preflight.php")"
           printf '%s\n' "$report"
-          printf '%s\n' "$report" | php -r '
-            $r = json_decode(stream_get_contents(STDIN), true);
-            if (!is_array($r) || !in_array($r["status"] ?? null, ["PASS", "WARNING"], true)
-                || ($r["auth"] ?? null) !== ["mode" => "PARALLEL", "lock" => "OPEN"]) exit(1);
-          '
+          printf '%s\n' "$report" | grep -Eq '^\{"status":"(PASS|WARNING)"'
+          printf '%s\n' "$report" | grep -Fq '"auth":{"mode":"PARALLEL","lock":"OPEN"}'
           REMOTE_SCRIPT
 
       - name: Staging HTTP, runtime, login and session smoke test
