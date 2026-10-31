@@ -1911,7 +1911,7 @@ jobs:
 
           docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
           after="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
-            -e "SELECT CONCAT(\`key\`,'=',value) FROM control_metadata WHERE \`key\` IN ('auth_mode','auth_cutover_lock') ORDER BY \`key\`;" | tr -d '\r')"
+            -e "SELECT CONCAT(COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_mode'),'PARALLEL'),'/',COALESCE((SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock'),'OPEN'));" | tr -d '\r')"
           if [ "$after" != "$before" ]; then echo "Isolierter Restore-Zustand: $after" >&2; exit 1; fi
           echo 'RECOVERY_ISOLATED_ROLLBACK=OK'
           table_count="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
