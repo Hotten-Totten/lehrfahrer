@@ -255,13 +255,16 @@ function lehrfahrer_control_account_preflight_read(PDO $pdo, string $driver): ar
     ];
 }
 
-if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
-    if (PHP_SAPI !== 'cli' || lehrfahrer_environment() !== 'staging'
-        || lehrfahrer_control_database_driver() !== 'mysql') {
-        fwrite(STDERR, "Preflight ist ausschließlich für die Staging-MariaDB per CLI freigegeben.\n");
+if (getenv('LEHRFAHRER_ACCOUNT_PREFLIGHT_RUN') === '1') {
+    if (!in_array(PHP_SAPI, ['cli', 'cgi-fcgi'], true) || isset($_SERVER['REQUEST_METHOD'])
+        || lehrfahrer_environment() !== 'staging') {
+        file_put_contents('php://stderr', "Preflight ist ausschließlich für die Staging-MariaDB per Shell freigegeben.\n");
         exit(2);
     }
     try {
+        if (lehrfahrer_control_database_driver() !== 'mysql') {
+            throw new RuntimeException('Unerwarteter Datenbankdialekt.');
+        }
         $configuration = lehrfahrer_control_mysql_configuration();
         $pdo = new PDO($configuration['dsn'], $configuration['user'], $configuration['password'], $configuration['options']);
         $pdo->exec('SET SESSION TRANSACTION READ ONLY');
@@ -271,7 +274,7 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
         echo json_encode($report, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
         exit($report['status'] === 'PASS' ? 0 : 1);
     } catch (Throwable $error) {
-        fwrite(STDERR, "Preflight blockiert: Datenbank- oder Schemafehler.\n");
+        file_put_contents('php://stderr', "Preflight blockiert: Datenbank- oder Schemafehler.\n");
         exit(2);
     }
 }

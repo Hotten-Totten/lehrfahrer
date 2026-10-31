@@ -1006,11 +1006,16 @@ jobs:
             "$private_root/cottbus-dry-run-stderr.raw"
           fi
           set +e
-          LEHRFAHRER_APP_ROOT="$webroot" \
+          account_preflight_report="$(LEHRFAHRER_ACCOUNT_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-account-preflight.php"
+              -f "$private_root/control-account-preflight.php")"
           account_preflight_status="$?"
           set -e
+          if [ -z "$account_preflight_report" ]; then
+            echo 'Read-only Account-Preflight lieferte keinen Bericht.' >&2
+            exit 2
+          fi
+          printf '%s\n' "$account_preflight_report"
           printf 'ACCOUNT_MIGRATION_PREFLIGHT_EXIT=%s\n' "$account_preflight_status"
           if [ "$account_preflight_status" -gt 1 ]; then
             echo 'Read-only Account-Preflight konnte nicht sicher ausgeführt werden.' >&2

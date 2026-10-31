@@ -133,10 +133,21 @@ $pdo->prepare('INSERT INTO accounts (id,login_normalized,display_name,password_h
 
 test('CLI verweigert Production-Kontext vor jedem Datenbankzugriff', () => {
   const result = spawnSync(php, [path.join(root, 'tools', 'control-account-preflight.php')], {
-    encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ENV: 'production', LEHRFAHRER_DB_DRIVER: 'mysql',
+    encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ACCOUNT_PREFLIGHT_RUN: '1',
+      LEHRFAHRER_ENV: 'production', LEHRFAHRER_DB_DRIVER: 'mysql',
       LEHRFAHRER_DB_DSN: '', LEHRFAHRER_DB_HOST: '', LEHRFAHRER_DB_NAME: '' }
   });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /ausschließlich für die Staging-MariaDB/);
+  assert.equal(result.stdout, '');
+});
+
+test('Ausführungsmarker startet den Guard und scheitert bei falschem Dialekt geschlossen', () => {
+  const result = spawnSync(php, [path.join(root, 'tools', 'control-account-preflight.php')], {
+    encoding: 'utf8', env: { ...process.env, LEHRFAHRER_ACCOUNT_PREFLIGHT_RUN: '1',
+      LEHRFAHRER_ENV: 'staging', LEHRFAHRER_DB_DRIVER: 'sqlite' }
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Preflight blockiert/);
   assert.equal(result.stdout, '');
 });
