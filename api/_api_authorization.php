@@ -64,6 +64,8 @@ function lehrfahrer_api_require_session(): array {
 
 /** Resolve one identity. A valid staging account takes precedence over a legacy cookie. */
 function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
+    $accountPrimary = lehrfahrer_environment() === 'staging'
+        && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY';
     if (lehrfahrer_environment() === 'staging'
         && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE)) {
         $session = lehrfahrer_account_current_session($pdo);
@@ -96,6 +98,7 @@ function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
         }
         if (lehrfahrer_auth_cutover_state($pdo)['lock'] !== 'OPEN') return null;
     }
+    if ($accountPrimary) return null;
     if (!array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)) return null;
     $session = lehrfahrer_auth_current_session($pdo);
     if ($session === null) return null;

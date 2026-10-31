@@ -107,6 +107,10 @@ function lehrfahrer_auth_create_session_unguarded(
     array $company,
     ?string $deviceLabel = null
 ): array {
+    if (lehrfahrer_environment() === 'staging'
+        && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY') {
+        throw new LehrfahrerAuthCutoverBusy('Bisherige Anmeldung ist nicht mehr verfuegbar.');
+    }
     if (($user['company_id'] ?? '') !== ($company['id'] ?? '')) {
         throw new InvalidArgumentException('Benutzer und Gesellschaft stimmen nicht überein.');
     }
@@ -184,6 +188,8 @@ function lehrfahrer_auth_revoke_user_sessions(PDO $pdo, string $companyId, strin
 }
 
 function lehrfahrer_auth_current_session(PDO $pdo, bool $touch = true): ?array {
+    if (lehrfahrer_environment() === 'staging'
+        && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY') return null;
     $sessionToken = lehrfahrer_auth_session_token_from_request();
     if ($sessionToken === '') return null;
 

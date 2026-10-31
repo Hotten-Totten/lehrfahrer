@@ -23,6 +23,10 @@ try {
     }
 
     $pdo = lehrfahrer_control_database();
+    if (lehrfahrer_environment() === 'staging'
+        && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY') {
+        lehrfahrer_auth_json_response(403, ['ok' => false, 'error' => 'Bisherige Anmeldung ist nicht mehr verfuegbar.']);
+    }
     $companies = new LehrfahrerCompanyRepository($pdo);
     $users = new LehrfahrerUserRepository($pdo);
     $company = $companies->findBySlug($companySlug);

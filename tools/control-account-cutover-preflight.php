@@ -18,7 +18,11 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $environment = $pdo->query("SELECT value FROM control_metadata WHERE `key` = 'environment'")->fetchColumn();
     if ($environment !== 'staging' && lehrfahrer_environment() === 'staging') $add('BLOCKER', 'ENVIRONMENT');
     $auth = lehrfahrer_auth_cutover_state($pdo);
-    if ($auth !== ['mode' => 'PARALLEL', 'lock' => 'OPEN']) $add('BLOCKER', 'AUTH_STATE');
+    $expectedMode = (string)getenv('LEHRFAHRER_CUTOVER_PREFLIGHT_EXPECT_MODE');
+    if ($expectedMode === '') $expectedMode = 'PARALLEL';
+    if (!in_array($expectedMode, ['PARALLEL', 'ACCOUNT_PRIMARY', 'ANY'], true)
+        || $auth['lock'] !== 'OPEN'
+        || ($expectedMode !== 'ANY' && $auth['mode'] !== $expectedMode)) $add('BLOCKER', 'AUTH_STATE');
 
     $tables = ['users', 'user_roles', 'companies', 'roles', 'capabilities', 'role_capabilities',
         'accounts', 'account_memberships', 'membership_roles', 'account_sessions',

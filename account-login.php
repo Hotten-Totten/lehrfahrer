@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/api/_runtime_info.php';
+require_once __DIR__ . '/api/_auth_cutover_gate.php';
 if (lehrfahrer_environment() !== 'staging') {
     http_response_code(404);
     exit;
@@ -18,6 +19,12 @@ header('Pragma: no-cache');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 if ($method === 'HEAD') exit;
+$legacyFallbackVisible = false;
+try {
+    $legacyFallbackVisible = lehrfahrer_auth_cutover_state(lehrfahrer_control_database())['mode'] === 'PARALLEL';
+} catch (Throwable $error) {
+    error_log('Lehrfahrer account login mode could not be checked.');
+}
 ?>
 <!doctype html>
 <html lang="de">
@@ -73,7 +80,7 @@ if ($method === 'HEAD') exit;
     </section>
     <p id="message" role="status" aria-live="polite"></p>
     <div id="runtime"></div>
-    <p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p>
+    <?php if ($legacyFallbackVisible): ?><p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p><?php endif; ?>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
   <script src="js/account-login.js?v=f3e29b4c762a" defer></script>

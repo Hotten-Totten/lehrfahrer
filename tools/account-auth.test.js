@@ -137,6 +137,49 @@ $pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)
   assert.deepEqual(data, { selectBlocked: true, switchBlocked: true, sessions: 1, mode: 'PARALLEL' });
 });
 
+test('ACCOUNT_PRIMARY akzeptiert nur die Account-Session und sperrt interaktive Legacy-Session', () => {
+  const data = fixture(String.raw`
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$legacy=lehrfahrer_auth_create_session($pdo,$userA,$companyA);
+$account=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$pdo->exec("UPDATE sessions SET environment='staging'");
+$pdo->exec("UPDATE account_sessions SET environment='staging'");
+$pdo->prepare('INSERT INTO control_metadata ("key",value,updated_at) VALUES (?,?,?)')
+  ->execute(['auth_mode','ACCOUNT_PRIMARY',gmdate('c')]);
+putenv('LEHRFAHRER_ENV=staging');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$legacy['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$account['token'];
+$both=lehrfahrer_api_resolve_session($pdo);
+unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
+$legacyOnly=lehrfahrer_api_resolve_session($pdo);
+$legacyDirect=lehrfahrer_auth_current_session($pdo,false);
+$createBlocked=false;
+try { lehrfahrer_auth_create_session($pdo,$userA,$companyA); }
+catch (LehrfahrerAuthCutoverBusy $error) { $createBlocked=true; }
+echo json_encode(['account'=>$both['auth_source']==='ACCOUNT',
+  'legacyOnly'=>$legacyOnly===null,'legacyDirect'=>$legacyDirect===null,
+  'createBlocked'=>$createBlocked],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { account: true, legacyOnly: true, legacyDirect: true, createBlocked: true });
+});
+
+test('Cutover-Lock ist an den administrativen Vorgang gebunden', () => {
+  const data = fixture(String.raw`
+lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED','123-1');
+$ownerQuery=$pdo->prepare('SELECT value FROM control_metadata WHERE "key"=?');
+$ownerQuery->execute(['auth_cutover_owner']);
+$owner=$ownerQuery->fetchColumn();
+$wrongBlocked=false;
+try { lehrfahrer_auth_cutover_set_lock($pdo,'OPEN','999-1'); }
+catch (RuntimeException $error) { $wrongBlocked=true; }
+$anonymousBlocked=false;
+try { lehrfahrer_auth_cutover_set_lock($pdo,'OPEN'); }
+catch (RuntimeException $error) { $anonymousBlocked=true; }
+lehrfahrer_auth_cutover_set_lock($pdo,'OPEN','123-1');
+echo json_encode(['owner'=>$owner==='123-1','wrongBlocked'=>$wrongBlocked,
+  'anonymousBlocked'=>$anonymousBlocked,'open'=>lehrfahrer_auth_cutover_state($pdo)['lock']==='OPEN'],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { owner: true, wrongBlocked: true, anonymousBlocked: true, open: true });
+});
+
 test('Mehrere Tenantrollen werden ohne Prioritätsauswahl aus der aktiven Membership geliefert', () => {
   const data = fixture(String.raw`
 $login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');

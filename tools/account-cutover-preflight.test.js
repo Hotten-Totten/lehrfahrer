@@ -70,6 +70,16 @@ test('migrierter Parallelbestand besteht lesenden Cutover-Preflight', () => {
   assert.equal(result.counts.membership_roles, 2);
 });
 
+test('ACCOUNT_PRIMARY besteht nur den explizit passenden read-only Postcheck', () => {
+  const setMode = "$pdo->prepare('INSERT INTO control_metadata (\"key\",value,updated_at) VALUES (?,?,?)')->execute(['auth_mode','ACCOUNT_PRIMARY',gmdate('c')]);";
+  const defaultResult = fixture(setMode);
+  assert.equal(defaultResult.status, 'BLOCKER');
+  assert.ok(defaultResult.codes.includes('AUTH_STATE'));
+  const explicitResult = fixture(setMode + " putenv('LEHRFAHRER_CUTOVER_PREFLIGHT_EXPECT_MODE=ACCOUNT_PRIMARY');");
+  assert.equal(explicitResult.status, 'PASS');
+  assert.equal(explicitResult.unchanged, true);
+});
+
 for (const [name, mutation, code] of [
   ['fehlender Account', "$pdo->exec('PRAGMA foreign_keys=OFF'); $pdo->exec('DELETE FROM accounts WHERE id='.$pdo->quote($accountB));", 'ACCOUNTS_COUNT'],
   ['fehlende Membership', "$pdo->exec('DELETE FROM membership_roles WHERE membership_id='.$pdo->quote($membershipB)); $pdo->exec('DELETE FROM account_memberships WHERE id='.$pdo->quote($membershipB));", 'ACCOUNT_MEMBERSHIPS_COUNT'],

@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      perform_account_cutover:
+        description: Execute the approved P2.4 staging-only ACCOUNT_PRIMARY cutover
+        required: true
+        default: false
+        type: boolean
       migrate_accounts:
         description: Run the approved one-time staging account 1:1 migration after a private restore point
         required: true
@@ -74,6 +79,23 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "staging"
+          if [ "${{ inputs.perform_account_cutover }}" = true ]; then
+            for option in migrate_accounts apply_cottbus preflight_cottbus check_official_cottbus \
+              stamp_cottbus_source_sha verify_gtfs_routes_v1 repair_cottbus_city \
+              verify_control_db_recovery; do
+              case "$option" in
+                migrate_accounts) selected="${{ inputs.migrate_accounts }}" ;;
+                apply_cottbus) selected="${{ inputs.apply_cottbus }}" ;;
+                preflight_cottbus) selected="${{ inputs.preflight_cottbus }}" ;;
+                check_official_cottbus) selected="${{ inputs.check_official_cottbus }}" ;;
+                stamp_cottbus_source_sha) selected="${{ inputs.stamp_cottbus_source_sha }}" ;;
+                verify_gtfs_routes_v1) selected="${{ inputs.verify_gtfs_routes_v1 }}" ;;
+                repair_cottbus_city) selected="${{ inputs.repair_cottbus_city }}" ;;
+                verify_control_db_recovery) selected="${{ inputs.verify_control_db_recovery }}" ;;
+              esac
+              test "$selected" != true
+            done
+          fi
           if [ "${{ inputs.migrate_accounts }}" = true ]; then
             test "${{ inputs.apply_cottbus }}" != true
             test "${{ inputs.preflight_cottbus }}" != true
@@ -454,6 +476,7 @@ jobs:
             tools/_control-db-restore-point.php \
             tools/control-db-recovery-drill.php \
             tools/control-db-live-recovery.php \
+            tools/control-account-cutover-staging.php \
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
             tools/control-account-migrate.php \
@@ -508,6 +531,7 @@ jobs:
             "$private_root/_control-db-restore-point.php" \
             "$private_root/control-db-recovery-drill.php" \
             "$private_root/control-db-live-recovery.php" \
+            "$private_root/control-account-cutover-staging.php" \
             "$private_root/control-account-preflight.php" \
             "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
@@ -1099,6 +1123,7 @@ jobs:
             "$valid_status" "$auth_permission_mode"
 
       - name: Read-only migrated account cutover preflight on staging
+        id: auth_preflight
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.migrate_accounts }}
         shell: bash
         env:
@@ -1120,7 +1145,7 @@ jobs:
           else
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
           fi
-          "${SSH_RUN[@]}" "$REMOTE" \
+          report="$("${SSH_RUN[@]}" "$REMOTE" \
             "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
@@ -1135,17 +1160,23 @@ jobs:
           fi
           test "$webroot" != "$live_webroot"
           case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
-          report="$(LEHRFAHRER_ENV=staging LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
+          report="$(LEHRFAHRER_ENV=staging LEHRFAHRER_CUTOVER_PREFLIGHT_EXPECT_MODE=ANY \
+            LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/control-account-cutover-preflight.php")"
           printf '%s\n' "$report"
           printf '%s\n' "$report" | grep -Eq '^\{"status":"(PASS|WARNING)"'
-          printf '%s\n' "$report" | grep -Fq '"auth":{"mode":"PARALLEL","lock":"OPEN"}'
+          printf '%s\n' "$report" | grep -Eq '"auth":\{"mode":"(PARALLEL|ACCOUNT_PRIMARY)","lock":"OPEN"\}'
           REMOTE_SCRIPT
+          )"
+          printf '%s\n' "$report"
+          mode="$(printf '%s\n' "$report" | jq -er '.auth.mode | select(. == "PARALLEL" or . == "ACCOUNT_PRIMARY")')"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
 
       - name: Staging HTTP, runtime, login and session smoke test
         shell: bash
         env:
+          AUTH_MODE: ${{ steps.auth_preflight.outputs.mode }}
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
           ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
@@ -1235,6 +1266,7 @@ jobs:
           ' /tmp/staging-runtime.json >/dev/null
           grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
 
+          if [ "$AUTH_MODE" = 'PARALLEL' ]; then
           jq -n '{
             company: "lehrfahrer-test",
             login: "staging-admin",
@@ -1305,8 +1337,10 @@ jobs:
           logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
+          fi
 
       - name: Verify parallel staging account authentication
+        if: ${{ steps.auth_preflight.outputs.mode == 'PARALLEL' }}
         shell: bash
         env:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
@@ -1442,6 +1476,58 @@ jobs:
             /tmp/parallel-account-relogin-editor.html \
             /tmp/parallel-account-editor.html /tmp/parallel-legacy-editor.html
           echo 'PARALLEL_ACCOUNT_AUTH=OK'
+
+      - name: Verify primary staging account authentication
+        if: ${{ steps.auth_preflight.outputs.mode == 'ACCOUNT_PRIMARY' }}
+        shell: bash
+        env:
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/primary-*.json /tmp/primary-*.cookies /tmp/primary-editor.html /tmp/primary-login.html /tmp/primary-app.html' EXIT
+          origin='https://staging.lehrfahrer.de'
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/account-login.php" > /tmp/primary-login.html
+          grep -q 'id="accountLoginForm"' /tmp/primary-login.html
+          if grep -q 'id="legacyFallback"' /tmp/primary-login.html; then exit 1; fi
+          if grep -q 'id="company"' /tmp/primary-login.html; then exit 1; fi
+          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/primary-account.json
+          jq -n --arg password "$ADMIN_PASSWORD" '{company:"lehrfahrer-test",login:"staging-admin",password:$password}' > /tmp/primary-legacy.json
+          legacy_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/primary-legacy.json "$origin/api/auth/login.php")"
+          test "$legacy_status" = 403
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/primary-account.cookies --data-binary @/tmp/primary-account.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/primary-response.json
+          jq -e '.ok == true and .context == "TENANT" and (.userNumber | test("^00(101|102)$"))
+            and .platformRoles == [] and .platformCapabilities == []
+            and (.tenantRoles | index("ADMIN")) and (.tenantCapabilities | index("routes.read"))' \
+            /tmp/primary-response.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies "$origin/" > /tmp/primary-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/primary-editor.html
+          python3 tools/staging-http-assets.py /tmp/primary-editor.html "$origin" /tmp/primary-editor-assets
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies "$origin/api/list_lines.php?scope=driver" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies "$origin/app/index.html" > /tmp/primary-app.html
+          grep -q '<title>Lehrfahrer</title>' /tmp/primary-app.html
+          csrf="$(jq -r '.csrfToken' /tmp/primary-response.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies -c /tmp/primary-account.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -X POST \
+            "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
+          post_logout="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/primary-account.cookies "$origin/api/list_lines.php?scope=driver")"
+          test "$post_logout" = 401
+          echo 'ACCOUNT_PRIMARY_AUTH=OK'
 
       - name: Register missing Cottbus city without changing existing routes
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_cottbus_city }}
@@ -1652,7 +1738,7 @@ jobs:
           REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.migrate_accounts) }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.perform_account_cutover || inputs.migrate_accounts) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -1822,6 +1908,146 @@ jobs:
           cat "$result"
           rm -f -- "$runner" "$result"
           REMOTE_SCRIPT
+
+      - name: Perform controlled ACCOUNT_PRIMARY cutover on staging
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.perform_account_cutover }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          origin='https://staging.lehrfahrer.de'
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_base+=(-i ~/.ssh/id_rsa)
+            ssh_run=("${ssh_base[@]}")
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          cutover() {
+            "${ssh_run[@]}" "$remote" \
+              "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' '$1'" <<'REMOTE_CUTOVER'
+          set -euo pipefail
+          webroot="$(cd "./$1" && pwd -P)"
+          private_root="$(cd "./$2" && pwd -P)"
+          case "$private_root/" in "$webroot/"*) exit 1 ;; esac
+          test "$(stat -c '%a' "$private_root")" = 700
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_CUTOVER_RUN_ID="$3" LEHRFAHRER_CUTOVER_ACTION="$4" \
+          LEHRFAHRER_CUTOVER_RUN=1 \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-account-cutover-staging.php"
+          REMOTE_CUTOVER
+          }
+          started=0
+          cleanup() {
+            result=$?
+            if [ "$started" -eq 1 ]; then
+              if cutover recover | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null; then
+                echo 'ACCOUNT_PRIMARY_CUTOVER_ROLLBACK=PARALLEL/OPEN' >&2
+              else
+                echo 'ACCOUNT_PRIMARY_CUTOVER_ROLLBACK=FAILED; administrativer Eingriff erforderlich.' >&2
+              fi
+            fi
+            rm -f /tmp/p24-*.json /tmp/p24-*.cookies /tmp/p24-*.html
+            exit "$result"
+          }
+          trap cleanup EXIT
+          cutover inspect | jq -e '.ok == true and .auth.mode == "PARALLEL" and .auth.lock == "OPEN" and .restore_point_valid == true and .marker_present == false' >/dev/null
+          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/p24-account.json
+          jq -n --arg password "$ADMIN_PASSWORD" '{company:"lehrfahrer-test",login:"staging-admin",password:$password}' > /tmp/p24-legacy.json
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/p24-old-account.cookies --data-binary @/tmp/p24-account.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/p24-old-account.json
+          jq -e '.ok == true and .context == "TENANT"' /tmp/p24-old-account.json >/dev/null
+          membership_id="$(jq -r '.membershipId' /tmp/p24-old-account.json)"
+          csrf="$(jq -r '.csrfToken' /tmp/p24-old-account.json)"
+          jq -n --arg membershipId "$membership_id" '{membershipId:$membershipId}' > /tmp/p24-select.json
+          started=1
+          cutover begin | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "LOCKED"' >/dev/null
+          for action in login select switch; do
+            if [ "$action" = login ]; then
+              status="$(curl --silent --show-error --output /tmp/p24-result.json --write-out '%{http_code}' \
+                -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+                --data-binary @/tmp/p24-account.json "$origin/api/auth/account_test.php?action=login")"
+            else
+              status="$(curl --silent --show-error --output /tmp/p24-result.json --write-out '%{http_code}' \
+                -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24-old-account.cookies \
+                -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' \
+                --data-binary @/tmp/p24-select.json "$origin/api/auth/account_test.php?action=$action")"
+            fi
+            test "$status" = 503
+          done
+          old_session_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24-old-account.cookies \
+            "$origin/api/auth/account_test.php?action=me")"
+          test "$old_session_status" = 401
+          cutover open | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"' >/dev/null
+          cutover inspect | jq -e '.auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN" and .marker_present == true' >/dev/null
+          legacy_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/p24-legacy.json "$origin/api/auth/login.php")"
+          test "$legacy_status" = 403
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/account-login.php" > /tmp/p24-login.html
+          grep -q 'id="accountLoginForm"' /tmp/p24-login.html
+          if grep -q 'id="legacyFallback"' /tmp/p24-login.html; then exit 1; fi
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/p24-new-account.cookies --data-binary @/tmp/p24-account.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/p24-new-account.json
+          jq -e '.ok == true and .context == "TENANT" and (.tenantCapabilities | index("routes.read"))
+            and .platformRoles == [] and .platformCapabilities == []' /tmp/p24-new-account.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies "$origin/" > /tmp/p24-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/p24-editor.html
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies "$origin/app/index.html" > /tmp/p24-app.html
+          grep -q '<title>Lehrfahrer</title>' /tmp/p24-app.html
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies "$origin/api/list_cities.php?lf-connection-check=1" \
+            | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies "$origin/api/list_lines.php?scope=driver" > /tmp/p24-lines.json
+          jq -e '.ok == true and (.lines | type == "array")' /tmp/p24-lines.json >/dev/null
+          route="$(jq -c '.lines | map(select((.routePointCount // 0) >= 2)) | first // empty' /tmp/p24-lines.json)"
+          test -n "$route"
+          city="$(printf '%s' "$route" | jq -r '.city')"
+          file_base="$(printf '%s' "$route" | jq -r '.fileBase')"
+          line_folder="$(printf '%s' "$route" | jq -r '.lineFolder // ""')"
+          category_folder="$(printf '%s' "$route" | jq -r '.categoryFolder // ""')"
+          curl --fail --silent --show-error --get -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies \
+            --data-urlencode 'scope=driver' --data-urlencode "city=$city" \
+            --data-urlencode "line=$file_base" --data-urlencode "lineFolder=$line_folder" \
+            --data-urlencode "categoryFolder=$category_folder" \
+            "$origin/api/load_line.php" | jq -e '.ok == true and (.line | type == "object")' >/dev/null
+          csrf="$(jq -r '.csrfToken' /tmp/p24-new-account.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-new-account.cookies -c /tmp/p24-new-account.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -X POST \
+            "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
+          post_logout="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/p24-new-account.cookies "$origin/")"
+          test "$post_logout" = 302
+          cutover finalize | jq -e '.ok == true and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"' >/dev/null
+          started=0
+          echo 'STAGING_ACCOUNT_PRIMARY_CUTOVER=OK'
 
       - name: Verify Control-DB recovery drill in isolated ephemeral MariaDB
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_control_db_recovery }}

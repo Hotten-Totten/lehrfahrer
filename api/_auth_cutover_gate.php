@@ -70,9 +70,12 @@ function lehrfahrer_with_auth_mutation_gate(PDO $pdo, callable $action): mixed {
 }
 
 /** Explicit recovery only. No timer may reopen authentication during a running cutover. */
-function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state): void {
+function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state, ?string $owner = null): void {
     if (lehrfahrer_environment() === 'production' || !in_array($state, ['LOCKED', 'OPEN'], true)) {
         throw new RuntimeException('Cutover-Sperre ist hier nicht erlaubt.');
+    }
+    if ($owner !== null && !preg_match('/^[0-9]+-[0-9]+$/D', $owner)) {
+        throw new RuntimeException('Cutover-Eigentuemer ist ungueltig.');
     }
     $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
     if ($mysql) {
@@ -86,11 +89,19 @@ function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state): void {
     try {
         if ($mysql) $pdo->beginTransaction();
         $current = lehrfahrer_auth_cutover_state($pdo);
+        $ownerQuery = $pdo->prepare('SELECT value FROM control_metadata WHERE `key` = ?');
+        $ownerQuery->execute(['auth_cutover_owner']);
+        $storedOwner = $ownerQuery->fetchColumn();
         if ($state === 'LOCKED' && $current['mode'] !== 'PARALLEL') {
             throw new RuntimeException('Auth-Modus ist nicht PARALLEL.');
         }
         if ($state === 'LOCKED' && $current['lock'] !== 'OPEN') throw new RuntimeException('Cutover bereits gesperrt.');
         if ($state === 'OPEN' && $current['lock'] !== 'LOCKED') throw new RuntimeException('Keine Cutover-Sperre aktiv.');
+        if ($state === 'LOCKED' && $storedOwner !== false) throw new RuntimeException('Cutover-Vorgang bereits markiert.');
+        if ($state === 'OPEN' && ($owner === null ? $storedOwner !== false
+            : !is_string($storedOwner) || !hash_equals($owner, $storedOwner))) {
+            throw new RuntimeException('Cutover-Eigentuemer stimmt nicht.');
+        }
         $now = gmdate('c');
         $exists = $pdo->prepare('SELECT 1 FROM control_metadata WHERE `key` = ?');
         $exists->execute(['auth_cutover_lock']);
@@ -100,6 +111,10 @@ function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state): void {
         } else {
             $update = $pdo->prepare('UPDATE control_metadata SET value = ?, updated_at = ? WHERE `key` = ?');
             $update->execute([$state, $now, 'auth_cutover_lock']);
+        }
+        if ($state === 'LOCKED' && $owner !== null) {
+            $insertOwner = $pdo->prepare('INSERT INTO control_metadata (`key`, value, updated_at) VALUES (?, ?, ?)');
+            $insertOwner->execute(['auth_cutover_owner', $owner, $now]);
         }
         if ($mysql) $pdo->commit(); else $pdo->exec('COMMIT');
     } catch (Throwable $error) {
