@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_session_auth.php';
+require_once __DIR__ . '/_legacy_auth_observation.php';
 
 function lehrfahrer_api_authorization_error(int $status, string $message): never {
     lehrfahrer_auth_json_response($status, ['ok' => false, 'error' => $message]);
@@ -89,7 +90,11 @@ function lehrfahrer_api_authorize(
     }
 
     if (lehrfahrer_api_legacy_token_supplied($allowLegacyParameterFallback)) {
-        lehrfahrer_require_write_auth();
+        $transport = lehrfahrer_get_header_ci('X-Api-Token') !== ''
+            ? 'HEADER' : 'REQUEST_PARAMETER';
+        lehrfahrer_require_write_auth(
+            static fn(bool $accepted) => lehrfahrer_observe_legacy_auth($transport, $accepted)
+        );
         $context = [
             'mode' => 'legacy-token',
             'pdo' => null,

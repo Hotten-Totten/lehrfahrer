@@ -71,7 +71,13 @@ function lehrfahrer_get_write_token(): string {
     return is_string($fileToken) ? trim($fileToken) : '';
 }
 
-function lehrfahrer_require_write_auth(): void {
+function lehrfahrer_require_write_auth(?callable $observeResult = null): void {
+    $observe = static function (bool $accepted) use ($observeResult): void {
+        if ($observeResult === null) return;
+        try { $observeResult($accepted); } catch (Throwable $_error) {
+            // Optional observation must never change the authentication result.
+        }
+    };
     $expected = lehrfahrer_get_write_token();
 
     if ($expected === '') {
@@ -79,6 +85,7 @@ function lehrfahrer_require_write_auth(): void {
             return;
         }
 
+        $observe(false);
         lehrfahrer_reject_unauthorized('Server ist nicht fuer Schreibzugriffe konfiguriert: LEHRFAHRER_API_TOKEN fehlt.');
     }
 
@@ -94,6 +101,8 @@ function lehrfahrer_require_write_auth(): void {
     }
 
     if ($provided === '' || !hash_equals($expected, $provided)) {
+        $observe(false);
         lehrfahrer_reject_unauthorized('Ungültiger oder fehlender API-Token.');
     }
+    $observe(true);
 }

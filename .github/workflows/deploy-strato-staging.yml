@@ -95,6 +95,7 @@ jobs:
             tools/control-database.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
+            tools/legacy-auth-observation.test.js \
             tools/security-dom-xss.test.js \
             tools/security-sensitive-storage.test.js \
             tools/tenant-storage.test.js \

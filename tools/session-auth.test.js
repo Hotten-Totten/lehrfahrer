@@ -330,13 +330,16 @@ test('N: Runtime-Info ist serverseitig und SQLite bleibt auf DEV begrenzt', asyn
 
 test('O: bestehende API-Token-Authentifizierung bleibt funktional und unverändert', () => {
   const authPath = path.join(projectRoot, 'api', '_auth.php');
-  const diff = spawnSync('git', ['diff', '--', authPath], { cwd: projectRoot, encoding: 'utf8' });
-  assert.equal(diff.status, 0, diff.stderr);
-  assert.equal(diff.stdout, '');
   const code = `putenv('LEHRFAHRER_API_TOKEN=phase2-token');$_SERVER['REMOTE_ADDR']='203.0.113.1';$_SERVER['SERVER_ADDR']='203.0.113.2';$_SERVER['HTTP_HOST']='example.invalid';$_SERVER['SERVER_NAME']='example.invalid';$_SERVER['HTTP_X_API_TOKEN']='phase2-token';require ${phpString(authPath)};lehrfahrer_require_write_auth();echo 'OK';`;
   const result = runPhp(code);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'OK');
+  const rejected = runPhp(code.replace("$_SERVER['HTTP_X_API_TOKEN']='phase2-token'", "$_SERVER['HTTP_X_API_TOKEN']='wrong-token'"));
+  assert.equal(rejected.status, 0, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stdout).ok, false);
+  const parameter = runPhp(code.replace("$_SERVER['HTTP_X_API_TOKEN']='phase2-token'", "$_GET['apiToken']='phase2-token'"));
+  assert.equal(parameter.status, 0, parameter.stderr);
+  assert.equal(parameter.stdout, 'OK');
 });
 
 test('Bootstrap legt einmalig einen ADMIN an und verlangt das Passwort aus der Umgebung', () => {
