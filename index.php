@@ -26,7 +26,8 @@ try {
     if ($auth === null) {
         header('Cache-Control: no-store, private');
         header('Pragma: no-cache');
-        header('Location: login.html', true, 302);
+        header('Location: ' . (lehrfahrer_environment() === 'staging'
+            ? 'account-login.php?next=%2F' : 'login.html'), true, 302);
         exit;
     }
 
@@ -67,6 +68,11 @@ $editorHtml = str_replace(
 );
 if ($csrfPlaceholderCount !== 1) {
     lehrfahrer_editor_response(500, 'Oberfläche konnte nicht sicher initialisiert werden.');
+}
+
+if ($auth['auth_source'] === 'ACCOUNT') {
+    $editorHtml = str_replace('id="accountMenuRoot" style="display:none"',
+        'id="accountMenuRoot"', $editorHtml);
 }
 
 echo $editorHtml;

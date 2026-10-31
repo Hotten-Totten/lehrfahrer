@@ -108,6 +108,7 @@ jobs:
             tools/control-account-preflight.test.js \
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
+            tools/account-login-ui.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
             tools/legacy-auth-observation.test.js \
@@ -1100,7 +1101,7 @@ jobs:
             --dump-header /tmp/staging-root-anonymous.headers --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/")"
           test "$root_status" = 302
-          grep -Eiq '^location: *login\.html' /tmp/staging-root-anonymous.headers
+          grep -Eiq '^location: *account-login\.php\?next=%2F' /tmp/staging-root-anonymous.headers
           if grep -q '<title>Linien-Editor</title>' /tmp/staging-root-anonymous.html; then
             echo 'Der Editor wurde ohne Lehrfahrer-Session ausgeliefert.' >&2
             exit 1
@@ -1110,6 +1111,20 @@ jobs:
           test "$legacy_root_status" = 302
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/login.html" | grep -q 'Lehrfahrer-Anmeldung'
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/account-login.php" > /tmp/staging-account-login.html
+          grep -q 'id="accountLoginForm"' /tmp/staging-account-login.html
+          grep -q 'autocomplete="username"' /tmp/staging-account-login.html
+          grep -q 'autocomplete="current-password"' /tmp/staging-account-login.html
+          if grep -q 'id="company"' /tmp/staging-account-login.html; then
+            echo 'Das neue Login enthält ein Gesellschaftsfeld.' >&2
+            exit 1
+          fi
+          account_script="$(grep -oE 'js/account-login\.js\?v=[a-f0-9]{12}' /tmp/staging-account-login.html | head -n 1)"
+          test -n "$account_script"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/$account_script" > /tmp/staging-account-login.js
+          test "${account_script#*v=}" = "$(sha256sum /tmp/staging-account-login.js | cut -c 1-12)"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -D /tmp/staging-activate.headers "$origin/activate.php" \
             > /tmp/staging-activate.html
@@ -1214,7 +1229,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f /tmp/parallel-account-*.json /tmp/parallel-old-*.json /tmp/parallel-auth.cookies /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies' EXIT
+          trap 'rm -f /tmp/parallel-account-*.json /tmp/parallel-old-*.json /tmp/parallel-auth.cookies /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies /tmp/parallel-account-relogin.cookies /tmp/parallel-account-editor.html /tmp/parallel-legacy-editor.html' EXIT
           origin='https://staging.lehrfahrer.de'
           jq -n --arg password "$ADMIN_PASSWORD" '{
             company: "lehrfahrer-test", login: "staging-admin", password: $password
@@ -1265,6 +1280,16 @@ jobs:
               -b "$cookie_file" "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
           done
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-account-only.cookies "$origin/" > /tmp/parallel-account-editor.html
+          grep -q 'id="accountMenuRoot"' /tmp/parallel-account-editor.html
+          if grep -q 'id="accountMenuRoot" style="display:none"' /tmp/parallel-account-editor.html; then
+            echo 'Account-Kontomenü wurde nicht eingeblendet.' >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-legacy-only.cookies "$origin/" > /tmp/parallel-legacy-editor.html
+          grep -q 'id="accountMenuRoot" style="display:none"' /tmp/parallel-legacy-editor.html
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/me.php" \
             | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
@@ -1291,6 +1316,19 @@ jobs:
             -H "Origin: $origin" -H "X-CSRF-Token: $new_csrf" -X POST \
             "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/parallel-account-relogin.cookies --data-binary @/tmp/parallel-account-login.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/parallel-account-relogin.json
+          jq -e '.ok == true and .context == "TENANT"' /tmp/parallel-account-relogin.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-account-relogin.cookies "$origin/" > /tmp/parallel-account-relogin-editor.html
+          grep -q '<title>Linien-Editor</title>' /tmp/parallel-account-relogin-editor.html
+          relogin_csrf="$(jq -r '.csrfToken' /tmp/parallel-account-relogin.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-account-relogin.cookies -c /tmp/parallel-account-relogin.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $relogin_csrf" -X POST \
+            "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/me.php" \
             | jq -e '.ok == true' >/dev/null
           old_csrf="$(jq -r '.csrfToken' /tmp/parallel-old-result.json)"
@@ -1302,7 +1340,10 @@ jobs:
             /tmp/parallel-account-wrong.json /tmp/parallel-account-unknown.json \
             /tmp/parallel-account-wrong-result.json /tmp/parallel-account-unknown-result.json \
             /tmp/parallel-old-result.json /tmp/parallel-account-result.json /tmp/parallel-auth.cookies \
-            /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies
+            /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies \
+            /tmp/parallel-account-relogin.cookies /tmp/parallel-account-relogin.json \
+            /tmp/parallel-account-relogin-editor.html \
+            /tmp/parallel-account-editor.html /tmp/parallel-legacy-editor.html
           echo 'PARALLEL_ACCOUNT_AUTH=OK'
 
       - name: Register missing Cottbus city without changing existing routes

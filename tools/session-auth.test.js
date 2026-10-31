@@ -387,7 +387,8 @@ test('Apache-Root und direkter Legacy-Einstieg verwenden den serverseitigen Sess
   assert.match(gate, /lehrfahrer_api_resolve_session/);
   assert.match(gate, /\$capabilities = \$auth\['capabilities'\]/);
   assert.match(gate, /routes\.read/);
-  assert.match(gate, /Location: login\.html/);
+  assert.match(gate, /lehrfahrer_environment\(\) === 'staging'/);
+  assert.match(gate, /account-login\.php\?next=%2F' : 'login\.html'/);
   assert.match(gate, /lehrfahrer_auth_csrf_token/);
 });
 
