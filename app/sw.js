@@ -6,14 +6,14 @@
 //   API-Calls   → nur Netzwerk; Offline-Linien liegen im mandantengeprüften IndexedDB
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21065-259fd3153c5f';
+const CACHE_APP = 'lehrfahrer-app-v21065-259fd3153c5f-4fdc2e444274';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/app.css?v=V2.1.063',
+  './css/app.css?v=V2.1.063-4fdc2e444274',
   './js/app.js?v=V2.1.065-259fd3153c5f',
   '../js/tenant-cache-boundary.js?v=6f1f3c95d4c9',
   './js/map.js?v=V2.1.063',

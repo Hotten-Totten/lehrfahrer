@@ -7,12 +7,17 @@ const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'app/js/app.js'), 'utf8');
+const appCss = fs.readFileSync(path.join(root, 'app/css/app.css'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, 'app/sw.js'), 'utf8');
 const appHtml = fs.readFileSync(path.join(root, 'app/index.html'), 'utf8');
 const start = appSource.indexOf('function detectOffline() {');
 const end = appSource.indexOf('// ── Events binden', start);
 assert.ok(start >= 0 && end > start);
 const detectionSource = appSource.slice(start, end);
+const catalogStart = appSource.indexOf('async function fetchLinesCatalogFromServer() {');
+const catalogEnd = appSource.indexOf('async function fetchLineRecordFromServer(', catalogStart);
+assert.ok(catalogStart >= 0 && catalogEnd > catalogStart);
+const catalogSource = appSource.slice(catalogStart, catalogEnd);
 
 async function settle() {
   await new Promise(resolve => setImmediate(resolve));
@@ -35,12 +40,13 @@ function detectionFixture(fetchImpl) {
     API_BASE: '../api', offlineBadge: badge, Date,
     availableLinesCatalog: [{ id: 'cached-line' }],
     renderLineDataStatus(state, count) { lineStates.push([state, count]); },
+    deduplicateLinesCatalog: lines => lines,
     window: { addEventListener(name, handler) { handlers[name] = handler; } },
     AbortSignal: { timeout(ms) { assert.equal(ms, 4000); return { timeoutMs: ms }; } },
     fetch(url, options) { calls.push({ url, options }); return fetchImpl(url, options); }
   });
   vm.runInContext(`${detectionSource}\ndetectOffline();`, context);
-  return { badge, handlers, calls, lineStates };
+  return { badge, handlers, calls, lineStates, context };
 }
 
 function response(status, payload = { ok: true, cities: ['cottbus'] }) {
@@ -57,6 +63,27 @@ test('gültige Session und routes.read ergeben Online per authentifiziertem GET'
   assert.equal(fixture.calls[0].options.credentials, 'same-origin');
   assert.equal(fixture.calls[0].options.cache, 'no-store');
   assert.equal(fixture.calls[0].options.signal.timeoutMs, 4000);
+});
+
+test('Online-Zustand verbirgt das Statuslabel tatsächlich über die App-CSS-Regel', async () => {
+  const fixture = detectionFixture(async () => response(200));
+  await settle();
+  assert.equal(fixture.badge.classList.contains('hidden'), true);
+  assert.match(appCss, /#offlineBadge\.hidden\s*\{\s*display:\s*none\s*;\s*\}/);
+});
+
+test('nach 200 bleibt der Serverstatus auch bei späterem Katalogfehler online', async () => {
+  let catalogStatus = 200;
+  const fixture = detectionFixture(async url => url.includes('list_cities.php')
+    ? response(200) : response(catalogStatus, { ok: true, lines: [{ id: 'route' }] }));
+  vm.runInContext(catalogSource, fixture.context);
+  await settle();
+  assert.equal((await vm.runInContext('fetchLinesCatalogFromServer()', fixture.context)).length, 1);
+  assert.equal(fixture.badge.classList.contains('hidden'), true);
+  catalogStatus = 403;
+  await assert.rejects(vm.runInContext('fetchLinesCatalogFromServer()', fixture.context), /HTTP 403/);
+  assert.equal(fixture.badge.classList.contains('hidden'), true);
+  assert.equal(fixture.calls.filter(call => call.url.includes('list_lines.php')).length, 2);
 });
 
 test('Netzwerkfehler und Timeout zeigen Offline', async () => {
@@ -152,10 +179,14 @@ test('API- und Tenant-Ressourcen nutzen keinen gemeinsamen Offline-Cache', async
 test('App und Service Worker laden denselben neuen App-Scriptstand', () => {
   const version = fs.readFileSync(path.join(root, 'VERSION'), 'utf8').trim();
   const hash = crypto.createHash('sha256').update(appSource.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
+  const cssHash = crypto.createHash('sha256').update(appCss.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
   const scriptKey = `js/app.js?v=${version}-${hash}`;
-  const cacheKey = `lehrfahrer-app-v${version.slice(1).replaceAll('.', '')}-${hash}`;
+  const cssKey = `css/app.css?v=V2.1.063-${cssHash}`;
+  const cacheKey = `lehrfahrer-app-v${version.slice(1).replaceAll('.', '')}-${hash}-${cssHash}`;
   assert.ok(appHtml.includes(`id="versionBadge" class="version-badge" title="App-Version">${version}</span>`));
   assert.ok(appHtml.includes(scriptKey));
+  assert.ok(appHtml.includes(cssKey));
+  assert.ok(workerSource.includes(`./${cssKey}`));
   assert.ok(workerSource.includes(`./${scriptKey}`));
   assert.ok(workerSource.includes(cacheKey));
 });

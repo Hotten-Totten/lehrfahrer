@@ -1141,6 +1141,12 @@ jobs:
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/app/index.html" > /tmp/staging-driver-app.html
           grep -q "../$tenant_script" /tmp/staging-driver-app.html
+          app_css="$(grep -oE 'css/app\.css\?v=V[0-9.]+-[a-f0-9]{12}' /tmp/staging-driver-app.html | head -n 1)"
+          test -n "$app_css"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/app/$app_css" > /tmp/staging-driver-app.css
+          test "${app_css##*-}" = "$(sha256sum /tmp/staging-driver-app.css | cut -c 1-12)"
+          grep -q '#offlineBadge.hidden { display: none; }' /tmp/staging-driver-app.css
           app_script="$(grep -oE 'js/app\.js\?v=V[0-9.]+-[a-f0-9]{12}' /tmp/staging-driver-app.html | head -n 1)"
           test -n "$app_script"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \

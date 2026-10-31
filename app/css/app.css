@@ -70,6 +70,8 @@ html, body {
   font-weight: 600;
 }
 
+#offlineBadge.hidden { display: none; }
+
 .version-badge {
   font-size: 11px;
   color: var(--text-secondary, #999);
