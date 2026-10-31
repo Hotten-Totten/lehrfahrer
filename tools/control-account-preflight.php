@@ -29,7 +29,7 @@ function lehrfahrer_control_account_preflight_read(PDO $pdo, string $driver): ar
         $findings[] = ['level' => $level, 'code' => $code, 'subjects' => $subjects];
     };
     $version = (int)$pdo->query('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')->fetchColumn();
-    if ($version !== 5) {
+    if ($version !== LEHRFAHRER_CONTROL_SCHEMA_VERSION) {
         $add('BLOCKER', 'UNEXPECTED_SCHEMA_VERSION');
         return ['status' => 'BLOCKIERT', 'schemaVersion' => $version, 'scanned' => false,
             'findings' => $findings];

@@ -312,7 +312,7 @@ test('N: Runtime-Info ist serverseitig und SQLite bleibt auf DEV begrenzt', asyn
   assert.equal(runtime.body.runtime.environmentLabel, 'DEV');
   assert.equal(runtime.body.runtime.commit, 'phase2-test-commit');
   assert.equal(runtime.body.runtime.buildId, 'phase2-test-build');
-  assert.equal(runtime.body.runtime.databaseSchemaVersion, 5);
+  assert.equal(runtime.body.runtime.databaseSchemaVersion, 6);
 
   const openCode = `require ${phpString(path.join(projectRoot, 'api', '_control_database.php'))};lehrfahrer_control_database();`;
   const crossEnvironment = runPhp(openCode, { environment: 'staging' });

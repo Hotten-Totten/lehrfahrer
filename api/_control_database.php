@@ -3,9 +3,10 @@
 require_once __DIR__ . '/_private_storage.php';
 require_once __DIR__ . '/_control_schema.php';
 require_once __DIR__ . '/_control_phase2_schema.php';
+require_once __DIR__ . '/_control_user_numbers.php';
 require_once __DIR__ . '/_runtime_info.php';
 
-const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 5;
+const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 6;
 const LEHRFAHRER_CONTROL_BUSY_TIMEOUT_MS = 5000;
 const LEHRFAHRER_CONTROL_MIGRATION_LOCK_SECONDS = 15;
 
@@ -177,6 +178,7 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
             3 => 'lehrfahrer_control_apply_capability_binding_schema',
             4 => 'lehrfahrer_control_apply_company_template_schema',
             5 => 'lehrfahrer_control_apply_phase2_schema',
+            6 => 'lehrfahrer_control_apply_user_number_schema',
         ];
         foreach ($migrations as $version => $migration) {
             if (in_array($version, $appliedVersions, true)) continue;
@@ -185,7 +187,7 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
         }
         if ($sqliteTransaction) $pdo->exec('COMMIT');
     } catch (Throwable $error) {
-        if ($sqliteTransaction && $pdo->inTransaction()) {
+        if ($sqliteTransaction) {
             try { $pdo->exec('ROLLBACK'); } catch (Throwable $_rollbackError) {}
         }
         throw $error;

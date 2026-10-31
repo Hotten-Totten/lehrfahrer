@@ -43,8 +43,10 @@ foreach (['users','user_roles','sessions','user_activation_tokens'] as $table) $
 $counts = [];
 foreach (['accounts','account_memberships','membership_roles','account_platform_roles','sysop_assignment','account_sessions','account_activation_tokens'] as $table)
   $counts[$table] = (int)$pdo->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn();
+$numbers = $pdo->query('SELECT user_number FROM account_user_numbers ORDER BY user_number')->fetchAll(PDO::FETCH_COLUMN);
 echo json_encode(['error'=>$error,'result'=>$result,'counts'=>$counts,
-  'oldUnchanged'=>$before===$after,'valid'=>lehrfahrer_control_validate_account_copy($pdo)['valid']], JSON_THROW_ON_ERROR);
+  'numbers'=>$numbers,'oldUnchanged'=>$before===$after,
+  'valid'=>lehrfahrer_control_validate_account_copy($pdo)['valid']], JSON_THROW_ON_ERROR);
 `;
   const result = spawnSync(php, ['-r', code], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -60,6 +62,7 @@ test('1:1-Kopie mit Rollen und intern identischen Hashes, Altmodell unverändert
   assert.equal(data.valid, true);
   assert.equal(data.oldUnchanged, true);
   assert.deepEqual([data.counts.accounts, data.counts.account_memberships, data.counts.membership_roles], [2, 2, 2]);
+  assert.deepEqual(data.numbers.map(Number), [101, 102]);
   assert.deepEqual([data.counts.account_platform_roles, data.counts.sysop_assignment,
     data.counts.account_sessions, data.counts.account_activation_tokens], [0, 0, 0, 0]);
 });

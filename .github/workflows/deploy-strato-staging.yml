@@ -105,6 +105,7 @@ jobs:
             tools/company-provisioning.test.js \
             tools/control-database.test.js \
             tools/control-phase2-schema.test.js \
+            tools/control-user-numbers.test.js \
             tools/control-account-preflight.test.js \
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
@@ -1024,6 +1025,24 @@ jobs:
             "$private_root/cottbus-dry-run-stderr.raw"
           fi
           set +e
+          LF_STAGING_WEBROOT="$webroot" php -q -d "auto_prepend_file=$private_root/runtime-env.php" -r '
+            require_once getenv("LF_STAGING_WEBROOT") . "/api/_control_database.php";
+            if (lehrfahrer_environment() !== "staging") throw new RuntimeException("Not staging");
+            $pdo = lehrfahrer_control_database();
+            $accounts = (int)$pdo->query("SELECT COUNT(*) FROM accounts")->fetchColumn();
+            $numbered = (int)$pdo->query("SELECT COUNT(*) FROM account_user_numbers WHERE current_account_id IS NOT NULL")->fetchColumn();
+            $memberships = (int)$pdo->query("SELECT COUNT(*) FROM account_memberships")->fetchColumn();
+            $membershipRoles = (int)$pdo->query("SELECT COUNT(*) FROM membership_roles")->fetchColumn();
+            $reserved = (int)$pdo->query("SELECT COUNT(*) FROM account_user_numbers WHERE user_number BETWEEN 1 AND 100")->fetchColumn();
+            $sysop = (int)$pdo->query("SELECT COUNT(*) FROM sysop_assignment")->fetchColumn();
+            $platform = (int)$pdo->query("SELECT COUNT(*) FROM account_platform_roles")->fetchColumn();
+            $next = (int)$pdo->query("SELECT next_number FROM account_user_number_allocator WHERE singleton_key=1")->fetchColumn();
+            $max = (int)$pdo->query("SELECT COALESCE(MAX(user_number),100) FROM account_user_numbers")->fetchColumn();
+            if ($accounts !== $numbered || $next <= $max) {
+                throw new RuntimeException("Account-number staging invariant failed");
+            }
+            echo "ACCOUNT_NUMBERS accounts=$accounts memberships=$memberships roles=$membershipRoles numbered=$numbered next=$next reserved=$reserved sysop=$sysop platform=$platform\n";
+          ' || exit 1
           account_preflight_report="$(LEHRFAHRER_ACCOUNT_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/control-account-preflight.php")"
@@ -1146,7 +1165,7 @@ jobs:
             and .runtime.environment == "staging"
             and .runtime.environmentLabel == "STAGING"
             and .runtime.commit == $commit
-            and .runtime.databaseSchemaVersion == 5
+            and .runtime.databaseSchemaVersion == 6
           ' /tmp/staging-runtime.json >/dev/null
           grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
 
@@ -2083,7 +2102,7 @@ jobs:
                   catch (Throwable $error) { continue; }
                   if (!hash_equals($expectedBackup, (string)($manifest['sha256'] ?? ''))
                       || (int)($manifest['bytes'] ?? -1) !== (int)filesize($dump)
-                      || ($manifest['schema_version'] ?? null) !== '5'
+                      || ($manifest['schema_version'] ?? null) !== '6'
                       || ($manifest['restore']['client_validated'] ?? false) !== true
                       || substr(sprintf('%o', fileperms($directory)), -3) !== '700'
                       || substr(sprintf('%o', fileperms($dump)), -3) !== '600'

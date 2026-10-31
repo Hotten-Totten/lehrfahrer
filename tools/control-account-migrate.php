@@ -57,6 +57,7 @@ function lehrfahrer_control_migrate_accounts(PDO $pdo, ?callable $afterAccount =
                 $user['display_name'], $user['password_hash'], (int)$user['active'],
                 (int)$user['must_change_password'], $user['last_login'], $user['blocked_until'],
                 $user['created_at'], $user['updated_at']]);
+            lehrfahrer_control_allocate_user_number($pdo, $accountId);
             if ($afterAccount !== null) $afterAccount($pdo, $userId);
             $insertMembership->execute([$membershipId, $accountId, $user['company_id'],
                 (int)$user['active'] === 1 ? 'active' : 'inactive', $userId,
