@@ -4,6 +4,9 @@ declare(strict_types=1);
 const COTTBUS_CONTROL_DB_EXPECTED_TABLES = [
     'capabilities', 'companies', 'control_metadata', 'role_capabilities', 'roles',
     'schema_migrations', 'sessions', 'user_activation_tokens', 'user_roles', 'users',
+    'accounts', 'account_memberships', 'membership_roles', 'platform_roles',
+    'platform_capabilities', 'platform_role_capabilities', 'account_platform_roles',
+    'sysop_assignment', 'account_sessions', 'account_activation_tokens',
 ];
 
 function cottbusExecutable(array $names): ?string {

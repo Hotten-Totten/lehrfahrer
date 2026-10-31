@@ -93,6 +93,7 @@ jobs:
             tools/company-activation-reissue.test.js \
             tools/company-provisioning.test.js \
             tools/control-database.test.js \
+            tools/control-phase2-schema.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
             tools/legacy-auth-observation.test.js \
@@ -1828,7 +1829,7 @@ jobs:
                   catch (Throwable $error) { continue; }
                   if (!hash_equals($expectedBackup, (string)($manifest['sha256'] ?? ''))
                       || (int)($manifest['bytes'] ?? -1) !== (int)filesize($dump)
-                      || ($manifest['schema_version'] ?? null) !== '4'
+                      || ($manifest['schema_version'] ?? null) !== '5'
                       || ($manifest['restore']['client_validated'] ?? false) !== true
                       || substr(sprintf('%o', fileperms($directory)), -3) !== '700'
                       || substr(sprintf('%o', fileperms($dump)), -3) !== '600'

@@ -104,6 +104,9 @@ try {
     $expectedTables = [
         'capabilities', 'companies', 'control_metadata', 'role_capabilities', 'roles',
         'schema_migrations', 'sessions', 'user_activation_tokens', 'user_roles', 'users',
+        'accounts', 'account_memberships', 'membership_roles', 'platform_roles',
+        'platform_capabilities', 'platform_role_capabilities', 'account_platform_roles',
+        'sysop_assignment', 'account_sessions', 'account_activation_tokens',
     ];
     $tables = $pdo->query(
         'SELECT table_name, engine, table_collation

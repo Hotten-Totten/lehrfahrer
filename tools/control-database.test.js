@@ -137,11 +137,13 @@ test('Control-Datenbank liegt außerhalb des DocumentRoot', () => {
 });
 
 test('Schema-Migration ist wiederholt idempotent', () => {
-  assert.equal(fixture.migrationCount, 4);
+  assert.equal(fixture.migrationCount, 5);
   for (const table of [
     'schema_migrations', 'companies', 'users', 'roles', 'capabilities',
     'role_capabilities', 'user_roles', 'control_metadata', 'sessions',
-    'user_activation_tokens'
+    'user_activation_tokens', 'accounts', 'account_memberships', 'membership_roles',
+    'platform_roles', 'platform_capabilities', 'platform_role_capabilities',
+    'account_platform_roles', 'sysop_assignment', 'account_sessions', 'account_activation_tokens'
   ]) {
     assert.ok(fixture.tableNames.includes(table), table);
   }
