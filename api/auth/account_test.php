@@ -69,6 +69,9 @@ try {
         $response['invalidateTenantCache'] = true;
     }
     lehrfahrer_auth_json_response(200, $response);
+} catch (LehrfahrerAuthCutoverBusy $error) {
+    lehrfahrer_auth_json_response(503, ['ok' => false,
+        'error' => 'Anmeldung wird gerade aktualisiert. Bitte erneut versuchen.']);
 } catch (Throwable $error) {
     error_log('Lehrfahrer account test authentication failed internally.');
     lehrfahrer_auth_json_response(500, ['ok' => false, 'error' => 'Anfrage fehlgeschlagen.']);

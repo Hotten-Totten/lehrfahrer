@@ -90,6 +90,53 @@ $pdo->prepare('INSERT INTO account_user_numbers (user_number,issued_to_account_i
   assert.deepEqual(data, { number: '00001', before: [], after: ['SYSOP'] });
 });
 
+test('Cutover-Sperre blockiert Account-, Legacy- und direkte Session-Erzeugung und ist bewusst reversibel', () => {
+  const data = fixture(String.raw`
+lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED');
+$blocked=[];
+foreach (['accountLogin','accountCreate','legacyCreate'] as $action) {
+  try {
+    if ($action==='accountLogin') lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+    elseif ($action==='accountCreate') lehrfahrer_account_create_session($pdo,$accountA,'TENANT',$membershipA);
+    else lehrfahrer_auth_create_session($pdo,$userA,$companyA);
+    $blocked[$action]=false;
+  } catch (LehrfahrerAuthCutoverBusy $error) { $blocked[$action]=true; }
+}
+$during=lehrfahrer_auth_cutover_state($pdo);
+lehrfahrer_auth_cutover_set_lock($pdo,'OPEN');
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+echo json_encode(['blocked'=>$blocked,'during'=>$during,
+  'recovered'=>$login!==null && lehrfahrer_auth_cutover_state($pdo)['lock']==='OPEN'],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { blocked: { accountLogin: true, accountCreate: true, legacyCreate: true },
+    during: { mode: 'PARALLEL', lock: 'LOCKED' }, recovered: true });
+});
+
+test('Cutover-Sperre blockiert Membership-Auswahl und Gesellschaftswechsel ohne neue Tenant-Session', () => {
+  const data = fixture(String.raw`
+$pending=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$pending['token'];
+lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED');
+$selectBlocked=false;
+try { lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$pending['csrf'],'select'); }
+catch (LehrfahrerAuthCutoverBusy $error) { $selectBlocked=true; }
+lehrfahrer_auth_cutover_set_lock($pdo,'OPEN');
+$selected=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$pending['csrf'],'select');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$selected['token'];
+lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED');
+$switchBlocked=false;
+try { lehrfahrer_account_rotate_to_membership($pdo,$membershipB,$selected['csrf'],'switch'); }
+catch (LehrfahrerAuthCutoverBusy $error) { $switchBlocked=true; }
+$sessions=(int)$pdo->query("SELECT COUNT(*) FROM account_sessions WHERE revoked_at IS NULL")->fetchColumn();
+echo json_encode(['selectBlocked'=>$selectBlocked,'switchBlocked'=>$switchBlocked,
+  'sessions'=>$sessions,'mode'=>lehrfahrer_auth_cutover_state($pdo)['mode']],JSON_THROW_ON_ERROR);`, String.raw`
+$membershipExtra=lehrfahrer_control_id('mem');
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at)
+  VALUES (?,?,?,'active',?,?)")->execute([$membershipExtra,$accountA,$companyB['id'],gmdate('c'),gmdate('c')]);
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')
+  ->execute([$membershipExtra,$pdo->query("SELECT id FROM roles WHERE code='FAHRER'")->fetchColumn()]);`);
+  assert.deepEqual(data, { selectBlocked: true, switchBlocked: true, sessions: 1, mode: 'PARALLEL' });
+});
+
 test('Mehrere Tenantrollen werden ohne Prioritätsauswahl aus der aktiven Membership geliefert', () => {
   const data = fixture(String.raw`
 $login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
@@ -161,6 +208,19 @@ $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]='invalid';
 $auth=lehrfahrer_api_resolve_session($pdo);
 echo json_encode(['source'=>$auth['auth_source'],'company'=>$auth['company_id']===$companyB['id']],JSON_THROW_ON_ERROR);`);
   assert.deepEqual(data, { source: 'LEGACY', company: true });
+});
+
+test('Während Cutover-Lock gibt es keinen Legacy-Fallback nach ungültiger Account-Session', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]='invalid';
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['blocked'=>$auth===null],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { blocked: true });
 });
 
 test('Production ignoriert parallelen Account-Cookie vollständig', () => {

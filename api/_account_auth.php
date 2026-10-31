@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_session_auth.php';
+require_once __DIR__ . '/_auth_cutover_gate.php';
 
 /** P2.1 is a staging-only, parallel test lane; the old session cookie remains untouched. */
 const LEHRFAHRER_ACCOUNT_TEST_COOKIE = '__Host-lehrfahrer_account_test';
@@ -63,6 +64,12 @@ function lehrfahrer_account_tenant_capabilities(PDO $pdo, string $accountId, str
 
 function lehrfahrer_account_create_session(PDO $pdo, string $accountId, string $context,
     ?string $membershipId, ?string $deviceLabel = null): array {
+    return lehrfahrer_with_auth_mutation_gate($pdo,
+        static fn(): array => lehrfahrer_account_create_session_unguarded($pdo, $accountId, $context, $membershipId, $deviceLabel));
+}
+
+function lehrfahrer_account_create_session_unguarded(PDO $pdo, string $accountId, string $context,
+    ?string $membershipId, ?string $deviceLabel = null): array {
     if (!in_array($context, ['PENDING', 'TENANT', 'PLATFORM'], true)
         || ($context === 'TENANT') !== ($membershipId !== null)) {
         throw new InvalidArgumentException('Ungültiger Account-Sessionkontext.');
@@ -93,6 +100,11 @@ function lehrfahrer_account_create_session(PDO $pdo, string $accountId, string $
 }
 
 function lehrfahrer_account_login(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
+    return lehrfahrer_with_auth_mutation_gate($pdo,
+        static fn(): ?array => lehrfahrer_account_login_unguarded($pdo, $login, $password, $deviceLabel));
+}
+
+function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
     $normalized = lehrfahrer_control_normalize_login($login);
     $query = $pdo->prepare('SELECT id, password_hash, active, must_change_password, blocked_until
         FROM accounts WHERE login_normalized = ?');
@@ -227,39 +239,46 @@ function lehrfahrer_account_available_memberships(PDO $pdo, array $session): ?ar
 
 function lehrfahrer_account_rotate_to_membership(PDO $pdo, string $membershipId,
     string $csrf, string $action = 'select'): ?array {
+    return lehrfahrer_with_auth_mutation_gate($pdo,
+        static fn(): ?array => lehrfahrer_account_rotate_to_membership_unguarded($pdo, $membershipId, $csrf, $action));
+}
+
+function lehrfahrer_account_rotate_to_membership_unguarded(PDO $pdo, string $membershipId,
+    string $csrf, string $action = 'select'): ?array {
     if (!in_array($action, ['select', 'switch'], true)) throw new InvalidArgumentException('Ungültige Kontextaktion.');
     if (lehrfahrer_control_driver($pdo) === 'mysql') {
         $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
     }
-    $pdo->beginTransaction();
+    $ownsTransaction = lehrfahrer_control_driver($pdo) === 'mysql';
+    if ($ownsTransaction) $pdo->beginTransaction();
     try {
         $session = lehrfahrer_account_current_session($pdo, false, true);
         $requiredContext = $action === 'select' ? 'PENDING' : 'TENANT';
         if ($session === null || $session['context_type'] !== $requiredContext
             || $csrf === '' || !hash_equals((string)$session['csrf_token_hash'], lehrfahrer_auth_token_hash($csrf))) {
-            $pdo->rollBack(); return null;
+            if ($ownsTransaction) $pdo->rollBack(); return null;
         }
         $available = lehrfahrer_account_memberships($pdo, (string)$session['account_id']);
         if ($action === 'switch' && (count($available) < 2
             || $membershipId === (string)$session['membership_id'])) {
-            $pdo->rollBack(); return null;
+            if ($ownsTransaction) $pdo->rollBack(); return null;
         }
         $matches = array_values(array_filter($available,
             static fn(array $item): bool => (string)$item['id'] === $membershipId));
-        if (count($matches) !== 1) { $pdo->rollBack(); return null; }
+        if (count($matches) !== 1) { if ($ownsTransaction) $pdo->rollBack(); return null; }
         $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
             WHERE id = ? AND environment = ? AND revoked_at IS NULL');
         $revoke->execute([lehrfahrer_auth_timestamp(time()), $session['id'], lehrfahrer_environment()]);
         if ($revoke->rowCount() !== 1) throw new RuntimeException('Sessionrotation fehlgeschlagen.');
         $created = lehrfahrer_account_create_session($pdo, (string)$session['account_id'],
             'TENANT', $membershipId, $session['device_label']);
-        $pdo->commit();
+        if ($ownsTransaction) $pdo->commit();
         return $created + ['contextEvent' => ['action' => $action,
             'accountId' => (string)$session['account_id'],
             'fromMembershipId' => $action === 'switch' ? (string)$session['membership_id'] : null,
             'toMembershipId' => $membershipId]];
     } catch (Throwable $error) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
         throw $error;
     }
 }

@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/_control_repositories.php';
 require_once __DIR__ . '/_runtime_info.php';
+require_once __DIR__ . '/_auth_cutover_gate.php';
 
 const LEHRFAHRER_SESSION_COOKIE = '__Host-lehrfahrer_session';
 const LEHRFAHRER_SESSION_IDLE_SECONDS = 1800;
@@ -91,6 +92,16 @@ function lehrfahrer_auth_session_token_from_request(): string {
 }
 
 function lehrfahrer_auth_create_session(
+    PDO $pdo,
+    array $user,
+    array $company,
+    ?string $deviceLabel = null
+): array {
+    return lehrfahrer_with_auth_mutation_gate($pdo,
+        static fn(): array => lehrfahrer_auth_create_session_unguarded($pdo, $user, $company, $deviceLabel));
+}
+
+function lehrfahrer_auth_create_session_unguarded(
     PDO $pdo,
     array $user,
     array $company,

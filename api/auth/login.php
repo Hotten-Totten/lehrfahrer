@@ -46,11 +46,14 @@ try {
         lehrfahrer_auth_json_response(401, ['ok' => false, 'error' => 'Anmeldung nicht möglich.']);
     }
 
-    $previousToken = lehrfahrer_auth_session_token_from_request();
-    if ($previousToken !== '') lehrfahrer_auth_revoke_session_by_token($pdo, $previousToken);
-
-    $created = lehrfahrer_auth_create_session($pdo, $user, $company, $deviceLabel);
-    $users->markSuccessfulLogin($company['id'], $user['id'], lehrfahrer_auth_timestamp(time()));
+    $created = lehrfahrer_with_auth_mutation_gate($pdo,
+        static function () use ($pdo, $user, $company, $deviceLabel, $users): array {
+            $previousToken = lehrfahrer_auth_session_token_from_request();
+            if ($previousToken !== '') lehrfahrer_auth_revoke_session_by_token($pdo, $previousToken);
+            $created = lehrfahrer_auth_create_session($pdo, $user, $company, $deviceLabel);
+            $users->markSuccessfulLogin($company['id'], $user['id'], lehrfahrer_auth_timestamp(time()));
+            return $created;
+        });
     lehrfahrer_auth_set_session_cookie($created['sessionToken'], $created['absoluteExpiresAt']);
 
     $_COOKIE[LEHRFAHRER_SESSION_COOKIE] = $created['sessionToken'];
@@ -61,6 +64,9 @@ try {
         lehrfahrer_auth_public_session($session, $pdo),
         ['runtime' => lehrfahrer_runtime_info($pdo)]
     ));
+} catch (LehrfahrerAuthCutoverBusy $error) {
+    lehrfahrer_auth_json_response(503, ['ok' => false,
+        'error' => 'Anmeldung wird gerade aktualisiert. Bitte erneut versuchen.']);
 } catch (Throwable $error) {
     error_log('Lehrfahrer login failed internally: ' . $error->getMessage());
     lehrfahrer_auth_json_response(500, ['ok' => false, 'error' => 'Anmeldung nicht möglich.']);

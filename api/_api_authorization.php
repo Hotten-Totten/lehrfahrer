@@ -94,6 +94,7 @@ function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
                     (string)$session['account_id'], $membershipId),
             ];
         }
+        if (lehrfahrer_auth_cutover_state($pdo)['lock'] !== 'OPEN') return null;
     }
     if (!array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)) return null;
     $session = lehrfahrer_auth_current_session($pdo);
