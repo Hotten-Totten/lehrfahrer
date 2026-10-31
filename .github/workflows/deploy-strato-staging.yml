@@ -1091,7 +1091,7 @@ jobs:
             and .runtime.environment == "staging"
             and .runtime.environmentLabel == "STAGING"
             and .runtime.commit == $commit
-            and .runtime.databaseSchemaVersion == 4
+            and .runtime.databaseSchemaVersion == 5
           ' /tmp/staging-runtime.json >/dev/null
           grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
 

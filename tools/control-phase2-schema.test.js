@@ -98,3 +98,11 @@ test('zukünftige Session-Kontexte erlauben nur passende Account-/Mitgliedschaft
   assert.equal(fixture.invalidContext, true);
   assert.equal(fixture.foreignMembership, true);
 });
+
+test('Staging-Runtime-Postcheck erwartet dieselbe Control-Schema-Version', () => {
+  const database = fs.readFileSync(path.join(root, 'api', '_control_database.php'), 'utf8');
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-strato-staging.yml'), 'utf8');
+  const version = Number(database.match(/LEHRFAHRER_CONTROL_SCHEMA_VERSION\s*=\s*(\d+)/)?.[1]);
+  const expected = Number(workflow.match(/\.runtime\.databaseSchemaVersion\s*==\s*(\d+)/)?.[1]);
+  assert.equal(expected, version);
+});
