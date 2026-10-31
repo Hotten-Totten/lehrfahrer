@@ -224,6 +224,7 @@ jobs:
             tools/control-account-preflight.test.js \
             tools/account-cutover-preflight.test.js \
             tools/sysop-bootstrap.test.js \
+            tools/sysop-bootstrap-json-check.test.js \
             tools/account-cutover-observability.test.js \
             tools/auth-cutover-race.test.js \
             tools/control-db-recovery-drill.test.js \
@@ -570,6 +571,7 @@ jobs:
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
             tools/control-sysop-bootstrap-staging.php \
+            tools/control-sysop-bootstrap-json-check.php \
             tools/control-driver-smoke-staging.php \
             tools/control-account-migrate.php \
             tools/staging-smoke.php \
@@ -625,6 +627,7 @@ jobs:
             "$private_root/control-db-live-recovery.php" \
             "$private_root/control-account-cutover-staging.php" \
             "$private_root/control-sysop-bootstrap-staging.php" \
+            "$private_root/control-sysop-bootstrap-json-check.php" \
             "$private_root/control-account-preflight.php" \
             "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
@@ -2004,10 +2007,14 @@ jobs:
           set -euo pipefail
           webroot="$(cd "./${1#./}" && pwd -P)"
           private_root="$(cd "./${2#./}" && pwd -P)"
-          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          command -v php >/dev/null
+          php -q -v >/dev/null
+          response="$(LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=preflight \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .targetNumber == 102 and .sysopAssignments == 0'
+              -f "$private_root/control-sysop-bootstrap-staging.php")"
+          LEHRFAHRER_SYSOP_JSON_RESPONSE="$response" LEHRFAHRER_SYSOP_JSON_EXPECT=preflight \
+            php -q -f "$private_root/control-sysop-bootstrap-json-check.php"
           REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
@@ -2207,14 +2214,20 @@ jobs:
           set -euo pipefail
           webroot="$(cd "./${1#./}" && pwd -P)"
           private_root="$(cd "./${2#./}" && pwd -P)"
-          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          command -v php >/dev/null
+          php -q -v >/dev/null
+          response="$(LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=apply \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .userNumber == 1 and .retiredNumber == 102 and .platformCapabilities == 9'
-          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+              -f "$private_root/control-sysop-bootstrap-staging.php")"
+          LEHRFAHRER_SYSOP_JSON_RESPONSE="$response" LEHRFAHRER_SYSOP_JSON_EXPECT=apply \
+            php -q -f "$private_root/control-sysop-bootstrap-json-check.php"
+          response="$(LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=verify \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .userNumber == 1 and .retiredNumber == 102 and .platformCapabilities == 9 and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"'
+              -f "$private_root/control-sysop-bootstrap-staging.php")"
+          LEHRFAHRER_SYSOP_JSON_RESPONSE="$response" LEHRFAHRER_SYSOP_JSON_EXPECT=verify \
+            php -q -f "$private_root/control-sysop-bootstrap-json-check.php"
           REMOTE_SCRIPT
 
       - name: Diagnose cutover lock and recovery without mode switch
