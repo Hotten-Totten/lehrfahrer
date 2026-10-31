@@ -1821,7 +1821,7 @@ jobs:
           rm -f -- "$runner" "$result"
           REMOTE_SCRIPT
 
-      - name: Verify Control-DB recovery drill in isolated database
+      - name: Verify Control-DB recovery drill in isolated ephemeral MariaDB
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_control_db_recovery }}
         shell: bash
         env:
@@ -1830,43 +1830,98 @@ jobs:
           STRATO_HOST: ${{ secrets.STRATO_HOST }}
           STRATO_PORT: ${{ secrets.STRATO_PORT }}
           STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
-          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
-          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
         run: |
           set -euo pipefail
+          umask 077
           REMOTE="$STRATO_USER@$STRATO_HOST"
           SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          SCP_BASE=(scp -P "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
           if [ -n "$STRATO_SSH_KEY" ]; then
             SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SCP_BASE+=(-i ~/.ssh/id_rsa)
             SSH_RUN=("${SSH_BASE[@]}")
+            SCP_RUN=("${SCP_BASE[@]}")
           else
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+            SCP_RUN=(sshpass -e "${SCP_BASE[@]}")
           fi
-          "${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+          temp_dir="$(mktemp -d)"
+          container="lf-recovery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            rm -rf -- "$temp_dir"
+          }
+          trap cleanup EXIT
+
+          restore_id="$("${SSH_RUN[@]}" "$REMOTE" "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_FIND'
           set -euo pipefail
-          staging_target="$1"
-          staging_private="$2"
-          live_target="${3#/}"
-          webroot="$(cd "./$staging_target" && pwd -P)"
-          private_root="$(cd "./$staging_private" && pwd -P)"
-          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
-            live_webroot="$(pwd -P)"
-          else
-            live_webroot="$(cd "./$live_target" && pwd -P)"
-          fi
-          test "$webroot" != "$live_webroot"
-          case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
-          test -f "$private_root/control-db-recovery-drill.php"
-          test "$(stat -c '%a' "$private_root/control-db-recovery-drill.php")" = 600
-          LEHRFAHRER_ENV=staging \
-          LEHRFAHRER_APP_ROOT="$webroot" \
-          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
-          LEHRFAHRER_RECOVERY_DRILL_RUN=1 \
-            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-db-recovery-drill.php"
-          REMOTE_SCRIPT
+          private_root="$(cd "./${1#./}" && pwd -P)"
+          base="$private_root/backups/control-db"
+          test -d "$base" && test ! -L "$base"
+          latest="$(find "$base" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | head -n1)"
+          case "$latest" in
+            20????????T??????Z-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'Kein sicherer Restore-Punkt gefunden.' >&2; exit 1 ;;
+          esac
+          test -f "$base/$latest/control.sql" && test ! -L "$base/$latest/control.sql"
+          test -f "$base/$latest/manifest.json" && test ! -L "$base/$latest/manifest.json"
+          printf '%s\n' "$latest"
+          REMOTE_FIND
+          )"
+          remote_base="./${STAGING_PRIVATE_PATH#/}/backups/control-db/$restore_id"
+          "${SCP_RUN[@]}" "$REMOTE:$remote_base/control.sql" "$temp_dir/control.sql"
+          "${SCP_RUN[@]}" "$REMOTE:$remote_base/manifest.json" "$temp_dir/manifest.json"
+          chmod 600 "$temp_dir/control.sql" "$temp_dir/manifest.json"
+
+          expected_sha="$(jq -er '.sha256 | select(test("^[0-9a-f]{64}$"))' "$temp_dir/manifest.json")"
+          expected_bytes="$(jq -er '.bytes | numbers' "$temp_dir/manifest.json")"
+          actual_sha="$(sha256sum "$temp_dir/control.sql" | awk '{print $1}')"
+          actual_bytes="$(stat -c %s "$temp_dir/control.sql")"
+          test "$expected_sha" = "$actual_sha"
+          test "$expected_bytes" = "$actual_bytes"
+          jq -e '.restore.client_validated == true and (.expected_tables | length) >= 20' "$temp_dir/manifest.json" >/dev/null
+
+          root_password="$(openssl rand -hex 24)"
+          docker run -d --name "$container" \
+            -e MARIADB_ROOT_PASSWORD="$root_password" \
+            -e MARIADB_DATABASE=control_recovery \
+            mariadb:11 >/dev/null
+          for attempt in $(seq 1 60); do
+            if docker exec "$container" mariadb-admin ping -uroot -p"$root_password" --silent >/dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 60 ]; then echo 'Ephemere MariaDB startet nicht.' >&2; exit 1; fi
+            sleep 1
+          done
+
+          docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
+          before="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
+            -e "SELECT CONCAT(\`key\`,'=',value) FROM control_metadata WHERE \`key\` IN ('auth_mode','auth_cutover_lock') ORDER BY \`key\`;" | tr -d '\r')"
+          printf '%s\n' "$before" | grep -Fxq 'auth_cutover_lock=OPEN'
+          printf '%s\n' "$before" | grep -Fxq 'auth_mode=PARALLEL'
+
+          docker exec "$container" mariadb -uroot -p"$root_password" control_recovery \
+            -e "UPDATE control_metadata SET value='LOCKED' WHERE \`key\`='auth_cutover_lock';"
+          locked="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
+            -e "SELECT value FROM control_metadata WHERE \`key\`='auth_cutover_lock';" | tr -d '\r')"
+          test "$locked" = LOCKED
+
+          docker exec -i "$container" mariadb -uroot -p"$root_password" control_recovery < "$temp_dir/control.sql"
+          after="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
+            -e "SELECT CONCAT(\`key\`,'=',value) FROM control_metadata WHERE \`key\` IN ('auth_mode','auth_cutover_lock') ORDER BY \`key\`;" | tr -d '\r')"
+          test "$after" = "$before"
+          table_count="$(docker exec "$container" mariadb -N -B -uroot -p"$root_password" control_recovery \
+            -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='control_recovery' AND table_type='BASE TABLE';" | tr -d '\r')"
+          expected_table_count="$(jq -er '.expected_tables | length' "$temp_dir/manifest.json")"
+          test "$table_count" = "$expected_table_count"
+
+          jq -n \
+            --arg restore_point_id "$restore_id" \
+            --arg backup_sha256 "$actual_sha" \
+            --argjson backup_bytes "$actual_bytes" \
+            '{ok:true,restore_point_id:$restore_point_id,backup_sha256:$backup_sha256,backup_bytes:$backup_bytes,
+              isolated_database:"ephemeral-github-mariadb",initial_restore:true,
+              fault_injected:"auth_cutover_lock=LOCKED",rollback_restored_auth_state:"PARALLEL/OPEN",
+              expected_tables_restored:true,staging_database_touched:false}'
 
       - name: Migrate legacy accounts 1:1 on staging
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.migrate_accounts }}
