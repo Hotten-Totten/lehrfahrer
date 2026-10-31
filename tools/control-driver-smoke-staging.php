@@ -76,7 +76,7 @@ function lehrfahrer_driver_smoke_company(PDO $pdo): array {
 }
 
 if (getenv('LEHRFAHRER_DRIVER_SMOKE_RUN') === '1') {
-    if (PHP_SAPI !== 'cli' || isset($_SERVER['REQUEST_METHOD'])
+    if (!in_array(PHP_SAPI, ['cli', 'cgi-fcgi'], true) || isset($_SERVER['REQUEST_METHOD'])
         || lehrfahrer_environment() !== 'staging' || lehrfahrer_control_database_driver() !== 'mysql') exit(2);
     $action = (string)getenv('LEHRFAHRER_DRIVER_SMOKE_ACTION');
     if (!in_array($action, ['inspect', 'provision'], true)) exit(2);
