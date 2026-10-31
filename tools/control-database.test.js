@@ -153,6 +153,12 @@ test('Schema-Migration ist wiederholt idempotent', () => {
   }
 });
 
+test('Staging-Smoke erwartet auch die additiven MFA-Tabellen', () => {
+  const smoke = fs.readFileSync(path.join(projectRoot, 'tools', 'staging-smoke.php'), 'utf8');
+  assert.match(smoke, /'account_passkeys'/);
+  assert.match(smoke, /'account_mfa_pending'/);
+});
+
 test('Gesellschaften können angelegt und eindeutig gelesen werden', () => {
   assert.equal(fixture.companyA.slug, 'betrieb-a');
   assert.equal(fixture.companyA.name, 'Betrieb A');

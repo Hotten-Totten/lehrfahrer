@@ -108,6 +108,7 @@ try {
         'platform_capabilities', 'platform_role_capabilities', 'account_platform_roles',
         'sysop_assignment', 'account_sessions', 'account_activation_tokens',
         'account_user_number_allocator', 'account_user_numbers',
+        'account_passkeys', 'account_mfa_pending',
     ];
     $tables = $pdo->query(
         'SELECT table_name, engine, table_collation
