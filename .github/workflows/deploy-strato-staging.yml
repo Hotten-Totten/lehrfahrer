@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      verify_control_db_recovery:
+        description: Restore the fresh Control-DB backup into an isolated temporary DB and verify rollback recovery
+        required: true
+        default: false
+        type: boolean
       migrate_accounts:
         description: Run the approved one-time staging account 1:1 migration after a private restore point
         required: true
@@ -109,6 +114,7 @@ jobs:
             tools/control-account-preflight.test.js \
             tools/account-cutover-preflight.test.js \
             tools/auth-cutover-race.test.js \
+            tools/control-db-recovery-drill.test.js \
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
             tools/account-login-ui.test.js \
@@ -446,6 +452,7 @@ jobs:
             tools/stamp-cottbus-source-sha-staging.php \
             tools/prepare-cottbus-gtfs-work-staging.php \
             tools/_control-db-restore-point.php \
+            tools/control-db-recovery-drill.php \
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
             tools/control-account-migrate.php \
@@ -498,6 +505,7 @@ jobs:
             "$private_root/stamp-cottbus-source-sha-staging.php" \
             "$private_root/prepare-cottbus-gtfs-work-staging.php" \
             "$private_root/_control-db-restore-point.php" \
+            "$private_root/control-db-recovery-drill.php" \
             "$private_root/control-account-preflight.php" \
             "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
@@ -1642,7 +1650,7 @@ jobs:
           REMOTE_SCRIPT
 
       - name: Create private Control-DB restore point
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.migrate_accounts) }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.migrate_accounts) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -1811,6 +1819,53 @@ jobs:
           chmod 600 "$result"
           cat "$result"
           rm -f -- "$runner" "$result"
+          REMOTE_SCRIPT
+
+      - name: Verify Control-DB recovery drill in isolated database
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_control_db_recovery }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          REMOTE="$STRATO_USER@$STRATO_HOST"
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            SSH_BASE+=(-i ~/.ssh/id_rsa)
+            SSH_RUN=("${SSH_BASE[@]}")
+          else
+            SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
+          fi
+          "${SSH_RUN[@]}" "$REMOTE" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          staging_target="$1"
+          staging_private="$2"
+          live_target="${3#/}"
+          webroot="$(cd "./$staging_target" && pwd -P)"
+          private_root="$(cd "./$staging_private" && pwd -P)"
+          if [ -z "$live_target" ] || [ "$live_target" = "." ]; then
+            live_webroot="$(pwd -P)"
+          else
+            live_webroot="$(cd "./$live_target" && pwd -P)"
+          fi
+          test "$webroot" != "$live_webroot"
+          case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
+          test -f "$private_root/control-db-recovery-drill.php"
+          test "$(stat -c '%a' "$private_root/control-db-recovery-drill.php")" = 600
+          LEHRFAHRER_ENV=staging \
+          LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_PRIVATE_DATA_DIR="$private_root" \
+          LEHRFAHRER_RECOVERY_DRILL_RUN=1 \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-db-recovery-drill.php"
           REMOTE_SCRIPT
 
       - name: Migrate legacy accounts 1:1 on staging
