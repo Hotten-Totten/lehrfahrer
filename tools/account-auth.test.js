@@ -165,3 +165,136 @@ $revoked=lehrfahrer_account_current_session($pdo,false)===null;
 echo json_encode(compact('idle','absolute','revoked'), JSON_THROW_ON_ERROR);`);
   assert.deepEqual(data, { idle: true, absolute: true, revoked: true });
 });
+
+test('Gesellschaftswechsel A → B → A rotiert Sessions und verwirft alte Tenant-Rechte', () => {
+  const data = fixture(String.raw`
+$pending=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$pending['token'];
+$selected=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$pending['csrf']);
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$selected['token'];
+$before=lehrfahrer_account_public_session($pdo,lehrfahrer_account_current_session($pdo,false));
+$switched=lehrfahrer_account_rotate_to_membership($pdo,$membershipExtra,$selected['csrf'],'switch');
+$oldTokenHash=lehrfahrer_auth_token_hash($selected['token']);
+$query=$pdo->prepare('SELECT revoked_at FROM account_sessions WHERE session_token_hash=?');
+$query->execute([$oldTokenHash]);
+$oldRevoked=$query->fetchColumn()!==null;
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$selected['token'];
+$oldRejected=lehrfahrer_account_current_session($pdo,false)===null;
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$switched['token'];
+$atB=lehrfahrer_account_public_session($pdo,lehrfahrer_account_current_session($pdo,false));
+$back=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$switched['csrf'],'switch');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$back['token'];
+$atA=lehrfahrer_account_public_session($pdo,lehrfahrer_account_current_session($pdo,false));
+echo json_encode(['beforeAdmin'=>in_array('users.manage',$before['tenantCapabilities'],true),
+  'atBAdmin'=>in_array('users.manage',$atB['tenantCapabilities'],true),
+  'backAdmin'=>in_array('users.manage',$atA['tenantCapabilities'],true),
+  'memberB'=>$atB['membershipId']===$membershipExtra,'memberA'=>$atA['membershipId']===$membershipA,
+  'oldRevoked'=>$oldRevoked,'oldRejected'=>$oldRejected,'newCsrf'=>$switched['csrf']!==$selected['csrf'],
+  'newToken'=>$switched['token']!==$selected['token'],
+  'platformUnchanged'=>$before['platformCapabilities']===$atB['platformCapabilities']
+    && $atB['platformCapabilities']===$atA['platformCapabilities'],
+  'switchEvent'=>$switched['contextEvent']['action']==='switch'
+    && $switched['contextEvent']['fromMembershipId']===$membershipA
+    && $switched['contextEvent']['toMembershipId']===$membershipExtra], JSON_THROW_ON_ERROR);`, String.raw`
+$membershipExtra=lehrfahrer_control_id('mem');
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at) VALUES (?,?,?,'active',?,?)")->execute([$membershipExtra,$accountA,$companyB['id'],gmdate('c'),gmdate('c')]);
+$roleB=$pdo->query('SELECT role_id FROM membership_roles WHERE membership_id=' . $pdo->quote($membershipB))->fetchColumn();
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$membershipExtra,$roleB]);`);
+  assert.deepEqual(data, { beforeAdmin: false, atBAdmin: true, backAdmin: false,
+    memberB: true, memberA: true, oldRevoked: true, oldRejected: true, newCsrf: true, newToken: true,
+    platformUnchanged: true, switchEvent: true });
+});
+
+test('Wechsel verlangt zwei aktive eigene Memberships und korrektes CSRF', () => {
+  const data = fixture(String.raw`
+$single=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$single['token'];
+$foreign=lehrfahrer_account_rotate_to_membership($pdo,$membershipB,$single['csrf'],'switch')===null;
+$same=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$single['csrf'],'switch')===null;
+$missingCsrf=lehrfahrer_account_rotate_to_membership($pdo,$membershipB,'','switch')===null;
+$wrongCsrf=lehrfahrer_account_rotate_to_membership($pdo,$membershipB,'wrong','switch')===null;
+$sessionStillValid=lehrfahrer_account_current_session($pdo,false)!==null;
+echo json_encode(compact('foreign','same','missingCsrf','wrongCsrf','sessionStillValid'), JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { foreign: true, same: true, missingCsrf: true,
+    wrongCsrf: true, sessionStillValid: true });
+});
+
+test('Mitgliedschafts- und Gesellschaftsdeaktivierung entziehen laufender Session sofort den Kontext', () => {
+  const data = fixture(String.raw`
+$first=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$first['token'];
+$pdo->prepare("UPDATE account_memberships SET status='inactive' WHERE id=?")->execute([$membershipA]);
+$membershipRevoked=lehrfahrer_account_current_session($pdo,false)===null;
+$pdo->prepare("UPDATE account_memberships SET status='active' WHERE id=?")->execute([$membershipA]);
+$second=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$second['token'];
+$pdo->prepare("UPDATE companies SET status='inactive' WHERE id=?")->execute([$companyA['id']]);
+$companyRevoked=lehrfahrer_account_current_session($pdo,false)===null;
+echo json_encode(compact('membershipRevoked','companyRevoked'), JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { membershipRevoked: true, companyRevoked: true });
+});
+
+test('Angebotsliste enthält nur eigene aktive Memberships aktiver Gesellschaften', () => {
+  const data = fixture(String.raw`
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+$session=lehrfahrer_account_current_session($pdo,false);
+$list=lehrfahrer_account_available_memberships($pdo,$session);
+echo json_encode(['pending'=>$session['context_type'],'count'=>count($list),
+  'own'=>count(array_filter($list,fn($m)=>$m['id']===$membershipA || $m['id']===$membershipExtra))===2,
+  'foreignMissing'=>count(array_filter($list,fn($m)=>$m['id']===$membershipB))===0,
+  'inactiveMissing'=>count(array_filter($list,fn($m)=>$m['id']===$membershipInactive))===0,
+  'companyInactiveMissing'=>count(array_filter($list,fn($m)=>$m['id']===$membershipCompanyInactive))===0,
+  'minimalFields'=>array_keys($list[0])===['id','company_id','slug','name']], JSON_THROW_ON_ERROR);`, String.raw`
+$companyC=$companies->create(['slug'=>'phase-c','name'=>'C','status'=>'active','license_status'=>'active']);
+$companyD=$companies->create(['slug'=>'phase-d','name'=>'D','status'=>'inactive','license_status'=>'active']);
+$membershipExtra=lehrfahrer_control_id('mem');
+$membershipInactive=lehrfahrer_control_id('mem');
+$membershipCompanyInactive=lehrfahrer_control_id('mem');
+$insert=$pdo->prepare('INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?)');
+$insert->execute([$membershipExtra,$accountA,$companyB['id'],'active',gmdate('c'),gmdate('c')]);
+$insert->execute([$membershipInactive,$accountA,$companyC['id'],'inactive',gmdate('c'),gmdate('c')]);
+$insert->execute([$membershipCompanyInactive,$accountA,$companyD['id'],'active',gmdate('c'),gmdate('c')]);`);
+  assert.deepEqual(data, { pending: 'PENDING', count: 2, own: true, foreignMissing: true,
+    inactiveMissing: true, companyInactiveMissing: true, minimalFields: true });
+});
+
+test('Kontextwechsel lehnt fremde, inaktive und Gesellschafts-inaktive Ziele ab', () => {
+  const data = fixture(String.raw`
+$pending=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$pending['token'];
+$selected=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$pending['csrf']);
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$selected['token'];
+$foreign=lehrfahrer_account_rotate_to_membership($pdo,$membershipB,$selected['csrf'],'switch')===null;
+$inactive=lehrfahrer_account_rotate_to_membership($pdo,$membershipInactive,$selected['csrf'],'switch')===null;
+$inactiveCompany=lehrfahrer_account_rotate_to_membership($pdo,$membershipCompanyInactive,$selected['csrf'],'switch')===null;
+$sameSession=lehrfahrer_account_current_session($pdo,false)['membership_id']===$membershipA;
+echo json_encode(compact('foreign','inactive','inactiveCompany','sameSession'), JSON_THROW_ON_ERROR);`, String.raw`
+$companyC=$companies->create(['slug'=>'phase-c','name'=>'C','status'=>'active','license_status'=>'active']);
+$companyD=$companies->create(['slug'=>'phase-d','name'=>'D','status'=>'inactive','license_status'=>'active']);
+$membershipExtra=lehrfahrer_control_id('mem');
+$membershipInactive=lehrfahrer_control_id('mem');
+$membershipCompanyInactive=lehrfahrer_control_id('mem');
+$insert=$pdo->prepare('INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at) VALUES (?,?,?,?,?,?)');
+$insert->execute([$membershipExtra,$accountA,$companyB['id'],'active',gmdate('c'),gmdate('c')]);
+$insert->execute([$membershipInactive,$accountA,$companyC['id'],'inactive',gmdate('c'),gmdate('c')]);
+$insert->execute([$membershipCompanyInactive,$accountA,$companyD['id'],'active',gmdate('c'),gmdate('c')]);`);
+  assert.deepEqual(data, { foreign: true, inactive: true, inactiveCompany: true, sameSession: true });
+});
+
+test('abgelaufene und widerrufene Auswahl-Sessions können keinen Kontext mehr erzeugen', () => {
+  const data = fixture(String.raw`
+$first=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$first['token'];
+$pdo->prepare('UPDATE account_sessions SET idle_expires_at=? WHERE session_token_hash=?')->execute([gmdate('c',time()-1),lehrfahrer_auth_token_hash($first['token'])]);
+$expired=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$first['csrf'])===null;
+$second=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$second['token'];
+$pdo->prepare('UPDATE account_sessions SET revoked_at=? WHERE session_token_hash=?')->execute([gmdate('c'),lehrfahrer_auth_token_hash($second['token'])]);
+$revoked=lehrfahrer_account_rotate_to_membership($pdo,$membershipA,$second['csrf'])===null;
+$tenantSessions=(int)$pdo->query("SELECT COUNT(*) FROM account_sessions WHERE context_type='TENANT'")->fetchColumn();
+echo json_encode(compact('expired','revoked','tenantSessions'), JSON_THROW_ON_ERROR);`, String.raw`
+$membershipExtra=lehrfahrer_control_id('mem');
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at) VALUES (?,?,?,'active',?,?)")->execute([$membershipExtra,$accountA,$companyB['id'],gmdate('c'),gmdate('c')]);`);
+  assert.deepEqual(data, { expired: true, revoked: true, tenantSessions: 0 });
+});

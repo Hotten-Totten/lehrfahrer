@@ -184,16 +184,32 @@ function lehrfahrer_account_public_session(PDO $pdo, array $session): array {
         'csrfToken' => lehrfahrer_auth_csrf_token((string)$session['_token'])];
 }
 
+/** Only the authenticated account's currently active tenant memberships are offered. */
+function lehrfahrer_account_available_memberships(PDO $pdo, array $session): ?array {
+    if (!in_array($session['context_type'], ['PENDING', 'TENANT'], true)) return null;
+    return lehrfahrer_account_memberships($pdo, (string)$session['account_id']);
+}
+
 function lehrfahrer_account_rotate_to_membership(PDO $pdo, string $membershipId,
-    string $csrf): ?array {
+    string $csrf, string $action = 'select'): ?array {
+    if (!in_array($action, ['select', 'switch'], true)) throw new InvalidArgumentException('Ungültige Kontextaktion.');
+    if (lehrfahrer_control_driver($pdo) === 'mysql') {
+        $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+    }
     $pdo->beginTransaction();
     try {
         $session = lehrfahrer_account_current_session($pdo, false, true);
-        if ($session === null || $session['context_type'] !== 'PENDING'
+        $requiredContext = $action === 'select' ? 'PENDING' : 'TENANT';
+        if ($session === null || $session['context_type'] !== $requiredContext
             || $csrf === '' || !hash_equals((string)$session['csrf_token_hash'], lehrfahrer_auth_token_hash($csrf))) {
             $pdo->rollBack(); return null;
         }
-        $matches = array_values(array_filter(lehrfahrer_account_memberships($pdo, (string)$session['account_id']),
+        $available = lehrfahrer_account_memberships($pdo, (string)$session['account_id']);
+        if ($action === 'switch' && (count($available) < 2
+            || $membershipId === (string)$session['membership_id'])) {
+            $pdo->rollBack(); return null;
+        }
+        $matches = array_values(array_filter($available,
             static fn(array $item): bool => (string)$item['id'] === $membershipId));
         if (count($matches) !== 1) { $pdo->rollBack(); return null; }
         $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
@@ -203,7 +219,10 @@ function lehrfahrer_account_rotate_to_membership(PDO $pdo, string $membershipId,
         $created = lehrfahrer_account_create_session($pdo, (string)$session['account_id'],
             'TENANT', $membershipId, $session['device_label']);
         $pdo->commit();
-        return $created;
+        return $created + ['contextEvent' => ['action' => $action,
+            'accountId' => (string)$session['account_id'],
+            'fromMembershipId' => $action === 'switch' ? (string)$session['membership_id'] : null,
+            'toMembershipId' => $membershipId]];
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $error;

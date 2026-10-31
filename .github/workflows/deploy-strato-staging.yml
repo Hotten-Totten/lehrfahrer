@@ -1261,7 +1261,22 @@ jobs:
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=me" \
             | jq -e '.ok == true and .context == "TENANT"' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=memberships" \
+            | jq -e '.ok == true and (.memberships | length) == 1 and .currentMembershipId == .memberships[0].id' >/dev/null
           new_csrf="$(jq -r '.csrfToken' /tmp/parallel-account-result.json)"
+          membership_id="$(jq -r '.membershipId' /tmp/parallel-account-result.json)"
+          jq -n --arg membershipId "$membership_id" '{membershipId: $membershipId}' \
+            > /tmp/parallel-account-switch.json
+          switch_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/parallel-auth.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $new_csrf" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/parallel-account-switch.json \
+            "$origin/api/auth/account_test.php?action=switch")"
+          test "$switch_status" = 403
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=me" \
+            | jq -e '.ok == true and .context == "TENANT"' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies -c /tmp/parallel-auth.cookies \
             -H "Origin: $origin" -H "X-CSRF-Token: $new_csrf" -X POST \
