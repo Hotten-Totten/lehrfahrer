@@ -107,6 +107,7 @@ jobs:
             tools/control-phase2-schema.test.js \
             tools/control-account-preflight.test.js \
             tools/control-account-migrate.test.js \
+            tools/account-auth.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
             tools/legacy-auth-observation.test.js \
@@ -1203,6 +1204,81 @@ jobs:
           logged_out_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/staging.cookies "$origin/")"
           test "$logged_out_status" = 302
+
+      - name: Verify parallel staging account authentication
+        shell: bash
+        env:
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/parallel-account-*.json /tmp/parallel-old-*.json /tmp/parallel-auth.cookies' EXIT
+          origin='https://staging.lehrfahrer.de'
+          jq -n --arg password "$ADMIN_PASSWORD" '{
+            company: "lehrfahrer-test", login: "staging-admin", password: $password
+          }' > /tmp/parallel-old-login.json
+          jq -n --arg password "$ADMIN_PASSWORD" '{
+            login: "staging-admin", password: $password
+          }' > /tmp/parallel-account-login.json
+          jq -n --arg password "$ADMIN_PASSWORD" '{
+            login: "staging-admin", password: $password, company: "lehrfahrer-test"
+          }' > /tmp/parallel-account-spoof.json
+          spoof_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/parallel-account-spoof.json \
+            "$origin/api/auth/account_test.php?action=login")"
+          test "$spoof_status" = 400
+          jq -n '{login: "staging-admin", password: "invalid-password"}' > /tmp/parallel-account-wrong.json
+          jq -n '{login: "unknown-account", password: "invalid-password"}' > /tmp/parallel-account-unknown.json
+          for case_name in wrong unknown; do
+            status="$(curl --silent --show-error --output "/tmp/parallel-account-$case_name-result.json" \
+              --write-out '%{http_code}' -u "$BASIC_USER:$BASIC_PASSWORD" \
+              -H "Origin: $origin" -H 'Content-Type: application/json' \
+              --data-binary "@/tmp/parallel-account-$case_name.json" \
+              "$origin/api/auth/account_test.php?action=login")"
+            test "$status" = 401
+          done
+          cmp /tmp/parallel-account-wrong-result.json /tmp/parallel-account-unknown-result.json
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/parallel-auth.cookies --data-binary @/tmp/parallel-old-login.json \
+            "$origin/api/auth/login.php" > /tmp/parallel-old-result.json
+          jq -e '.ok == true' /tmp/parallel-old-result.json >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -b /tmp/parallel-auth.cookies -c /tmp/parallel-auth.cookies \
+            --data-binary @/tmp/parallel-account-login.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/parallel-account-result.json
+          jq -e '.ok == true and .context == "TENANT" and (.tenantCapabilities | index("routes.read")) and .platformCapabilities == []' \
+            /tmp/parallel-account-result.json >/dev/null
+          grep -q '__Host-lehrfahrer_session' /tmp/parallel-auth.cookies
+          grep -q '__Host-lehrfahrer_account_test' /tmp/parallel-auth.cookies
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies "$origin/api/auth/me.php" \
+            | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies "$origin/api/auth/account_test.php?action=me" \
+            | jq -e '.ok == true and .context == "TENANT"' >/dev/null
+          new_csrf="$(jq -r '.csrfToken' /tmp/parallel-account-result.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies -c /tmp/parallel-auth.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $new_csrf" -X POST \
+            "$origin/api/auth/account_test.php?action=logout" | jq -e '.ok == true' >/dev/null
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies "$origin/api/auth/me.php" \
+            | jq -e '.ok == true' >/dev/null
+          old_csrf="$(jq -r '.csrfToken' /tmp/parallel-old-result.json)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/parallel-auth.cookies -c /tmp/parallel-auth.cookies \
+            -H "Origin: $origin" -H "X-CSRF-Token: $old_csrf" -X POST \
+            "$origin/api/auth/logout.php" | jq -e '.ok == true' >/dev/null
+          rm -f /tmp/parallel-old-login.json /tmp/parallel-account-login.json /tmp/parallel-account-spoof.json \
+            /tmp/parallel-account-wrong.json /tmp/parallel-account-unknown.json \
+            /tmp/parallel-account-wrong-result.json /tmp/parallel-account-unknown-result.json \
+            /tmp/parallel-old-result.json /tmp/parallel-account-result.json /tmp/parallel-auth.cookies
+          echo 'PARALLEL_ACCOUNT_AUTH=OK'
 
       - name: Register missing Cottbus city without changing existing routes
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_cottbus_city }}
