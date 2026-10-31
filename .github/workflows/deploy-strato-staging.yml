@@ -1125,7 +1125,7 @@ jobs:
           fi
           test "$webroot" != "$live_webroot"
           case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
-          report="$(LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
+          report="$(LEHRFAHRER_ENV=staging LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/control-account-cutover-preflight.php")"
           printf '%s\n' "$report"
