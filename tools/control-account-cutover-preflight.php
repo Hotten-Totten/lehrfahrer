@@ -230,7 +230,7 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
         'auth' => $auth, 'findings' => $findings];
 }
 
-if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+if (getenv('LEHRFAHRER_CUTOVER_PREFLIGHT_RUN') === '1') {
     if (PHP_SAPI !== 'cli' || lehrfahrer_environment() !== 'staging') exit(2);
     try {
         $configuration = lehrfahrer_control_mysql_configuration();

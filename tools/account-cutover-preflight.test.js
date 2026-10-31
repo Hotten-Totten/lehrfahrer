@@ -109,3 +109,15 @@ try {
   assert.equal(result.duplicateRejected, true);
   assert.equal(result.status, 'PASS');
 });
+
+test('CLI-Preflight verlangt expliziten Ausführungsmarker und staging-Kontext', () => {
+  const script = path.join(root, 'tools/control-account-cutover-preflight.php');
+  const environment = { ...process.env, LEHRFAHRER_ENV: 'dev',
+    LEHRFAHRER_CUTOVER_PREFLIGHT_RUN: '' };
+  const passive = spawnSync(php, ['-f', script], { encoding: 'utf8', env: environment });
+  assert.equal(passive.status, 0);
+  assert.equal(passive.stdout, '');
+  const guarded = spawnSync(php, ['-f', script], { encoding: 'utf8',
+    env: { ...environment, LEHRFAHRER_CUTOVER_PREFLIGHT_RUN: '1' } });
+  assert.equal(guarded.status, 2);
+});

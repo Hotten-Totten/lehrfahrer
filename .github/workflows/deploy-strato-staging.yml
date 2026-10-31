@@ -1125,9 +1125,15 @@ jobs:
           fi
           test "$webroot" != "$live_webroot"
           case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
-          LEHRFAHRER_APP_ROOT="$webroot" \
+          report="$(LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
-              -f "$private_root/control-account-cutover-preflight.php"
+              -f "$private_root/control-account-cutover-preflight.php")"
+          printf '%s\n' "$report"
+          printf '%s\n' "$report" | php -r '
+            $r = json_decode(stream_get_contents(STDIN), true);
+            if (!is_array($r) || !in_array($r["status"] ?? null, ["PASS", "WARNING"], true)
+                || ($r["auth"] ?? null) !== ["mode" => "PARALLEL", "lock" => "OPEN"]) exit(1);
+          '
           REMOTE_SCRIPT
 
       - name: Staging HTTP, runtime, login and session smoke test
