@@ -73,6 +73,179 @@ echo json_encode(['context'=>$public['context'],'member'=>$public['membershipId'
     idle: 1800, absolute: 43200 });
 });
 
+test('Authorization-Brücke nutzt Legacy allein und Account allein aus derselben Identität', () => {
+  const legacy = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$created=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$created['sessionToken'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'company'=>$auth['company_id']===$companyB['id'],
+  'admin'=>in_array('ADMIN',$auth['roles'],true),'read'=>lehrfahrer_auth_has_capability($auth,'routes.read')],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(legacy, { source: 'LEGACY', company: true, admin: true, read: true });
+  const account = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$created=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$created['token'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'company'=>$auth['company_id']===$companyA['id'],
+  'driver'=>in_array('FAHRER',$auth['roles'],true),'read'=>lehrfahrer_auth_has_capability($auth,'routes.read'),
+  'write'=>lehrfahrer_auth_has_capability($auth,'routes.write')],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(account, { source: 'ACCOUNT', company: true, driver: true, read: true, write: false });
+});
+
+test('Bei zwei Cookies hat Account Vorrang ohne Rollen- oder Tenant-Rechteunion', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$_GET['company_id']=$companyB['id'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'companyA'=>$auth['company_id']===$companyA['id'],
+  'admin'=>in_array('ADMIN',$auth['roles'],true),'write'=>lehrfahrer_auth_has_capability($auth,'routes.write'),
+  'personal'=>lehrfahrer_auth_has_capability($auth,'drivers.manage')],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { source: 'ACCOUNT', companyA: true, admin: false, write: false, personal: false });
+  const reverse = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userA,$companyA);
+$new=lehrfahrer_account_login($pdo,'beta','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'companyB'=>$auth['company_id']===$companyB['id'],
+  'admin'=>in_array('ADMIN',$auth['roles'],true),'write'=>lehrfahrer_auth_has_capability($auth,'routes.write')],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(reverse, { source: 'ACCOUNT', companyB: true, admin: true, write: true });
+});
+
+test('Ungültige Account-Session fällt nur auf eine gültige Legacy-Session zurück', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]='invalid';
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'company'=>$auth['company_id']===$companyB['id']],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { source: 'LEGACY', company: true });
+});
+
+test('Production ignoriert parallelen Account-Cookie vollständig', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=production');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+echo json_encode(['source'=>$auth['auth_source'],'companyB'=>$auth['company_id']===$companyB['id']],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { source: 'LEGACY', companyB: true });
+});
+
+test('Pending-Account darf Legacy-Rechte nicht übernehmen', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_create_session($pdo,$accountA,'PENDING',null);
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+lehrfahrer_api_resolve_session($pdo);`);
+  assert.equal(data.ok, false);
+  assert.match(data.error, /Aktive Gesellschaft/);
+});
+
+test('Deaktivierte Membership oder Gesellschaft entzieht Account-Tenantzugriff', () => {
+  for (const change of [
+    "$pdo->prepare('UPDATE account_memberships SET status=? WHERE id=?')->execute(['inactive',$membershipA]);",
+    "$pdo->prepare('UPDATE companies SET status=? WHERE id=?')->execute(['inactive',$companyA['id']]);"
+  ]) {
+    const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+${change}
+echo json_encode(['resolved'=>lehrfahrer_api_resolve_session($pdo) !== null],JSON_THROW_ON_ERROR);`);
+    assert.deepEqual(data, { resolved: false });
+  }
+});
+
+test('CSRF-Prüfung verwendet den Hash der ausgewählten Session', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$_SERVER['HTTP_X_CSRF_TOKEN']=$new['csrf'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+lehrfahrer_auth_require_csrf($auth['session']);
+echo json_encode(['source'=>$auth['auth_source'],'accepted'=>true],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { source: 'ACCOUNT', accepted: true });
+  const rejected = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$_SERVER['HTTP_X_CSRF_TOKEN']=$old['csrfToken'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+lehrfahrer_auth_require_csrf($auth['session']);
+echo json_encode(['accepted'=>true],JSON_THROW_ON_ERROR);`);
+  assert.equal(rejected.ok, false);
+  const reverse = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+$_SERVER['HTTP_X_CSRF_TOKEN']=$new['csrf'];
+$auth=lehrfahrer_api_resolve_session($pdo);
+lehrfahrer_auth_require_csrf($auth['session']);
+echo json_encode(['accepted'=>true],JSON_THROW_ON_ERROR);`);
+  assert.equal(reverse.ok, false);
+});
+
+test('Platform-Rechte allein erlauben keinen Tenantzugang', () => {
+  const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$old=lehrfahrer_auth_create_session($pdo,$userB,$companyB);
+$_COOKIE[LEHRFAHRER_SESSION_COOKIE]=$old['sessionToken'];
+lehrfahrer_api_resolve_session($pdo);`, String.raw`
+$pdo->prepare("UPDATE account_memberships SET status='inactive' WHERE id=?")->execute([$membershipA]);
+$pdo->prepare('INSERT INTO account_platform_roles (account_id,role_code,assigned_at) VALUES (?,?,?)')->execute([$accountA,'COSYSOP',gmdate('c')]);`);
+  assert.equal(data.ok, false);
+  assert.match(data.error, /Aktive Gesellschaft/);
+});
+
+test('Abgelaufene und widerrufene Account-Sessions liefern keine Tenantrechte', () => {
+  for (const update of [
+    "UPDATE account_sessions SET idle_expires_at='2000-01-01T00:00:00Z'",
+    "UPDATE account_sessions SET absolute_expires_at='2000-01-01T00:00:00Z'",
+    "UPDATE account_sessions SET revoked_at='2000-01-01T00:00:00Z'"
+  ]) {
+    const data = fixture(String.raw`
+putenv('LEHRFAHRER_ENV=staging');
+require ${quote(path.join(root, 'api', '_api_authorization.php'))};
+$new=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$new['token'];
+$pdo->exec(${quote(update)});
+echo json_encode(['resolved'=>lehrfahrer_api_resolve_session($pdo) !== null],JSON_THROW_ON_ERROR);`);
+    assert.deepEqual(data, { resolved: false });
+  }
+});
+
 test('falsches Passwort, unbekannter, inaktiver, gesperrter und wechselpflichtiger Account scheitern', () => {
   const data = fixture(String.raw`
 $wrong=lehrfahrer_account_login($pdo,'alpha','wrong')===null;

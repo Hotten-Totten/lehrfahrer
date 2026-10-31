@@ -6,7 +6,7 @@ require_once __DIR__ . '/_tenant_storage.php';
 
 function lehrfahrer_route_company_id(array $auth): string {
     if (($auth['mode'] ?? '') === 'session') {
-        return lehrfahrer_tenant_company_id((string)($auth['session']['company_id'] ?? ''));
+        return lehrfahrer_tenant_company_id((string)($auth['company_id'] ?? ''));
     }
     if (($auth['mode'] ?? '') !== 'legacy-token') {
         throw new RuntimeException('Kein autorisierter Gesellschaftskontext.');

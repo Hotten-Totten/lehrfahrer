@@ -384,8 +384,8 @@ test('Apache-Root und direkter Legacy-Einstieg verwenden den serverseitigen Sess
   const gate = fs.readFileSync(path.join(projectRoot, 'index.php'), 'utf8');
   assert.match(apache, /^DirectoryIndex index\.php$/m);
   assert.match(apache, /RewriteRule \^index\\\.html\$ index\.php \[L,NC\]/);
-  assert.match(gate, /lehrfahrer_auth_current_session/);
-  assert.match(gate, /userCapabilities/);
+  assert.match(gate, /lehrfahrer_api_resolve_session/);
+  assert.match(gate, /\$capabilities = \$auth\['capabilities'\]/);
   assert.match(gate, /routes\.read/);
   assert.match(gate, /Location: login\.html/);
   assert.match(gate, /lehrfahrer_auth_csrf_token/);

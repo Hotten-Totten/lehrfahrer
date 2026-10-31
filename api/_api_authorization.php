@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_session_auth.php';
+require_once __DIR__ . '/_account_auth.php';
 require_once __DIR__ . '/_legacy_auth_observation.php';
 
 function lehrfahrer_api_authorization_error(int $status, string $message): never {
@@ -54,9 +55,52 @@ function lehrfahrer_auth_require_capability(array $authContext, string $capabili
 
 function lehrfahrer_api_require_session(): array {
     $pdo = lehrfahrer_control_database();
-    $session = lehrfahrer_auth_require_session($pdo);
+    $context = lehrfahrer_api_resolve_session($pdo);
+    if ($context === null) {
+        lehrfahrer_api_authorization_error(401, 'Anmeldung erforderlich.');
+    }
+    return $context;
+}
+
+/** Resolve one identity. A valid staging account takes precedence over a legacy cookie. */
+function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
+    if (lehrfahrer_environment() === 'staging'
+        && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE)) {
+        $session = lehrfahrer_account_current_session($pdo);
+        if ($session !== null) {
+            if ($session['context_type'] !== 'TENANT') {
+                lehrfahrer_api_authorization_error(403, 'Aktive Gesellschaft erforderlich.');
+            }
+            $membershipId = (string)$session['membership_id'];
+            $membership = $pdo->prepare('SELECT m.company_id FROM account_memberships m
+                JOIN companies c ON c.id = m.company_id
+                WHERE m.id = ? AND m.account_id = ? AND m.status = ? AND c.status = ?');
+            $membership->execute([$membershipId, $session['account_id'], 'active', 'active']);
+            $companies = $membership->fetchAll(PDO::FETCH_COLUMN);
+            if (count($companies) !== 1) {
+                lehrfahrer_api_authorization_error(403, 'Aktive Gesellschaft erforderlich.');
+            }
+            $roles = $pdo->prepare('SELECT DISTINCT r.code FROM membership_roles mr
+                JOIN roles r ON r.id = mr.role_id
+                WHERE mr.membership_id = ? ORDER BY r.code');
+            $roles->execute([$membershipId]);
+            return [
+                'mode' => 'session', 'auth_source' => 'ACCOUNT', 'pdo' => $pdo,
+                'session' => $session, 'company_id' => (string)$companies[0],
+                'account_id' => (string)$session['account_id'],
+                'membership_id' => $membershipId,
+                'roles' => $roles->fetchAll(PDO::FETCH_COLUMN),
+                'capabilities' => lehrfahrer_account_tenant_capabilities($pdo,
+                    (string)$session['account_id'], $membershipId),
+            ];
+        }
+    }
+    if (!array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)) return null;
+    $session = lehrfahrer_auth_current_session($pdo);
+    if ($session === null) return null;
     return [
         'mode' => 'session',
+        'auth_source' => 'LEGACY',
         'pdo' => $pdo,
         'session' => $session,
         'company_id' => (string)$session['company_id'],
@@ -77,7 +121,9 @@ function lehrfahrer_api_authorize(
         lehrfahrer_api_authorization_error(405, 'Methode nicht erlaubt.');
     }
 
-    $sessionCookieSupplied = array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE);
+    $sessionCookieSupplied = array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)
+        || (lehrfahrer_environment() === 'staging'
+            && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE));
     if ($sessionCookieSupplied) {
         $context = lehrfahrer_api_require_session();
         lehrfahrer_auth_require_capability($context, $capability);
@@ -97,6 +143,7 @@ function lehrfahrer_api_authorize(
         );
         $context = [
             'mode' => 'legacy-token',
+            'auth_source' => 'LEGACY_TOKEN',
             'pdo' => null,
             'session' => null,
             'company_id' => null,

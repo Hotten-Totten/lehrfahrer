@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/api/_session_auth.php';
+require_once __DIR__ . '/api/_api_authorization.php';
 
 function lehrfahrer_editor_response(int $status, string $message): never {
     http_response_code($status);
@@ -21,19 +22,15 @@ if (!in_array($method, ['GET', 'HEAD'], true)) {
 
 try {
     $pdo = lehrfahrer_control_database();
-    $session = lehrfahrer_auth_current_session($pdo);
-    if ($session === null) {
-        lehrfahrer_auth_clear_session_cookie();
+    $auth = lehrfahrer_api_resolve_session($pdo);
+    if ($auth === null) {
         header('Cache-Control: no-store, private');
         header('Pragma: no-cache');
         header('Location: login.html', true, 302);
         exit;
     }
 
-    $capabilities = (new LehrfahrerRoleRepository($pdo))->userCapabilities(
-        (string)$session['company_id'],
-        (string)$session['user_id']
-    );
+    $capabilities = $auth['capabilities'];
     if (!in_array('routes.read', $capabilities, true)) {
         lehrfahrer_editor_response(403, 'Keine Berechtigung für diese Oberfläche.');
     }
@@ -58,7 +55,8 @@ if ($editorHtml === false) {
     lehrfahrer_editor_response(500, 'Oberfläche konnte nicht geladen werden.');
 }
 
-$csrfToken = lehrfahrer_auth_csrf_token((string)$session['_session_token']);
+$csrfToken = lehrfahrer_auth_csrf_token((string)($auth['auth_source'] === 'ACCOUNT'
+    ? $auth['session']['_token'] : $auth['session']['_session_token']));
 $csrfMeta = '<meta name="lehrfahrer-csrf-token" content="'
     . htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
 $editorHtml = str_replace(

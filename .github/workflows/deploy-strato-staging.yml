@@ -1214,7 +1214,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f /tmp/parallel-account-*.json /tmp/parallel-old-*.json /tmp/parallel-auth.cookies' EXIT
+          trap 'rm -f /tmp/parallel-account-*.json /tmp/parallel-old-*.json /tmp/parallel-auth.cookies /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies' EXIT
           origin='https://staging.lehrfahrer.de'
           jq -n --arg password "$ADMIN_PASSWORD" '{
             company: "lehrfahrer-test", login: "staging-admin", password: $password
@@ -1255,6 +1255,15 @@ jobs:
             /tmp/parallel-account-result.json >/dev/null
           grep -q '__Host-lehrfahrer_session' /tmp/parallel-auth.cookies
           grep -q '__Host-lehrfahrer_account_test' /tmp/parallel-auth.cookies
+          grep '__Host-lehrfahrer_account_test' /tmp/parallel-auth.cookies > /tmp/parallel-account-only.cookies
+          grep '__Host-lehrfahrer_session' /tmp/parallel-auth.cookies > /tmp/parallel-legacy-only.cookies
+          for cookie_file in /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies; do
+            editor_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              -u "$BASIC_USER:$BASIC_PASSWORD" -b "$cookie_file" "$origin/")"
+            test "$editor_status" = 200
+            curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+              -b "$cookie_file" "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
+          done
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/parallel-auth.cookies "$origin/api/auth/me.php" \
             | jq -e '.ok == true and .runtime.environment == "staging"' >/dev/null
@@ -1292,7 +1301,8 @@ jobs:
           rm -f /tmp/parallel-old-login.json /tmp/parallel-account-login.json /tmp/parallel-account-spoof.json \
             /tmp/parallel-account-wrong.json /tmp/parallel-account-unknown.json \
             /tmp/parallel-account-wrong-result.json /tmp/parallel-account-unknown-result.json \
-            /tmp/parallel-old-result.json /tmp/parallel-account-result.json /tmp/parallel-auth.cookies
+            /tmp/parallel-old-result.json /tmp/parallel-account-result.json /tmp/parallel-auth.cookies \
+            /tmp/parallel-account-only.cookies /tmp/parallel-legacy-only.cookies
           echo 'PARALLEL_ACCOUNT_AUTH=OK'
 
       - name: Register missing Cottbus city without changing existing routes
