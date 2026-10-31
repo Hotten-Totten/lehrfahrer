@@ -5,6 +5,7 @@ $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__);
 require_once $appRoot . '/api/_control_database.php';
 require_once $appRoot . '/api/_control_repositories.php';
 require_once $appRoot . '/api/_auth_cutover_gate.php';
+require_once __DIR__ . '/control-driver-smoke-staging.php';
 
 /** Read-only check of the already migrated account inventory. No identity values leave this function. */
 function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
@@ -31,18 +32,22 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
         'sysop_assignment', 'sessions', 'user_activation_tokens', 'account_activation_tokens'];
     $counts = [];
     foreach ($tables as $table) $counts[$table] = $count($table);
-    foreach (['users' => 2, 'accounts' => 2, 'account_memberships' => 2,
-        'user_roles' => 2, 'membership_roles' => 2,
+    $smoke = lehrfahrer_driver_smoke_identity($pdo);
+    $smokePresent = $smoke['present'];
+    if ($smokePresent && !$smoke['valid']) $add('BLOCKER', 'DRIVER_SMOKE_IDENTITY');
+    $additional = $smokePresent ? 1 : 0;
+    foreach (['users' => 2, 'accounts' => 2 + $additional, 'account_memberships' => 2 + $additional,
+        'user_roles' => 2, 'membership_roles' => 2 + $additional,
         'platform_roles' => 2, 'platform_capabilities' => 9,
         'platform_role_capabilities' => 16, 'sysop_assignment' => 0,
-        'account_platform_roles' => 0, 'account_user_numbers' => 2,
+        'account_platform_roles' => 0, 'account_user_numbers' => 2 + $additional,
         'account_user_number_allocator' => 1] as $table => $expected) {
         if ($counts[$table] !== $expected) $add('BLOCKER', strtoupper($table) . '_COUNT');
     }
     foreach ([
         'SELECT COUNT(*) FROM users u LEFT JOIN companies c ON c.id = u.company_id WHERE c.id IS NULL',
         'SELECT COUNT(*) FROM user_roles ur LEFT JOIN users u ON u.id = ur.user_id LEFT JOIN roles r ON r.id = ur.role_id WHERE u.id IS NULL OR r.id IS NULL',
-        'SELECT COUNT(*) FROM account_memberships m LEFT JOIN accounts a ON a.id = m.account_id LEFT JOIN companies c ON c.id = m.company_id LEFT JOIN users u ON u.id = m.legacy_user_id WHERE a.id IS NULL OR c.id IS NULL OR u.id IS NULL',
+        'SELECT COUNT(*) FROM account_memberships m LEFT JOIN accounts a ON a.id = m.account_id LEFT JOIN companies c ON c.id = m.company_id LEFT JOIN users u ON u.id = m.legacy_user_id WHERE a.id IS NULL OR c.id IS NULL OR (m.legacy_user_id IS NOT NULL AND u.id IS NULL)',
         'SELECT COUNT(*) FROM membership_roles mr LEFT JOIN account_memberships m ON m.id = mr.membership_id LEFT JOIN roles r ON r.id = mr.role_id WHERE m.id IS NULL OR r.id IS NULL',
         'SELECT COUNT(*) FROM sessions s LEFT JOIN users u ON u.id = s.user_id LEFT JOIN companies c ON c.id = s.company_id WHERE u.id IS NULL OR c.id IS NULL',
         'SELECT COUNT(*) FROM account_sessions s LEFT JOIN accounts a ON a.id = s.account_id LEFT JOIN account_memberships m ON m.id = s.membership_id LEFT JOIN companies c ON c.id = s.technical_company_id WHERE a.id IS NULL OR (s.membership_id IS NOT NULL AND m.id IS NULL) OR (s.technical_company_id IS NOT NULL AND c.id IS NULL)',
@@ -120,6 +125,7 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $membersByUser = [];
     foreach ($memberships as $membership) {
         $legacyId = (string)($membership['legacy_user_id'] ?? '');
+        if ($legacyId === '' && $smokePresent && (string)$membership['account_id'] === (string)$smoke['accountId']) continue;
         if ($legacyId === '' || isset($membersByUser[$legacyId])) $add('BLOCKER', 'MEMBERSHIP_DUPLICATE_OR_UNLINKED');
         $membersByUser[$legacyId] = $membership;
         if (!isset($accountsById[(string)$membership['account_id']])) $add('BLOCKER', 'MEMBERSHIP_ACCOUNT_ORPHAN');
@@ -160,9 +166,11 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
         if ($normalized === '' || $normalized !== (string)$account['login_normalized']) $add('BLOCKER', 'LOGIN_NOT_NORMALIZED');
         $normalizedLogins[] = $normalized;
     }
-    if (count($usedAccounts) !== count($accounts) || count($membersByUser) !== count($users)) {
+    if (count($usedAccounts) !== count($accounts) - $additional || count($membersByUser) !== count($users)
+        || ($smokePresent && isset($usedAccounts[(string)$smoke['accountId']]))) {
         $add('BLOCKER', 'ORPHAN_OR_EXTRA_ACCOUNT');
     }
+    if ($smokePresent) $normalizedLogins[] = LEHRFAHRER_DRIVER_SMOKE_LOGIN;
     if (count(array_unique($normalizedLogins)) !== count($normalizedLogins)) $add('BLOCKER', 'LOGIN_COLLISION');
     if (count(array_unique($legacyLogins)) !== count($legacyLogins)) $add('BLOCKER', 'LOGIN_COLLISION');
     if (lehrfahrer_control_driver($pdo) === 'mysql') {
@@ -205,7 +213,12 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $allocator = $pdo->query('SELECT singleton_key, next_number FROM account_user_number_allocator')->fetchAll(PDO::FETCH_ASSOC);
     $next = count($allocator) === 1 ? (int)$allocator[0]['next_number'] : 0;
     if (count($allocator) !== 1 || (int)$allocator[0]['singleton_key'] !== 1
-        || $next !== 103 || $next <= $maxNumber) $add('BLOCKER', 'NUMBER_ALLOCATOR');
+        || $next !== 103 + $additional || $next <= $maxNumber) $add('BLOCKER', 'NUMBER_ALLOCATOR');
+    if (getenv('LEHRFAHRER_CUTOVER_PREFLIGHT_REQUIRE_DRIVER_SMOKE') === '1'
+        && (!$smokePresent || !$smoke['valid']
+            || lehrfahrer_driver_smoke_released_count((string)$smoke['companyId']) < 1)) {
+        $add('BLOCKER', 'NO_AUTHORIZED_RELEASED_DRIVER_ROUTE');
+    }
     $sessions = [];
     $now = time();
     foreach (['legacy' => 'sessions', 'account' => 'account_sessions'] as $kind => $table) {

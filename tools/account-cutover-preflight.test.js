@@ -70,6 +70,59 @@ test('migrierter Parallelbestand besteht lesenden Cutover-Preflight', () => {
   assert.equal(result.counts.membership_roles, 2);
 });
 
+const smokeAccount = String.raw`
+$cottbus=$companies->create(['slug'=>'cottbusverkehr','name'=>'Cottbusverkehr','status'=>'active','license_status'=>'active']);
+$smoke=lehrfahrer_control_id('acc'); $smokeMembership=lehrfahrer_control_id('mem');
+$pdo->prepare('INSERT INTO accounts (id,login_normalized,display_name,password_hash,active,must_change_password,created_at,updated_at)
+ VALUES (?,?,?,?,1,0,?,?)')->execute([$smoke,'staging-driver-smoke','Staging Driver Smoke',password_hash('test-secret-not-for-staging',PASSWORD_DEFAULT),gmdate('c'),gmdate('c')]);
+$pdo->beginTransaction(); lehrfahrer_control_allocate_user_number($pdo,$smoke); $pdo->commit();
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,legacy_user_id,created_at,updated_at)
+ VALUES (?,?,?,'active',NULL,?,?)")->execute([$smokeMembership,$smoke,$cottbus['id'],gmdate('c'),gmdate('c')]);
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$smokeMembership,'role_fahrer']);`;
+
+test('dedizierter Staging-Account mit nur Fahrerrolle bleibt mit Migrationsbestand konsistent', () => {
+  const result = fixture(smokeAccount);
+  assert.equal(result.status, 'PASS', result.codes.join(', '));
+  assert.equal(result.unchanged, true);
+  assert.equal(result.counts.users, 2);
+  assert.equal(result.counts.accounts, 3);
+  assert.equal(result.counts.account_memberships, 3);
+  assert.equal(result.next, 104);
+});
+
+test('zukuenftiger Cutover blockiert ohne autorisierte freigegebene Driver-Route', () => {
+  for (const mutation of ['', smokeAccount]) {
+    const result = fixture(mutation + " putenv('LEHRFAHRER_CUTOVER_PREFLIGHT_REQUIRE_DRIVER_SMOKE=1');");
+    assert.equal(result.status, 'BLOCKER');
+    assert.ok(result.codes.includes('NO_AUTHORIZED_RELEASED_DRIVER_ROUTE'));
+    assert.equal(result.unchanged, true);
+  }
+});
+
+test('zukuenftiger Cutover akzeptiert nur die exakte freigegebene GTFS-savedRoute', () => {
+  const result = fixture(smokeAccount + String.raw`
+require_once ${q(path.join(root, 'api/_tenant_route_storage.php'))};
+require_once ${q(path.join(root, 'api/_gtfs_work_inventory.php'))};
+$routeId='gtfs-route-10'; $variantId='gtfs-variant-1';
+$routeFile=lehrfahrer_route_file($cottbus['id'],'cottbus','Route_01','json','Linie_10','Standard',true);
+file_put_contents($routeFile,json_encode(['stops'=>[],
+ 'routePoints'=>[['lat'=>51.7,'lon'=>14.3],['lat'=>51.71,'lon'=>14.31]],
+ 'meta'=>['gtfsWork'=>['routeId'=>$routeId,'variantId'=>$variantId]]],JSON_THROW_ON_ERROR));
+lehrfahrer_gtfs_work_write_json(lehrfahrer_gtfs_work_inventory_path($cottbus['id']),
+ ['entries'=>[['routeId'=>$routeId,'variantId'=>$variantId,'status'=>'FREIGEGEBEN',
+ 'savedRoute'=>'cottbus/Linie_10/Standard/Route_01.json']]]);
+putenv('LEHRFAHRER_CUTOVER_PREFLIGHT_REQUIRE_DRIVER_SMOKE=1');`);
+  assert.equal(result.status, 'PASS', result.codes.join(', '));
+  assert.equal(result.unchanged, true);
+});
+
+test('zusaetzliche Schreibrolle beim Smoke-Account blockiert Cutover', () => {
+  const result = fixture(smokeAccount + String.raw`
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$smokeMembership,'role_editor']);`);
+  assert.equal(result.status, 'BLOCKER');
+  assert.ok(result.codes.includes('DRIVER_SMOKE_IDENTITY'));
+});
+
 test('ACCOUNT_PRIMARY besteht nur den explizit passenden read-only Postcheck', () => {
   const setMode = "$pdo->prepare('INSERT INTO control_metadata (\"key\",value,updated_at) VALUES (?,?,?)')->execute(['auth_mode','ACCOUNT_PRIMARY',gmdate('c')]);";
   const defaultResult = fixture(setMode);

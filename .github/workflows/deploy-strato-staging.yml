@@ -29,7 +29,17 @@ on:
         default: false
         type: boolean
       diagnose_driver_api:
-        description: P2.4c read-only Driver API checks using a fresh staging account session
+        description: P2.4e read-only Driver API checks using the dedicated staging smoke account
+        required: true
+        default: false
+        type: boolean
+      provision_driver_smoke:
+        description: One-time staging-only Driver smoke account provisioning (no cutover)
+        required: true
+        default: false
+        type: boolean
+      inspect_driver_smoke:
+        description: Read-only check for an existing released Cottbus Driver route (no cutover)
         required: true
         default: false
         type: boolean
@@ -128,6 +138,23 @@ jobs:
             test "${{ inputs.verify_gtfs_routes_v1 }}" != true
             test "${{ inputs.repair_cottbus_city }}" != true
             test "${{ inputs.verify_control_db_recovery }}" != true
+          fi
+          if [ "${{ inputs.provision_driver_smoke }}" = true ]; then
+            test "${{ inputs.perform_account_cutover }}" != true
+            test "${{ inputs.diagnose_account_cutover }}" != true
+            test "${{ inputs.migrate_accounts }}" != true
+            test "${{ inputs.apply_cottbus }}" != true
+            test "${{ inputs.preflight_cottbus }}" != true
+            test "${{ inputs.check_official_cottbus }}" != true
+            test "${{ inputs.stamp_cottbus_source_sha }}" != true
+            test "${{ inputs.verify_gtfs_routes_v1 }}" != true
+            test "${{ inputs.repair_cottbus_city }}" != true
+            test "${{ inputs.verify_control_db_recovery }}" != true
+          fi
+          if [ "${{ inputs.inspect_driver_smoke }}" = true ]; then
+            test "${{ inputs.perform_account_cutover }}" != true
+            test "${{ inputs.migrate_accounts }}" != true
+            test "${{ inputs.apply_cottbus }}" != true
           fi
           if [ "${{ inputs.migrate_accounts }}" = true ]; then
             test "${{ inputs.apply_cottbus }}" != true
@@ -513,6 +540,7 @@ jobs:
             tools/control-account-cutover-staging.php \
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
+            tools/control-driver-smoke-staging.php \
             tools/control-account-migrate.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
@@ -1182,7 +1210,7 @@ jobs:
             SSH_RUN=(sshpass -e "${SSH_BASE[@]}")
           fi
           report="$("${SSH_RUN[@]}" "$REMOTE" \
-            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH'" <<'REMOTE_SCRIPT'
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH' '$LIVE_TARGET_PATH' '${{ inputs.perform_account_cutover }}'" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staging_target="$1"
           staging_private="$2"
@@ -1196,7 +1224,10 @@ jobs:
           fi
           test "$webroot" != "$live_webroot"
           case "$private_root/" in "$webroot/"*|"$live_webroot/"*) exit 31 ;; esac
+          require_smoke=0
+          if [ "$4" = true ]; then require_smoke=1; fi
           report="$(LEHRFAHRER_ENV=staging LEHRFAHRER_CUTOVER_PREFLIGHT_EXPECT_MODE=ANY \
+            LEHRFAHRER_CUTOVER_PREFLIGHT_REQUIRE_DRIVER_SMOKE="$require_smoke" \
             LEHRFAHRER_CUTOVER_PREFLIGHT_RUN=1 LEHRFAHRER_APP_ROOT="$webroot" \
             php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
               -f "$private_root/control-account-cutover-preflight.php")"
@@ -1567,13 +1598,49 @@ jobs:
           test "$post_logout" = 401
           echo 'ACCOUNT_PRIMARY_AUTH=OK'
 
-      - name: Diagnose Driver API with fresh staging account session
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_driver_api && steps.auth_preflight.outputs.mode == 'PARALLEL' }}
+      - name: Inspect released route and optionally provision dedicated staging Driver smoke account
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.inspect_driver_smoke || inputs.provision_driver_smoke) && steps.auth_preflight.outputs.mode == 'PARALLEL' }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          DRIVER_SMOKE_PASSWORD: ${{ secrets.STAGING_DRIVER_SMOKE_PASSWORD }}
+          PROVISION_DRIVER_SMOKE: ${{ inputs.provision_driver_smoke }}
+        run: |
+          set -euo pipefail
+          umask 077
+          remote="$STRATO_USER@$STRATO_HOST"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_base+=(-i ~/.ssh/id_rsa)
+            ssh_run=("${ssh_base[@]}")
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          remote_command="LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT='./$STAGING_TARGET_PATH' LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=inspect php -q -d auto_prepend_file='./$STAGING_PRIVATE_PATH/runtime-env.php' -f './$STAGING_PRIVATE_PATH/control-driver-smoke-staging.php'"
+          inspection="$("${ssh_run[@]}" "$remote" "$remote_command")"
+          printf '%s\n' "$inspection" | jq -e '.ok == true and .releasedRoutes > 0 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
+          echo "DRIVER_SMOKE_INSPECT=PASS released_routes=$(printf '%s\n' "$inspection" | jq -r '.releasedRoutes')"
+          if [ "$PROVISION_DRIVER_SMOKE" != true ]; then exit 0; fi
+          printf '%s\n' "$inspection" | jq -e '.smokeAccountPresent == false' >/dev/null
+          test -n "$DRIVER_SMOKE_PASSWORD"
+          provision_command="LEHRFAHRER_STAGING_DRIVER_SMOKE_PASSWORD=\$(cat) LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT='./$STAGING_TARGET_PATH' LEHRFAHRER_DRIVER_SMOKE_RUN=1 LEHRFAHRER_DRIVER_SMOKE_ACTION=provision php -q -d auto_prepend_file='./$STAGING_PRIVATE_PATH/runtime-env.php' -f './$STAGING_PRIVATE_PATH/control-driver-smoke-staging.php'"
+          result="$(printf '%s' "$DRIVER_SMOKE_PASSWORD" | "${ssh_run[@]}" "$remote" "$provision_command")"
+          printf '%s\n' "$result" | jq -e '.ok == true and .releasedRoutes > 0 and .smokeAccountPresent == true and .smokeAccountValid == true and .userNumber > 100 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
+          echo "DRIVER_SMOKE_PROVISION=PASS user_number=$(printf '%s\n' "$result" | jq -r '.userNumber')"
+
+      - name: Diagnose Driver API with dedicated staging smoke account
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.diagnose_driver_api || inputs.provision_driver_smoke) && steps.auth_preflight.outputs.mode == 'PARALLEL' }}
         shell: bash
         env:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
-          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+          DRIVER_SMOKE_PASSWORD: ${{ secrets.STAGING_DRIVER_SMOKE_PASSWORD }}
         run: |
           set -euo pipefail
           umask 077
@@ -1581,12 +1648,12 @@ jobs:
           trap 'rm -f /tmp/p24c-*.json /tmp/p24c-*.cookies /tmp/p24c-*.html' EXIT
           failure=0
           echo '15A ACCOUNT_SESSION: START expected=HTTP_200 Account TENANT'
-          jq -n --arg password "$ADMIN_PASSWORD" '{login:"staging-admin",password:$password}' > /tmp/p24c-login.json
+          jq -n --arg password "$DRIVER_SMOKE_PASSWORD" '{login:"staging-driver-smoke",password:$password}' > /tmp/p24c-login.json
           status="$(curl --silent --show-error --output /tmp/p24c-session.json --write-out '%{http_code}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -H "Origin: $origin" -H 'Content-Type: application/json' \
             -c /tmp/p24c-account.cookies --data-binary @/tmp/p24c-login.json \
             "$origin/api/auth/account_test.php?action=login")" || status=000
-          if [ "$status" = 200 ] && jq -e '.ok == true and .context == "TENANT" and (.membershipId | type == "string")' /tmp/p24c-session.json >/dev/null; then
+          if [ "$status" = 200 ] && jq -e '.ok == true and .context == "TENANT" and .companyName == "Cottbusverkehr" and .tenantRoles == ["FAHRER"] and .tenantCapabilities == ["app.access","routes.read"] and .platformRoles == [] and .platformCapabilities == [] and (.membershipId | type == "string")' /tmp/p24c-session.json >/dev/null; then
             echo "15A ACCOUNT_SESSION: PASS HTTP=$status"
           else
             echo "15A ACCOUNT_SESSION: FAIL HTTP=$status error_class=ACCOUNT_SESSION_INVALID" >&2
@@ -1618,8 +1685,8 @@ jobs:
           echo '15D RELEASED_ROUTE_DISCOVERY: START expected=driver_route_with_two_points'
           route=''
           if [ "$catalog_valid" -eq 1 ]; then
-            route="$(jq -c '.lines | map(select((.routePointCount // 0) >= 2)) | first // empty' /tmp/p24c-lines.json)"
-            eligible="$(jq '[.lines[] | select((.routePointCount // 0) >= 2)] | length' /tmp/p24c-lines.json)"
+            route="$(jq -c '.lines | map(select(.city == "cottbus" and (.routePointCount // 0) >= 2)) | first // empty' /tmp/p24c-lines.json)"
+            eligible="$(jq '[.lines[] | select(.city == "cottbus" and (.routePointCount // 0) >= 2)] | length' /tmp/p24c-lines.json)"
             if [ -n "$route" ]; then
               echo "15D RELEASED_ROUTE_DISCOVERY: PASS HTTP=200 total=$count eligible=$eligible"
             else
@@ -2169,6 +2236,7 @@ jobs:
           BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
           BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
           ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+          DRIVER_SMOKE_PASSWORD: ${{ secrets.STAGING_DRIVER_SMOKE_PASSWORD }}
         run: |
           set -euo pipefail
           umask 077
@@ -2285,25 +2353,35 @@ jobs:
           echo "$current_phase: PASS"
           current_phase='CUTOVER-15 DRIVER_API_SMOKE'
           echo "$current_phase: START expected=driver_API_and_route mutation=true recovery_required=true"
+          jq -n --arg password "$DRIVER_SMOKE_PASSWORD" '{login:"staging-driver-smoke",password:$password}' > /tmp/p24-driver-smoke-login.json
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/p24-new-account.cookies "$origin/app/index.html" > /tmp/p24-app.html
+            -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -c /tmp/p24-driver-smoke.cookies --data-binary @/tmp/p24-driver-smoke-login.json \
+            "$origin/api/auth/account_test.php?action=login" > /tmp/p24-driver-smoke-session.json
+          jq -e '.ok == true and .context == "TENANT" and .companyName == "Cottbusverkehr"
+            and .tenantRoles == ["FAHRER"] and .tenantCapabilities == ["app.access","routes.read"]
+            and .platformRoles == [] and .platformCapabilities == []' /tmp/p24-driver-smoke-session.json >/dev/null
+          grep -q '__Host-lehrfahrer_account_test' /tmp/p24-driver-smoke.cookies
+          ! grep -q '__Host-lehrfahrer_session' /tmp/p24-driver-smoke.cookies
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/p24-driver-smoke.cookies "$origin/app/index.html" > /tmp/p24-app.html
           grep -q '<title>Lehrfahrer</title>' /tmp/p24-app.html
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/p24-new-account.cookies "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
+            -b /tmp/p24-driver-smoke.cookies "$origin/api/list_cities.php" | jq -e '.ok == true' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/p24-new-account.cookies "$origin/api/list_cities.php?lf-connection-check=1" \
+            -b /tmp/p24-driver-smoke.cookies "$origin/api/list_cities.php?lf-connection-check=1" \
             | jq -e '.ok == true' >/dev/null
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/p24-new-account.cookies "$origin/api/list_lines.php?scope=driver" > /tmp/p24-lines.json
+            -b /tmp/p24-driver-smoke.cookies "$origin/api/list_lines.php?scope=driver" > /tmp/p24-lines.json
           jq -e '.ok == true and (.lines | type == "array")' /tmp/p24-lines.json >/dev/null
-          route="$(jq -c '.lines | map(select((.routePointCount // 0) >= 2)) | first // empty' /tmp/p24-lines.json)"
+          route="$(jq -c '.lines | map(select(.city == "cottbus" and (.routePointCount // 0) >= 2)) | first // empty' /tmp/p24-lines.json)"
           test -n "$route"
           city="$(printf '%s' "$route" | jq -r '.city')"
           file_base="$(printf '%s' "$route" | jq -r '.fileBase')"
           line_folder="$(printf '%s' "$route" | jq -r '.lineFolder // ""')"
           category_folder="$(printf '%s' "$route" | jq -r '.categoryFolder // ""')"
           curl --fail --silent --show-error --get -u "$BASIC_USER:$BASIC_PASSWORD" \
-            -b /tmp/p24-new-account.cookies \
+            -b /tmp/p24-driver-smoke.cookies \
             --data-urlencode 'scope=driver' --data-urlencode "city=$city" \
             --data-urlencode "line=$file_base" --data-urlencode "lineFolder=$line_folder" \
             --data-urlencode "categoryFolder=$category_folder" \

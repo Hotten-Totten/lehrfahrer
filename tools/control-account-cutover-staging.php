@@ -187,6 +187,7 @@ function lehrfahrer_cutover_run(): array {
         if ($state !== ['mode' => 'PARALLEL', 'lock' => 'OPEN'] || file_exists($marker)) {
             throw new RuntimeException('Cutover erwartet PARALLEL/OPEN ohne bestehenden Marker.');
         }
+        if ($action === 'begin') putenv('LEHRFAHRER_CUTOVER_PREFLIGHT_REQUIRE_DRIVER_SMOKE=1');
         $preflight = lehrfahrer_account_cutover_preflight($pdo);
         if ($preflight['status'] === 'BLOCKER' || $preflight['auth'] !== $state) {
             throw new RuntimeException('Read-only Cutover-Preflight blockiert.');
