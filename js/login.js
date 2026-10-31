@@ -54,6 +54,7 @@
       showRuntime(result.runtime);
       message.style.color = '#176b3a';
       message.textContent = `Angemeldet als ${result.user.displayName}.`;
+      await window.LehrfahrerTenantCache.applyValidatedContext(result, 'legacy');
       window.location.replace('./');
     } catch (_error) {
       csrfToken = '';

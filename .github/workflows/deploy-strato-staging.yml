@@ -110,6 +110,7 @@ jobs:
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
             tools/account-login-ui.test.js \
+            tools/tenant-cache-boundary.test.js \
             tools/session-auth.test.js \
             tools/capability-authorization.test.js \
             tools/legacy-auth-observation.test.js \
@@ -1131,6 +1132,19 @@ jobs:
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/$account_script" > /tmp/staging-account-login.js
           test "${account_script#*v=}" = "$(sha256sum /tmp/staging-account-login.js | cut -c 1-12)"
+          tenant_script="$(grep -oE 'js/tenant-cache-boundary\.js\?v=[a-f0-9]{12}' /tmp/staging-account-login.html | head -n 1)"
+          test -n "$tenant_script"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/$tenant_script" > /tmp/staging-tenant-cache-boundary.js
+          test "${tenant_script#*v=}" = "$(sha256sum /tmp/staging-tenant-cache-boundary.js | cut -c 1-12)"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/app/index.html" > /tmp/staging-driver-app.html
+          grep -q "../$tenant_script" /tmp/staging-driver-app.html
+          app_script="$(grep -oE 'js/app\.js\?v=V[0-9.]+-[a-f0-9]{12}' /tmp/staging-driver-app.html | head -n 1)"
+          test -n "$app_script"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/app/$app_script" > /tmp/staging-driver-app.js
+          test "${app_script##*-}" = "$(sha256sum /tmp/staging-driver-app.js | cut -c 1-12)"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -D /tmp/staging-activate.headers "$origin/activate.php" \
             > /tmp/staging-activate.html

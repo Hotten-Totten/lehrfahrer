@@ -86,6 +86,7 @@
   function sessionExpired() {
     csrfToken = '';
     membershipChoices.replaceChildren();
+    window.LehrfahrerTenantCache.clearForLogout().catch(() => {});
     show('login');
     notice('Sitzung abgelaufen. Bitte erneut anmelden.');
   }
@@ -93,6 +94,7 @@
   async function handleSession(body) {
     csrfToken = typeof body.csrfToken === 'string' ? body.csrfToken : '';
     if (body.context === 'TENANT') {
+      await window.LehrfahrerTenantCache.applyValidatedContext(body, 'account');
       if (!manageMode) {
         window.location.replace(target);
         return;
@@ -112,6 +114,7 @@
       return;
     }
     if (body.context === 'SELECTION_PENDING' || body.context === 'NO_MEMBERSHIP') {
+      await window.LehrfahrerTenantCache.clearForLogout();
       await renderMemberships('select');
       return;
     }
@@ -129,6 +132,7 @@
         return;
       }
       csrfToken = typeof body.csrfToken === 'string' ? body.csrfToken : '';
+      await window.LehrfahrerTenantCache.applyValidatedContext(body, 'account');
       window.location.replace(target);
     } catch (_error) {
       notice('Gesellschaft konnte nicht ausgewählt werden.');
@@ -148,6 +152,7 @@
         return;
       }
       csrfToken = '';
+      await window.LehrfahrerTenantCache.clearForLogout();
       window.location.replace('account-login.php');
     } catch (_error) {
       notice('Abmelden ist derzeit nicht möglich.');

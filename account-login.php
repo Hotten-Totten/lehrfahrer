@@ -73,6 +73,7 @@ if ($method === 'HEAD') exit;
     <div id="runtime"></div>
     <p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p>
   </main>
-  <script src="js/account-login.js?v=783d3c43fc73" defer></script>
+  <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
+  <script src="js/account-login.js?v=6634065b152a" defer></script>
 </body>
 </html>

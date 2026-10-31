@@ -60,6 +60,7 @@ $public = lehrfahrer_account_public_session($pdo,$session);
 $stored = $pdo->query('SELECT * FROM account_sessions')->fetch(PDO::FETCH_ASSOC);
 $cookieOptions = lehrfahrer_auth_cookie_options($login['absoluteExpiresAt']);
 echo json_encode(['context'=>$public['context'],'member'=>$public['membershipId']===$membershipA,
+  'accountContext'=>$public['accountId']===$accountA && $public['companyId']===$companyA['id'],
   'tenantRead'=>in_array('routes.read',$public['tenantCapabilities'],true),
   'platform'=>$public['platformCapabilities'],'oldCookie'=>isset($_COOKIE[LEHRFAHRER_SESSION_COOKIE]),
   'tokenHashed'=>$stored['session_token_hash']===lehrfahrer_auth_token_hash($login['token']) && $stored['session_token_hash']!==$login['token'],
@@ -68,7 +69,7 @@ echo json_encode(['context'=>$public['context'],'member'=>$public['membershipId'
     && $cookieOptions['samesite']==='Strict' && $cookieOptions['path']==='/',
   'idle'=>(strtotime($stored['idle_expires_at'])-strtotime($stored['created_at'])),
   'absolute'=>(strtotime($stored['absolute_expires_at'])-strtotime($stored['created_at']))], JSON_THROW_ON_ERROR);`);
-  assert.deepEqual(data, { context: 'TENANT', member: true, tenantRead: true, platform: [],
+  assert.deepEqual(data, { context: 'TENANT', member: true, accountContext: true, tenantRead: true, platform: [],
     oldCookie: false, tokenHashed: true, csrfHashed: true, cookieSecure: true,
     idle: 1800, absolute: 43200 });
 });

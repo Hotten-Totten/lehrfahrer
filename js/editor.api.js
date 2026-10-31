@@ -402,7 +402,7 @@ async function saveLineToServer() {
   setLineValidity(target.validFrom, target.validUntil);
 
   try {
-    localStorage.setItem(SAVE_TARGET_STORAGE_KEY, JSON.stringify(target));
+    localStorage.setItem(window.LehrfahrerTenantCache.tenantStorageKey(SAVE_TARGET_STORAGE_KEY), JSON.stringify(target));
   } catch (_) {
     // Ignorieren, wenn Storage nicht verfügbar ist.
   }
@@ -452,7 +452,7 @@ function showSaveConfirmDialog({ data, city }) {
 
     let lastTarget = null;
     try {
-      lastTarget = JSON.parse(localStorage.getItem(SAVE_TARGET_STORAGE_KEY) || "null");
+      lastTarget = JSON.parse(localStorage.getItem(window.LehrfahrerTenantCache.tenantStorageKey(SAVE_TARGET_STORAGE_KEY)) || "null");
     } catch (_) {
       lastTarget = null;
     }
@@ -694,7 +694,7 @@ const VBB_ACCESS_ID_STORAGE_KEY = "lehrfahrer_vbb_access_id";
 
 function getStoredVbbAccessId() {
   try {
-    return String(localStorage.getItem(VBB_ACCESS_ID_STORAGE_KEY) || "").trim();
+    return String(localStorage.getItem(window.LehrfahrerTenantCache.tenantStorageKey(VBB_ACCESS_ID_STORAGE_KEY)) || "").trim();
   } catch (_) {
     return "";
   }
@@ -704,7 +704,7 @@ function setStoredVbbAccessId(accessId) {
   const value = String(accessId || "").trim();
   if (!value) return false;
   try {
-    localStorage.setItem(VBB_ACCESS_ID_STORAGE_KEY, value);
+    localStorage.setItem(window.LehrfahrerTenantCache.tenantStorageKey(VBB_ACCESS_ID_STORAGE_KEY), value);
     return true;
   } catch (_) {
     return false;
@@ -713,7 +713,7 @@ function setStoredVbbAccessId(accessId) {
 
 function clearStoredVbbAccessId() {
   try {
-    localStorage.removeItem(VBB_ACCESS_ID_STORAGE_KEY);
+    localStorage.removeItem(window.LehrfahrerTenantCache.tenantStorageKey(VBB_ACCESS_ID_STORAGE_KEY));
     return true;
   } catch (_) {
     return false;
@@ -1104,9 +1104,9 @@ function chooseVbbCandidateInPopup(candidates, options = {}) {
 
 function chooseGtfsAgenciesInPopup(agencies, options = {}) {
   const isIndexSelection = options.mode === "index";
-  const storageKey = isIndexSelection
+  const storageKey = window.LehrfahrerTenantCache.tenantStorageKey(isIndexSelection
     ? "lehrfahrer_gtfs_index_agency_filter"
-    : "lehrfahrer_gtfs_import_agency_filter";
+    : "lehrfahrer_gtfs_import_agency_filter");
   let savedSelection = null;
   try {
     savedSelection = JSON.parse(localStorage.getItem(storageKey) || "null");

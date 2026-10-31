@@ -171,8 +171,17 @@ function lehrfahrer_account_public_session(PDO $pdo, array $session): array {
     $memberships = $context === 'PENDING' ? lehrfahrer_account_memberships($pdo, $accountId) : [];
     $tenantCapabilities = $context === 'TENANT'
         ? lehrfahrer_account_tenant_capabilities($pdo, $accountId, (string)$session['membership_id']) : [];
+    $companyId = null;
+    if ($context === 'TENANT') {
+        $company = $pdo->prepare('SELECT company_id FROM account_memberships WHERE id = ? AND account_id = ? AND status = ?');
+        $company->execute([(string)$session['membership_id'], $accountId, 'active']);
+        $companyId = $company->fetchColumn();
+        if (!is_string($companyId) || $companyId === '') throw new RuntimeException('Mandantenkontext ungültig.');
+    }
     $platformCapabilities = lehrfahrer_account_platform_capabilities($pdo, $accountId);
     return ['ok' => true,
+        'accountId' => $accountId,
+        'companyId' => $companyId,
         'context' => $context === 'PENDING'
             ? ($memberships === [] ? 'NO_MEMBERSHIP' : 'SELECTION_PENDING') : $context,
         'membershipId' => $context === 'TENANT' ? $session['membership_id'] : null,

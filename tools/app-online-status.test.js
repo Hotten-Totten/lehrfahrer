@@ -113,7 +113,9 @@ function workerFixture(fetchImpl, cacheImpl) {
   const handlers = {};
   const context = vm.createContext({
     URL, fetch: fetchImpl, caches: cacheImpl,
-    self: { addEventListener(name, handler) { handlers[name] = handler; } }
+    Response: class { constructor(body, options) { this.body = body; this.status = options.status; } },
+    self: { registration: { scope: 'https://example.test/app/' },
+      addEventListener(name, handler) { handlers[name] = handler; } }
   });
   vm.runInContext(workerSource, context);
   return handlers;
@@ -127,7 +129,7 @@ function workerRequest(handler, url) {
   return result;
 }
 
-test('Verbindungscheck umgeht den Service-Worker-Cache; übriger API-Offline-Fallback bleibt', async () => {
+test('API- und Tenant-Ressourcen nutzen keinen gemeinsamen Offline-Cache', async () => {
   const cacheCalls = [];
   const cached = { ok: true, source: 'offline-cache' };
   let networkAvailable = true;
@@ -140,7 +142,10 @@ test('Verbindungscheck umgeht den Service-Worker-Cache; übriger API-Offline-Fal
   networkAvailable = false;
   await assert.rejects(workerRequest(handlers.fetch, probe), /network down/);
   assert.deepEqual(cacheCalls, []);
-  assert.equal((await workerRequest(handlers.fetch, 'https://example.test/api/list_lines.php?scope=driver')).source, 'offline-cache');
+  await assert.rejects(workerRequest(handlers.fetch, 'https://example.test/api/list_lines.php?scope=driver'), /network down/);
+  await assert.rejects(workerRequest(handlers.fetch, 'https://example.test/liniendaten/cottbus/route.json'), /network down/);
+  assert.deepEqual(cacheCalls, []);
+  assert.equal((await workerRequest(handlers.fetch, 'https://example.test/app/index.html')).source, 'offline-cache');
   assert.deepEqual(cacheCalls, ['match']);
 });
 

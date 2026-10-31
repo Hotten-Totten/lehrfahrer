@@ -39,7 +39,12 @@ function harness(search = '', responses = {}) {
     return { ok: result.status >= 200 && result.status < 300,
       status: result.status, json: async () => result.body };
   };
-  const window = { location: { search, replace: url => redirects.push(url) } };
+  const window = {
+    location: { search, replace: url => redirects.push(url) },
+    LehrfahrerTenantCache: {
+      async applyValidatedContext() {}, async clearForLogout() {}
+    }
+  };
   vm.runInNewContext(script, { document, window, fetch, URLSearchParams, URL });
   return { element, requests, redirects, settle: () => new Promise(resolve => setImmediate(resolve)) };
 }

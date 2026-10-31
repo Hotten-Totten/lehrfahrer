@@ -3,11 +3,10 @@
 // =========================
 // Strategie:
 //   App-Shell   → Cache-First (immer sofort aus Cache)
-//   API-Calls   → Network-First, Cache als Offline-Fallback
+//   API-Calls   → nur Netzwerk; Offline-Linien liegen im mandantengeprüften IndexedDB
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21065-a4412782eb26';
-const CACHE_API  = 'lehrfahrer-api-v1';
+const CACHE_APP = 'lehrfahrer-app-v21065-259fd3153c5f';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
 const APP_SHELL = [
@@ -15,10 +14,11 @@ const APP_SHELL = [
   './index.html',
   './manifest.json',
   './css/app.css?v=V2.1.063',
-  './js/app.js?v=V2.1.065-a4412782eb26',
+  './js/app.js?v=V2.1.065-259fd3153c5f',
+  '../js/tenant-cache-boundary.js?v=6f1f3c95d4c9',
   './js/map.js?v=V2.1.063',
   './js/local-bus-routing-storage.js',
-  './js/debug-helper.js?v=dda409171b33',
+  './js/debug-helper.js?v=c6059d9a1163',
   './js/local-bus-router.js?v=V2.1.063',
   './js/local-bus-router.js',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
@@ -44,7 +44,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys =>
       Promise.all(
         keys
-          .filter(k => k !== CACHE_APP && k !== CACHE_API)
+          .filter(k => k !== CACHE_APP)
           .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
@@ -55,14 +55,14 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // API-Anfragen: Network-first, Cache als Fallback
+  // API-Antworten enthalten Mandantendaten und werden nie gemeinsam gecacht.
   if (url.pathname.includes('/api/')) {
     // Der Verbindungscheck muss den Server erreichen und darf keinen API-Cache lesen.
     if (url.pathname.endsWith('/api/list_cities.php') && url.searchParams.has('lf-connection-check')) {
       event.respondWith(fetch(event.request));
       return;
     }
-    event.respondWith(networkFirstAPI(event.request));
+    event.respondWith(fetch(event.request));
     return;
   }
 
@@ -82,26 +82,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // App-Shell + CDN-Libs: Cache-first
-  event.respondWith(cacheFirstApp(event.request));
-});
-
-async function networkFirstAPI(request) {
-  try {
-    const response = await fetch(request.clone());
-    if (response.ok) {
-      const cache = await caches.open(CACHE_API);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    return cached || new Response(
-      JSON.stringify({ ok: false, error: 'Offline – kein Cache vorhanden.' }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+  // Nur bekannte statische App-Shell-Ressourcen duerfen in den globalen Cache.
+  const shellUrls = APP_SHELL.map(path => new URL(path, self.registration.scope).href);
+  if (shellUrls.includes(url.href)) {
+    event.respondWith(cacheFirstApp(event.request));
+    return;
   }
-}
+  event.respondWith(fetch(event.request));
+});
 
 async function cacheFirstApp(request) {
   const cached = await caches.match(request);
@@ -146,13 +134,4 @@ self.addEventListener('message', event => {
     return;
   }
 
-  if (event.data && event.data.type === 'CACHE_ROUTE') {
-    const { url, data } = event.data;
-    caches.open(CACHE_API).then(cache => {
-      const response = new Response(JSON.stringify(data), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      cache.put(url, response);
-    });
-  }
 });

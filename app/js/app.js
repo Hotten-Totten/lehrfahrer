@@ -4,13 +4,14 @@
 
 const API_BASE = '../api';
 const DB_NAME  = 'lehrfahrer-offline';
-const DB_VER   = 3;
+const DB_VER   = 4;
 const STORAGE_KEY_LINES_CATALOG = 'lehrfahrer-lines-catalog-version';
 const STORAGE_KEY_DISMISSED_UPDATE = 'lehrfahrer-dismissed-lines-update';
 const ACTIVE_DRIVE_STORAGE_KEY = 'lehrfahrer-active-drive';
 const ACTIVE_DRIVE_STATE_VERSION = 1;
 
 let db          = null;
+let activeLocalContextKey = null;
 let currentRoute = null;
 let gpsActive   = false;
 let gpsFirstFixTimer = null;
@@ -208,11 +209,22 @@ let lastActiveDrivePersistAt = 0;
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  let tenantContext;
+  try {
+    tenantContext = await window.LehrfahrerTenantCache.ensureContext();
+  } catch (error) {
+    console.warn('Mandantenkontext konnte nicht geprüft werden:', error);
+  }
+  if (!tenantContext) {
+    if (lineDataStatus) lineDataStatus.textContent = 'Mandantenkontext nicht bestätigt. Bitte online anmelden.';
+    return;
+  }
   console.log('🚀 App starting...');
   initFullscreenUi();
   registerServiceWorker();
   try {
     await openDB();
+    await verifyLocalDatabaseOwner(tenantContext.context);
   } catch (err) {
     db = null;
     console.warn('IndexedDB nicht verfuegbar. Offline-Speicher ist deaktiviert:', err);
@@ -543,17 +555,51 @@ function openDB() {
       if (!d.objectStoreNames.contains('linesPDF')) {
         d.createObjectStore('linesPDF', { keyPath: 'id' });
       }
+      if (!d.objectStoreNames.contains('contextOwner')) {
+        d.createObjectStore('contextOwner', { keyPath: 'id' });
+      }
     };
-    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onsuccess = e => {
+      db = e.target.result;
+      db.onversionchange = () => { db.close(); db = null; };
+      resolve();
+    };
     req.onerror   = () => reject(req.error);
   });
 }
 
 function requireDB() {
+  const context = window.LehrfahrerTenantCache.readContext();
+  if (!context || activeLocalContextKey !== localContextKey(context)) {
+    throw new Error('Mandantenkontext ist nicht bestätigt.');
+  }
   if (!db) {
     throw new Error('IndexedDB ist nicht verfuegbar.');
   }
   return db;
+}
+
+function localContextKey(context) {
+  return JSON.stringify([context.mode, context.principal, context.company, context.membership]);
+}
+
+function verifyLocalDatabaseOwner(context) {
+  return new Promise((resolve, reject) => {
+    const key = localContextKey(context);
+    const stores = ['contextOwner', 'routes', 'linesCatalog', 'linesData', 'linesGPX', 'linesPDF'];
+    const tx = db.transaction(stores, 'readwrite');
+    const owner = tx.objectStore('contextOwner');
+    const request = owner.get('active');
+    request.onsuccess = () => {
+      if (request.result?.key !== key) {
+        for (const name of stores.slice(1)) tx.objectStore(name).clear();
+      }
+      owner.put({ id: 'active', key });
+    };
+    tx.oncomplete = () => { activeLocalContextKey = key; resolve(); };
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Lokaler Mandantenspeicher konnte nicht geprüft werden.'));
+  });
 }
 
 function dbPut(key, data) {
@@ -960,6 +1006,8 @@ function readActiveDriveState() {
     const raw = localStorage.getItem(ACTIVE_DRIVE_STORAGE_KEY);
     if (!raw) return null;
     const state = JSON.parse(raw);
+    const context = window.LehrfahrerTenantCache.readContext();
+    if (!context || state?.owner !== localContextKey(context)) return null;
     return state?.active === true && state?.selection?.fileBase ? state : null;
   } catch (err) {
     console.warn('Gespeicherte Lehrfahrt konnte nicht gelesen werden:', err);
@@ -980,6 +1028,7 @@ function buildActiveDriveState() {
 
   return {
     version: ACTIVE_DRIVE_STATE_VERSION,
+    owner: activeLocalContextKey,
     active: true,
     savedAt: Date.now(),
     selection: {

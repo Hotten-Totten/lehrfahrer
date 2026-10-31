@@ -92,7 +92,7 @@ function buildAutosaveData() {
 function saveAutosave() {
   try {
     const data = buildAutosaveData();
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(window.LehrfahrerTenantCache.tenantStorageKey(AUTOSAVE_KEY), JSON.stringify(data));
 
     debug("Autosave gespeichert", {
       stops: data.stops.length,
@@ -253,7 +253,7 @@ function clearEditorData() {
 // Stellt den vorherigen Editor-Status wieder her
 function loadAutosave() {
   try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    const raw = localStorage.getItem(window.LehrfahrerTenantCache.tenantStorageKey(AUTOSAVE_KEY));
 
     if (!raw) {
       setStatus("Kein Autosave vorhanden.", "warn");
@@ -429,7 +429,12 @@ function loadAutosave() {
 
 // Löscht den Autosave aus dem localStorage
 function clearAutosave() {
-  localStorage.removeItem(AUTOSAVE_KEY);
+  try {
+    localStorage.removeItem(window.LehrfahrerTenantCache.tenantStorageKey(AUTOSAVE_KEY));
+  } catch (_) {
+    setStatus('Mandantenkontext nicht bestätigt. Autosave konnte nicht gelöscht werden.', 'warn');
+    return;
+  }
   debug("Autosave gelöscht");
   setStatus("Autosave gelöscht.");
 }

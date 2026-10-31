@@ -2,15 +2,8 @@
 // DB_NAME und die offene Verbindung stammen aus app.js; keine eigene DB-Version.
 
 function debugAppDatabase() {
-  if (typeof db !== 'undefined' && db?.name === DB_NAME) {
-    return Promise.resolve({ connection: db, closeAfterUse: false });
-  }
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME); // Ohne Versionsangabe: vorhandene Version lesen.
-    request.onsuccess = () => resolve({ connection: request.result, closeAfterUse: true });
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('App-Datenbank ist durch einen anderen Tab gesperrt.'));
-  });
+  // Diagnose darf die Mandantenpruefung von app.js nicht durch eigenes Oeffnen umgehen.
+  return Promise.resolve({ connection: requireDB(), closeAfterUse: false });
 }
 
 async function debugWithAppDatabase(operation) {
