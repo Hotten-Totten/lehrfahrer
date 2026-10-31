@@ -140,7 +140,7 @@ for (const [name, mutation, code] of [
   ['Rollenabweichung', "$pdo->exec('DELETE FROM membership_roles WHERE membership_id='.$pdo->quote($membershipB));", 'ROLE_MISMATCH'],
   ['Login-Kollision', "$pdo->prepare('UPDATE users SET login_normalized=? WHERE id=?')->execute(['alpha',$userB['id']]);", 'LOGIN_COLLISION'],
   ['Nummernregistry inkonsistent', "$pdo->prepare('UPDATE account_user_numbers SET current_account_id=NULL WHERE current_account_id=?')->execute([$accountB]);", 'NUMBER_REGISTRY'],
-  ['unerwarteter SysOp', "$pdo->prepare('INSERT INTO sysop_assignment (singleton_key,account_id,assigned_at) VALUES (1,?,?)')->execute([$accountA,gmdate('c')]);", 'SYSOP_ASSIGNMENT_COUNT'],
+  ['unerwarteter SysOp', "$pdo->prepare('INSERT INTO sysop_assignment (singleton_key,account_id,assigned_at) VALUES (1,?,?)')->execute([$accountA,gmdate('c')]);", 'SYSOP_POSTSTATE'],
   ['unerwartete Plattformrolle', "$pdo->prepare(\"INSERT INTO account_platform_roles (account_id,role_code,assigned_at) VALUES (?,'COSYSOP',?)\")->execute([$accountA,gmdate('c')]);", 'ACCOUNT_PLATFORM_ROLES_COUNT'],
   ['aktiver Cutover-Lock', "lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED');", 'AUTH_STATE'],
   ['ungültiger Account-Passworthash', "$pdo->prepare('UPDATE accounts SET password_hash=? WHERE id=?')->execute(['plain',$accountA]);", 'ACCOUNT_PASSWORD_HASH']

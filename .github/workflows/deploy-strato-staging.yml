@@ -23,6 +23,11 @@ on:
         required: true
         default: false
         type: boolean
+      bootstrap_sysop:
+        description: One-time staging-only promotion of cottbus-admin 00102 to SysOp 00001
+        required: true
+        default: false
+        type: boolean
       diagnose_account_cutover:
         description: P2.4b dry-run of cutover lock and recovery without mode switch or session revocation
         required: true
@@ -100,10 +105,33 @@ jobs:
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "staging"
           if [ "${{ inputs.perform_account_cutover }}" = true ]; then
+            test "${{ inputs.bootstrap_sysop }}" != true
             for option in migrate_accounts apply_cottbus preflight_cottbus check_official_cottbus \
               stamp_cottbus_source_sha verify_gtfs_routes_v1 repair_cottbus_city \
               verify_control_db_recovery; do
               case "$option" in
+                migrate_accounts) selected="${{ inputs.migrate_accounts }}" ;;
+                apply_cottbus) selected="${{ inputs.apply_cottbus }}" ;;
+                preflight_cottbus) selected="${{ inputs.preflight_cottbus }}" ;;
+                check_official_cottbus) selected="${{ inputs.check_official_cottbus }}" ;;
+                stamp_cottbus_source_sha) selected="${{ inputs.stamp_cottbus_source_sha }}" ;;
+                verify_gtfs_routes_v1) selected="${{ inputs.verify_gtfs_routes_v1 }}" ;;
+                repair_cottbus_city) selected="${{ inputs.repair_cottbus_city }}" ;;
+                verify_control_db_recovery) selected="${{ inputs.verify_control_db_recovery }}" ;;
+              esac
+              test "$selected" != true
+            done
+          fi
+          if [ "${{ inputs.bootstrap_sysop }}" = true ]; then
+            for option in perform_account_cutover diagnose_account_cutover diagnose_driver_api \
+              provision_driver_smoke migrate_accounts apply_cottbus preflight_cottbus \
+              check_official_cottbus stamp_cottbus_source_sha verify_gtfs_routes_v1 \
+              repair_cottbus_city verify_control_db_recovery; do
+              case "$option" in
+                perform_account_cutover) selected="${{ inputs.perform_account_cutover }}" ;;
+                diagnose_account_cutover) selected="${{ inputs.diagnose_account_cutover }}" ;;
+                diagnose_driver_api) selected="${{ inputs.diagnose_driver_api }}" ;;
+                provision_driver_smoke) selected="${{ inputs.provision_driver_smoke }}" ;;
                 migrate_accounts) selected="${{ inputs.migrate_accounts }}" ;;
                 apply_cottbus) selected="${{ inputs.apply_cottbus }}" ;;
                 preflight_cottbus) selected="${{ inputs.preflight_cottbus }}" ;;
@@ -195,6 +223,7 @@ jobs:
             tools/control-user-numbers.test.js \
             tools/control-account-preflight.test.js \
             tools/account-cutover-preflight.test.js \
+            tools/sysop-bootstrap.test.js \
             tools/account-cutover-observability.test.js \
             tools/auth-cutover-race.test.js \
             tools/control-db-recovery-drill.test.js \
@@ -540,6 +569,7 @@ jobs:
             tools/control-account-cutover-staging.php \
             tools/control-account-preflight.php \
             tools/control-account-cutover-preflight.php \
+            tools/control-sysop-bootstrap-staging.php \
             tools/control-driver-smoke-staging.php \
             tools/control-account-migrate.php \
             tools/staging-smoke.php \
@@ -594,6 +624,7 @@ jobs:
             "$private_root/control-db-recovery-drill.php" \
             "$private_root/control-db-live-recovery.php" \
             "$private_root/control-account-cutover-staging.php" \
+            "$private_root/control-sysop-bootstrap-staging.php" \
             "$private_root/control-account-preflight.php" \
             "$private_root/control-account-migrate.php" \
             "$private_root/staging-smoke.php"
@@ -1952,8 +1983,35 @@ jobs:
           PHP
           REMOTE_SCRIPT
 
+      - name: Read-only SysOp bootstrap preflight on staging
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_sysop }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then SSH_BASE+=(-i ~/.ssh/id_rsa); SSH_RUN=("${SSH_BASE[@]}");
+          else SSH_RUN=(sshpass -e "${SSH_BASE[@]}"); fi
+          "${SSH_RUN[@]}" "$STRATO_USER@$STRATO_HOST" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          webroot="$(cd "./${1#./}" && pwd -P)"
+          private_root="$(cd "./${2#./}" && pwd -P)"
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=preflight \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .targetNumber == 102 and .sysopAssignments == 0'
+          REMOTE_SCRIPT
+
       - name: Create private Control-DB restore point
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.perform_account_cutover || inputs.diagnose_account_cutover || inputs.migrate_accounts) }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.create_control_db_restore_point || inputs.verify_control_db_recovery || inputs.perform_account_cutover || inputs.diagnose_account_cutover || inputs.migrate_accounts || inputs.bootstrap_sysop) }}
         shell: bash
         env:
           SSHPASS: ${{ secrets.STRATO_PASSWORD }}
@@ -2127,6 +2185,37 @@ jobs:
           REMOTE_SCRIPT
           echo 'CUTOVER-02 RESTORE_POINT: PASS'
           trap - ERR
+
+      - name: Bootstrap the sole SysOp on staging
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_sysop }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_BASE=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then SSH_BASE+=(-i ~/.ssh/id_rsa); SSH_RUN=("${SSH_BASE[@]}");
+          else SSH_RUN=(sshpass -e "${SSH_BASE[@]}"); fi
+          "${SSH_RUN[@]}" "$STRATO_USER@$STRATO_HOST" \
+            "bash -s -- '$STAGING_TARGET_PATH' '$STAGING_PRIVATE_PATH'" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          webroot="$(cd "./${1#./}" && pwd -P)"
+          private_root="$(cd "./${2#./}" && pwd -P)"
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=apply \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .userNumber == 1 and .retiredNumber == 102 and .platformCapabilities == 9'
+          LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT="$webroot" \
+          LEHRFAHRER_SYSOP_BOOTSTRAP_RUN=1 LEHRFAHRER_SYSOP_BOOTSTRAP_ACTION=verify \
+            php -q -d "auto_prepend_file=$private_root/runtime-env.php" \
+              -f "$private_root/control-sysop-bootstrap-staging.php" | jq -e '.ok == true and .userNumber == 1 and .retiredNumber == 102 and .platformCapabilities == 9 and .auth.mode == "ACCOUNT_PRIMARY" and .auth.lock == "OPEN"'
+          REMOTE_SCRIPT
 
       - name: Diagnose cutover lock and recovery without mode switch
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_account_cutover }}

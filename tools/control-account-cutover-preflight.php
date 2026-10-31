@@ -6,6 +6,7 @@ require_once $appRoot . '/api/_control_database.php';
 require_once $appRoot . '/api/_control_repositories.php';
 require_once $appRoot . '/api/_auth_cutover_gate.php';
 require_once __DIR__ . '/control-driver-smoke-staging.php';
+require_once __DIR__ . '/control-sysop-bootstrap-staging.php';
 
 /** Read-only check of the already migrated account inventory. No identity values leave this function. */
 function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
@@ -36,11 +37,24 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $smokePresent = $smoke['present'];
     if ($smokePresent && !$smoke['valid']) $add('BLOCKER', 'DRIVER_SMOKE_IDENTITY');
     $additional = $smokePresent ? 1 : 0;
+    $sysopRows = $pdo->query('SELECT account_id FROM sysop_assignment')->fetchAll(PDO::FETCH_COLUMN);
+    $bootstrapped = count($sysopRows) === 1;
+    if ($bootstrapped) {
+        try {
+            $target = $pdo->prepare('SELECT id FROM accounts WHERE login_normalized = ?');
+            $target->execute([LEHRFAHRER_SYSOP_BOOTSTRAP_LOGIN]);
+            $targetId = $target->fetchColumn();
+            if (!is_string($targetId)) throw new RuntimeException('TARGET_ACCOUNT');
+            lehrfahrer_sysop_bootstrap_postcheck($pdo, $targetId);
+        } catch (Throwable $error) {
+            $add('BLOCKER', 'SYSOP_POSTSTATE');
+        }
+    }
     foreach (['users' => 2, 'accounts' => 2 + $additional, 'account_memberships' => 2 + $additional,
         'user_roles' => 2, 'membership_roles' => 2 + $additional,
         'platform_roles' => 2, 'platform_capabilities' => 9,
-        'platform_role_capabilities' => 16, 'sysop_assignment' => 0,
-        'account_platform_roles' => 0, 'account_user_numbers' => 2 + $additional,
+        'platform_role_capabilities' => 16, 'sysop_assignment' => $bootstrapped ? 1 : 0,
+        'account_platform_roles' => 0, 'account_user_numbers' => 2 + $additional + ($bootstrapped ? 1 : 0),
         'account_user_number_allocator' => 1] as $table => $expected) {
         if ($counts[$table] !== $expected) $add('BLOCKER', strtoupper($table) . '_COUNT');
     }
@@ -202,7 +216,9 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
         $maxNumber = max($maxNumber, $number);
         if (isset($seenNumbers[$number])) $add('BLOCKER', 'DUPLICATE_USER_NUMBER');
         $seenNumbers[$number] = true;
-        if ($number <= 100 || $row['current_account_id'] === null
+        if ($bootstrapped && $number === 102 && $row['current_account_id'] === null
+            && (string)$row['issued_to_account_id'] === (string)$sysopRows[0]) continue;
+        if (($number <= 100 && !($bootstrapped && $number === 1)) || $row['current_account_id'] === null
             || (string)$row['current_account_id'] !== (string)$row['issued_to_account_id']
             || !isset($accountsById[(string)$row['current_account_id']])) $add('BLOCKER', 'NUMBER_REGISTRY');
         $accountId = (string)$row['current_account_id'];
