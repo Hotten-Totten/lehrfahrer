@@ -12,6 +12,32 @@ const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 9;
 const LEHRFAHRER_CONTROL_BUSY_TIMEOUT_MS = 5000;
 const LEHRFAHRER_CONTROL_MIGRATION_LOCK_SECONDS = 15;
 
+/** Tracks SQLite transactions opened by this project's SQL-level BEGIN IMMEDIATE. */
+function lehrfahrer_control_sqlite_manual_transactions(): WeakMap {
+    static $transactions = null;
+    if ($transactions === null) $transactions = new WeakMap();
+    return $transactions;
+}
+
+function lehrfahrer_control_transaction_active(PDO $pdo): bool {
+    return $pdo->inTransaction() || isset(lehrfahrer_control_sqlite_manual_transactions()[$pdo]);
+}
+
+function lehrfahrer_control_sqlite_begin_immediate(PDO $pdo): void {
+    if (lehrfahrer_control_driver($pdo) !== 'sqlite' || lehrfahrer_control_transaction_active($pdo)) {
+        throw new LogicException('SQLite-Transaktion bereits aktiv oder Treiber ungueltig.');
+    }
+    $pdo->exec('BEGIN IMMEDIATE');
+    lehrfahrer_control_sqlite_manual_transactions()[$pdo] = true;
+}
+
+function lehrfahrer_control_sqlite_finish(PDO $pdo, bool $commit): void {
+    $transactions = lehrfahrer_control_sqlite_manual_transactions();
+    if (!isset($transactions[$pdo])) throw new LogicException('Keine registrierte SQLite-Transaktion.');
+    $pdo->exec($commit ? 'COMMIT' : 'ROLLBACK');
+    unset($transactions[$pdo]);
+}
+
 function lehrfahrer_control_database_path(): string {
     if (lehrfahrer_control_database_driver() !== 'sqlite') {
         throw new RuntimeException('Ein Dateipfad existiert nur fuer das explizite DEV/Test-SQLite-Backend.');
@@ -167,7 +193,7 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
             throw new RuntimeException('MariaDB-Migrations-Lock konnte nicht bezogen werden.');
         }
     } else {
-        $pdo->exec('BEGIN IMMEDIATE');
+        lehrfahrer_control_sqlite_begin_immediate($pdo);
         $sqliteTransaction = true;
     }
 
@@ -190,10 +216,10 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
             $migration($pdo);
             lehrfahrer_control_record_migration($pdo, $version);
         }
-        if ($sqliteTransaction) $pdo->exec('COMMIT');
+        if ($sqliteTransaction) lehrfahrer_control_sqlite_finish($pdo, true);
     } catch (Throwable $error) {
         if ($sqliteTransaction) {
-            try { $pdo->exec('ROLLBACK'); } catch (Throwable $_rollbackError) {}
+            try { lehrfahrer_control_sqlite_finish($pdo, false); } catch (Throwable $_rollbackError) {}
         }
         throw $error;
     } finally {

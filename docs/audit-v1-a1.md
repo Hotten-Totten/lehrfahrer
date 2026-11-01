@@ -20,6 +20,12 @@ verification detects accidental changes and unsophisticated tampering. A databas
 administrator with write access can rewrite both the ledger and its chain state;
 strong independent proof will require a separately protected external anchor.
 
+SQLite `BEGIN IMMEDIATE` transactions opened by Control DB helpers are registered
+per PDO connection. The audit writer joins a registered caller transaction with
+a savepoint; only the caller commits or rolls it back. PDO-owned transactions use
+`PDO::inTransaction()`. An unregistered raw SQL transaction is not a supported
+audit calling convention.
+
 **DB privileges:** The deployment currently uses one Control DB credential for
 both runtime and migrations. A1 logically separates the append-only module from
 schema migration, but cannot enforce database-level append-only privileges with

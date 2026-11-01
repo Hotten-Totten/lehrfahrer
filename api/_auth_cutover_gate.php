@@ -25,7 +25,7 @@ function lehrfahrer_auth_cutover_lock_name(PDO $pdo): string {
 
 function lehrfahrer_auth_cutover_begin_sqlite(PDO $pdo): void {
     try {
-        $pdo->exec('BEGIN IMMEDIATE');
+        lehrfahrer_control_sqlite_begin_immediate($pdo);
     } catch (PDOException $error) {
         if ((int)($error->errorInfo[1] ?? 0) === 5) {
             throw new LehrfahrerAuthCutoverBusy('Auth-Sperre nicht verfügbar.', 0, $error);
@@ -39,7 +39,7 @@ function lehrfahrer_with_auth_mutation_gate(PDO $pdo, callable $action): mixed {
     static $active = [];
     $id = spl_object_id($pdo);
     if (isset($active[$id])) return $action();
-    if ($pdo->inTransaction()) throw new LogicException('Auth-Mutation in fremder Transaktion.');
+    if (lehrfahrer_control_transaction_active($pdo)) throw new LogicException('Auth-Mutation in fremder Transaktion.');
     $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
     $lockName = $mysql ? lehrfahrer_auth_cutover_lock_name($pdo) : null;
     if ($mysql) {
@@ -55,10 +55,10 @@ function lehrfahrer_with_auth_mutation_gate(PDO $pdo, callable $action): mixed {
             throw new LehrfahrerAuthCutoverBusy('Auth-Cutover läuft.');
         }
         $result = $action();
-        if (!$mysql) $pdo->exec('COMMIT');
+        if (!$mysql) lehrfahrer_control_sqlite_finish($pdo, true);
         return $result;
     } catch (Throwable $error) {
-        if (!$mysql) $pdo->exec('ROLLBACK');
+        if (!$mysql && lehrfahrer_control_transaction_active($pdo)) lehrfahrer_control_sqlite_finish($pdo, false);
         throw $error;
     } finally {
         unset($active[$id]);
@@ -116,10 +116,10 @@ function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state, ?string $owne
             $insertOwner = $pdo->prepare('INSERT INTO control_metadata (`key`, value, updated_at) VALUES (?, ?, ?)');
             $insertOwner->execute(['auth_cutover_owner', $owner, $now]);
         }
-        if ($mysql) $pdo->commit(); else $pdo->exec('COMMIT');
+        if ($mysql) $pdo->commit(); else lehrfahrer_control_sqlite_finish($pdo, true);
     } catch (Throwable $error) {
         if ($mysql && $pdo->inTransaction()) $pdo->rollBack();
-        elseif (!$mysql) $pdo->exec('ROLLBACK');
+        elseif (!$mysql && lehrfahrer_control_transaction_active($pdo)) lehrfahrer_control_sqlite_finish($pdo, false);
         throw $error;
     } finally {
         if ($mysql) {

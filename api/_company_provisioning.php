@@ -16,7 +16,7 @@ function lehrfahrer_company_activation_token_hash(string $token): string {
 // Internal provisioning operation only. Callers must be trusted server-side operators;
 // never expose this function through an HTTP endpoint or log its returned token.
 function lehrfahrer_reissue_company_admin_activation(PDO $pdo, string $companyId, string $login): array {
-    if ($pdo->inTransaction()) {
+    if (lehrfahrer_control_transaction_active($pdo)) {
         throw new RuntimeException('Reissue benoetigt eine eigene Datenbanktransaktion.');
     }
     if (preg_match('/^cmp_[0-9a-f]{32}$/D', $companyId) !== 1
@@ -27,7 +27,7 @@ function lehrfahrer_reissue_company_admin_activation(PDO $pdo, string $companyId
     $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
     $transactionOpen = false;
     try {
-        if ($sqlite) $pdo->exec('BEGIN IMMEDIATE');
+        if ($sqlite) lehrfahrer_control_sqlite_begin_immediate($pdo);
         else $pdo->beginTransaction();
         $transactionOpen = true;
 
@@ -73,13 +73,13 @@ function lehrfahrer_reissue_company_admin_activation(PDO $pdo, string $companyId
             throw new RuntimeException('Reissue konnte nicht atomar abgeschlossen werden.');
         }
 
-        if ($sqlite) $pdo->exec('COMMIT');
+        if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, true);
         else $pdo->commit();
         $transactionOpen = false;
         return ['token' => $token, 'expires_at' => $expiresAt];
     } catch (Throwable $error) {
         if ($transactionOpen) {
-            if ($sqlite) $pdo->exec('ROLLBACK');
+            if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, false);
             else $pdo->rollBack();
         }
         throw $error;
@@ -87,7 +87,7 @@ function lehrfahrer_reissue_company_admin_activation(PDO $pdo, string $companyId
 }
 
 function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $password): array {
-    if ($pdo->inTransaction()) {
+    if (lehrfahrer_control_transaction_active($pdo)) {
         throw new RuntimeException('Aktivierung benoetigt eine eigene Datenbanktransaktion.');
     }
     if (preg_match('/^[A-Za-z0-9_-]{43}$/D', $token) !== 1) {
@@ -101,7 +101,7 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
     $transactionOpen = false;
     try {
         if ($sqlite) {
-            $pdo->exec('BEGIN IMMEDIATE');
+            lehrfahrer_control_sqlite_begin_immediate($pdo);
         } else {
             $pdo->beginTransaction();
         }
@@ -155,7 +155,7 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
             throw new DomainException('Aktivierungstoken wurde bereits verwendet.');
         }
         if ($sqlite) {
-            $pdo->exec('COMMIT');
+            lehrfahrer_control_sqlite_finish($pdo, true);
         } else {
             $pdo->commit();
         }
@@ -167,7 +167,7 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         ];
     } catch (Throwable $error) {
         if ($transactionOpen) {
-            if ($sqlite) $pdo->exec('ROLLBACK');
+            if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, false);
             else $pdo->rollBack();
         }
         throw $error;
@@ -282,7 +282,7 @@ function lehrfahrer_company_remove_uncommitted_tenant(string $companyId): void {
 }
 
 function lehrfahrer_create_company_from_template(PDO $pdo, array $input): array {
-    if ($pdo->inTransaction()) {
+    if (lehrfahrer_control_transaction_active($pdo)) {
         throw new RuntimeException('Provisioning benoetigt eine eigene Datenbanktransaktion.');
     }
     $values = lehrfahrer_company_provision_validate($input);

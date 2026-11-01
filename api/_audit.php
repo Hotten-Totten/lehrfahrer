@@ -124,12 +124,12 @@ function lehrfahrer_audit_append(PDO $pdo, LehrfahrerAuditActor $actor, array $e
     string $mode = LEHRFAHRER_AUDIT_CRITICAL): array {
     [$action, $objectType, $objectId, $result, $reason, $capability] =
         lehrfahrer_audit_validate_event($actor, $event, $mode);
-    $ownTransaction = !$pdo->inTransaction();
+    $ownTransaction = !lehrfahrer_control_transaction_active($pdo);
     $savepointCreated = false;
     $sqliteImmediate = $ownTransaction && lehrfahrer_control_driver($pdo) === 'sqlite';
     try {
         if ($ownTransaction) {
-            if ($sqliteImmediate) $pdo->exec('BEGIN IMMEDIATE');
+            if ($sqliteImmediate) lehrfahrer_control_sqlite_begin_immediate($pdo);
             else $pdo->beginTransaction();
         } else {
             $pdo->exec('SAVEPOINT lehrfahrer_audit_append');
@@ -159,17 +159,17 @@ function lehrfahrer_audit_append(PDO $pdo, LehrfahrerAuditActor $actor, array $e
         $update->execute([$sequence, $hash, $state['last_sequence'], $previous]);
         if ($update->rowCount() !== 1) throw new RuntimeException('Audit-Kette konkurrierend geaendert.');
         if ($ownTransaction) {
-            if ($sqliteImmediate) $pdo->exec('COMMIT');
+            if ($sqliteImmediate) lehrfahrer_control_sqlite_finish($pdo, true);
             else $pdo->commit();
         }
         else $pdo->exec('RELEASE SAVEPOINT lehrfahrer_audit_append');
         return ['eventId' => $id, 'sequence' => $sequence, 'eventHash' => $hash];
     } catch (Throwable $error) {
-        if ($ownTransaction && $pdo->inTransaction()) {
-            if ($sqliteImmediate) $pdo->exec('ROLLBACK');
+        if ($ownTransaction && lehrfahrer_control_transaction_active($pdo)) {
+            if ($sqliteImmediate) lehrfahrer_control_sqlite_finish($pdo, false);
             else $pdo->rollBack();
         }
-        elseif ($savepointCreated && $pdo->inTransaction()) {
+        elseif ($savepointCreated && lehrfahrer_control_transaction_active($pdo)) {
             $pdo->exec('ROLLBACK TO SAVEPOINT lehrfahrer_audit_append');
             $pdo->exec('RELEASE SAVEPOINT lehrfahrer_audit_append');
         }
@@ -179,7 +179,7 @@ function lehrfahrer_audit_append(PDO $pdo, LehrfahrerAuditActor $actor, array $e
 
 /** Internal verification only; A1 exposes no HTTP read interface. */
 function lehrfahrer_audit_verify_chain(PDO $pdo): bool {
-    $ownTransaction = !$pdo->inTransaction();
+    $ownTransaction = !lehrfahrer_control_transaction_active($pdo);
     if ($ownTransaction) $pdo->beginTransaction();
     try {
         $state = $pdo->query('SELECT last_sequence,last_hash FROM audit_chain_state WHERE singleton_key=1')
