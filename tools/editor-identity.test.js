@@ -32,9 +32,12 @@ async function fixture(accountResponse, legacyResponse = { status: 401 }) {
   const status = element();
   status.textContent = 'Sitzung: aktiv';
   const details = element();
+  const passkeysMenuItem = element();
   const calls = [];
   const document = {
-    getElementById(id) { return id === 'apiTokenStatus' ? status : id === 'accountContextDetails' ? details : null; },
+    getElementById(id) { return id === 'apiTokenStatus' ? status
+      : id === 'accountContextDetails' ? details
+      : id === 'sysopPasskeysMenuItem' ? passkeysMenuItem : null; },
     createElement: element
   };
   const fetch = async (url, options) => {
@@ -45,7 +48,7 @@ async function fixture(accountResponse, legacyResponse = { status: 401 }) {
   };
   vm.runInNewContext(script, { document, fetch });
   await new Promise(resolve => setImmediate(resolve));
-  return { status, details, calls };
+  return { status, details, passkeysMenuItem, calls };
 }
 
 const account = (companyName, tenantRoles, userNumber = '00101', platformRoles = []) => ({
@@ -78,6 +81,20 @@ test('00001 allein ist kein SYSOP; nur gelieferte Plattformrolle erscheint getre
   assert.equal(ordinary.status.textContent, 'A · ADMIN · 00001');
   assert.equal(official.status.textContent, 'A · ADMIN | SYSOP · 00001');
   assert.equal(official.details.children.at(-1).textContent, 'Plattformrolle: SYSOP');
+  assert.equal(ordinary.passkeysMenuItem.hidden, true);
+  assert.equal(official.passkeysMenuItem.hidden, false);
+});
+
+test('Passkey-Einstieg bleibt für Tenant-ADMIN, Pending und Legacy verborgen', async () => {
+  const admin = await fixture(account('A', ['ADMIN'], '00001'));
+  const pending = await fixture({ status: 200, body: { ok: true, context: 'SELECTION_PENDING',
+    platformRoles: ['SYSOP'], userNumber: '00001' } });
+  const legacy = await fixture({ status: 401 }, { status: 200,
+    body: { ok: true, company: { name: 'A' }, user: { roles: ['ADMIN'] } } });
+  assert.equal(admin.passkeysMenuItem.hidden, true);
+  assert.equal(pending.passkeysMenuItem.hidden, true);
+  assert.equal(legacy.passkeysMenuItem.hidden, true);
+  assert.match(page, /id="sysopPasskeysMenuItem"[^>]*hidden/);
 });
 
 test('Browserwerte beeinflussen Anzeige nicht; HTML wird nur als Text angehängt', async () => {

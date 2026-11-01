@@ -3,6 +3,7 @@
 
   const status = document.getElementById('apiTokenStatus');
   const details = document.getElementById('accountContextDetails');
+  const passkeysMenuItem = document.getElementById('sysopPasskeysMenuItem');
   if (!status) return;
 
   function labels(values) {
@@ -13,6 +14,7 @@
     if (!data || !data.company) { renderUnavailable(); return; }
     const tenantRoles = labels(data.tenantRoles);
     const platformRoles = labels(data.platformRoles);
+    if (passkeysMenuItem) passkeysMenuItem.hidden = !(data.account && platformRoles.includes('SYSOP'));
     status.replaceChildren();
     status.classList.add('identity-status');
     status.classList.remove('identity-unavailable', 'token-status-off');
@@ -55,6 +57,7 @@
   }
 
   function renderUnavailable() {
+    if (passkeysMenuItem) passkeysMenuItem.hidden = true;
     status.replaceChildren();
     status.classList.remove('identity-status', 'token-status-on');
     status.classList.add('identity-unavailable', 'token-status-off');
