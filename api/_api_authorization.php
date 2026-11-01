@@ -66,7 +66,7 @@ function lehrfahrer_api_require_session(): array {
 function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
     $accountPrimary = lehrfahrer_environment() === 'staging'
         && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY';
-    if (lehrfahrer_environment() === 'staging'
+    if (lehrfahrer_environment() !== 'production'
         && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE)) {
         $session = lehrfahrer_account_current_session($pdo);
         if ($session !== null) {
@@ -126,7 +126,7 @@ function lehrfahrer_api_authorize(
     }
 
     $sessionCookieSupplied = array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)
-        || (lehrfahrer_environment() === 'staging'
+        || (lehrfahrer_environment() !== 'production'
             && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE));
     if ($sessionCookieSupplied) {
         $context = lehrfahrer_api_require_session();

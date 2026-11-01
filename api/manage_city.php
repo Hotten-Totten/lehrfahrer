@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 
 function cityManageRespond(int $status, array $payload): void {
     http_response_code($status);
@@ -169,6 +170,12 @@ $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) cityManageRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);
 $action = strtolower(trim((string)($input['action'] ?? '')));
 $companyId = lehrfahrer_route_authorize('cities.manage', $action !== 'analyze', true);
+$auditFileLock = $action === 'analyze'
+    ? lehrfahrer_audit_file_read_lock($companyId)
+    : lehrfahrer_audit_file_write_lock($companyId);
+if (lehrfahrer_audit_file_any_blocked($companyId)) {
+    cityManageRespond(503, ['ok' => false, 'error' => 'Route voruebergehend gesperrt.']);
+}
 $city = cityManageSlug($input['oldName'] ?? ($input['city'] ?? ''));
 if ($city === '') cityManageRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
 

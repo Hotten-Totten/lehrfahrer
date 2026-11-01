@@ -639,20 +639,12 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFol
       result.categoryFolder || categoryFolder, actualFileBase
     );
 
-    // ---------- GPX erzeugen + speichern ----------
-    const gpx = buildGpxString();
-    let gpxSaved = false;
+    // JSON, PDF and GPX are committed by the same server request.
+    const gpxSaved = !!result.gpxSaved;
     const pdfSaved = !!result.pdfSaved;
     const pdfError = (result.pdfError || "").toString().trim();
     const pdfPath = (result.pdfPath || "").toString().trim();
     const pdfTriedPaths = Array.isArray(result.pdfTriedPaths) ? result.pdfTriedPaths : [];
-    try {
-      const gpxResult = await saveGpxToServer(`${actualFileBase}.gpx`, gpx, city, lineFolder, categoryFolder);
-      gpxSaved = !!(gpxResult && gpxResult.ok !== false);
-    } catch (gpxErr) {
-      warn("GPX konnte nicht gespeichert werden: " + gpxErr.message);
-    }
-
     debug("Linie + GPX + PDF auf Server gespeichert", {
       json: result,
       gpxSaved,
@@ -679,10 +671,11 @@ async function _doSaveLineToServer(data, city, fileBase, lineFolder, categoryFol
         gpxSaved,
         pdfSaved,
         changeType: result.changeType,
+        artifactRepair: !!result.artifactRepair,
         savedAt: result.savedAt || new Date().toISOString()
       });
     }
-    setStatus(`Gespeichert: ${lineFolder}/${categoryFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})${pdfSaved && pdfPath ? " - PDF: " + pdfPath : ""}${!pdfSaved && pdfError ? " - PDF-Fehler: " + pdfError : ""}`);
+    setStatus(`Gespeichert: ${lineFolder}/${categoryFolder}/${actualFileBase}.json${gpxSaved ? " + .gpx" : ""}${pdfSaved ? " + .pdf" : ""} (${city})${result.artifactRepair ? " - Begleitdateien repariert" : ""}${pdfSaved && pdfPath ? " - PDF: " + pdfPath : ""}${!pdfSaved && pdfError ? " - PDF-Fehler: " + pdfError : ""}`);
   } catch (err) {
     error("Fehler beim Server-Speichern", err);
     setStatus(err.message || "Fehler beim Speichern auf Server.", "error");
@@ -2955,22 +2948,6 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
       }
     }
 
-    let existingGpx = null;
-    if (line.hasGpx) {
-      const gpxUrl = line.gpxPath
-        ? String(line.gpxPath)
-        : "api/download_line_gpx.php?" + new URLSearchParams({
-          city, line: fileBase, lineFolder: oldLineFolder || "", categoryFolder: categoryFolder || ""
-        }).toString();
-      const gpxResponse = await fetch(gpxUrl, {
-        cache: "no-store", headers: withApiAuthHeaders({})
-      });
-      if (!gpxResponse.ok) {
-        throw new Error("Vorhandene GPX-Datei konnte für den Ordnerwechsel nicht geladen werden.");
-      }
-      existingGpx = await gpxResponse.text();
-    }
-
     lineData.city = city;
     lineData.fileBase = fileBase;
     lineData.lineFolder = newLineFolder;
@@ -2996,10 +2973,6 @@ async function renameLineOnServer(line, newLineName, newRouteName, newDirectionN
 
     if (!saveRes.ok || !saveResult.ok) {
       throw new Error(saveResult.error || "Umbenennen konnte nicht gespeichert werden");
-    }
-
-    if (existingGpx !== null) {
-      await saveGpxToServer(fileBase + ".gpx", existingGpx, city, newLineFolder, categoryFolder);
     }
 
     if (!sameTarget) {

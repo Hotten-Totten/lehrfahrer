@@ -147,7 +147,7 @@ test('workOpen trennt Entwurf und Serverroute und bewahrt Status beim bloßen Ö
   assert.doesNotMatch(workOpen, /lehrfahrer_gtfs_work_set_status/);
   assert.match(workOpen, /gtfs_error\(409, 'Die gespeicherte Lehrfahrer-Route/);
   assert.match(fs.readFileSync(path.join(root, 'api/save_line.php'), 'utf8'),
-    /lehrfahrer_gtfs_work_save_manual_route\(\$companyId, \$filePath, \$json\)/);
+    /lehrfahrer_route_bundle_save\(\$authContext, \$data/);
 });
 
 test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten Statuswerte',
@@ -158,6 +158,8 @@ test('workOpen öffnet Entwurf nur ohne Referenz und bewahrt alle gespeicherten 
       define('LEHRFAHRER_GTFS_COMPANY_ID', ${JSON.stringify(company)});
       class WorkReply extends Exception { public array $payload; function __construct(array $payload) { $this->payload = $payload; } }
       function gtfs_require_cottbus_change_scope() {}
+      function lehrfahrer_audit_file_read_lock($company) { return fopen('php://memory','r'); }
+      function lehrfahrer_audit_file_any_blocked($company) { return false; }
       function gtfs_index_path() { return 'index'; }
       function lehrfahrer_gtfs_work_inventory_path($company) { return $GLOBALS['inventoryPath']; }
       function lehrfahrer_gtfs_work_read_json($path) { return json_decode(file_get_contents($path),true); }

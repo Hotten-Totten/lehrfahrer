@@ -34,6 +34,24 @@ function lehrfahrer_route_authorize(
     );
 }
 
+/** Route mutations with an audit actor require a verified account membership. */
+function lehrfahrer_route_require_account_write(): array {
+    if (in_array(strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')), ['GET', 'HEAD'], true)) {
+        header('Allow: POST');
+        lehrfahrer_api_authorization_error(405, 'Methode nicht erlaubt.');
+    }
+    $auth = lehrfahrer_api_require_session();
+    if (($auth['auth_source'] ?? null) !== 'ACCOUNT'
+        || ($auth['mode'] ?? null) !== 'session'
+        || !isset($auth['account_id'], $auth['membership_id'])) {
+        lehrfahrer_api_authorization_error(403, 'Account-Anmeldung mit aktiver Gesellschaft erforderlich.');
+    }
+    lehrfahrer_auth_require_capability($auth, 'routes.write');
+    lehrfahrer_auth_require_same_origin();
+    lehrfahrer_auth_require_csrf($auth['session']);
+    return $auth;
+}
+
 function lehrfahrer_route_segment(string $value): string {
     $segments = lehrfahrer_tenant_segments($value);
     if (count($segments) !== 1) throw new InvalidArgumentException('Ungueltiger Fachpfadname.');

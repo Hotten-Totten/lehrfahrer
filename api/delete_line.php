@@ -1,7 +1,14 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 $companyId = lehrfahrer_route_authorize('routes.delete', true, true);
+$auditFileWriteLock = lehrfahrer_audit_file_write_lock($companyId);
+if (lehrfahrer_audit_file_any_blocked($companyId)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Route voruebergehend gesperrt.']);
+    exit;
+}
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(

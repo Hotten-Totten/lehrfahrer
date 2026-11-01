@@ -184,7 +184,9 @@ after(() => {
 test('alle geforderten APIs besitzen eine explizite Capability-Zuordnung', () => {
   for (const apiCase of apiCases) {
     const source = fs.readFileSync(path.join(projectRoot, 'api', apiCase.file), 'utf8');
-    assert.ok(source.includes(apiCase.capability), `${apiCase.name}: ${apiCase.capability}`);
+    assert.ok(['save_line', 'save_gpx'].includes(apiCase.name)
+      ? source.includes('lehrfahrer_route_require_account_write()')
+      : source.includes(apiCase.capability), `${apiCase.name}: ${apiCase.capability}`);
   }
 });
 
@@ -215,14 +217,22 @@ for (const apiCase of apiCases) {
       csrf: mutation ? sessions[apiCase.role].csrf : '',
       origin: mutation
     });
-    assert.notEqual(allowed.response.status, 401, allowed.text);
-    assert.notEqual(allowed.response.status, 403, allowed.text);
-    assert.equal(allowed.response.headers.get('x-lehrfahrer-auth-mode'), 'session');
+    if (['save_line', 'save_gpx'].includes(apiCase.name)) {
+      assert.equal(allowed.response.status, 403, allowed.text); // Legacy session has no account actor.
+    } else {
+      assert.notEqual(allowed.response.status, 401, allowed.text);
+      assert.notEqual(allowed.response.status, 403, allowed.text);
+      assert.equal(allowed.response.headers.get('x-lehrfahrer-auth-mode'), 'session');
+    }
 
     const legacy = await request(apiCase, { legacy: true });
-    assert.notEqual(legacy.response.status, 401, legacy.text);
-    assert.notEqual(legacy.response.status, 403, legacy.text);
-    assert.equal(legacy.response.headers.get('x-lehrfahrer-auth-mode'), 'legacy-token');
+    if (['save_line', 'save_gpx'].includes(apiCase.name)) {
+      assert.equal(legacy.response.status, 401, legacy.text);
+    } else {
+      assert.notEqual(legacy.response.status, 401, legacy.text);
+      assert.notEqual(legacy.response.status, 403, legacy.text);
+      assert.equal(legacy.response.headers.get('x-lehrfahrer-auth-mode'), 'legacy-token');
+    }
   });
 }
 

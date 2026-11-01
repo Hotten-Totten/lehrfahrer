@@ -110,37 +110,6 @@ const waypointXml = waypoints.map(wpt => `
 </gpx>`;
 }
 
-async function saveGpxToServer(filename, gpx, city, lineFolder, categoryFolder) {
-  const response = await fetch(`${API_BASE}/save_gpx.php`, {
-    method: "POST",
-    headers: withApiAuthHeaders({
-      "Content-Type": "application/json"
-    }),
-    body: JSON.stringify({
-      filename,
-      gpx,
-      city,
-      lineFolder: lineFolder || "",
-      categoryFolder: categoryFolder || ""
-    })
-  });
-
-  const rawText = await response.text();
-
-  let result;
-  try {
-    result = JSON.parse(rawText);
-  } catch (err) {
-    throw new Error("Server liefert kein gültiges JSON zurück: " + rawText);
-  }
-
-  if (!response.ok || !result.ok) {
-    throw new Error(result.error || "GPX konnte nicht auf dem Server gespeichert werden.");
-  }
-
-  return result;
-}
-
 async function exportLineAsGpx() {
   try {
     const gpx = buildGpxString();
@@ -148,8 +117,6 @@ async function exportLineAsGpx() {
     const lineName = document.getElementById("lineName")?.value?.trim() || "Linie";
     const routeName = document.getElementById("routeName")?.value?.trim() || "";
     const directionName = document.getElementById("directionName")?.value?.trim() || "";
-    const city = citySelect?.value?.trim() || "cottbus";
-
     const fileBase = (typeof buildLineFileBase === "function")
     ? buildLineFileBase()
     : sanitizeFilename([lineName, routeName, directionName].filter(Boolean).join("_") || "Linie");
@@ -169,11 +136,8 @@ async function exportLineAsGpx() {
 
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-    // Zusätzlich auf Server speichern
-    const serverResult = await saveGpxToServer(fileName, gpx, city);
-
     if (typeof setStatus === "function") {
-      setStatus(`GPX exportiert und auf Server gespeichert: ${serverResult.filename}`);
+      setStatus(`GPX heruntergeladen: ${fileName}`);
     }
   } catch (error) {
     console.error("GPX-Export fehlgeschlagen:", error);

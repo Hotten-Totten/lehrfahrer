@@ -5,7 +5,9 @@ require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_timetable_change.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
 require_once __DIR__ . '/_route_content_comparison.php';
-$companyId = lehrfahrer_route_authorize('routes.write', true, true);
+require_once __DIR__ . '/_route_save_bundle.php';
+$authContext = lehrfahrer_route_require_account_write();
+$companyId = lehrfahrer_route_company_id($authContext);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -537,175 +539,39 @@ $forceOverwrite = !empty($data['forceOverwrite']);
 
 $filePath = lehrfahrer_route_file($companyId, $city, $fileBase, 'json', $lineFolder, $categoryFolder);
 
-// Konfliktvermeidung:
-// - Andere Route im selben Dateinamen -> freier Dateiname mit Zählsuffix
-// - Selbe Route/Direction auf Original-Datei -> neue Umleitung (Umleitung_XX)
-// - Bereits Umleitung_XX -> darf überschrieben werden
-if (file_exists($filePath) && !$forceOverwrite) {
-    $existingRaw  = @file_get_contents($filePath);
-    $existingData = $existingRaw ? @json_decode($existingRaw, true) : null;
-    if (is_array($existingData)) {
-        $exLine  = isset($existingData['line']) && is_array($existingData['line'])
-                   ? $existingData['line'] : $existingData;
-        $exRoute = $exLine['routeName']     ?? ($existingData['routeName']     ?? '');
-        $exDir   = $exLine['directionName'] ?? ($existingData['directionName'] ?? '');
-
-        $inLine  = isset($data['line']) && is_array($data['line'])
-                   ? $data['line'] : $data;
-        $inRoute = $inLine['routeName']     ?? ($data['routeName']     ?? '');
-        $inDir   = $inLine['directionName'] ?? ($data['directionName'] ?? '');
-
-        $isSameRoute = ($exRoute === $inRoute && $exDir === $inDir);
-        $isDiversionFile = hasDiversionSuffix($fileBase)
-            || hasDiversionSuffix((string)$inRoute)
-            || hasDiversionSuffix((string)$exRoute);
-
-        if ($isSameRoute && !$isDiversionFile) {
-            // Originalroute wird bearbeitet: neue Umleitungsdatei erzeugen statt zu überschreiben.
-            $origBase = $fileBase;
-            $i = 1;
-            while ($i <= 99) {
-                $suffix = 'Umleitung_' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
-                $candidateBase = $origBase . '_' . $suffix;
-                $candidatePath = lehrfahrer_route_file($companyId, $city, $candidateBase, 'json', $lineFolder, $categoryFolder);
-                if (!file_exists($candidatePath)) {
-                    $fileBase = $candidateBase;
-                    $filePath = $candidatePath;
-
-                    $newRouteName = trim((string)$inRoute);
-                    if ($newRouteName === '') {
-                        $newRouteName = 'Route';
-                    }
-                    if (!hasDiversionSuffix($newRouteName)) {
-                        $newRouteName .= ' ' . $suffix;
-                    }
-
-                    $data['routeName'] = $newRouteName;
-                    if (isset($data['line']) && is_array($data['line'])) {
-                        $data['line']['routeName'] = $newRouteName;
-                    }
-                    break;
-                }
-                $i++;
-            }
-        } elseif (!$isSameRoute) {
-            // Andere Route im selben Dateinamen – freie Datei mit Suffix suchen
-            $origBase = $fileBase;
-            $i = 1;
-            while (file_exists($filePath) && $i <= 99) {
-                $fileBase = $origBase . '_' . str_pad($i, 2, '0', STR_PAD_LEFT);
-                $filePath = lehrfahrer_route_file($companyId, $city, $fileBase, 'json', $lineFolder, $categoryFolder);
-                $i++;
-            }
-        }
-    }
-}
-
-$isGtfsWork = isset($data['meta']['gtfsWork']);
-$changeType = 'NEW';
-if (!$isGtfsWork && is_file($filePath)) {
-    $existingRaw = @file_get_contents($filePath);
-    $existingRoute = $existingRaw === false ? null : json_decode($existingRaw, true);
-    if (!is_array($existingRoute)) {
-        http_response_code(409);
-        echo json_encode(['ok' => false, 'error' => 'Vorhandene Route kann nicht verglichen werden'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-    $changeType = lehrfahrer_route_content_change($existingRoute, $data);
-}
-
-$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-if ($json === false) {
-    http_response_code(500);
-    echo json_encode([
-        'ok' => false,
-        'error' => 'JSON konnte nicht erzeugt werden'
-    ], JSON_UNESCAPED_UNICODE);
+// Zielwahl, semantischer Vergleich und alle Dateiartefakte laufen unter derselben
+// tenantgebundenen Datei- und GTFS-Inventarsperre.
+try {
+    $saved = lehrfahrer_route_bundle_save($authContext, $data, $city,
+        $lineFolder, $categoryFolder, $fileBase, $forceOverwrite);
+} catch (InvalidArgumentException $error) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+} catch (Throwable $error) {
+    http_response_code(409);
+    echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
     exit;
 }
-
-if ($isGtfsWork) {
-    try {
-        $changeType = lehrfahrer_gtfs_work_save_route($companyId, $data,
-            $city . '/' . $lineFolder . '/' . $categoryFolder . '/' . $fileBase . '.json', $filePath, $json);
-    } catch (Throwable $error) {
-        http_response_code(409);
-        echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-} else {
-    try {
-        lehrfahrer_gtfs_work_save_manual_route($companyId, $filePath, $json);
-    } catch (Throwable $error) {
-        http_response_code(409);
-        echo json_encode(['ok' => false, 'error' => $error->getMessage()], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-}
-
-$pdfSaved = false;
-$pdfFile = $fileBase . '.pdf';
-$pdfPath = lehrfahrer_route_file($companyId, $city, $fileBase, 'pdf', $lineFolder, $categoryFolder);
-$pdfError = null;
-$pdfSavedPath = null;
-$pdfTriedPaths = [];
-
-try {
-    $pdfBinary = buildLineOverviewPdf($data, $city, $lineFolder);
-
-    $candidates = [$pdfPath];
-
-    foreach ($candidates as $candidatePath) {
-        $pdfTriedPaths[] = basename($candidatePath);
-
-        $tmpPath = $candidatePath . '.tmp';
-        $tmpWrite = @file_put_contents($tmpPath, $pdfBinary);
-        if ($tmpWrite !== false && @rename($tmpPath, $candidatePath) && isRealPdfFile($candidatePath)) {
-            $pdfSaved = true;
-            $pdfSavedPath = 'api/download_line_pdf.php?' . http_build_query([
-                'city' => $city, 'line' => $fileBase,
-                'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder
-            ], '', '&', PHP_QUERY_RFC3986);
-            $pdfPath = $candidatePath;
-            break;
-        }
-        if (is_file($tmpPath)) {
-            @unlink($tmpPath);
-        }
-
-        $directWrite = @file_put_contents($candidatePath, $pdfBinary);
-        if ($directWrite !== false && isRealPdfFile($candidatePath)) {
-            $pdfSaved = true;
-            $pdfSavedPath = 'api/download_line_pdf.php?' . http_build_query([
-                'city' => $city, 'line' => $fileBase,
-                'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder
-            ], '', '&', PHP_QUERY_RFC3986);
-            $pdfPath = $candidatePath;
-            break;
-        }
-    }
-
-    if (!$pdfSaved) {
-        $pdfError = 'PDF konnte nicht dauerhaft geschrieben werden (Datei nicht vorhanden oder leer)';
-    }
-} catch (Throwable $pdfException) {
-    $pdfError = $pdfException->getMessage();
-}
-
+$pdfPath = 'api/download_line_pdf.php?' . http_build_query([
+    'city' => $saved['city'], 'line' => $saved['fileBase'],
+    'lineFolder' => $saved['lineFolder'], 'categoryFolder' => $saved['categoryFolder']
+], '', '&', PHP_QUERY_RFC3986);
 echo json_encode([
     'ok' => true,
     'message' => 'Linie gespeichert',
-    'file' => basename($filePath),
-    'pdfFile' => $pdfFile,
-    'pdfSaved' => $pdfSaved,
-    'pdfError' => $pdfError,
-    'pdfPath' => $pdfSavedPath,
-    'pdfTriedPaths' => $pdfTriedPaths,
-    'fileBase' => $fileBase,
-    'lineFolder' => $lineFolder,
-    'categoryFolder' => $categoryFolder,
-    'city' => $city,
-    'savedAt' => $data['savedAt'],
-    'changeType' => $changeType
+    'file' => $saved['file'],
+    'pdfFile' => $saved['fileBase'] . '.pdf',
+    'pdfSaved' => true,
+    'pdfError' => null,
+    'pdfPath' => $pdfPath,
+    'pdfTriedPaths' => [$saved['fileBase'] . '.pdf'],
+    'gpxSaved' => true,
+    'fileBase' => $saved['fileBase'],
+    'lineFolder' => $saved['lineFolder'],
+    'categoryFolder' => $saved['categoryFolder'],
+    'city' => $saved['city'],
+    'savedAt' => $saved['savedAt'],
+    'changeType' => $saved['changeType'],
+    'artifactRepair' => $saved['repair']
 ], JSON_UNESCAPED_UNICODE);

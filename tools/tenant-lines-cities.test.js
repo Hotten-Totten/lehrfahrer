@@ -19,6 +19,8 @@ let companyA;
 let companyB;
 let sessionA;
 let sessionB;
+let accountSessionA;
+let accountSessionB;
 
 function phpString(value) { return JSON.stringify(String(value).replaceAll('\\', '/')); }
 function environment() {
@@ -48,6 +50,10 @@ async function port() {
   });
 }
 async function request(url, options = {}, session = sessionA) {
+  if (/^\/api\/save_(?:line|gpx)\.php(?:\?|$)/.test(url)) {
+    if (session === sessionA) session = accountSessionA;
+    else if (session === sessionB) session = accountSessionB;
+  }
   const headers = { ...(options.headers || {}) };
   if (session) headers.Cookie = session.cookie;
   if (options.json !== undefined) {
@@ -102,21 +108,35 @@ before(async () => {
   fs.cpSync(path.join(root, 'api'), path.join(webroot, 'api'), { recursive: true });
   origin = 'http://127.0.0.1:' + await port();
   const seed = `
-    require ${phpString(path.join(root, 'api', '_control_repositories.php'))};
+    require ${phpString(path.join(root, 'api', '_account_auth.php'))};
     $pdo=lehrfahrer_control_database();
     $companies=new LehrfahrerCompanyRepository($pdo);
     $users=new LehrfahrerUserRepository($pdo);
     $roles=new LehrfahrerRoleRepository($pdo);
     $result=[];
+    $accountSessions=[];
     foreach (['betrieb-a','betrieb-b'] as $slug) {
       $company=$companies->create(['slug'=>$slug,'name'=>$slug,'status'=>'active','license_status'=>'active']);
       $user=$users->create($company['id'],['login'=>'admin','display_name'=>'Admin','password'=>${phpString(password)}]);
       $roles->assignRole($company['id'],$user['id'],'ADMIN');
+      $record=$users->findAuthenticationRecordByLogin($company['id'],'admin');
+      $accountId=lehrfahrer_control_id('acc'); $membershipId=lehrfahrer_control_id('mem');
+      $login=$slug.'-admin'; $now=gmdate('c');
+      $pdo->prepare('INSERT INTO accounts (id,login_normalized,display_name,password_hash,active,must_change_password,created_at,updated_at) VALUES (?,?,?,?,1,0,?,?)')
+        ->execute([$accountId,$login,'Admin',$record['password_hash'],$now,$now]);
+      $pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,legacy_user_id,created_at,updated_at) VALUES (?,?,?,'active',?,?,?)")
+        ->execute([$membershipId,$accountId,$company['id'],$user['id'],$now,$now]);
+      $roleId=$pdo->query("SELECT id FROM roles WHERE code='ADMIN'")->fetchColumn();
+      $pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$membershipId,$roleId]);
+      $created=lehrfahrer_account_login($pdo,$login,${phpString(password)});
+      $accountSessions[]=['cookie'=>LEHRFAHRER_ACCOUNT_TEST_COOKIE.'='.$created['token'],'csrf'=>$created['csrf']];
       $result[]=$company;
     }
-    echo json_encode($result);
+    echo json_encode(['companies'=>$result,'accountSessions'=>$accountSessions]);
   `;
-  [companyA, companyB] = JSON.parse(runPhp(seed));
+  const seeded = JSON.parse(runPhp(seed));
+  [companyA, companyB] = seeded.companies;
+  [accountSessionA, accountSessionB] = seeded.accountSessions;
   seedCity(companyA, 'stadt-a', 'Route_A');
   seedCity(companyB, 'stadt-b', 'Route_B');
   server = spawn(php, ['-S', origin.replace('http://', ''), '-t', webroot], {
@@ -228,7 +248,7 @@ test('bekannte Fremd-IDs und Fremdstadt liefern beidseitig 404', async () => {
       json: { city: foreignCity, lineFolder: 'Linie_X', categoryFolder: 'Standard',
         filename: 'Foreign_Write.gpx', gpx: '<gpx />' }
     }, session);
-    assert.equal(saveGpx.status, 404, saveGpx.body);
+    assert.equal(saveGpx.status, 410, saveGpx.body);
     const settings = await request('/api/city_settings.php', {
       json: { city: foreignCity, dispatchPhone: '999' }
     }, session);
@@ -316,7 +336,7 @@ test('Stadt und Linie werden nur bei A erstellt, umbenannt und geloescht', async
     json: { city, lineFolder: 'Linie_9', categoryFolder: 'Standard',
       filename: 'Route_Neu.gpx', gpx: '<gpx><name>Route_Neu</name></gpx>' }
   });
-  assert.equal(gpx.status, 200, gpx.body);
+  assert.equal(gpx.status, 410, gpx.body);
   for (const endpoint of ['load_line.php', 'download_line_json.php', 'download_line_gpx.php', 'download_line_pdf.php']) {
     const url = '/api/' + endpoint + '?city=' + city + '&line=Route_Neu&lineFolder=Linie_9&categoryFolder=Standard';
     const own = await request(url);
@@ -397,7 +417,7 @@ test('Konfliktvermeidung klassifiziert den tatsächlich neu angelegten Umleitung
   const route = {
     city: 'stadt-a', lineFolder: 'Linie_45', categoryFolder: 'Standard',
     fileBase: 'Route_Detour', lineName: 'Linie 45', routeName: 'Route Detour',
-    directionName: 'Nord', stops: [], routePoints: []
+    directionName: 'Nord', stops: [], routePoints: [[51.7, 14.3], [51.71, 14.31]]
   };
   const first = await request('/api/save_line.php', { json: route });
   assert.equal(first.status, 200, first.body);
@@ -446,5 +466,70 @@ test('Semantischer Save erhält UNCHANGED-Status und stuft CHANGED zurück', asy
           expected === 'UNCHANGED' && status === 'FREIGEGEBEN');
       }
     }
+  }
+});
+
+test('Account-Save koppelt JSON, PDF und GPX; UNCHANGED schreibt nichts und repariert nur Fehlendes', async () => {
+  const directory = path.join(privateRoot, 'companies', companyA.id, 'lines', 'stadt-a', 'Linie_52', 'Standard');
+  const route = { city: 'stadt-a', lineFolder: 'Linie_52', categoryFolder: 'Standard',
+    fileBase: 'Route_Bundle', lineName: 'Linie 52', routeName: 'Route Bundle', directionName: 'Nord',
+    routePoints: [[51.7, 14.3], [51.71, 14.31]],
+    stops: [{ name: 'A', lat: 51.7, lon: 14.3 }, { name: 'B', lat: 51.71, lon: 14.31 }] };
+  const files = ['json', 'pdf', 'gpx'].map(extension => path.join(directory, `Route_Bundle.${extension}`));
+  const first = await request('/api/save_line.php', { json: route });
+  assert.equal(first.status, 200, first.body);
+  assert.equal(first.json().changeType, 'NEW');
+  assert.ok(files.every(file => fs.existsSync(file)));
+  const timestamps = files.map(file => fs.statSync(file).mtimeMs);
+  const second = await request('/api/save_line.php', { json: { ...route, forceOverwrite: true } });
+  assert.equal(second.status, 200, second.body);
+  assert.equal(second.json().changeType, 'UNCHANGED');
+  assert.equal(second.json().artifactRepair, false);
+  assert.deepEqual(files.map(file => fs.statSync(file).mtimeMs), timestamps);
+  fs.rmSync(files[2]);
+  const repaired = await request('/api/save_line.php', { json: { ...route, forceOverwrite: true } });
+  assert.equal(repaired.status, 200, repaired.body);
+  assert.equal(repaired.json().changeType, 'UNCHANGED');
+  assert.equal(repaired.json().artifactRepair, true);
+  assert.ok(fs.existsSync(files[2]));
+  assert.deepEqual(files.slice(0, 2).map(file => fs.statSync(file).mtimeMs), timestamps.slice(0, 2));
+  const gpxBefore = fs.readFileSync(files[2]);
+  const standalone = await request('/api/save_gpx.php', { json: {
+    city: route.city, lineFolder: route.lineFolder, categoryFolder: route.categoryFolder,
+    filename: 'Route_Bundle.gpx', gpx: '<gpx>foreign</gpx>'
+  } });
+  assert.equal(standalone.status, 410);
+  assert.deepEqual(fs.readFileSync(files[2]), gpxBefore);
+});
+
+test('Legacy-Token kann weder JSON noch GPX schreiben', async () => {
+  for (const endpoint of ['save_line.php', 'save_gpx.php']) {
+    const response = await request('/api/' + endpoint, { headers: { 'X-Api-Token': legacyToken }, json: {} }, null);
+    assert.equal(response.status, 401, response.body);
+  }
+});
+test('GPX-Vorbereitungsfehler verhindert jede Aktivierung eines bestehenden Routensatzes', async () => {
+  const route = { city: 'stadt-a', lineFolder: 'Linie_53', categoryFolder: 'Standard',
+    fileBase: 'Route_Atomic', lineName: 'Linie 53', routeName: 'Route Atomic',
+    routePoints: [[51.7, 14.3], [51.71, 14.31]], stops: [] };
+  const saved = await request('/api/save_line.php', { json: route });
+  assert.equal(saved.status, 200, saved.body);
+  const directory = path.join(privateRoot, 'companies', companyA.id, 'lines', 'stadt-a', 'Linie_53', 'Standard');
+  const files = ['json', 'pdf', 'gpx'].map(extension => path.join(directory, `Route_Atomic.${extension}`));
+  const before = files.map(file => fs.readFileSync(file));
+  const failed = await request('/api/save_line.php', { json: {
+    ...route, forceOverwrite: true, routePoints: [], stops: [], directionName: 'Geaendert'
+  } });
+  assert.equal(failed.status, 409, failed.body);
+  files.forEach((file, i) => assert.deepEqual(fs.readFileSync(file), before[i]));
+});
+test('Account-Route-Write erzwingt CSRF und lehnt Legacy-Session ab', async () => {
+  for (const endpoint of ['save_line.php', 'save_gpx.php']) {
+    const wrongCsrf = await request('/api/' + endpoint, { json: {}, headers: { 'X-CSRF-Token': 'wrong' } },
+      { ...accountSessionA, csrf: 'wrong' });
+    assert.equal(wrongCsrf.status, 403, wrongCsrf.body);
+    const legacy = await request('/api/' + endpoint, { json: {} },
+      { ...sessionA });
+    assert.equal(legacy.status, 403, legacy.body);
   }
 });

@@ -131,6 +131,8 @@ function showSaveToast(info) {
   appendRow("Datei", info.fileBase || "–");
   appendRow("Ort", info.city || "–");
 
+  if (info.artifactRepair) appendRow("Begleitdateien", "Repariert");
+
   const counts = document.createElement("div");
   counts.className = "toast-row";
   const stopsLabel = document.createElement("span");

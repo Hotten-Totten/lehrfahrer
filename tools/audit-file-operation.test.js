@@ -342,3 +342,34 @@ test('Recovery vor Aktivierung ist an jeder Journalgrenze idempotent', () => {
     assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'alt', stage);
   }
 });
+
+test('gemischter UPDATE/CREATE-Dateisatz aktiviert und rollt als Einheit zurueck', () => {
+  const f = fixture();
+  const pdfPath = f.routePath.replace(/\.json$/, '.pdf');
+  const gpxPath = f.routePath.replace(/\.json$/, '.gpx');
+  const inventoryPath = path.join(f.privateRoot, 'companies', company, 'imports', 'gtfs', 'index', 'work-inventory.json');
+  fs.mkdirSync(path.dirname(inventoryPath), { recursive: true });
+  fs.writeFileSync(f.routePath, 'old-json');
+  fs.writeFileSync(pdfPath, 'old-pdf');
+  fs.writeFileSync(inventoryPath, 'old-inventory');
+  const files = `[
+    ['relative'=>$route,'kind'=>'UPDATE','content'=>'new-json'],
+    ['relative'=>substr($route,0,-5).'.pdf','kind'=>'UPDATE','content'=>'new-pdf'],
+    ['relative'=>substr($route,0,-5).'.gpx','kind'=>'CREATE','content'=>'new-gpx'],
+    ['relative'=>'gtfs/index/work-inventory.json','area'=>'imports','kind'=>'UPDATE','content'=>'new-inventory']
+  ]`;
+  run(f, `try { lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'UPDATE',${files},$event,
+    static function($stage) { if ($stage==='ACTIVATED_2') throw new RuntimeException('simulated'); });
+  } catch(RuntimeException $error) {}
+  echo lehrfahrer_audit_verify_chain($pdo) ? 'OK' : 'BAD';`);
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'old-json');
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'old-pdf');
+  assert.equal(fs.readFileSync(inventoryPath, 'utf8'), 'old-inventory');
+  assert.equal(fs.existsSync(gpxPath), false);
+  run(f, `lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'UPDATE',${files},$event);
+    echo lehrfahrer_audit_verify_chain($pdo) ? 'OK' : 'BAD';`);
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'new-json');
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'new-pdf');
+  assert.equal(fs.readFileSync(gpxPath, 'utf8'), 'new-gpx');
+  assert.equal(fs.readFileSync(inventoryPath, 'utf8'), 'new-inventory');
+});

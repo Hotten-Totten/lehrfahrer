@@ -116,9 +116,9 @@ if (file_exists($gpxPath)) {
 }
 
 $pdfFile = null;
-$pdfPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $baseName));
+$pdfPath = lehrfahrer_route_sibling_path($companyId, $filePath, $baseName . '.pdf');
 if (!file_exists($pdfPath)) {
-    $pdfPath = lehrfahrer_route_sibling_path($companyId, $filePath, $baseName . '.pdf');
+    $pdfPath = lehrfahrer_tenant_path($companyId, 'lines', $city . '/pdf/' . buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $baseName));
 }
 if (file_exists($pdfPath)) {
     $pdfFile = basename($pdfPath);

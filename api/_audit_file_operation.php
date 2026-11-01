@@ -27,6 +27,8 @@ function lehrfahrer_audit_file_directory(string $companyId): string {
 }
 
 function lehrfahrer_audit_file_lock(string $companyId, callable $work): mixed {
+    static $held = [];
+    if (isset($held[$companyId])) return $work($held[$companyId]);
     $directory = lehrfahrer_audit_file_directory($companyId);
     $path = $directory . DIRECTORY_SEPARATOR . '.lock';
     if (is_link($path)) throw new RuntimeException('Audit-Dateisperre ist unsicher.');
@@ -34,8 +36,10 @@ function lehrfahrer_audit_file_lock(string $companyId, callable $work): mixed {
     if ($handle === false) throw new RuntimeException('Audit-Dateisperre fehlt.');
     try {
         if (!flock($handle, LOCK_EX)) throw new RuntimeException('Audit-Dateisperre fehlgeschlagen.');
+        $held[$companyId] = $directory;
         return $work($directory);
     } finally {
+        unset($held[$companyId]);
         flock($handle, LOCK_UN);
         fclose($handle);
     }
@@ -50,6 +54,19 @@ function lehrfahrer_audit_file_read_lock(string $companyId) {
     if ($handle === false || !flock($handle, LOCK_SH)) {
         if (is_resource($handle)) fclose($handle);
         throw new RuntimeException('Audit-Lesesperre fehlgeschlagen.');
+    }
+    return $handle;
+}
+
+/** For existing maintenance writers that must not race a recoverable Save. */
+function lehrfahrer_audit_file_write_lock(string $companyId) {
+    $directory = lehrfahrer_audit_file_directory($companyId);
+    $path = $directory . DIRECTORY_SEPARATOR . '.lock';
+    if (is_link($path)) throw new RuntimeException('Audit-Dateisperre ist unsicher.');
+    $handle = fopen($path, 'c');
+    if ($handle === false || !flock($handle, LOCK_EX)) {
+        if (is_resource($handle)) fclose($handle);
+        throw new RuntimeException('Audit-Dateisperre fehlgeschlagen.');
     }
     return $handle;
 }
@@ -109,19 +126,23 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
         $fileKeys = is_array($file) ? array_keys($file) : [];
         sort($fileKeys);
         if (!is_int($i) || !is_array($file) || !is_string($file['relative'] ?? null)
-            || $fileKeys !== ['area','newHash','oldHash','relative']
+            || !in_array($fileKeys, [
+                ['area','newHash','oldHash','relative'],
+                ['area','kind','newHash','oldHash','relative'],
+            ], true)
             || !in_array($file['area'] ?? null, ['lines','imports'], true)
             || !lehrfahrer_audit_file_related_path($record['routeRelative'], $file['relative'], $file['area'])
             || ($file['area'] === 'imports'
-                && ($file['relative'] !== 'gtfs/index/work-inventory.json' || $record['kind'] !== 'UPDATE'))
+                && ($file['relative'] !== 'gtfs/index/work-inventory.json' || ($file['kind'] ?? $record['kind']) !== 'UPDATE'))
+            || !in_array($file['kind'] ?? $record['kind'], ['CREATE','UPDATE','DELETE'], true)
             || (($file['oldHash'] ?? null) !== null
                 && preg_match('/^[a-f0-9]{64}$/D', (string)$file['oldHash']) !== 1)
             || (($file['newHash'] ?? null) !== null
                 && preg_match('/^[a-f0-9]{64}$/D', (string)$file['newHash']) !== 1)
-            || ($record['kind'] === 'CREATE' && $file['oldHash'] !== null)
-            || ($record['kind'] !== 'CREATE' && $file['oldHash'] === null)
-            || ($record['kind'] === 'DELETE' && $file['newHash'] !== null)
-            || ($record['kind'] !== 'DELETE' && $file['newHash'] === null)) {
+            || (($file['kind'] ?? $record['kind']) === 'CREATE' && $file['oldHash'] !== null)
+            || (($file['kind'] ?? $record['kind']) !== 'CREATE' && $file['oldHash'] === null)
+            || (($file['kind'] ?? $record['kind']) === 'DELETE' && $file['newHash'] !== null)
+            || (($file['kind'] ?? $record['kind']) !== 'DELETE' && $file['newHash'] === null)) {
             throw new RuntimeException('Journal-Dateieintrag ungueltig.');
         }
         lehrfahrer_tenant_segments($file['relative']);
@@ -258,10 +279,11 @@ function lehrfahrer_audit_file_restore(string $companyId, array $record): void {
         $currentHash = is_file($target) ? @hash_file('sha256', $target) : null;
         $oldHash = $file['oldHash'];
         $newHash = $file['newHash'];
-        if ($record['kind'] === 'CREATE') {
+        $kind = $file['kind'] ?? $record['kind'];
+        if ($kind === 'CREATE') {
             if ($currentHash !== null && $currentHash !== $newHash) throw new RuntimeException('CREATE-Ziel wurde fremd veraendert.');
             if ($currentHash !== null && !@unlink($target)) throw new RuntimeException('CREATE-Rollback fehlgeschlagen.');
-        } elseif ($record['kind'] === 'UPDATE') {
+        } elseif ($kind === 'UPDATE') {
             if ($currentHash === $oldHash) continue;
             if ($currentHash !== $newHash || !is_file($backup)
                 || @hash_file('sha256', $backup) !== $oldHash
@@ -338,7 +360,7 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
         throw new InvalidArgumentException('Audit-Ereignis gehoert nicht zum Routenobjekt.');
     }
     lehrfahrer_audit_validate_event($actor, $event, LEHRFAHRER_AUDIT_CRITICAL);
-    return lehrfahrer_audit_file_lock($companyId, static function (string $directory) use (
+    $operation = static function (string $directory) use (
         $pdo, $actor, $companyId, $routeRelative, $kind, $files, $event, $checkpoint, $objectId
     ): string {
         lehrfahrer_audit_file_recover_locked($pdo, $companyId, $directory);
@@ -349,8 +371,11 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
         $payloads = [];
         $seen = [];
         foreach (array_values($files) as $i => $file) {
-            if (!is_array($file) || !is_string($file['relative'] ?? null)
-                || ($kind !== 'DELETE' && !is_string($file['content'] ?? null))) {
+            if (!is_array($file)) throw new InvalidArgumentException('Audit-Dateieintrag ungueltig.');
+            $fileKind = $file['kind'] ?? $kind;
+            if (!is_string($file['relative'] ?? null)
+                || !in_array($fileKind, ['CREATE','UPDATE','DELETE'], true)
+                || ($fileKind !== 'DELETE' && !is_string($file['content'] ?? null))) {
                 throw new InvalidArgumentException('Audit-Dateieintrag ungueltig.');
             }
             $relative = $file['relative'];
@@ -358,7 +383,7 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             if (!is_string($area) || !in_array($area, ['lines','imports'], true)
                 || !lehrfahrer_audit_file_related_path($routeRelative, $relative, $area)
                 || ($area === 'imports'
-                    && ($relative !== 'gtfs/index/work-inventory.json' || $kind !== 'UPDATE'))) {
+                    && ($relative !== 'gtfs/index/work-inventory.json' || $fileKind !== 'UPDATE'))) {
                 throw new InvalidArgumentException('Audit-Dateibereich ungueltig.');
             }
             $key = $area . '/' . $relative;
@@ -366,18 +391,20 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             $seen[$key] = true;
             $target = lehrfahrer_audit_file_target($companyId, $relative, $area);
             $old = is_file($target) ? @file_get_contents($target) : null;
-            if ($old === false || ($kind === 'CREATE' && $old !== null)
-                || ($kind !== 'CREATE' && $old === null)) throw new RuntimeException('Dateizustand passt nicht zum Vorgang.');
+            if ($old === false || ($fileKind === 'CREATE' && $old !== null)
+                || ($fileKind !== 'CREATE' && $old === null)) throw new RuntimeException('Dateizustand passt nicht zum Vorgang.');
             $record['files'][] = ['area' => $area, 'relative' => $relative,
                 'oldHash' => $old === null ? null : hash('sha256', $old),
-                'newHash' => $kind === 'DELETE' ? null : hash('sha256', $file['content'])];
-            if ($kind !== 'DELETE') $payloads[$i] = $file['content'];
+                'newHash' => $fileKind === 'DELETE' ? null : hash('sha256', $file['content'])];
+            if ($fileKind !== $kind) $record['files'][$i]['kind'] = $fileKind;
+            if ($fileKind !== 'DELETE') $payloads[$i] = $file['content'];
         }
         if ($kind !== 'UPDATE' && !isset($seen['lines/' . $routeRelative])) {
             throw new InvalidArgumentException('Routenobjekt fehlt im Dateivorgang.');
         }
         if ($kind === 'UPDATE' && !isset($seen['lines/' . $routeRelative])
-            && !isset($seen['imports/gtfs/index/work-inventory.json'])) {
+            && !isset($seen['imports/gtfs/index/work-inventory.json'])
+            && !is_file(lehrfahrer_audit_file_target($companyId, $routeRelative))) {
             throw new InvalidArgumentException('Routenbezug fehlt im Dateivorgang.');
         }
         lehrfahrer_audit_file_store($directory, $record);
@@ -385,13 +412,14 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             if ($checkpoint !== null) $checkpoint('PREPARING');
             foreach ($record['files'] as $i => $file) {
                 $target = lehrfahrer_audit_file_target($companyId, $file['relative'], $file['area']);
-                if ($kind === 'UPDATE') {
+                $fileKind = $file['kind'] ?? $kind;
+                if ($fileKind === 'UPDATE') {
                     $old = (string)@file_get_contents($target);
                     if (hash('sha256', $old) !== $file['oldHash']) throw new RuntimeException('Routendatei hat sich geaendert.');
                     lehrfahrer_audit_file_write_complete(
                         lehrfahrer_audit_file_auxiliary($target, $id, $i, 'bak'), $old);
                 }
-                if ($kind !== 'DELETE') lehrfahrer_audit_file_write_complete(
+                if ($fileKind !== 'DELETE') lehrfahrer_audit_file_write_complete(
                     lehrfahrer_audit_file_auxiliary($target, $id, $i, 'new'), $payloads[$i]);
             }
             lehrfahrer_audit_file_transition($directory, $record, 'PREPARED');
@@ -405,14 +433,15 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             if ($checkpoint !== null) $checkpoint('ACTIVATING');
             foreach ($record['files'] as $i => $file) {
                 $target = lehrfahrer_audit_file_target($companyId, $file['relative'], $file['area']);
+                $fileKind = $file['kind'] ?? $kind;
                 $aux = dirname($target) . DIRECTORY_SEPARATOR . '.lf-audit-' . $id . '-' . $i . '.'
-                    . ($kind === 'DELETE' ? 'bak' : 'new');
-                if ($kind === 'DELETE') {
+                    . ($fileKind === 'DELETE' ? 'bak' : 'new');
+                if ($fileKind === 'DELETE') {
                     if (is_link($target) || !is_file($target) || is_link($aux)
                         || file_exists($aux) || !@rename($target, $aux)) {
                         throw new RuntimeException('Dateiloeschung konnte nicht reversibel aktiviert werden.');
                     }
-                } elseif ($kind === 'CREATE') {
+                } elseif ($fileKind === 'CREATE') {
                     if (is_link($aux) || !is_file($aux) || !@link($aux, $target)) {
                         throw new RuntimeException('Neue Routendatei konnte nicht exklusiv aktiviert werden.');
                     }
@@ -440,5 +469,6 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             }
             throw $error;
         }
-    });
+    };
+    return lehrfahrer_audit_file_lock($companyId, $operation);
 }

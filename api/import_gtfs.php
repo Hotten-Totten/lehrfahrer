@@ -11,6 +11,7 @@ require_once __DIR__ . '/_gtfs_route_preview.php';
 require_once __DIR__ . '/_gtfs_route_assignment.php';
 require_once __DIR__ . '/_route_categories.php';
 require_once __DIR__ . '/_gtfs_route_creation.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -759,6 +760,11 @@ function gtfs_route_category_list(): void {
 
 function gtfs_candidate_adopt(): void {
     gtfs_require_cottbus_change_scope();
+    // Adoption also replaces the inventory: serialize it with route saves.
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $dir = gtfs_candidate_dir();
     $id = trim(strval($_POST['candidateId'] ?? ''));
     if (preg_match('/^[a-f0-9]{64}$/D', $id) !== 1 || !hash_equals(basename($dir), $id)) {
@@ -828,6 +834,10 @@ function gtfs_adopt_timetable_working_set(string $scope): void {
 
 function gtfs_work_inventory_response(bool $prepareAll = false): void {
     gtfs_require_cottbus_change_scope();
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $inventory = lehrfahrer_gtfs_work_reconcile(LEHRFAHRER_GTFS_COMPANY_ID, gtfs_index_path(), [lehrfahrer_gtfs_operator_id_from_index(gtfs_index_path())]);
     $prepared = null;
     if ($prepareAll) {
@@ -839,6 +849,10 @@ function gtfs_work_inventory_response(bool $prepareAll = false): void {
 
 function gtfs_work_open(): void {
     gtfs_require_cottbus_change_scope();
+    $auditFileReadLock = lehrfahrer_audit_file_read_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
@@ -871,6 +885,10 @@ function gtfs_work_open(): void {
 
 function gtfs_work_status(): void {
     gtfs_require_cottbus_change_scope();
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     $status = strtoupper(trim(strval($_POST['status'] ?? '')));
@@ -894,6 +912,10 @@ function gtfs_work_status(): void {
 
 function gtfs_work_revoke(): void {
     gtfs_require_cottbus_change_scope();
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $auth = lehrfahrer_api_require_session();
     lehrfahrer_auth_require_capability($auth, 'routes.import');
     lehrfahrer_auth_require_same_origin();
@@ -911,6 +933,10 @@ function gtfs_work_revoke(): void {
 
 function gtfs_work_archive(): void {
     gtfs_require_cottbus_change_scope();
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     $auth = lehrfahrer_api_require_session();
     lehrfahrer_auth_require_capability($auth, 'routes.import');
     lehrfahrer_auth_require_same_origin();
