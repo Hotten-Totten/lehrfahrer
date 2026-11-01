@@ -552,16 +552,18 @@ jobs:
           cd "./${1#./}"
           probe_dir="$(mktemp -d .lf-audit-probe-XXXXXXXX)"
           trap 'rm -f -- "$probe_dir"/*; rmdir -- "$probe_dir"' EXIT
-          php -r '
-            $dir = $argv[1];
-            $source = "$dir/source"; $linked = "$dir/linked"; $target = "$dir/target";
-            if (file_put_contents($source, "old") !== 3
-                || !link($source, $linked)
-                || file_get_contents($linked) !== "old"
-                || file_put_contents($target, "new") !== 3
-                || !rename($target, $linked)
-                || file_get_contents($linked) !== "new") exit(1);
-          ' "$probe_dir"
+          cat > "$probe_dir/check.php" <<'PHP_ATOMIC_FILE_CHECK'
+          <?php
+          $dir = $argv[1];
+          $source = "$dir/source"; $linked = "$dir/linked"; $target = "$dir/target";
+          if (file_put_contents($source, "old") !== 3
+              || !link($source, $linked)
+              || file_get_contents($linked) !== "old"
+              || file_put_contents($target, "new") !== 3
+              || !rename($target, $linked)
+              || file_get_contents($linked) !== "new") exit(1);
+          PHP_ATOMIC_FILE_CHECK
+          php -q -f "$probe_dir/check.php" "$probe_dir"
           REMOTE_ATOMIC_FILE_CHECK
 
           "${RSYNC_RUN[@]}" -az --omit-dir-times --no-perms --no-owner --no-group \
