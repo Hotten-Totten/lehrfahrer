@@ -42,6 +42,7 @@ foreach ([$userA,$userB] as $user) {
   if ($record['login_normalized']==='alpha') { $accountA=$accountId; $membershipA=$membershipId; }
   else { $accountB=$accountId; $membershipB=$membershipId; }
 }
+
 ${setup}
 ${action}
 `;
@@ -51,6 +52,100 @@ ${action}
   return JSON.parse(result.stdout);
 }
 
+test('A2 Login und Kontextwechsel auditieren nur serverseitige Identität und erhalten die Hashkette', () => {
+  const data = fixture(String.raw`
+lehrfahrer_account_login($pdo,'unbekannt-personenname','bad-secret');
+$pdo->prepare('UPDATE accounts SET active=0 WHERE id=?')->execute([$accountB]);
+lehrfahrer_account_login($pdo,'beta','test-password-12345');
+$pdo->prepare('UPDATE accounts SET active=1,blocked_until=? WHERE id=?')
+ ->execute([gmdate('c',time()+600),$accountB]);
+lehrfahrer_account_login($pdo,'beta','test-password-12345');
+$_POST=['accountId'=>$accountB,'companyId'=>$companyB['id'],'membershipId'=>$membershipB];
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+lehrfahrer_account_rotate_to_membership($pdo,$membershipA,'wrong-csrf','switch');
+$extra=lehrfahrer_control_id('mem');
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at)
+ VALUES (?,?,?,'active',?,?)")->execute([$extra,$accountA,$companyB['id'],gmdate('c'),gmdate('c')]);
+$role=$pdo->query("SELECT id FROM roles WHERE code='FAHRER'")->fetchColumn();
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute([$extra,$role]);
+lehrfahrer_account_rotate_to_membership($pdo,$extra,$login['csrf'],'switch');
+$events=$pdo->query('SELECT action,result,reason_code,account_id,company_id,object_id FROM audit_events ORDER BY sequence_number')->fetchAll(PDO::FETCH_ASSOC);
+$raw=json_encode($pdo->query('SELECT * FROM audit_events')->fetchAll(PDO::FETCH_ASSOC));
+echo json_encode(['events'=>$events,'chain'=>lehrfahrer_audit_verify_chain($pdo),
+ 'serverActor'=>$events[3]['account_id']===$accountA && $events[3]['company_id']===$companyA['id'],
+ 'secretsAbsent'=>!str_contains($raw,'unbekannt-personenname') && !str_contains($raw,'bad-secret')
+   && !str_contains($raw,$login['token']) && !str_contains($raw,$login['csrf'])],JSON_THROW_ON_ERROR);`);
+  assert.equal(data.chain, true);
+  assert.equal(data.secretsAbsent, true);
+  assert.equal(data.serverActor, true);
+  assert.deepEqual(data.events.map(e => [e.action, e.result, e.reason_code]), [
+    ['AUTH_LOGIN', 'DENIED', 'INVALID_CREDENTIALS'],
+    ['AUTH_LOGIN', 'DENIED', 'ACCOUNT_DISABLED'],
+    ['AUTH_LOGIN', 'DENIED', 'ACCOUNT_LOCKED'],
+    ['AUTH_LOGIN', 'SUCCESS', null],
+    ['AUTH_CONTEXT_CHANGE', 'DENIED', 'CSRF_REJECTED'],
+    ['AUTH_CONTEXT_CHANGE', 'SUCCESS', null],
+  ]);
+  assert.equal(data.events[0].account_id, null);
+  assert.equal(data.events[1].company_id, null);
+  assert.notEqual(data.events[3].company_id, null);
+  assert.notEqual(data.events[5].company_id, data.events[3].company_id);
+});
+
+test('A2 Audit verbindet BEGIN IMMEDIATE mit Login und CRITICAL-Fehler öffnet keine Session', () => {
+  const data = fixture(String.raw`
+lehrfahrer_control_sqlite_begin_immediate($pdo);
+$login=lehrfahrer_account_create_session_unguarded($pdo,$accountA,'TENANT',$membershipA);
+lehrfahrer_audit_append($pdo,LehrfahrerAuditActor::createdSession($pdo,$login['token']),
+ ['action'=>'AUTH_LOGIN','result'=>'SUCCESS']);
+$inside=(int)$pdo->query("SELECT COUNT(*) FROM audit_events WHERE action='AUTH_LOGIN' AND result='SUCCESS'")->fetchColumn();
+lehrfahrer_control_sqlite_finish($pdo,false);
+$rolledBack=(int)$pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn()===0
+ && (int)$pdo->query('SELECT COUNT(*) FROM account_sessions')->fetchColumn()===0;
+$pdo->exec('DELETE FROM audit_chain_state');
+$blocked=false;
+try { lehrfahrer_account_login($pdo,'alpha','test-password-12345'); }
+catch (LehrfahrerAuditWriteFailure $error) { $blocked=true; }
+echo json_encode(['inside'=>$inside,'rolledBack'=>$rolledBack,'blocked'=>$blocked,
+ 'sessions'=>(int)$pdo->query('SELECT COUNT(*) FROM account_sessions')->fetchColumn()],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { inside: 1, rolledBack: true, blocked: true, sessions: 0 });
+});
+
+test('A2 Logout widerruft Session und auditieren beide atomar', () => {
+  const data = fixture(String.raw`
+$login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+$session=lehrfahrer_account_current_session($pdo,false);
+lehrfahrer_account_logout_session($pdo,$session);
+$event=$pdo->query("SELECT action,result,account_id,company_id,object_id FROM audit_events WHERE action='AUTH_LOGOUT'")->fetch(PDO::FETCH_ASSOC);
+echo json_encode(['revoked'=>(int)$pdo->query('SELECT COUNT(*) FROM account_sessions WHERE revoked_at IS NOT NULL')->fetchColumn(),
+ 'event'=>$event,'sameSession'=>$event['object_id']===$session['id'],
+ 'sameActor'=>$event['account_id']===$accountA && $event['company_id']===$companyA['id'],
+ 'chain'=>lehrfahrer_audit_verify_chain($pdo)],JSON_THROW_ON_ERROR);`);
+  assert.equal(data.revoked, 1);
+  assert.equal(data.event.action, 'AUTH_LOGOUT');
+  assert.equal(data.event.result, 'SUCCESS');
+  assert.equal(data.sameSession, true);
+  assert.equal(data.sameActor, true);
+  assert.equal(data.chain, true);
+});
+
+test('A2 technischer Loginfehler bleibt abgewiesen und erzeugt FAILED nach Rollback', () => {
+  const data = fixture(String.raw`
+$pdo->exec("CREATE TRIGGER deny_session_insert BEFORE INSERT ON account_sessions
+ BEGIN SELECT RAISE(ABORT, 'fixture failure'); END");
+$failed=false;
+try { lehrfahrer_account_login($pdo,'alpha','test-password-12345'); }
+catch (PDOException $error) { $failed=true; }
+$event=$pdo->query('SELECT action,result,reason_code,account_id FROM audit_events')->fetch(PDO::FETCH_ASSOC);
+echo json_encode(['failed'=>$failed,'sessions'=>(int)$pdo->query('SELECT COUNT(*) FROM account_sessions')->fetchColumn(),
+ 'event'=>$event,'chain'=>lehrfahrer_audit_verify_chain($pdo)],JSON_THROW_ON_ERROR);`);
+  assert.equal(data.failed, true);
+  assert.equal(data.sessions, 0);
+  assert.deepEqual(data.event, { action: 'AUTH_LOGIN', result: 'FAILED', reason_code: 'INTERNAL_FAILURE', account_id: null });
+  assert.equal(data.chain, true);
+});
 test('globaler Accountlogin aktiviert genau eine Membership mit getrennten Capabilities', () => {
   const data = fixture(String.raw`
 $login = lehrfahrer_account_login($pdo,' ALPHA ','test-password-12345');

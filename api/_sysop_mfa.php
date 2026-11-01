@@ -98,6 +98,25 @@ function lehrfahrer_sysop_mfa_pending(PDO $pdo, bool $lock = false): ?array {
     return $pending;
 }
 
+/** Only server-stored pending rows may contribute an account identity to denial audit. */
+function lehrfahrer_sysop_mfa_denial_audit(PDO $pdo): array {
+    require_once __DIR__ . '/_audit.php';
+    $token = lehrfahrer_sysop_mfa_pending_token();
+    if ($token === '') return [LehrfahrerAuditActor::unauthenticated(), 'MFA_REJECTED'];
+    $query = $pdo->prepare('SELECT account_id,consumed_at,expires_at,challenge_expires_at
+        FROM account_mfa_pending WHERE token_hash = ? AND environment = ?');
+    $query->execute([lehrfahrer_auth_token_hash($token), lehrfahrer_environment()]);
+    $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows) !== 1) return [LehrfahrerAuditActor::unauthenticated(), 'MFA_REJECTED'];
+    $row = $rows[0];
+    $reason = $row['consumed_at'] !== null ? 'CHALLENGE_REPLAY'
+        : (strtotime((string)$row['expires_at']) <= time()
+            || ($row['challenge_expires_at'] !== null
+                && strtotime((string)$row['challenge_expires_at']) <= time())
+            ? 'EXPIRED' : 'MFA_REJECTED');
+    return [LehrfahrerAuditActor::knownAccount($pdo, (string)$row['account_id']), $reason];
+}
+
 function lehrfahrer_sysop_mfa_begin(PDO $pdo, string $csrf): ?array {
     return lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $csrf): ?array {
         $pending = lehrfahrer_sysop_mfa_pending($pdo);
@@ -154,7 +173,9 @@ function lehrfahrer_sysop_mfa_verify_creation(array $input, string $challenge): 
 
 /** Always consumes the challenge, including on a failed WebAuthn assertion. */
 function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?array {
-    return lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $csrf, $input): ?array {
+    $denialBefore = lehrfahrer_sysop_mfa_denial_audit($pdo);
+    try {
+        $result = lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $csrf, $input): ?array {
         $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
         if ($mysql) { $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'); $pdo->beginTransaction(); }
         try {
@@ -186,15 +207,26 @@ function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?arr
                 $webauthn = lehrfahrer_sysop_mfa_library();
                 if ($pending['purpose'] === 'ENROLL') {
                     $created = lehrfahrer_sysop_mfa_verify_creation($input, $challenge);
+                    $passkeyId = lehrfahrer_control_id('pkey');
                     $insert = $pdo->prepare("INSERT INTO account_passkeys
                         (id, account_id, credential_id, public_key, sign_count, rp_id, status, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, 'active', ?)");
-                    $insert->execute([lehrfahrer_control_id('pkey'), $pending['account_id'], $created['credentialId'],
+                    $insert->execute([$passkeyId, $pending['account_id'], $created['credentialId'],
                         $created['publicKey'], $created['signCount'],
                         LEHRFAHRER_SYSOP_MFA_RP_ID, lehrfahrer_auth_timestamp(time())]);
                     $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
                         WHERE account_id = ? AND environment = ? AND revoked_at IS NULL');
                     $revoke->execute([lehrfahrer_auth_timestamp(time()), $pending['account_id'], 'staging']);
+                    require_once __DIR__ . '/_audit.php';
+                    lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::knownAccount($pdo, (string)$pending['account_id']),
+                        ['action' => 'AUTH_PASSKEY_REGISTER', 'objectType' => 'PASSKEY',
+                            'objectId' => $passkeyId, 'result' => 'SUCCESS']);
+                    if ($revoke->rowCount() > 0) {
+                        lehrfahrer_audit_append($pdo,
+                            LehrfahrerAuditActor::knownAccount($pdo, (string)$pending['account_id']),
+                            ['action' => 'AUTH_SESSION_REVOKE', 'objectType' => 'SESSION',
+                                'result' => 'SUCCESS']);
+                    }
                     $result = ['enrolled' => true];
                 } else {
                     lehrfahrer_sysop_mfa_validate_client($clientData, 'webauthn.get');
@@ -224,6 +256,11 @@ function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?arr
                     $session = lehrfahrer_account_create_session($pdo, (string)$pending['account_id'], $context,
                         $context === 'TENANT' ? (string)$memberships[0]['id'] : null,
                         $pending['device_label'], true);
+                    require_once __DIR__ . '/_audit.php';
+                    $auditActor = LehrfahrerAuditActor::createdSession($pdo, $session['token']);
+                    lehrfahrer_audit_append($pdo, $auditActor, ['action' => 'AUTH_MFA',
+                        'objectType' => 'PASSKEY', 'objectId' => (string)$credential['id'], 'result' => 'SUCCESS']);
+                    lehrfahrer_audit_append($pdo, $auditActor, ['action' => 'AUTH_LOGIN', 'result' => 'SUCCESS']);
                     $result = ['enrolled' => false, 'session' => $session];
                 }
                 $consume = $pdo->prepare('UPDATE account_mfa_pending SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL');
@@ -239,5 +276,22 @@ function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?arr
             if ($mysql && $pdo->inTransaction()) $pdo->rollBack();
             throw $error;
         }
-    });
+        });
+    } catch (Throwable $error) {
+        if (!$error instanceof LehrfahrerAuditWriteFailure) {
+            [$actor] = lehrfahrer_sysop_mfa_denial_audit($pdo);
+            lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_MFA',
+                'objectType' => 'PASSKEY', 'result' => 'FAILED', 'reasonCode' => 'INTERNAL_FAILURE'],
+                LEHRFAHRER_AUDIT_OPERATIONAL);
+        }
+        throw $error;
+    }
+    if ($result === null) {
+        [$actor, $reason] = lehrfahrer_sysop_mfa_denial_audit($pdo);
+        if ($reason === 'MFA_REJECTED' && $denialBefore[1] !== 'MFA_REJECTED') $reason = $denialBefore[1];
+        lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_MFA',
+            'objectType' => 'PASSKEY', 'result' => 'DENIED', 'reasonCode' => $reason],
+            LEHRFAHRER_AUDIT_OPERATIONAL);
+    }
+    return $result;
 }

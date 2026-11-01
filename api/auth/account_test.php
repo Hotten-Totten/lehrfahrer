@@ -55,10 +55,7 @@ try {
             || !hash_equals((string)$session['csrf_token_hash'], lehrfahrer_auth_token_hash($csrf))) {
             lehrfahrer_auth_json_response(403, ['ok' => false, 'error' => 'Anfrage wurde abgelehnt.']);
         }
-        $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
-            WHERE id = ? AND environment = ? AND revoked_at IS NULL');
-        $revoke->execute([lehrfahrer_auth_timestamp(time()), $session['id'], lehrfahrer_environment()]);
-        if ($revoke->rowCount() !== 1) throw new RuntimeException('Account-Logout fehlgeschlagen.');
+        lehrfahrer_account_logout_session($pdo, $session);
         lehrfahrer_account_clear_cookie();
         lehrfahrer_auth_json_response(200, ['ok' => true]);
     }

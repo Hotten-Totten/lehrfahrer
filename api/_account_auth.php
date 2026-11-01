@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_session_auth.php';
 require_once __DIR__ . '/_auth_cutover_gate.php';
 require_once __DIR__ . '/_sysop_mfa.php';
+require_once __DIR__ . '/_audit.php';
 
 /** P2.1 is a staging-only, parallel test lane; the old session cookie remains untouched. */
 const LEHRFAHRER_ACCOUNT_TEST_COOKIE = '__Host-lehrfahrer_account_test';
@@ -101,8 +102,42 @@ function lehrfahrer_account_create_session_unguarded(PDO $pdo, string $accountId
 }
 
 function lehrfahrer_account_login(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
-    return lehrfahrer_with_auth_mutation_gate($pdo,
-        static fn(): ?array => lehrfahrer_account_login_unguarded($pdo, $login, $password, $deviceLabel));
+    try {
+        return lehrfahrer_with_auth_mutation_gate($pdo,
+            static fn(): ?array => lehrfahrer_account_login_unguarded($pdo, $login, $password, $deviceLabel));
+    } catch (Throwable $error) {
+        if (!$error instanceof LehrfahrerAuditWriteFailure && !$error instanceof LehrfahrerAuthCutoverBusy) {
+            lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::unauthenticated(),
+                ['action' => 'AUTH_LOGIN', 'result' => 'FAILED', 'reasonCode' => 'INTERNAL_FAILURE'],
+                LEHRFAHRER_AUDIT_OPERATIONAL);
+        }
+        throw $error;
+    }
+}
+
+/** Called only after the endpoint has verified the current session and CSRF. */
+function lehrfahrer_account_logout_session(PDO $pdo, array $session): void {
+    $actor = LehrfahrerAuditActor::currentAccount($pdo);
+    if ($actor->accountId !== (string)$session['account_id']) throw new RuntimeException('Logout-Session abweichend.');
+    $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
+    if ($sqlite) lehrfahrer_control_sqlite_begin_immediate($pdo);
+    else $pdo->beginTransaction();
+    try {
+        $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
+            WHERE id = ? AND environment = ? AND revoked_at IS NULL');
+        $revoke->execute([lehrfahrer_auth_timestamp(time()), $session['id'], lehrfahrer_environment()]);
+        if ($revoke->rowCount() !== 1) throw new RuntimeException('Account-Logout fehlgeschlagen.');
+        lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_LOGOUT',
+            'objectType' => 'SESSION', 'objectId' => (string)$session['id'], 'result' => 'SUCCESS']);
+        if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, true);
+        else $pdo->commit();
+    } catch (Throwable $error) {
+        if (lehrfahrer_control_transaction_active($pdo)) {
+            if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, false);
+            else $pdo->rollBack();
+        }
+        throw $error;
+    }
 }
 
 function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
@@ -116,26 +151,54 @@ function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $pas
         is_array($account) ? (string)$account['password_hash'] : $dummyHash);
     $blocked = is_array($account) ? $account['blocked_until'] : null;
     $blockedUntil = $blocked === null ? null : strtotime((string)$blocked);
+    $actor = is_array($account) ? LehrfahrerAuditActor::knownAccount($pdo, (string)$account['id'])
+        : LehrfahrerAuditActor::unauthenticated();
     if (!is_array($account) || $normalized === '' || $password === '' || !$passwordValid
         || (int)$account['active'] !== 1 || (int)$account['must_change_password'] !== 0
-        || ($blocked !== null && ($blockedUntil === false || $blockedUntil > time()))) return null;
-    $previous = lehrfahrer_account_cookie_token();
-    if ($previous !== '') {
-        $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = COALESCE(revoked_at, ?)
-            WHERE session_token_hash = ? AND environment = ?');
-        $revoke->execute([lehrfahrer_auth_timestamp(time()), lehrfahrer_auth_token_hash($previous),
-            lehrfahrer_environment()]);
+        || ($blocked !== null && ($blockedUntil === false || $blockedUntil > time()))) {
+        $reason = !is_array($account) || !$passwordValid ? 'INVALID_CREDENTIALS'
+            : ((int)$account['active'] !== 1 ? 'ACCOUNT_DISABLED'
+                : ($blocked !== null && ($blockedUntil === false || $blockedUntil > time())
+                    ? 'ACCOUNT_LOCKED' : 'FORBIDDEN'));
+        lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_LOGIN', 'result' => 'DENIED',
+            'reasonCode' => $reason], LEHRFAHRER_AUDIT_OPERATIONAL);
+        return null;
     }
-    if (lehrfahrer_sysop_mfa_required($pdo, (string)$account['id'])) {
-        return lehrfahrer_sysop_mfa_start_unguarded($pdo, (string)$account['id'], $deviceLabel);
+    $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
+    if ($mysql) $pdo->beginTransaction();
+    try {
+        $previous = lehrfahrer_account_cookie_token();
+        if ($previous !== '') {
+            $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = COALESCE(revoked_at, ?)
+                WHERE session_token_hash = ? AND environment = ?');
+            $revoke->execute([lehrfahrer_auth_timestamp(time()), lehrfahrer_auth_token_hash($previous),
+                lehrfahrer_environment()]);
+            if ($revoke->rowCount() > 0) {
+                lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_SESSION_REVOKE',
+                    'objectType' => 'SESSION', 'result' => 'SUCCESS']);
+            }
+        }
+        if (lehrfahrer_sysop_mfa_required($pdo, (string)$account['id'])) {
+            $pending = lehrfahrer_sysop_mfa_start_unguarded($pdo, (string)$account['id'], $deviceLabel);
+            lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_MFA_PENDING',
+                'objectType' => 'PASSKEY', 'result' => 'SUCCESS']);
+            if ($mysql) $pdo->commit();
+            return $pending;
+        }
+        $memberships = lehrfahrer_account_memberships($pdo, (string)$account['id']);
+        $platform = lehrfahrer_account_platform_capabilities($pdo, (string)$account['id']);
+        $count = count($memberships);
+        $context = $count === 1 ? 'TENANT' : ($count === 0 && $platform !== [] ? 'PLATFORM' : 'PENDING');
+        $membershipId = $context === 'TENANT' ? (string)$memberships[0]['id'] : null;
+        $created = lehrfahrer_account_create_session($pdo, (string)$account['id'], $context, $membershipId, $deviceLabel);
+        lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::createdSession($pdo, $created['token']),
+            ['action' => 'AUTH_LOGIN', 'result' => 'SUCCESS']);
+        if ($mysql) $pdo->commit();
+        return $created + ['accountId' => (string)$account['id'], 'context' => $context];
+    } catch (Throwable $error) {
+        if ($mysql && $pdo->inTransaction()) $pdo->rollBack();
+        throw $error;
     }
-    $memberships = lehrfahrer_account_memberships($pdo, (string)$account['id']);
-    $platform = lehrfahrer_account_platform_capabilities($pdo, (string)$account['id']);
-    $count = count($memberships);
-    $context = $count === 1 ? 'TENANT' : ($count === 0 && $platform !== [] ? 'PLATFORM' : 'PENDING');
-    $membershipId = $context === 'TENANT' ? (string)$memberships[0]['id'] : null;
-    $created = lehrfahrer_account_create_session($pdo, (string)$account['id'], $context, $membershipId, $deviceLabel);
-    return $created + ['accountId' => (string)$account['id'], 'context' => $context];
 }
 
 function lehrfahrer_account_current_session(PDO $pdo, bool $touch = true,
@@ -263,22 +326,41 @@ function lehrfahrer_account_rotate_to_membership_unguarded(PDO $pdo, string $mem
         $requiredContext = $action === 'select' ? 'PENDING' : 'TENANT';
         if ($session === null || $session['context_type'] !== $requiredContext
             || $csrf === '' || !hash_equals((string)$session['csrf_token_hash'], lehrfahrer_auth_token_hash($csrf))) {
-            if ($ownsTransaction) $pdo->rollBack(); return null;
+            if ($ownsTransaction) $pdo->rollBack();
+            $actor = $session === null ? LehrfahrerAuditActor::unauthenticated()
+                : LehrfahrerAuditActor::currentAccount($pdo);
+            lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_CONTEXT_CHANGE',
+                'objectType' => 'MEMBERSHIP', 'result' => 'DENIED', 'reasonCode' => 'CSRF_REJECTED'],
+                LEHRFAHRER_AUDIT_OPERATIONAL);
+            return null;
         }
         $available = lehrfahrer_account_memberships($pdo, (string)$session['account_id']);
         if ($action === 'switch' && (count($available) < 2
             || $membershipId === (string)$session['membership_id'])) {
-            if ($ownsTransaction) $pdo->rollBack(); return null;
+            if ($ownsTransaction) $pdo->rollBack();
+            lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::currentAccount($pdo),
+                ['action' => 'AUTH_CONTEXT_CHANGE', 'objectType' => 'MEMBERSHIP',
+                    'result' => 'DENIED', 'reasonCode' => 'FORBIDDEN'], LEHRFAHRER_AUDIT_OPERATIONAL);
+            return null;
         }
         $matches = array_values(array_filter($available,
             static fn(array $item): bool => (string)$item['id'] === $membershipId));
-        if (count($matches) !== 1) { if ($ownsTransaction) $pdo->rollBack(); return null; }
+        if (count($matches) !== 1) {
+            if ($ownsTransaction) $pdo->rollBack();
+            lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::currentAccount($pdo),
+                ['action' => 'AUTH_CONTEXT_CHANGE', 'objectType' => 'MEMBERSHIP',
+                    'result' => 'DENIED', 'reasonCode' => 'FORBIDDEN'], LEHRFAHRER_AUDIT_OPERATIONAL);
+            return null;
+        }
         $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
             WHERE id = ? AND environment = ? AND revoked_at IS NULL');
         $revoke->execute([lehrfahrer_auth_timestamp(time()), $session['id'], lehrfahrer_environment()]);
         if ($revoke->rowCount() !== 1) throw new RuntimeException('Sessionrotation fehlgeschlagen.');
         $created = lehrfahrer_account_create_session($pdo, (string)$session['account_id'],
             'TENANT', $membershipId, $session['device_label'], $session['mfa_verified_at'] !== null);
+        lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::createdSession($pdo, $created['token']),
+            ['action' => 'AUTH_CONTEXT_CHANGE', 'objectType' => 'MEMBERSHIP',
+                'objectId' => $membershipId, 'result' => 'SUCCESS']);
         if ($ownsTransaction) $pdo->commit();
         return $created + ['contextEvent' => ['action' => $action,
             'accountId' => (string)$session['account_id'],

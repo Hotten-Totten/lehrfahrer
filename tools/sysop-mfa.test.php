@@ -282,6 +282,29 @@ check(!lehrfahrer_sysop_mfa_required($pdo, 'sysop')
 $normal = lehrfahrer_account_login($pdo, 'normal', 'correct-password');
 check(isset($normal['token']) && !isset($normal['mfaPending']), 'non-sysop login unaffected');
 
+$audit = $pdo->query('SELECT action,result,reason_code,account_id,company_id,context_type FROM audit_events')
+    ->fetchAll(PDO::FETCH_ASSOC);
+$has = static function (string $action, string $result, ?string $reason = null) use ($audit): bool {
+    foreach ($audit as $event) {
+        if ($event['action'] === $action && $event['result'] === $result
+            && ($reason === null || $event['reason_code'] === $reason)) return true;
+    }
+    return false;
+};
+foreach ([['AUTH_LOGIN','DENIED',null], ['AUTH_LOGIN','SUCCESS',null],
+    ['AUTH_MFA_PENDING','SUCCESS',null], ['AUTH_MFA','SUCCESS',null],
+    ['AUTH_MFA','DENIED',null], ['AUTH_MFA','DENIED','EXPIRED'],
+    ['AUTH_PASSKEY_REGISTER','SUCCESS',null], ['AUTH_PASSKEY_RENAME','SUCCESS',null],
+    ['AUTH_PASSKEY_REVOKE','SUCCESS',null], ['AUTH_PASSKEY_MANAGE','DENIED',null],
+    ['AUTH_SESSION_REVOKE','SUCCESS',null]] as [$action,$result,$reason]) {
+    check($has($action,$result,$reason), "A2 audit $action $result" . ($reason === null ? '' : " $reason"));
+}
+check(lehrfahrer_audit_verify_chain($pdo), 'A2 MFA and passkey events preserve hash chain');
+$ledger = json_encode($pdo->query('SELECT * FROM audit_events')->fetchAll(PDO::FETCH_ASSOC), JSON_THROW_ON_ERROR);
+check(!str_contains($ledger, 'correct-password') && !str_contains($ledger, b64($credentialId))
+    && !str_contains($ledger, $pending['token']) && !str_contains($ledger, $sessionCsrf),
+    'A2 MFA ledger excludes password credential and tokens');
+
 // Remove only this isolated fixture; no staging or production data is touched.
 $pdo = null;
 chdir($originalWorkingDirectory);

@@ -29,9 +29,15 @@ final class LehrfahrerAuditActor {
         return new self(null, 'PREAUTH', null, null, null);
     }
 
-    public static function currentAccount(PDO $pdo): self {
-        $session = lehrfahrer_account_current_session($pdo, false);
-        if ($session === null) throw new RuntimeException('Keine verifizierte Account-Session.');
+    /** Account ID must originate from a server-side account/pending-session lookup. */
+    public static function knownAccount(PDO $pdo, string $accountId): self {
+        $query = $pdo->prepare('SELECT id FROM accounts WHERE id = ?');
+        $query->execute([$accountId]);
+        if ($query->fetchColumn() !== $accountId) throw new RuntimeException('Audit-Account unbekannt.');
+        return new self($accountId, 'PREAUTH', null, null, null);
+    }
+
+    private static function fromSessionRow(PDO $pdo, array $session): self {
         $public = lehrfahrer_account_public_session($pdo, $session);
         $context = (string)$session['context_type'];
         $roles = $context === 'TENANT' ? $public['tenantRoles'] : $public['platformRoles'];
@@ -40,6 +46,23 @@ final class LehrfahrerAuditActor {
             $context === 'TENANT' ? (string)$session['membership_id'] : null,
             $context === 'TENANT' ? (string)$public['companyId'] : null,
             $roles === [] ? null : implode(',', $roles));
+    }
+
+    /** For a server-generated session before its cookie is sent. */
+    public static function createdSession(PDO $pdo, string $token): self {
+        $query = $pdo->prepare('SELECT * FROM account_sessions WHERE session_token_hash = ?
+            AND environment = ? AND revoked_at IS NULL');
+        $query->execute([lehrfahrer_auth_token_hash($token), lehrfahrer_environment()]);
+        $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+        if (count($rows) !== 1) throw new RuntimeException('Audit-Session nicht eindeutig.');
+        $rows[0]['_token'] = $token;
+        return self::fromSessionRow($pdo, $rows[0]);
+    }
+
+    public static function currentAccount(PDO $pdo): self {
+        $session = lehrfahrer_account_current_session($pdo, false);
+        if ($session === null) throw new RuntimeException('Keine verifizierte Account-Session.');
+        return self::fromSessionRow($pdo, $session);
     }
 
     public static function authorizedCli(): self {
@@ -53,8 +76,11 @@ final class LehrfahrerAuditActor {
 /** A1 contract: actions and their only permitted object types. */
 function lehrfahrer_audit_event_catalog(): array {
     return [
-        'AUTH_LOGIN' => null, 'AUTH_LOGOUT' => 'SESSION',
-        'AUTH_MFA' => 'PASSKEY', 'AUTH_CONTEXT_CHANGE' => 'MEMBERSHIP',
+        'AUTH_LOGIN' => null, 'AUTH_LOGOUT' => 'SESSION', 'AUTH_SESSION_REVOKE' => 'SESSION',
+        'AUTH_MFA' => 'PASSKEY', 'AUTH_MFA_PENDING' => 'PASSKEY',
+        'AUTH_CONTEXT_CHANGE' => 'MEMBERSHIP',
+        'AUTH_PASSKEY_REGISTER' => 'PASSKEY', 'AUTH_PASSKEY_RENAME' => 'PASSKEY',
+        'AUTH_PASSKEY_REVOKE' => 'PASSKEY', 'AUTH_PASSKEY_MANAGE' => 'PASSKEY',
         'ACCOUNT_CREATE' => 'ACCOUNT', 'ACCOUNT_CHANGE' => 'ACCOUNT',
         'ACCOUNT_DEACTIVATE' => 'ACCOUNT', 'MEMBERSHIP_CHANGE' => 'MEMBERSHIP',
         'TENANT_ROLE_CHANGE' => 'MEMBERSHIP', 'PLATFORM_ROLE_CHANGE' => 'ACCOUNT',
@@ -72,7 +98,8 @@ function lehrfahrer_audit_event_catalog(): array {
 function lehrfahrer_audit_reason_codes(): array {
     return ['INVALID_CREDENTIALS', 'MFA_REJECTED', 'EXPIRED', 'FORBIDDEN',
         'CSRF_REJECTED', 'NOT_FOUND', 'INVALID_INPUT', 'CONFLICT',
-        'STORAGE_FAILURE', 'INTERNAL_FAILURE'];
+        'STORAGE_FAILURE', 'INTERNAL_FAILURE', 'ACCOUNT_DISABLED',
+        'ACCOUNT_LOCKED', 'CHALLENGE_REPLAY'];
 }
 
 function lehrfahrer_audit_validate_event(LehrfahrerAuditActor $actor, array $event, string $mode): array {
