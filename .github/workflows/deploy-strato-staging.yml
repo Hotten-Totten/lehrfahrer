@@ -550,7 +550,7 @@ jobs:
           "${SSH_RUN[@]}" "$REMOTE" "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_ATOMIC_FILE_CHECK'
           set -euo pipefail
           cd "./${1#./}"
-          probe_dir="$(mktemp -d .lf-audit-probe-XXXXXXXX)"
+          probe_dir="$(mktemp -d "$(pwd -P)/.lf-audit-probe-XXXXXXXX")"
           trap 'rm -f -- "$probe_dir"/*; rmdir -- "$probe_dir"' EXIT
           cat > "$probe_dir/check.php" <<'PHP_ATOMIC_FILE_CHECK'
           <?php
