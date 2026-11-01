@@ -37,7 +37,7 @@ mkdir($dir . '/webroot');
 $_SERVER['DOCUMENT_ROOT'] = $dir . '/webroot';
 require dirname(__DIR__) . '/api/_account_auth.php';
 $pdo = lehrfahrer_control_database();
-check((int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 9,
+check((int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 10,
     'additive MFA schema migrated');
 check((int)$pdo->query('SELECT COUNT(*) FROM account_passkeys')->fetchColumn() === 0,
     'migration seeds no credential');

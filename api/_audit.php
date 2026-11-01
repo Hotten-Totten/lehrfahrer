@@ -104,7 +104,8 @@ function lehrfahrer_audit_reason_codes(): array {
 
 function lehrfahrer_audit_validate_event(LehrfahrerAuditActor $actor, array $event, string $mode): array {
     if (!in_array($mode, [LEHRFAHRER_AUDIT_CRITICAL, LEHRFAHRER_AUDIT_OPERATIONAL], true)
-        || array_diff(array_keys($event), ['action', 'objectType', 'objectId', 'result', 'reasonCode', 'capability']) !== []) {
+        || array_diff(array_keys($event), ['action', 'objectType', 'objectId',
+            'relatedObjectType', 'relatedObjectId', 'result', 'reasonCode', 'capability']) !== []) {
         throw new InvalidArgumentException('Audit-Vertrag ungueltig.');
     }
     $action = $event['action'] ?? null;
@@ -118,6 +119,22 @@ function lehrfahrer_audit_validate_event(LehrfahrerAuditActor $actor, array $eve
         || ($objectId !== null
         && (!is_string($objectId) || preg_match('/^(?:[a-z]{2,12}_[a-f0-9]{32}|training_[0-9]{6})$/D', $objectId) !== 1))) {
         throw new InvalidArgumentException('Audit-Objekt ungueltig.');
+    }
+    $relatedType = $event['relatedObjectType'] ?? null;
+    $relatedId = $event['relatedObjectId'] ?? null;
+    $relatedCatalog = ['TENANT_ROLE_CHANGE' => 'TENANT_ROLE',
+        'PLATFORM_ROLE_CHANGE' => 'PLATFORM_ROLE'];
+    $expectedRelatedType = $relatedCatalog[$action] ?? null;
+    if ($relatedType !== $expectedRelatedType || ($relatedType !== null && $objectId === null)
+        || ($relatedType === 'TENANT_ROLE' && preg_match('/^mem_[a-f0-9]{32}$/D', (string)$objectId) !== 1)
+        || ($relatedType === 'PLATFORM_ROLE' && preg_match('/^acc_[a-f0-9]{32}$/D', (string)$objectId) !== 1)
+        || ($relatedType === null && $relatedId !== null)
+        || ($relatedType !== null && (!is_string($relatedId)
+            || !in_array($relatedId, $relatedType === 'TENANT_ROLE'
+                ? array_map(static fn(string $code): string => 'role_' . strtolower($code),
+                    array_keys(lehrfahrer_control_role_definitions()))
+                : ['prole_sysop', 'prole_cosysop'], true)))) {
+        throw new InvalidArgumentException('Audit-Zielbeziehung ungueltig.');
     }
     $result = $event['result'] ?? null;
     if (!in_array($result, ['SUCCESS', 'DENIED', 'FAILED'], true)) {
@@ -139,7 +156,8 @@ function lehrfahrer_audit_validate_event(LehrfahrerAuditActor $actor, array $eve
     }
     if ($actor->contextType === 'PREAUTH' && !str_starts_with($action, 'AUTH_')
         && $action !== 'SECURITY_DENIAL') throw new InvalidArgumentException('Audit-Kontext ungueltig.');
-    return [$action, $objectType, $objectId, $result, $reason, $capability];
+    return [$action, $objectType, $objectId, $result, $reason, $capability,
+        $relatedType, $relatedId];
 }
 
 function lehrfahrer_audit_canonical(array $fields): string {
@@ -149,7 +167,7 @@ function lehrfahrer_audit_canonical(array $fields): string {
 /** Append in the caller's transaction when one exists; otherwise own a short transaction. */
 function lehrfahrer_audit_append(PDO $pdo, LehrfahrerAuditActor $actor, array $event,
     string $mode = LEHRFAHRER_AUDIT_CRITICAL): array {
-    [$action, $objectType, $objectId, $result, $reason, $capability] =
+    [$action, $objectType, $objectId, $result, $reason, $capability, $relatedType, $relatedId] =
         lehrfahrer_audit_validate_event($actor, $event, $mode);
     $ownTransaction = !lehrfahrer_control_transaction_active($pdo);
     $savepointCreated = false;
@@ -173,14 +191,15 @@ function lehrfahrer_audit_append(PDO $pdo, LehrfahrerAuditActor $actor, array $e
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
         $fields = [$sequence, $id, $timestamp, $actor->accountId, $actor->contextType,
             $actor->membershipId, $actor->companyId, $actor->roleSnapshot, $capability,
-            $action, $objectType, $objectId, $result, $reason];
+            $action, $objectType, $objectId, $result, $reason, $relatedType, $relatedId];
         $previous = (string)$state['last_hash'];
         $hash = hash('sha256', $previous . "\n" . lehrfahrer_audit_canonical($fields));
         $insert = $pdo->prepare('INSERT INTO audit_events
             (sequence_number,event_id,occurred_at,account_id,context_type,membership_id,company_id,
              role_snapshot,capability_snapshot,action,object_type,object_id,result,reason_code,
-             previous_hash,event_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-        $insert->execute([...$fields, $previous, $hash]);
+             related_object_type,related_object_id,hash_format,previous_hash,event_hash)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $insert->execute([...$fields, 2, $previous, $hash]);
         $update = $pdo->prepare('UPDATE audit_chain_state SET last_sequence=?,last_hash=?
             WHERE singleton_key=1 AND last_sequence=? AND last_hash=?');
         $update->execute([$sequence, $hash, $state['last_sequence'], $previous]);
@@ -217,10 +236,18 @@ function lehrfahrer_audit_verify_chain(PDO $pdo): bool {
         $sequence = 0;
         foreach ($rows as $row) {
             if ((int)$row['sequence_number'] !== ++$sequence || !hash_equals($previous, (string)$row['previous_hash'])) return false;
+            $format = (int)$row['hash_format'];
+            if (!in_array($format, [1, 2], true)) return false;
             $fields = [$sequence, $row['event_id'], $row['occurred_at'], $row['account_id'],
                 $row['context_type'], $row['membership_id'], $row['company_id'],
                 $row['role_snapshot'], $row['capability_snapshot'], $row['action'],
                 $row['object_type'], $row['object_id'], $row['result'], $row['reason_code']];
+            if ($format === 1) {
+                if ($row['related_object_type'] !== null || $row['related_object_id'] !== null) return false;
+            } else {
+                $fields[] = $row['related_object_type'];
+                $fields[] = $row['related_object_id'];
+            }
             $hash = hash('sha256', $previous . "\n" . lehrfahrer_audit_canonical($fields));
             if (!hash_equals($hash, (string)$row['event_hash'])) return false;
             $previous = $hash;

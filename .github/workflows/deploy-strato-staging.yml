@@ -1368,7 +1368,7 @@ jobs:
             and .runtime.environment == "staging"
             and .runtime.environmentLabel == "STAGING"
             and .runtime.commit == $commit
-            and .runtime.databaseSchemaVersion == 9
+            and .runtime.databaseSchemaVersion == 10
           ' /tmp/staging-runtime.json >/dev/null
           grep -Eiq '^x-robots-tag:.*noindex' /tmp/staging-runtime.headers
 
@@ -3079,7 +3079,7 @@ jobs:
                   catch (Throwable $error) { continue; }
                   if (!hash_equals($expectedBackup, (string)($manifest['sha256'] ?? ''))
                       || (int)($manifest['bytes'] ?? -1) !== (int)filesize($dump)
-                      || ($manifest['schema_version'] ?? null) !== '9'
+                      || ($manifest['schema_version'] ?? null) !== '10'
                       || ($manifest['restore']['client_validated'] ?? false) !== true
                       || substr(sprintf('%o', fileperms($directory)), -3) !== '700'
                       || substr(sprintf('%o', fileperms($dump)), -3) !== '600'

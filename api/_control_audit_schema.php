@@ -48,3 +48,28 @@ function lehrfahrer_control_apply_audit_schema(PDO $pdo): void {
             VALUES (1,0,'" . str_repeat('0', 64) . "')");
     }
 }
+
+/** A1.2: existing rows retain hash format 1; only newly appended rows use format 2. */
+function lehrfahrer_control_apply_audit_related_targets(PDO $pdo): void {
+    $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
+    if ($mysql) {
+        $query = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_events'");
+        $existing = $query->fetchAll(PDO::FETCH_COLUMN);
+        $columns = [
+            'related_object_type' => 'VARCHAR(32) NULL',
+            'related_object_id' => 'VARCHAR(128) NULL',
+            'hash_format' => 'TINYINT UNSIGNED NOT NULL DEFAULT 1 CHECK (hash_format IN (1,2))',
+        ];
+    } else {
+        $existing = array_column($pdo->query('PRAGMA table_info(audit_events)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        $columns = [
+            'related_object_type' => 'TEXT NULL',
+            'related_object_id' => 'TEXT NULL',
+            'hash_format' => 'INTEGER NOT NULL DEFAULT 1 CHECK (hash_format IN (1,2))',
+        ];
+    }
+    foreach ($columns as $name => $definition) {
+        if (!in_array($name, $existing, true)) $pdo->exec("ALTER TABLE audit_events ADD COLUMN $name $definition");
+    }
+}
