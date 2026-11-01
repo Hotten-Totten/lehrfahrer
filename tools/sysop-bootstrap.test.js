@@ -88,6 +88,7 @@ $reuse=false; try { $pdo->prepare('UPDATE account_user_numbers SET current_accou
 $fresh=lehrfahrer_account_login($pdo,'cottbus-admin','test-password-12345');
 $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$fresh['token'];
 $public=lehrfahrer_account_public_session($pdo,lehrfahrer_account_current_session($pdo,false));
+$sysopAudit=$pdo->query("SELECT action,result,context_type,account_id,role_snapshot,object_type,object_id FROM audit_events WHERE action='SYSOP_CHANGE' ORDER BY sequence_number")->fetchAll(PDO::FETCH_ASSOC);
 echo json_encode(['pre'=>$pre['oldNumber'],'number'=>$post['userNumber'],'retired'=>$post['retiredNumber'],
   'capabilities'=>count($post['platformCapabilities']),'cutover'=>$cutover['status'],
   'cutoverCodes'=>array_column($cutover['findings'],'code'),
@@ -96,7 +97,8 @@ echo json_encode(['pre'=>$pre['oldNumber'],'number'=>$post['userNumber'],'retire
   'sessions'=>$sessions,'tenantAdmin'=>in_array('users.manage',$tenant,true),
   'foreign'=>$foreign,'second'=>$second,'reuse'=>$reuse,
   'freshNumber'=>$public['userNumber'],'freshPlatform'=>$public['platformRoles'],
-  'freshTenant'=>$public['companyId']??null],JSON_THROW_ON_ERROR);`);
+  'freshTenant'=>$public['companyId']??null,'sysopAudit'=>$sysopAudit,
+  'auditChain'=>lehrfahrer_audit_verify_chain($pdo)],JSON_THROW_ON_ERROR);`);
   assert.equal(data.pre, 102);
   assert.equal(data.number, 1);
   assert.equal(data.retired, 102);
@@ -115,6 +117,13 @@ echo json_encode(['pre'=>$pre['oldNumber'],'number'=>$post['userNumber'],'retire
   assert.equal(data.freshNumber, '00001');
   assert.deepEqual(data.freshPlatform, ['SYSOP']);
   assert.ok(data.freshTenant);
+  assert.equal(data.auditChain, true);
+  assert.deepEqual(data.sysopAudit.map(event => event.result), ['SUCCESS','DENIED']);
+  assert.equal(data.sysopAudit[0].context_type, 'SYSTEM');
+  assert.equal(data.sysopAudit[0].account_id, null);
+  assert.equal(data.sysopAudit[0].role_snapshot, null);
+  assert.equal(data.sysopAudit[0].object_type, 'ACCOUNT');
+  assert.equal(data.sysopAudit[0].object_id, data.target);
 });
 
 for (const [name, mutation, expected] of [
@@ -146,4 +155,13 @@ $failed=false; try { lehrfahrer_sysop_bootstrap_apply($pdo); } catch (PDOExcepti
 $after=[]; foreach ($tables as $table) $after[$table]=$pdo->query('SELECT * FROM '.$table)->fetchAll(PDO::FETCH_ASSOC);
 echo json_encode(['failed'=>$failed,'unchanged'=>$before===$after],JSON_THROW_ON_ERROR);`);
   assert.deepEqual(data, { failed: true, unchanged: true });
+});
+
+test('CRITICAL Audit-Ausfall verhindert den SysOp-Bootstrap', () => {
+  const data = fixture("$pdo->exec('DELETE FROM audit_chain_state');", snapshot + String.raw`
+$failed=false; try { lehrfahrer_sysop_bootstrap_apply($pdo); } catch (LehrfahrerAuditWriteFailure $e) { $failed=true; }
+$after=[]; foreach ($tables as $table) $after[$table]=$pdo->query('SELECT * FROM '.$table)->fetchAll(PDO::FETCH_ASSOC);
+echo json_encode(['failed'=>$failed,'unchanged'=>$before===$after,
+  'sysopEvents'=>(int)$pdo->query("SELECT COUNT(*) FROM audit_events WHERE action='SYSOP_CHANGE'")->fetchColumn()],JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, { failed: true, unchanged: true, sysopEvents: 0 });
 });

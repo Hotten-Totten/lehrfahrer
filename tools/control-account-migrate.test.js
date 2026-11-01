@@ -44,9 +44,15 @@ $counts = [];
 foreach (['accounts','account_memberships','membership_roles','account_platform_roles','sysop_assignment','account_sessions','account_activation_tokens'] as $table)
   $counts[$table] = (int)$pdo->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn();
 $numbers = $pdo->query('SELECT user_number FROM account_user_numbers ORDER BY user_number')->fetchAll(PDO::FETCH_COLUMN);
+$events = $pdo->query('SELECT action,result,reason_code,context_type,account_id,role_snapshot,
+  object_type,object_id,related_object_type,related_object_id FROM audit_events ORDER BY sequence_number')->fetchAll(PDO::FETCH_ASSOC);
+$auditRaw = json_encode($pdo->query('SELECT * FROM audit_events')->fetchAll(PDO::FETCH_ASSOC),JSON_THROW_ON_ERROR);
 echo json_encode(['error'=>$error,'result'=>$result,'counts'=>$counts,
   'numbers'=>$numbers,'oldUnchanged'=>$before===$after,
-  'valid'=>lehrfahrer_control_validate_account_copy($pdo)['valid']], JSON_THROW_ON_ERROR);
+  'valid'=>lehrfahrer_control_validate_account_copy($pdo)['valid'],
+  'events'=>$events,'auditChain'=>lehrfahrer_audit_verify_chain($pdo),
+  'auditPrivate'=>!str_contains($auditRaw,'alpha') && !str_contains($auditRaw,'beta')
+    && !str_contains($auditRaw,'test-password-12345')], JSON_THROW_ON_ERROR);
 `;
   const result = spawnSync(php, ['-r', code], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -65,6 +71,24 @@ test('1:1-Kopie mit Rollen und intern identischen Hashes, Altmodell unverändert
   assert.deepEqual(data.numbers.map(Number), [101, 102]);
   assert.deepEqual([data.counts.account_platform_roles, data.counts.sysop_assignment,
     data.counts.account_sessions, data.counts.account_activation_tokens], [0, 0, 0, 0]);
+  assert.equal(data.auditChain, true);
+  assert.equal(data.auditPrivate, true);
+  assert.deepEqual(data.events.map(event => [event.action,event.result]), [
+    ['ACCOUNT_CREATE','SUCCESS'],['MEMBERSHIP_CHANGE','SUCCESS'],
+    ['ACCOUNT_CREATE','SUCCESS'],['MEMBERSHIP_CHANGE','SUCCESS'],
+    ['TENANT_ROLE_ASSIGN','SUCCESS'],['TENANT_ROLE_ASSIGN','SUCCESS'],
+  ]);
+  for (const event of data.events) {
+    assert.equal(event.context_type, 'SYSTEM');
+    assert.equal(event.account_id, null);
+    assert.equal(event.role_snapshot, null);
+  }
+  for (const event of data.events.filter(event => event.action === 'TENANT_ROLE_ASSIGN')) {
+    assert.equal(event.object_type, 'MEMBERSHIP');
+    assert.match(event.object_id, /^mem_[a-f0-9]{32}$/);
+    assert.equal(event.related_object_type, 'TENANT_ROLE');
+    assert.match(event.related_object_id, /^role_(fahrer|admin)$/);
+  }
 });
 
 test('Fehler nach Account-Insert rollt alle neuen Tabellen zurück', () => {
@@ -73,6 +97,8 @@ test('Fehler nach Account-Insert rollt alle neuen Tabellen zurück', () => {
   assert.equal(data.oldUnchanged, true);
   assert.equal(data.counts.accounts, 0);
   assert.equal(data.counts.account_memberships, 0);
+  assert.deepEqual(data.events.map(event => [event.action,event.result]), [['ACCOUNT_CREATE','FAILED']]);
+  assert.equal(data.auditChain, true);
 });
 
 test('Rollenfehler rollt Accounts und Memberships zurück', () => {
@@ -81,6 +107,16 @@ test('Rollenfehler rollt Accounts und Memberships zurück', () => {
   assert.equal(data.counts.accounts, 0);
   assert.equal(data.counts.account_memberships, 0);
   assert.equal(data.counts.membership_roles, 0);
+  assert.deepEqual(data.events.map(event => [event.action,event.result,event.related_object_type]),
+    [['TENANT_ROLE_ASSIGN','FAILED','TENANT_ROLE']]);
+  assert.equal(data.auditChain, true);
+});
+
+test('CRITICAL Audit-Ausfall verhindert Account-, Membership- und Rollen-Commit', () => {
+  const data = fixture(`$pdo->exec('DELETE FROM audit_chain_state');`);
+  assert.equal(data.error, true);
+  assert.deepEqual([data.counts.accounts,data.counts.account_memberships,data.counts.membership_roles], [0,0,0]);
+  assert.deepEqual(data.events, []);
 });
 
 test('globale Login-Kollision blockiert vor dem ersten Insert', () => {

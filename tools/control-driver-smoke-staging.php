@@ -5,6 +5,7 @@ $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__);
 require_once $appRoot . '/api/_control_database.php';
 require_once $appRoot . '/api/_control_repositories.php';
 require_once $appRoot . '/api/_auth_cutover_gate.php';
+require_once $appRoot . '/api/_audit.php';
 
 const LEHRFAHRER_DRIVER_SMOKE_LOGIN = 'staging-driver-smoke';
 
@@ -94,7 +95,12 @@ if (getenv('LEHRFAHRER_DRIVER_SMOKE_RUN') === '1') {
         if ($action === 'provision') {
             $password = (string)getenv('LEHRFAHRER_STAGING_DRIVER_SMOKE_PASSWORD');
             if (strlen($password) < 40) throw new RuntimeException('Staging-Smoke-Secret fehlt.');
-            if ($identity['present']) throw new RuntimeException('Smoke-Account existiert bereits; keine Neuanlage.');
+            if ($identity['present']) {
+                lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::authorizedCli(),
+                    ['action' => 'ACCOUNT_CREATE', 'objectType' => 'ACCOUNT',
+                        'result' => 'DENIED', 'reasonCode' => 'CONFLICT'], LEHRFAHRER_AUDIT_OPERATIONAL);
+                throw new RuntimeException('Smoke-Account existiert bereits; keine Neuanlage.');
+            }
             $role = $pdo->query("SELECT id FROM roles WHERE code = 'FAHRER'")->fetchAll(PDO::FETCH_COLUMN);
             if (count($role) !== 1) throw new RuntimeException('Minimale Fahrerrolle fehlt.');
             $capabilities = $pdo->prepare('SELECT c.code FROM role_capabilities rc JOIN capabilities c
@@ -103,7 +109,10 @@ if (getenv('LEHRFAHRER_DRIVER_SMOKE_RUN') === '1') {
             if ($capabilities->fetchAll(PDO::FETCH_COLUMN) !== ['app.access', 'routes.read']) {
                 throw new RuntimeException('Fahrerrolle hat nicht die erwarteten Minimalrechte.');
             }
-            $number = lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $company, $role, $password): int {
+            $actor = LehrfahrerAuditActor::authorizedCli();
+            $attempt = ['action' => 'ACCOUNT_CREATE', 'objectType' => 'ACCOUNT'];
+            try {
+            $number = lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $company, $role, $password, $actor, &$attempt): int {
                 if (lehrfahrer_auth_cutover_state($pdo) !== ['mode' => 'PARALLEL', 'lock' => 'OPEN']
                     || lehrfahrer_driver_smoke_identity($pdo)['present']) {
                     throw new RuntimeException('Smoke-Provisionierung nicht mehr eindeutig erlaubt.');
@@ -113,18 +122,27 @@ if (getenv('LEHRFAHRER_DRIVER_SMOKE_RUN') === '1') {
                     $accountId = lehrfahrer_control_id('acc');
                     $membershipId = lehrfahrer_control_id('mem');
                     $now = gmdate('c');
+                    $attempt['objectId'] = $accountId;
                     $insert = $pdo->prepare('INSERT INTO accounts
                         (id, login_normalized, display_name, password_hash, active, must_change_password, created_at, updated_at)
                         VALUES (?, ?, ?, ?, 1, 0, ?, ?)');
                     $insert->execute([$accountId, LEHRFAHRER_DRIVER_SMOKE_LOGIN, 'Staging Driver Smoke',
                         password_hash($password, PASSWORD_DEFAULT), $now, $now]);
                     $number = lehrfahrer_control_allocate_user_number($pdo, $accountId);
+                    lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
+                    $attempt = ['action' => 'MEMBERSHIP_CHANGE', 'objectType' => 'MEMBERSHIP',
+                        'objectId' => $membershipId];
                     $insert = $pdo->prepare("INSERT INTO account_memberships
                         (id, account_id, company_id, status, legacy_user_id, created_at, updated_at)
                         VALUES (?, ?, ?, 'active', NULL, ?, ?)");
                     $insert->execute([$membershipId, $accountId, $company['id'], $now, $now]);
+                    lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
+                    $attempt = ['action' => 'TENANT_ROLE_ASSIGN', 'objectType' => 'MEMBERSHIP',
+                        'objectId' => $membershipId, 'relatedObjectType' => 'TENANT_ROLE',
+                        'relatedObjectId' => (string)$role[0]];
                     $insert = $pdo->prepare('INSERT INTO membership_roles (membership_id, role_id) VALUES (?, ?)');
                     $insert->execute([$membershipId, $role[0]]);
+                    lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
                     $pdo->commit();
                     return $number;
                 } catch (Throwable $error) {
@@ -132,6 +150,15 @@ if (getenv('LEHRFAHRER_DRIVER_SMOKE_RUN') === '1') {
                     throw $error;
                 }
             });
+            } catch (Throwable $error) {
+                if (!$error instanceof LehrfahrerAuditWriteFailure) {
+                    lehrfahrer_audit_append($pdo, $actor, $attempt + [
+                        'result' => isset($attempt['objectId']) ? 'FAILED' : 'DENIED',
+                        'reasonCode' => isset($attempt['objectId']) ? 'INTERNAL_FAILURE' : 'CONFLICT',
+                    ], LEHRFAHRER_AUDIT_OPERATIONAL);
+                }
+                throw $error;
+            }
             unset($password);
             $identity = lehrfahrer_driver_smoke_identity($pdo);
             if (!$identity['valid'] || $identity['userNumber'] !== $number) {

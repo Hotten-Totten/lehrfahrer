@@ -83,7 +83,8 @@ function lehrfahrer_audit_event_catalog(): array {
         'AUTH_PASSKEY_REVOKE' => 'PASSKEY', 'AUTH_PASSKEY_MANAGE' => 'PASSKEY',
         'ACCOUNT_CREATE' => 'ACCOUNT', 'ACCOUNT_CHANGE' => 'ACCOUNT',
         'ACCOUNT_DEACTIVATE' => 'ACCOUNT', 'MEMBERSHIP_CHANGE' => 'MEMBERSHIP',
-        'TENANT_ROLE_CHANGE' => 'MEMBERSHIP', 'PLATFORM_ROLE_CHANGE' => 'ACCOUNT',
+        'TENANT_ROLE_CHANGE' => 'MEMBERSHIP', 'TENANT_ROLE_ASSIGN' => 'MEMBERSHIP',
+        'PLATFORM_ROLE_CHANGE' => 'ACCOUNT',
         'SYSOP_CHANGE' => 'ACCOUNT', 'PASSKEY_CHANGE' => 'PASSKEY',
         'ROUTE_SAVE' => 'ROUTE', 'ROUTE_DELETE' => 'ROUTE',
         'ROUTE_STATUS_CHANGE' => 'ROUTE', 'ROUTE_RELEASE' => 'ROUTE',
@@ -123,6 +124,7 @@ function lehrfahrer_audit_validate_event(LehrfahrerAuditActor $actor, array $eve
     $relatedType = $event['relatedObjectType'] ?? null;
     $relatedId = $event['relatedObjectId'] ?? null;
     $relatedCatalog = ['TENANT_ROLE_CHANGE' => 'TENANT_ROLE',
+        'TENANT_ROLE_ASSIGN' => 'TENANT_ROLE',
         'PLATFORM_ROLE_CHANGE' => 'PLATFORM_ROLE'];
     $expectedRelatedType = $relatedCatalog[$action] ?? null;
     if ($relatedType !== $expectedRelatedType || ($relatedType !== null && $objectId === null)

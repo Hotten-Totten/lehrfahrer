@@ -4,6 +4,7 @@ declare(strict_types=1);
 $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__);
 require_once $appRoot . '/api/_control_database.php';
 require_once $appRoot . '/api/_auth_cutover_gate.php';
+require_once $appRoot . '/api/_audit.php';
 
 const LEHRFAHRER_SYSOP_BOOTSTRAP_LOGIN = 'cottbus-admin';
 const LEHRFAHRER_SYSOP_BOOTSTRAP_OLD_NUMBER = 102;
@@ -134,7 +135,10 @@ function lehrfahrer_sysop_bootstrap_postcheck(PDO $pdo, string $accountId): arra
 }
 
 function lehrfahrer_sysop_bootstrap_apply(PDO $pdo): array {
-    return lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo): array {
+    $actor = LehrfahrerAuditActor::authorizedCli();
+    $targetId = null;
+    try {
+    return lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, &$targetId, $actor): array {
         $mysql = lehrfahrer_control_driver($pdo) === 'mysql';
         if ($mysql) {
             $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
@@ -143,6 +147,7 @@ function lehrfahrer_sysop_bootstrap_apply(PDO $pdo): array {
         try {
             $preflight = lehrfahrer_sysop_bootstrap_preflight($pdo);
             $accountId = $preflight['accountId'];
+            $targetId = $accountId;
             $retire = $pdo->prepare('UPDATE account_user_numbers SET current_account_id = NULL
                 WHERE user_number = 102 AND issued_to_account_id = ? AND current_account_id = ?');
             $retire->execute([$accountId, $accountId]);
@@ -157,6 +162,8 @@ function lehrfahrer_sysop_bootstrap_apply(PDO $pdo): array {
                 WHERE account_id = ? AND environment = ? AND revoked_at IS NULL');
             $sessions->execute([gmdate('c'), $accountId, 'staging']);
             $verified = lehrfahrer_sysop_bootstrap_postcheck($pdo, $accountId);
+            lehrfahrer_audit_append($pdo, $actor, ['action' => 'SYSOP_CHANGE',
+                'objectType' => 'ACCOUNT', 'objectId' => $accountId, 'result' => 'SUCCESS']);
             if ($mysql) $pdo->commit();
             return $verified + ['revokedSessions' => $sessions->rowCount()];
         } catch (Throwable $error) {
@@ -164,6 +171,16 @@ function lehrfahrer_sysop_bootstrap_apply(PDO $pdo): array {
             throw $error;
         }
     });
+    } catch (Throwable $error) {
+        if (!$error instanceof LehrfahrerAuditWriteFailure) {
+            $event = ['action' => 'SYSOP_CHANGE', 'objectType' => 'ACCOUNT',
+                'result' => $targetId === null ? 'DENIED' : 'FAILED',
+                'reasonCode' => $targetId === null ? 'CONFLICT' : 'INTERNAL_FAILURE'];
+            if ($targetId !== null) $event['objectId'] = $targetId;
+            lehrfahrer_audit_append($pdo, $actor, $event, LEHRFAHRER_AUDIT_OPERATIONAL);
+        }
+        throw $error;
+    }
 }
 
 if (getenv('LEHRFAHRER_SYSOP_BOOTSTRAP_RUN') === '1') {

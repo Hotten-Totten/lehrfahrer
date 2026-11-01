@@ -3,10 +3,13 @@ declare(strict_types=1);
 
 $appRoot = trim((string)getenv('LEHRFAHRER_APP_ROOT'));
 require_once __DIR__ . '/control-account-preflight.php';
+require_once (trim((string)getenv('LEHRFAHRER_APP_ROOT')) ?: dirname(__DIR__)) . '/api/_audit.php';
 
 /** The caller owns the connection; all target writes and verification share one transaction. */
 function lehrfahrer_control_migrate_accounts(PDO $pdo, ?callable $afterAccount = null,
     bool $requireStagingBaseline = false): array {
+    $actor = LehrfahrerAuditActor::authorizedCli();
+    $attempt = ['action' => 'ACCOUNT_CREATE', 'objectType' => 'ACCOUNT'];
     $driver = lehrfahrer_control_driver($pdo);
     if ($driver === 'mysql') $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
     $pdo->beginTransaction();
@@ -53,25 +56,41 @@ function lehrfahrer_control_migrate_accounts(PDO $pdo, ?callable $afterAccount =
             $userId = (string)$user['id'];
             $accountId = lehrfahrer_control_id('acc');
             $membershipId = lehrfahrer_control_id('mem');
+            $attempt = ['action' => 'ACCOUNT_CREATE', 'objectType' => 'ACCOUNT', 'objectId' => $accountId];
             $insertAccount->execute([$accountId, $user['login_normalized'], $user['email_normalized'],
                 $user['display_name'], $user['password_hash'], (int)$user['active'],
                 (int)$user['must_change_password'], $user['last_login'], $user['blocked_until'],
                 $user['created_at'], $user['updated_at']]);
             lehrfahrer_control_allocate_user_number($pdo, $accountId);
             if ($afterAccount !== null) $afterAccount($pdo, $userId);
+            lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
+            $attempt = ['action' => 'MEMBERSHIP_CHANGE', 'objectType' => 'MEMBERSHIP', 'objectId' => $membershipId];
             $insertMembership->execute([$membershipId, $accountId, $user['company_id'],
                 (int)$user['active'] === 1 ? 'active' : 'inactive', $userId,
                 $user['created_at'], $user['updated_at']]);
+            lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
             $accountIds[$userId] = $accountId;
             $membershipIds[$userId] = $membershipId;
         }
-        foreach ($oldRoles as $role) $insertRole->execute([$membershipIds[(string)$role['user_id']], $role['role_id']]);
+        foreach ($oldRoles as $role) {
+            $attempt = ['action' => 'TENANT_ROLE_ASSIGN', 'objectType' => 'MEMBERSHIP',
+                'objectId' => $membershipIds[(string)$role['user_id']],
+                'relatedObjectType' => 'TENANT_ROLE', 'relatedObjectId' => (string)$role['role_id']];
+            $insertRole->execute([$attempt['objectId'], $role['role_id']]);
+            lehrfahrer_audit_append($pdo, $actor, $attempt + ['result' => 'SUCCESS']);
+        }
         $validated = lehrfahrer_control_validate_account_copy($pdo);
         if (!$validated['valid']) throw new RuntimeException('Alt-Neu-Vergleich fehlgeschlagen.');
         $pdo->commit();
         return ['status' => 'MIGRIERT', 'counts' => $validated['counts'], 'validated' => true];
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
+        if (!$error instanceof LehrfahrerAuditWriteFailure) {
+            lehrfahrer_audit_append($pdo, $actor, $attempt + [
+                'result' => isset($attempt['objectId']) ? 'FAILED' : 'DENIED',
+                'reasonCode' => isset($attempt['objectId']) ? 'INTERNAL_FAILURE' : 'CONFLICT',
+            ], LEHRFAHRER_AUDIT_OPERATIONAL);
+        }
         throw $error;
     }
 }
