@@ -1,0 +1,136 @@
+name: Diagnose staging smoke 41352273721
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure existing staging SSH access
+        shell: bash
+        env:
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            printf '%s\n' "$STRATO_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+          else
+            if ! sudo apt-get update -qq >/dev/null 2>&1 \
+                || ! sudo apt-get install -y -qq sshpass >/dev/null 2>&1; then
+              echo 'SMOKE_CATEGORY=ACCESS_FAILURE'
+              exit 0
+            fi
+          fi
+          if [ -n "${{ secrets.STRATO_KNOWN_HOSTS }}" ]; then
+            printf '%s\n' "${{ secrets.STRATO_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$STRATO_PORT" "$STRATO_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Classify only the failed run's private smoke error
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          LIVE_TARGET_PATH: ${{ vars.LIVE_TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          for path in "$STAGING_PRIVATE_PATH" "$STAGING_TARGET_PATH" "$LIVE_TARGET_PATH"; do
+            if [ -z "$path" ] || [[ ! "$path" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+              echo 'SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR'; exit 0
+            fi
+          done
+          case "$STAGING_PRIVATE_PATH" in
+            /*|.|..|*../*|*/..|*//*|lehrfahrer-private|*/lehrfahrer-private)
+              echo 'SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR'; exit 0 ;;
+          esac
+          if [ "$STAGING_PRIVATE_PATH" = "$LIVE_TARGET_PATH" ] || [ "$STAGING_PRIVATE_PATH" = "$STAGING_TARGET_PATH" ]; then
+            echo 'SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR'; exit 0
+          fi
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_base+=(-i ~/.ssh/id_rsa)
+            ssh_run=("${ssh_base[@]}")
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          result="$(
+            "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" \
+              "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
+          set -euo pipefail
+          private_root="$(cd -- "./${1#./}" && pwd -P)"
+          case "$private_root" in
+            */*staging-private) ;;
+            *) echo 'SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR'; exit 0 ;;
+          esac
+          php -r '
+            $root = $argv[1];
+            $path = $root . "/smoke-stderr.raw";
+            if (!file_exists($path) && !is_link($path)) {
+                echo "SMOKE_CATEGORY=FILE_MISSING\n";
+                exit;
+            }
+            if (is_link($path) || !is_file($path) || realpath(dirname($path)) !== $root) {
+                echo "SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR\n";
+                exit;
+            }
+            clearstatcache(true, $path);
+            $mtime = filemtime($path);
+            // The failed run wrote this file at 2026-11-01 21:31:25 UTC.
+            if ($mtime === false || $mtime < 1793568684 || $mtime > 1793568687) {
+                echo "SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR\n";
+                exit;
+            }
+            $size = filesize($path);
+            if ($size === false || $size < 1 || $size > 4096) {
+                echo "SMOKE_CATEGORY=UNCLASSIFIED\n";
+                exit;
+            }
+            $raw = file_get_contents($path);
+            if (!is_string($raw) || !preg_match("/\\AStaging-Smoketest fehlgeschlagen: ([^\\r\\n]+)\\r?\\n?\\z/D", $raw, $matches)) {
+                echo "SMOKE_CATEGORY=UNCLASSIFIED\n";
+                exit;
+            }
+            $known = [
+                "LEHRFAHRER_APP_ROOT ist ungueltig." => "APP_ROOT",
+                "Dieser Smoketest darf nur in der Staging-Umgebung laufen." => "ENVIRONMENT",
+                "CGI-Smoke-Ergebnisdatei liegt nicht im privaten Staging-Speicher." => "RESULT_PATH",
+                "LEHRFAHRER_STAGING_COMPANY_SLUG fehlt." => "COMPANY_SLUG",
+                "Staging-Testgesellschaft ist nicht eindeutig." => "TEST_COMPANY",
+                "Staging-Gesellschaftsconfig fehlt oder ist ungueltig." => "COMPANY_CONFIG",
+                "Staging-Testadmin ist nicht eindeutig aktiv." => "TEST_ADMIN",
+                "Staging-Control-DB ist nicht MariaDB." => "DB_ENGINE",
+                "MariaDB-Verbindung verwendet kein verifiziert konfiguriertes TLS." => "DB_TLS",
+                "Staging-DB-Benutzer besitzt globale Rechte." => "DB_GRANTS",
+                "Staging-Datenbank enthaelt unerwartete Tabellen." => "DB_TABLES",
+                "Staging-Tabelle verwendet Engine oder Zeichensatz nicht korrekt." => "DB_TABLE_FORMAT",
+                "Staging-Accountnummern sind inkonsistent." => "ACCOUNT_NUMBERS",
+                "CGI-Smoke-Ergebnisdatei konnte nicht atomar geschrieben werden." => "RESULT_WRITE",
+            ];
+            $message = $matches[1];
+            $category = $known[$message] ?? (preg_match("/\\AStaging-Nullbestand ist im Bereich [a-z]+ verletzt\\.\\z/D", $message)
+                ? "TEST_COMPANY_NOT_EMPTY" : "UNCLASSIFIED");
+            echo "SMOKE_CATEGORY=", $category, "\n";
+          ' "$private_root"
+          REMOTE
+          )" || { echo 'SMOKE_CATEGORY=ACCESS_FAILURE'; exit 0; }
+          case "$result" in
+            SMOKE_CATEGORY=APP_ROOT|SMOKE_CATEGORY=ENVIRONMENT|SMOKE_CATEGORY=RESULT_PATH|SMOKE_CATEGORY=COMPANY_SLUG|SMOKE_CATEGORY=TEST_COMPANY|SMOKE_CATEGORY=COMPANY_CONFIG|SMOKE_CATEGORY=TEST_ADMIN|SMOKE_CATEGORY=DB_ENGINE|SMOKE_CATEGORY=DB_TLS|SMOKE_CATEGORY=DB_GRANTS|SMOKE_CATEGORY=DB_TABLES|SMOKE_CATEGORY=DB_TABLE_FORMAT|SMOKE_CATEGORY=ACCOUNT_NUMBERS|SMOKE_CATEGORY=RESULT_WRITE|SMOKE_CATEGORY=TEST_COMPANY_NOT_EMPTY|SMOKE_CATEGORY=FILE_MISSING|SMOKE_CATEGORY=ASSIGNMENT_UNCLEAR|SMOKE_CATEGORY=UNCLASSIFIED)
+              printf '%s\n' "$result" ;;
+            *) echo 'SMOKE_CATEGORY=UNCLASSIFIED' ;;
+          esac
