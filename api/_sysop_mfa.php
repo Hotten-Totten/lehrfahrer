@@ -132,6 +132,26 @@ function lehrfahrer_sysop_mfa_validate_client(string $clientData, string $type):
     }
 }
 
+/** Shared verification for first enrollment and an additional credential. */
+function lehrfahrer_sysop_mfa_verify_creation(array $input, string $challenge): array {
+    foreach (['id', 'clientDataJSON', 'attestationObject'] as $field) {
+        if (!isset($input[$field]) || !is_string($input[$field])) {
+            throw new LehrfahrerMfaRejected('WebAuthn-Antwort ungueltig.');
+        }
+    }
+    $clientData = lehrfahrer_sysop_mfa_decode($input['clientDataJSON']);
+    lehrfahrer_sysop_mfa_validate_client($clientData, 'webauthn.create');
+    $data = lehrfahrer_sysop_mfa_library()->processCreate($clientData,
+        lehrfahrer_sysop_mfa_decode($input['attestationObject']),
+        lehrfahrer_sysop_mfa_decode($challenge), true);
+    $credentialId = lehrfahrer_sysop_mfa_encode((string)$data->credentialId);
+    if (!hash_equals($credentialId, $input['id']) || $data->rpId !== LEHRFAHRER_SYSOP_MFA_RP_ID) {
+        throw new LehrfahrerMfaRejected('Credential ungueltig.');
+    }
+    return ['credentialId' => $credentialId, 'publicKey' => (string)$data->credentialPublicKey,
+        'signCount' => (int)($data->signatureCounter ?? 0)];
+}
+
 /** Always consumes the challenge, including on a failed WebAuthn assertion. */
 function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?array {
     return lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $csrf, $input): ?array {
@@ -165,18 +185,12 @@ function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?arr
                 $clientData = lehrfahrer_sysop_mfa_decode((string)($input['clientDataJSON'] ?? ''));
                 $webauthn = lehrfahrer_sysop_mfa_library();
                 if ($pending['purpose'] === 'ENROLL') {
-                    lehrfahrer_sysop_mfa_validate_client($clientData, 'webauthn.create');
-                    $data = $webauthn->processCreate($clientData,
-                        lehrfahrer_sysop_mfa_decode((string)($input['attestationObject'] ?? '')),
-                        lehrfahrer_sysop_mfa_decode($challenge), true);
-                    $credentialId = lehrfahrer_sysop_mfa_encode((string)$data->credentialId);
-                    if (!hash_equals($credentialId, (string)($input['id'] ?? ''))
-                        || $data->rpId !== LEHRFAHRER_SYSOP_MFA_RP_ID) throw new LehrfahrerMfaRejected('Credential ungueltig.');
+                    $created = lehrfahrer_sysop_mfa_verify_creation($input, $challenge);
                     $insert = $pdo->prepare("INSERT INTO account_passkeys
                         (id, account_id, credential_id, public_key, sign_count, rp_id, status, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, 'active', ?)");
-                    $insert->execute([lehrfahrer_control_id('pkey'), $pending['account_id'], $credentialId,
-                        $data->credentialPublicKey, (int)($data->signatureCounter ?? 0),
+                    $insert->execute([lehrfahrer_control_id('pkey'), $pending['account_id'], $created['credentialId'],
+                        $created['publicKey'], $created['signCount'],
                         LEHRFAHRER_SYSOP_MFA_RP_ID, lehrfahrer_auth_timestamp(time())]);
                     $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
                         WHERE account_id = ? AND environment = ? AND revoked_at IS NULL');

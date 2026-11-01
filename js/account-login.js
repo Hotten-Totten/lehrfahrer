@@ -17,6 +17,12 @@
   const accountSection = document.getElementById('accountSection');
   const activeCompany = document.getElementById('activeCompany');
   const accountDetails = document.getElementById('accountDetails');
+  const passkeysSection = document.getElementById('passkeysSection');
+  const passkeyManageButton = document.getElementById('passkeyManageButton');
+  const passkeyList = document.getElementById('passkeyList');
+  const passkeyHint = document.getElementById('passkeyHint');
+  const newPasskeyName = document.getElementById('newPasskeyName');
+  const addPasskeyButton = document.getElementById('addPasskeyButton');
   const continueTarget = document.getElementById('continueTarget');
   const switchCompany = document.getElementById('switchCompany');
   const message = document.getElementById('message');
@@ -33,6 +39,7 @@
     membershipSection.hidden = section !== 'memberships';
     mfaSection.hidden = section !== 'mfa';
     accountSection.hidden = section !== 'account';
+    passkeysSection.hidden = section !== 'passkeys';
     if (section === 'login') loginInput.focus();
   }
 
@@ -82,6 +89,152 @@
     mfaButton.textContent = purpose === 'ENROLL' ? 'Passkey einrichten' : 'Mit Passkey bestätigen';
     notice('');
     show('mfa');
+  }
+
+  async function passkeyRequest(action, method = 'GET', payload = null) {
+    const options = { method, credentials: 'same-origin', cache: 'no-store' };
+    if (method === 'POST') {
+      options.headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+      options.body = JSON.stringify(payload || {});
+    }
+    const response = await fetch(`api/auth/account_passkeys.php?action=${action}`, options);
+    return { response, body: await response.json().catch(() => ({})) };
+  }
+
+  function passkeyDate(value) {
+    const date = value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime()) ? date.toLocaleString('de-DE') : 'Noch nicht verwendet';
+  }
+
+  async function loadPasskeys() {
+    const { response, body } = await passkeyRequest('list');
+    if (response.status === 401 || response.status === 403) { sessionExpired(); return; }
+    if (!response.ok || !body.ok || !Array.isArray(body.passkeys)) {
+      notice('Passkeys können derzeit nicht geladen werden.');
+      return;
+    }
+    passkeyList.replaceChildren();
+    const keys = body.passkeys;
+    passkeyHint.textContent = keys.length <= 1
+      ? 'Der letzte aktive Passkey kann nicht entfernt werden.' : '';
+    for (const key of keys) {
+      if (typeof key.id !== 'string' || typeof key.name !== 'string') continue;
+      const card = document.createElement('div');
+      card.className = 'passkey-card';
+      const title = document.createElement('strong');
+      title.textContent = key.name;
+      const details = document.createElement('small');
+      details.textContent = `Erstellt: ${passkeyDate(key.createdAt)} · Zuletzt verwendet: ${passkeyDate(key.lastUsedAt)} · ${key.status || 'Aktiv'}`;
+      const actions = document.createElement('div');
+      actions.className = 'passkey-actions';
+      const renameButton = document.createElement('button');
+      renameButton.type = 'button';
+      renameButton.className = 'secondary';
+      renameButton.textContent = 'Ändern';
+      renameButton.addEventListener('click', () => {
+        actions.replaceChildren();
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.maxLength = 120;
+        nameInput.value = key.name;
+        nameInput.setAttribute('aria-label', 'Passkey-Name');
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.textContent = 'Name speichern';
+        saveButton.addEventListener('click', async () => {
+          if (busy) return;
+          busy = true;
+          try {
+            const result = await passkeyRequest('rename', 'POST', { id: key.id, name: nameInput.value });
+            if (!result.response.ok || !result.body.ok) { notice('Name konnte nicht geändert werden.'); return; }
+            await loadPasskeys();
+            notice('Passkey-Name gespeichert.');
+          } catch (_error) { notice('Name konnte nicht geändert werden.'); }
+          finally { busy = false; }
+        });
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'secondary';
+        cancel.textContent = 'Abbrechen';
+        cancel.addEventListener('click', () => { actions.replaceChildren(renameButton, removeButton); });
+        actions.replaceChildren(nameInput, saveButton, cancel);
+        nameInput.focus();
+      });
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'secondary';
+      removeButton.textContent = 'Entfernen';
+      removeButton.disabled = keys.length <= 1;
+      removeButton.addEventListener('click', () => {
+        actions.replaceChildren();
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.textContent = 'Entfernen bestätigen';
+        confirm.addEventListener('click', async () => {
+          if (busy) return;
+          busy = true;
+          try {
+            const result = await passkeyRequest('revoke', 'POST', { id: key.id });
+            if (!result.response.ok || !result.body.ok) { notice('Passkey konnte nicht entfernt werden.'); return; }
+            await loadPasskeys();
+            notice('Passkey entfernt.');
+          } catch (_error) { notice('Passkey konnte nicht entfernt werden.'); }
+          finally { busy = false; }
+        });
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'secondary';
+        cancel.textContent = 'Abbrechen';
+        cancel.addEventListener('click', () => { actions.replaceChildren(renameButton, removeButton); });
+        actions.replaceChildren(confirm, cancel);
+      });
+      actions.append(renameButton, removeButton);
+      card.append(title, details, actions);
+      passkeyList.append(card);
+    }
+    show('passkeys');
+    notice('');
+  }
+
+  async function addPasskey() {
+    if (busy || !csrfToken) return;
+    if (!window.PublicKeyCredential || !navigator.credentials) {
+      notice('Dieser Browser unterstützt Passkeys nicht.');
+      return;
+    }
+    const name = newPasskeyName.value.trim();
+    if (!name) { notice('Bitte einen Namen für den Passkey eingeben.'); return; }
+    busy = true;
+    addPasskeyButton.disabled = true;
+    try {
+      const begun = await passkeyRequest('begin', 'POST', { name });
+      if (!begun.response.ok || !begun.body.ok) { notice('Passkey konnte nicht gestartet werden.'); return; }
+      const options = begun.body.options?.publicKey;
+      if (!options || typeof options.challenge !== 'string') throw new Error('Invalid options');
+      options.challenge = decodeBase64Url(options.challenge);
+      options.user.id = decodeBase64Url(options.user.id);
+      options.excludeCredentials = (options.excludeCredentials || []).map(item => ({
+        ...item, id: decodeBase64Url(item.id)
+      }));
+      const credential = await navigator.credentials.create({ publicKey: options });
+      if (!credential) throw new Error('No credential');
+      const finished = await passkeyRequest('finish', 'POST', {
+        id: encodeBase64Url(credential.rawId),
+        clientDataJSON: encodeBase64Url(credential.response.clientDataJSON),
+        attestationObject: encodeBase64Url(credential.response.attestationObject)
+      });
+      if (!finished.response.ok || !finished.body.ok) { notice('Passkey konnte nicht gespeichert werden.'); return; }
+      newPasskeyName.value = '';
+      await loadPasskeys();
+      notice('Passkey hinzugefügt.');
+    } catch (error) {
+      notice(error?.name === 'NotAllowedError'
+        ? 'Passkey-Vorgang abgebrochen. Sie können es erneut versuchen.'
+        : 'Passkey konnte nicht hinzugefügt werden.');
+    } finally {
+      busy = false;
+      addPasskeyButton.disabled = false;
+    }
   }
 
   async function completeMfa() {
@@ -226,6 +379,7 @@
       row('Rolle', Array.isArray(body.tenantRoles) ? body.tenantRoles.join(' / ') : '');
       row('Plattformrolle', Array.isArray(body.platformRoles) ? body.platformRoles.join(' / ') : '');
       switchCompany.hidden = (memberships.body.memberships || []).length < 2;
+      passkeyManageButton.hidden = !Array.isArray(body.platformRoles) || !body.platformRoles.includes('SYSOP');
       show('account');
       notice('');
       return;
@@ -321,6 +475,11 @@
     notice('Sicherheitsprüfung abgebrochen. Bitte erneut anmelden.');
   });
   document.getElementById('accountLogout').addEventListener('click', logout);
+  passkeyManageButton.addEventListener('click', () => loadPasskeys().catch(() => {
+    notice('Passkeys können derzeit nicht geladen werden.');
+  }));
+  addPasskeyButton.addEventListener('click', addPasskey);
+  document.getElementById('passkeysBack').addEventListener('click', () => { show('account'); notice(''); });
   switchCompany.addEventListener('click', () => renderMemberships('switch').catch(() => {
     notice('Gesellschaftsauswahl ist derzeit nicht möglich.');
   }));

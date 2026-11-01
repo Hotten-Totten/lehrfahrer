@@ -7,7 +7,7 @@ require_once __DIR__ . '/_control_user_numbers.php';
 require_once __DIR__ . '/_control_sysop_mfa_schema.php';
 require_once __DIR__ . '/_runtime_info.php';
 
-const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 7;
+const LEHRFAHRER_CONTROL_SCHEMA_VERSION = 8;
 const LEHRFAHRER_CONTROL_BUSY_TIMEOUT_MS = 5000;
 const LEHRFAHRER_CONTROL_MIGRATION_LOCK_SECONDS = 15;
 
@@ -181,6 +181,7 @@ function lehrfahrer_control_migrate(PDO $pdo): void {
             5 => 'lehrfahrer_control_apply_phase2_schema',
             6 => 'lehrfahrer_control_apply_user_number_schema',
             7 => 'lehrfahrer_control_apply_sysop_mfa_schema',
+            8 => 'lehrfahrer_control_apply_sysop_mfa_management_schema',
         ];
         foreach ($migrations as $version => $migration) {
             if (in_array($version, $appliedVersions, true)) continue;

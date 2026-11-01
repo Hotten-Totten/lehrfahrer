@@ -52,6 +52,15 @@ try {
     #runtime, #legacyFallback { margin-top: 18px; color: #66717d; font-size: .82rem; }
     #legacyFallback a { color: #3f5264; }
     #accountDetails { margin: 0 0 18px; color: #334155; font-size: .94rem; line-height: 1.55; }
+    #passkeyList { display: grid; gap: 12px; margin: 16px 0; }
+    .passkey-card { border: 1px solid #d6dde5; border-radius: 8px; padding: 14px; }
+    .passkey-card strong { display: block; margin-bottom: 6px; }
+    .passkey-card small { display: block; color: #526171; line-height: 1.5; }
+    .passkey-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .passkey-actions button { min-height: 38px; font-size: .9rem; }
+    .passkey-actions button + button { margin-top: 0; }
+    .passkey-card input { margin-top: 8px; }
+    #passkeyHint { color: #526171; font-size: .9rem; }
   </style>
 </head>
 <body>
@@ -81,14 +90,24 @@ try {
       <p id="activeCompany"></p>
       <div id="accountDetails"></div>
       <a id="continueTarget" class="link-button" href="/">Zum Editor</a>
+      <button id="passkeyManageButton" class="secondary" type="button" hidden>Passkeys verwalten</button>
       <button id="switchCompany" class="secondary" type="button">Gesellschaft wechseln</button>
       <button id="accountLogout" class="secondary" type="button">Abmelden</button>
+    </section>
+    <section id="passkeysSection" aria-labelledby="passkeysTitle" hidden>
+      <h2 id="passkeysTitle">Passkeys</h2>
+      <div id="passkeyList"></div>
+      <p id="passkeyHint"></p>
+      <label for="newPasskeyName">Name für neuen Passkey</label>
+      <input id="newPasskeyName" maxlength="120" autocomplete="off" placeholder="z. B. iPad" type="text">
+      <button id="addPasskeyButton" type="button">Passkey hinzufügen</button>
+      <button id="passkeysBack" class="secondary" type="button">Zurück zum Konto</button>
     </section>
     <p id="message" role="status" aria-live="polite"></p>
     <div id="runtime"></div>
     <?php if ($legacyFallbackVisible): ?><p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p><?php endif; ?>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=25b478929d5f" defer></script>
+  <script src="js/account-login.js?v=ac4d50ee682c" defer></script>
 </body>
 </html>

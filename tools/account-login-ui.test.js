@@ -25,8 +25,11 @@ function harness(search = '', responses = {}) {
   };
   const document = {
     getElementById: element,
-    createElement: () => ({ type: '', textContent: '', listeners: {},
-      addEventListener(type, handler) { this.listeners[type] = handler; } })
+    createElement: () => ({ type: '', textContent: '', listeners: {}, children: [], disabled: false,
+      addEventListener(type, handler) { this.listeners[type] = handler; },
+      append(...children) { this.children.push(...children); },
+      replaceChildren(...children) { this.children = children; },
+      setAttribute() {}, focus() {} })
   };
   const fetch = async (url, options = {}) => {
     const action = new URL(url, 'https://staging.lehrfahrer.de/').searchParams.get('action') || 'runtime';
@@ -94,6 +97,31 @@ test('SYSOP-Passwort startet nur den begrenzten Passkey-Schritt', async () => {
   assert.equal(h.element('mfaButton').textContent, 'Passkey einrichten');
   h.element('mfaCancel').listeners.click();
   assert.equal(h.element('accountLoginForm').hidden, false);
+});
+
+test('Passkey-Verwaltung erscheint nur bei serverseitig gemeldeter SYSOP-Rolle', async () => {
+  const account = platformRoles => harness('?mode=manage', {
+    me: { status: 200, body: { ok: true, context: 'TENANT', csrfToken: 'csrf',
+      platformRoles, companyName: 'Cottbusverkehr' } },
+    memberships: { status: 200, body: { ok: true, memberships: [{ id: 'm1', name: 'Cottbusverkehr' }],
+      currentMembershipId: 'm1' } },
+    list: { status: 200, body: { ok: true, passkeys: [{ id: 'private-id', name: 'Windows Haupt-PC',
+      createdAt: '2026-10-31T00:00:00Z', lastUsedAt: null, status: 'Aktiv' }] } }
+  });
+  const sysop = account(['SYSOP']);
+  await sysop.settle(); await sysop.settle();
+  assert.equal(sysop.element('passkeyManageButton').hidden, false);
+  await sysop.element('passkeyManageButton').listeners.click();
+  assert.equal(sysop.element('passkeysSection').hidden, false);
+  assert.equal(sysop.element('passkeyHint').textContent,
+    'Der letzte aktive Passkey kann nicht entfernt werden.');
+  const card = sysop.element('passkeyList').children[0];
+  assert.equal(card.children[0].textContent, 'Windows Haupt-PC');
+  assert.equal(card.children[2].children[1].disabled, true);
+  assert.ok(!card.children.some(child => child.textContent === 'private-id'));
+  const normal = account([]);
+  await normal.settle(); await normal.settle();
+  assert.equal(normal.element('passkeyManageButton').hidden, true);
 });
 
 test('Externe und unerlaubte Return-Ziele werden auf den Editor begrenzt', async () => {

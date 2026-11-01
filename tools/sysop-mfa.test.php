@@ -37,7 +37,7 @@ mkdir($dir . '/webroot');
 $_SERVER['DOCUMENT_ROOT'] = $dir . '/webroot';
 require dirname(__DIR__) . '/api/_account_auth.php';
 $pdo = lehrfahrer_control_database();
-check((int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 7,
+check((int)$pdo->query('SELECT MAX(version) FROM schema_migrations')->fetchColumn() === 8,
     'additive MFA schema migrated');
 check((int)$pdo->query('SELECT COUNT(*) FROM account_passkeys')->fetchColumn() === 0,
     'migration seeds no credential');
@@ -52,8 +52,11 @@ $company = (new LehrfahrerCompanyRepository($pdo))->create(['slug' => 'cottbus',
     'status' => 'active', 'license_status' => 'active']);
 $pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at)
     VALUES (?,?,?,'active',?,?)")->execute(['member-sysop', 'sysop', $company['id'], $now, $now]);
+$pdo->prepare("INSERT INTO account_memberships (id,account_id,company_id,status,created_at,updated_at)
+    VALUES (?,?,?,'active',?,?)")->execute(['member-normal', 'normal', $company['id'], $now, $now]);
 $adminRole = $pdo->query("SELECT id FROM roles WHERE code = 'ADMIN'")->fetchColumn();
 $pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute(['member-sysop', $adminRole]);
+$pdo->prepare('INSERT INTO membership_roles (membership_id,role_id) VALUES (?,?)')->execute(['member-normal', $adminRole]);
 $pdo->prepare('INSERT INTO account_user_numbers (user_number,issued_to_account_id,current_account_id,issued_at)
     VALUES (?,?,?,?)')->execute([1, 'sysop', 'sysop', $now]);
 putenv('LEHRFAHRER_ENV=staging');
@@ -96,6 +99,10 @@ $client = json_encode(['type' => 'webauthn.create', 'challenge' => $begin['optio
 $payload['clientDataJSON'] = b64($client);
 check(lehrfahrer_sysop_mfa_finish($pdo, $pending['csrf'], $payload) === ['enrolled' => true], 'valid passkey enrolled');
 check(count(lehrfahrer_sysop_mfa_credentials($pdo, 'sysop')) === 1, 'credential stored for sysop');
+$beforeMigrationReplay = $pdo->query("SELECT credential_id, public_key, sign_count, status FROM account_passkeys WHERE account_id = 'sysop'")->fetch(PDO::FETCH_ASSOC);
+lehrfahrer_control_apply_sysop_mfa_management_schema($pdo);
+$afterMigrationReplay = $pdo->query("SELECT credential_id, public_key, sign_count, status FROM account_passkeys WHERE account_id = 'sysop'")->fetch(PDO::FETCH_ASSOC);
+check($beforeMigrationReplay === $afterMigrationReplay, 'additive management migration preserves existing passkey');
 $preEnrollmentLookup = $pdo->prepare('SELECT revoked_at FROM account_sessions WHERE session_token_hash = ?');
 $preEnrollmentLookup->execute([lehrfahrer_auth_token_hash($preEnrollmentSession['token'])]);
 check($preEnrollmentLookup->fetchColumn() !== null, 'first enrollment revokes existing sysop sessions');
@@ -157,6 +164,87 @@ check($public['companyName'] === 'Cottbusverkehr' && in_array('ADMIN', $public['
     'Cottbus ADMIN tenant context preserved');
 check(in_array('SYSOP', $public['platformRoles'], true) && $public['userNumber'] === '00001',
     'SYSOP role and number preserved after MFA');
+require dirname(__DIR__) . '/api/_sysop_passkey_management.php';
+$sessionCsrf = $verified['session']['csrf'];
+$keys = lehrfahrer_sysop_passkeys_list($pdo);
+check(count($keys) === 1 && $keys[0]['name'] === 'Passkey 1', 'existing unnamed Windows passkey listed');
+$firstId = $keys[0]['id'];
+check(!lehrfahrer_sysop_passkeys_revoke($pdo, $sessionCsrf, $firstId), 'last active passkey protected');
+check(!lehrfahrer_sysop_passkeys_rename($pdo, 'wrong-csrf', $firstId, 'Windows Haupt-PC'),
+    'wrong CSRF blocks rename');
+$beforeRename = $pdo->query("SELECT credential_id, public_key, sign_count, status FROM account_passkeys WHERE account_id = 'sysop'")->fetch(PDO::FETCH_ASSOC);
+check(lehrfahrer_sysop_passkeys_rename($pdo, $sessionCsrf, $firstId, 'Windows Haupt-PC'),
+    'first passkey can be named without changing credential');
+check($beforeRename === $pdo->query("SELECT credential_id, public_key, sign_count, status FROM account_passkeys WHERE account_id = 'sysop'")->fetch(PDO::FETCH_ASSOC),
+    'rename changes no security fields');
+check(lehrfahrer_sysop_passkeys_list($pdo)[0]['name'] === 'Windows Haupt-PC', 'new label shown');
+check(!lehrfahrer_sysop_passkeys_rename($pdo, $sessionCsrf, 'foreign-key', 'Fremd'),
+    'foreign credential cannot be renamed');
+unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
+$normalSession = lehrfahrer_account_login($pdo, 'normal', 'correct-password');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $normalSession['token'];
+check(($normalSession['context'] ?? '') === 'TENANT'
+    && lehrfahrer_sysop_passkeys_list($pdo) === null, 'tenant ADMIN cannot list SYSOP passkeys');
+check(lehrfahrer_sysop_passkeys_begin($pdo, $normalSession['csrf'], 'Fremd') === null,
+    'normal account cannot begin registration');
+check(!lehrfahrer_sysop_passkeys_revoke($pdo, $normalSession['csrf'], $firstId),
+    'foreign account cannot revoke SYSOP credential');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $verified['session']['token'];
+check(lehrfahrer_sysop_passkeys_begin($pdo, 'wrong-csrf', 'iPad') === null,
+    'wrong CSRF blocks managed enrollment');
+$managed = lehrfahrer_sysop_passkeys_begin($pdo, $sessionCsrf, 'iPad');
+check(isset($managed['options']->publicKey->challenge), 'second registration challenge issued');
+$secondPrivate = openssl_pkey_new($keyOptions);
+$secondDetails = openssl_pkey_get_details($secondPrivate);
+$secondCredentialId = random_bytes(32);
+$secondCose = cbor([1 => 2, 3 => -7, -1 => 1,
+    -2 => new BinaryValue($secondDetails['ec']['x']), -3 => new BinaryValue($secondDetails['ec']['y'])]);
+$secondAuthData = hash('sha256', LEHRFAHRER_SYSOP_MFA_RP_ID, true) . chr(0x45) . pack('N', 0)
+    . str_repeat("\0", 16) . pack('n', strlen($secondCredentialId)) . $secondCredentialId . $secondCose;
+$secondClient = json_encode(['type' => 'webauthn.create',
+    'challenge' => $managed['options']->publicKey->challenge, 'origin' => LEHRFAHRER_SYSOP_MFA_ORIGIN], JSON_THROW_ON_ERROR);
+$secondPayload = ['id' => b64($secondCredentialId), 'clientDataJSON' => b64($secondClient),
+    'attestationObject' => b64(cbor(['fmt' => 'none', 'attStmt' => [], 'authData' => new BinaryValue($secondAuthData)]))];
+check(lehrfahrer_sysop_passkeys_finish($pdo, $sessionCsrf, $secondPayload), 'second passkey registered');
+check(!lehrfahrer_sysop_passkeys_finish($pdo, $sessionCsrf, $secondPayload), 'managed challenge replay denied');
+$keys = lehrfahrer_sysop_passkeys_list($pdo);
+check(count($keys) === 2 && in_array('iPad', array_column($keys, 'name'), true),
+    'both passkeys remain active');
+$secondId = array_values(array_filter($keys, static fn(array $key): bool => $key['name'] === 'iPad'))[0]['id'];
+check(!lehrfahrer_sysop_passkeys_revoke($pdo, $sessionCsrf, 'foreign-key'),
+    'manipulated credential ID cannot revoke a key');
+unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
+$loginB = lehrfahrer_account_login($pdo, 'sysop', 'correct-password');
+$_COOKIE[LEHRFAHRER_SYSOP_MFA_COOKIE] = $loginB['token'];
+check(lehrfahrer_sysop_passkeys_list($pdo) === null, 'MFA pending cannot manage passkeys');
+$requestB = lehrfahrer_sysop_mfa_begin($pdo, $loginB['csrf']);
+$clientB = json_encode(['type' => 'webauthn.get', 'challenge' => $requestB['options']->publicKey->challenge,
+    'origin' => LEHRFAHRER_SYSOP_MFA_ORIGIN], JSON_THROW_ON_ERROR);
+$authB = hash('sha256', LEHRFAHRER_SYSOP_MFA_RP_ID, true) . chr(0x05) . pack('N', 1);
+openssl_sign($authB . hash('sha256', $clientB, true), $signatureB, $secondPrivate, OPENSSL_ALGO_SHA256);
+$assertionB = ['id' => b64($secondCredentialId), 'clientDataJSON' => b64($clientB),
+    'authenticatorData' => b64($authB), 'signature' => b64($signatureB)];
+$verifiedB = lehrfahrer_sysop_mfa_finish($pdo, $loginB['csrf'], $assertionB);
+check(is_array($verifiedB) && !$verifiedB['enrolled'], 'second credential authenticates');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $verified['session']['token'];
+check(lehrfahrer_sysop_passkeys_revoke($pdo, $sessionCsrf, $secondId), 'one of two passkeys revoked');
+check(count(lehrfahrer_sysop_passkeys_list($pdo)) === 1, 'remaining passkey stays active');
+unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
+$revokedAttempt = lehrfahrer_account_login($pdo, 'sysop', 'correct-password');
+$_COOKIE[LEHRFAHRER_SYSOP_MFA_COOKIE] = $revokedAttempt['token'];
+$revokedChallenge = lehrfahrer_sysop_mfa_begin($pdo, $revokedAttempt['csrf']);
+$revokedClient = json_encode(['type' => 'webauthn.get',
+    'challenge' => $revokedChallenge['options']->publicKey->challenge,
+    'origin' => LEHRFAHRER_SYSOP_MFA_ORIGIN], JSON_THROW_ON_ERROR);
+openssl_sign($authB . hash('sha256', $revokedClient, true), $revokedSig, $secondPrivate, OPENSSL_ALGO_SHA256);
+check(lehrfahrer_sysop_mfa_finish($pdo, $revokedAttempt['csrf'], [
+    'id' => b64($secondCredentialId), 'clientDataJSON' => b64($revokedClient),
+    'authenticatorData' => b64($authB), 'signature' => b64($revokedSig)]) === null,
+    'revoked passkey cannot log in');
+$_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $verified['session']['token'];
+check(!lehrfahrer_sysop_passkeys_revoke($pdo, $sessionCsrf, $firstId),
+    'last passkey still protected after revocation');
+check(lehrfahrer_account_current_session($pdo, false) !== null, 'management keeps current MFA session');
 check(lehrfahrer_sysop_mfa_finish($pdo, $login['csrf'], $assertion) === null, 'challenge cannot be replayed');
 $expired = lehrfahrer_account_login($pdo, 'sysop', 'correct-password');
 $_COOKIE[LEHRFAHRER_SYSOP_MFA_COOKIE] = $expired['token'];
@@ -187,6 +275,10 @@ check(lehrfahrer_sysop_mfa_credentials($pdo, 'sysop') === [], 'server-side recov
 unset($_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]);
 $recovery = lehrfahrer_account_login($pdo, 'sysop', 'correct-password');
 check(($recovery['purpose'] ?? '') === 'ENROLL', 'server-side recovery allows controlled re-enrollment');
+$pdo->exec('DELETE FROM sysop_assignment');
+check(!lehrfahrer_sysop_mfa_required($pdo, 'sysop')
+    && !isset(lehrfahrer_account_login($pdo, 'sysop', 'correct-password')['mfaPending']),
+    'user number 00001 alone is not the MFA authority');
 $normal = lehrfahrer_account_login($pdo, 'normal', 'correct-password');
 check(isset($normal['token']) && !isset($normal['mfaPending']), 'non-sysop login unaffected');
 

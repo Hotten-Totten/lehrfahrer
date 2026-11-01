@@ -61,3 +61,24 @@ function lehrfahrer_control_apply_sysop_mfa_schema(PDO $pdo): void {
         }
     }
 }
+
+/** Add only display labels and an authenticated-session binding for additional registrations. */
+function lehrfahrer_control_apply_sysop_mfa_management_schema(PDO $pdo): void {
+    if (lehrfahrer_control_driver($pdo) === 'mysql') {
+        foreach (['account_passkeys' => ['display_name', 'VARCHAR(120) NULL'],
+                  'account_mfa_pending' => ['session_id', 'VARCHAR(64) NULL']] as $table => [$column, $type]) {
+            $query = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+            $query->execute([$table, $column]);
+            if ((int)$query->fetchColumn() === 0) $pdo->exec("ALTER TABLE $table ADD COLUMN $column $type");
+        }
+    } else {
+        foreach (['account_passkeys' => ['display_name', 'TEXT NULL'],
+                  'account_mfa_pending' => ['session_id', 'TEXT NULL']] as $table => [$column, $type]) {
+            $columns = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_ASSOC);
+            if (!in_array($column, array_column($columns, 'name'), true)) {
+                $pdo->exec("ALTER TABLE $table ADD COLUMN $column $type");
+            }
+        }
+    }
+}
