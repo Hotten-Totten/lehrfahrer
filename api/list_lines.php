@@ -4,8 +4,15 @@ ini_set('display_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 $authContext = lehrfahrer_api_authorize('routes.read');
 $companyId = lehrfahrer_route_company_id($authContext);
+$auditFileReadLock = lehrfahrer_audit_file_read_lock($companyId);
+if (lehrfahrer_audit_file_any_blocked($companyId)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Routen voruebergehend gesperrt.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $driverOnly = strtolower(trim(strval($_GET['scope'] ?? ''))) === 'driver';
 $includeUnreleased = !$driverOnly && lehrfahrer_auth_has_capability($authContext, 'routes.write');
 
@@ -25,6 +32,13 @@ function tenantAssetExists(string $path): bool {
     if (is_link($path) || !is_file($path)) return false;
     $resolved = realpath($path);
     return $resolved !== false && lehrfahrer_tenant_same_path($resolved, $path);
+}
+
+function tenantRequireAuditFileAvailable(string $companyId, string $path): void {
+    if (!lehrfahrer_audit_file_route_blocked($companyId, $path)) return;
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Route voruebergehend gesperrt.'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 function sanitizeForFilesystem(string $value): string {
@@ -132,6 +146,7 @@ foreach ($cities as $city) {
                     $categoryFiles = glob($categoryPath . '/*.json');
                     foreach ($categoryFiles as $file) {
                         if (is_link($file)) continue;
+                        tenantRequireAuditFileAvailable($companyId, $file);
                         $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
                             : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
                         if (!is_array($data)) continue;
@@ -195,6 +210,7 @@ foreach ($cities as $city) {
             $files = glob($subPath . '/*.json');
             foreach ($files as $file) {
                 if (is_link($file)) continue;
+                tenantRequireAuditFileAvailable($companyId, $file);
                 $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
                     : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
                 if (!is_array($data)) continue;
@@ -259,6 +275,7 @@ foreach ($cities as $city) {
     $oldFiles = glob($cityDir . '/*.json');
     foreach ($oldFiles as $file) {
         if (is_link($file)) continue;
+        tenantRequireAuditFileAvailable($companyId, $file);
         $data = $includeUnreleased ? lehrfahrer_gtfs_work_read_json($file)
             : lehrfahrer_gtfs_work_load_driver_route($companyId, $file);
         if (!is_array($data)) continue;

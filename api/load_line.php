@@ -2,8 +2,10 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 $authContext = lehrfahrer_api_authorize('routes.read');
 $companyId = lehrfahrer_route_company_id($authContext);
+$auditFileReadLock = lehrfahrer_audit_file_read_lock($companyId);
 $driverOnly = strtolower(trim(strval($_GET['scope'] ?? ''))) === 'driver';
 $includeUnreleased = !$driverOnly && lehrfahrer_auth_has_capability($authContext, 'routes.write');
 
@@ -60,6 +62,11 @@ if ($line === '') {
 // Neues Format: linien/{city}/{lineFolder}/{categoryFolder}/{line}.json
 // Zwischenformat: linien/{city}/{lineFolder}/{line}.json
 // Fallback:     linien/{city}/{line}.json  (alte Dateien)
+if (lehrfahrer_audit_file_request_blocked($companyId, $city, $line, $lineFolder, $categoryFolder)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Route voruebergehend gesperrt.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $filePath = lehrfahrer_route_find_file($companyId, $city, $line, 'json', $lineFolder, $categoryFolder);
 
 if (!$filePath || !file_exists($filePath)) {
@@ -68,6 +75,12 @@ if (!$filePath || !file_exists($filePath)) {
         'ok' => false,
         'error' => 'Linie nicht gefunden'
     ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if (lehrfahrer_audit_file_route_blocked($companyId, $filePath)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Route voruebergehend gesperrt.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

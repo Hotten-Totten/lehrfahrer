@@ -165,6 +165,37 @@ test('App-Laden und Editor-Downloads nutzen authentifizierte Tenant-Dateien', as
   }
 });
 
+test('BLOCKED sperrt Listing, Laden und direkte Downloads nur im betroffenen Mandanten', async () => {
+  const relative = 'stadt-a/Linie_1/Standard/Route_A.json';
+  runPhp(`
+    require ${phpString(path.join(root, 'api/_audit_file_operation.php'))};
+    $company=${phpString(companyA.id)};
+    $route=${phpString(relative)};
+    $record=['id'=>'op_'.bin2hex(random_bytes(16)),'companyId'=>$company,
+      'routeRelative'=>$route,'objectId'=>lehrfahrer_audit_file_object_id($company,$route),
+      'kind'=>'UPDATE','state'=>'BLOCKED','auditEventId'=>null,
+      'files'=>[['area'=>'lines','relative'=>$route,'oldHash'=>hash('sha256',(string)file_get_contents(
+        lehrfahrer_tenant_path($company,'lines',$route))),'newHash'=>hash('sha256','neuer Inhalt')]]];
+    lehrfahrer_audit_file_store(lehrfahrer_audit_file_directory($company),$record);
+  `);
+  const query = 'city=stadt-a&line=Route_A&lineFolder=Linie_1&categoryFolder=Standard';
+  assert.equal((await request('/api/list_lines.php')).status, 503);
+  assert.equal((await request('/api/list_lines.php?scope=driver')).status, 503);
+  assert.equal((await request('/api/load_line.php?' + query)).status, 503);
+  for (const endpoint of ['download_line_json.php', 'download_line_gpx.php', 'download_line_pdf.php']) {
+    assert.equal((await request('/api/' + endpoint + '?' + query)).status, 503, endpoint);
+  }
+  assert.deepEqual((await request('/api/list_lines.php', {}, sessionB)).json().lines.map(x => x.fileBase), ['Route_B']);
+  runPhp(`
+    require ${phpString(path.join(root, 'api/_audit_file_operation.php'))};
+    $pdo=lehrfahrer_control_database();
+    lehrfahrer_audit_file_recover($pdo,${phpString(companyA.id)});
+  `);
+  assert.deepEqual((await request('/api/list_lines.php')).json().lines.map(x => x.fileBase), ['Route_A']);
+  assert.deepEqual((await request('/api/list_lines.php?scope=driver')).json().lines, []);
+  assert.equal((await request('/api/load_line.php?' + query)).status, 200);
+});
+
 test('bekannte Fremd-IDs und Fremdstadt liefern beidseitig 404', async () => {
   for (const [session, foreignCity, foreignLine] of [
     [sessionA, 'stadt-b', 'Route_B'], [sessionB, 'stadt-a', 'Route_A']

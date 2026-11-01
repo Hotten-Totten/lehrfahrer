@@ -2,10 +2,12 @@
 
 require_once __DIR__ . '/_tenant_route_storage.php';
 require_once __DIR__ . '/_gtfs_work_inventory.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 
 function lehrfahrer_download_tenant_route(string $extension): never {
     $auth = lehrfahrer_api_authorize('routes.read');
     $companyId = lehrfahrer_route_company_id($auth);
+    $auditFileReadLock = lehrfahrer_audit_file_read_lock($companyId);
     $city = strtolower(trim((string)($_GET['city'] ?? '')));
     $line = trim((string)($_GET['line'] ?? ''));
     $line = preg_replace('/\.(json|gpx)$/i', '', $line);
@@ -16,6 +18,10 @@ function lehrfahrer_download_tenant_route(string $extension): never {
             lehrfahrer_route_segment($segment);
         }
         if ($city === '' || $line === '') throw new InvalidArgumentException('Pflichtangabe fehlt.');
+        if (lehrfahrer_audit_file_request_blocked($companyId, $city, $line, $lineFolder, $categoryFolder)) {
+            http_response_code(503);
+            exit;
+        }
         $path = lehrfahrer_route_find_file($companyId, $city, $line, $extension, $lineFolder, $categoryFolder);
         if ($path === null && $extension === 'gpx' && lehrfahrer_route_city_exists($companyId, $city)) {
             $legacy = lehrfahrer_tenant_path($companyId, 'lines', $city . '/gpx/' . $line . '.gpx');

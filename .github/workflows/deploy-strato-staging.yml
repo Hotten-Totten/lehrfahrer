@@ -222,6 +222,7 @@ jobs:
             tools/company-provisioning.test.js \
             tools/control-database.test.js \
             tools/audit-writer-concurrency.test.js \
+            tools/audit-file-operation.test.js \
             tools/control-phase2-schema.test.js \
             tools/control-user-numbers.test.js \
             tools/control-account-preflight.test.js \
@@ -545,6 +546,23 @@ jobs:
 
           "${SSH_RUN[@]}" "$REMOTE" \
             "mkdir -p -- './$STAGING_TARGET_PATH' './$STAGING_PRIVATE_PATH' './$STAGING_AUTH_PATH' && chmod 700 './$STAGING_PRIVATE_PATH'"
+
+          "${SSH_RUN[@]}" "$REMOTE" "bash -s -- '$STAGING_PRIVATE_PATH'" <<'REMOTE_ATOMIC_FILE_CHECK'
+          set -euo pipefail
+          cd "./${1#./}"
+          probe_dir="$(mktemp -d .lf-audit-probe-XXXXXXXX)"
+          trap 'rm -f -- "$probe_dir"/*; rmdir -- "$probe_dir"' EXIT
+          php -r '
+            $dir = $argv[1];
+            $source = "$dir/source"; $linked = "$dir/linked"; $target = "$dir/target";
+            if (file_put_contents($source, "old") !== 3
+                || !link($source, $linked)
+                || file_get_contents($linked) !== "old"
+                || file_put_contents($target, "new") !== 3
+                || !rename($target, $linked)
+                || file_get_contents($linked) !== "new") exit(1);
+          ' "$probe_dir"
+          REMOTE_ATOMIC_FILE_CHECK
 
           "${RSYNC_RUN[@]}" -az --omit-dir-times --no-perms --no-owner --no-group \
             --exclude '.git/' --exclude '.github/' --exclude '.vscode/' \

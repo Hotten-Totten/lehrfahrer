@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_audit_file_operation.php';
 $companyId = lehrfahrer_route_authorize('routes.read');
+$auditFileReadLock = lehrfahrer_audit_file_read_lock($companyId);
 
 function sanitizeForFilesystem(string $value): string {
     $value = str_replace(
@@ -50,6 +52,11 @@ if ($line === '') {
     exit;
 }
 
+if (lehrfahrer_audit_file_request_blocked($companyId, $city, $line, $lineFolder, $categoryFolder)) {
+    http_response_code(503);
+    exit;
+}
+
 $pdfPath = '';
 
 $pdfStorageFile = buildPdfStorageFileName(trim($lineFolder . '_' . $categoryFolder, '_'), $line);
@@ -79,6 +86,7 @@ if ($pdfPath === '' || !file_exists($pdfPath)) {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
 
 $fileName = basename($pdfPath);
 
