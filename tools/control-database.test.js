@@ -137,26 +137,29 @@ test('Control-Datenbank liegt außerhalb des DocumentRoot', () => {
 });
 
 test('Schema-Migration ist wiederholt idempotent', () => {
-  assert.equal(fixture.migrationCount, 8);
+  assert.equal(fixture.migrationCount, 9);
   for (const table of [
     'schema_migrations', 'companies', 'users', 'roles', 'capabilities',
     'role_capabilities', 'user_roles', 'control_metadata', 'sessions',
     'user_activation_tokens', 'accounts', 'account_memberships', 'membership_roles',
     'platform_roles', 'platform_capabilities', 'platform_role_capabilities',
     'account_platform_roles', 'sysop_assignment', 'account_sessions', 'account_activation_tokens',
-    'account_user_number_allocator', 'account_user_numbers', 'account_passkeys', 'account_mfa_pending'
+    'account_user_number_allocator', 'account_user_numbers', 'account_passkeys', 'account_mfa_pending',
+    'audit_events', 'audit_chain_state'
   ]) {
     assert.ok(fixture.tableNames.includes(table), table);
   }
-  for (const deferredTable of ['company_write_locks', 'password_resets', 'audit_events']) {
+  for (const deferredTable of ['company_write_locks', 'password_resets']) {
     assert.ok(!fixture.tableNames.includes(deferredTable), deferredTable);
   }
 });
 
-test('Staging-Smoke erwartet auch die additiven MFA-Tabellen', () => {
+test('Staging-Smoke erwartet MFA- und Audit-Tabellen', () => {
   const smoke = fs.readFileSync(path.join(projectRoot, 'tools', 'staging-smoke.php'), 'utf8');
   assert.match(smoke, /'account_passkeys'/);
   assert.match(smoke, /'account_mfa_pending'/);
+  assert.match(smoke, /'audit_events'/);
+  assert.match(smoke, /'audit_chain_state'/);
 });
 
 test('Gesellschaften können angelegt und eindeutig gelesen werden', () => {

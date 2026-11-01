@@ -175,7 +175,7 @@ echo json_encode([
 mariaTest('MariaDB-Schema ist idempotent, vollstaendig und InnoDB/utf8mb4', () => {
   assert.equal(fixture.info.driver, 'mysql');
   assert.match(fixture.info.serverVersion, /MariaDB/i);
-  assert.equal(fixture.migrationCount, 8);
+  assert.equal(fixture.migrationCount, 9);
   const requiredTables = [
     'capabilities', 'companies', 'control_metadata', 'role_capabilities', 'roles',
     'schema_migrations', 'sessions', 'user_activation_tokens', 'user_roles', 'users',
@@ -183,7 +183,7 @@ mariaTest('MariaDB-Schema ist idempotent, vollstaendig und InnoDB/utf8mb4', () =
     'platform_capabilities', 'platform_role_capabilities', 'account_platform_roles',
     'sysop_assignment', 'account_sessions', 'account_activation_tokens',
     'account_user_number_allocator', 'account_user_numbers',
-    'account_passkeys', 'account_mfa_pending'
+    'account_passkeys', 'account_mfa_pending', 'audit_events', 'audit_chain_state'
   ];
   assert.deepEqual(fixture.tables.map(table => table.table_name).sort(), requiredTables.sort());
   for (const table of fixture.tables) {

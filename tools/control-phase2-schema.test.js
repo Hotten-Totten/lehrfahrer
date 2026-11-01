@@ -73,8 +73,8 @@ assert.equal(result.status, 0, result.stderr);
 const fixture = JSON.parse(result.stdout);
 
 test('additive Migration und wiederholter Lauf lassen Altbestand unverändert', () => {
-  assert.equal(fixture.initial, 8);
-  assert.equal(fixture.again, 8);
+  assert.equal(fixture.initial, 9);
+  assert.equal(fixture.again, 9);
   for (const count of Object.values(fixture.counts)) assert.equal(count, 0);
 });
 
