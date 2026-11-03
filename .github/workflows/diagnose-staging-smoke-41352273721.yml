@@ -89,7 +89,8 @@ jobs:
             printf 'IMPORT_FILES=%s IMPORT_DIRS=%s IMPORT_LINKS=%s\n' "$files" "$directories" "$links"
           else
             echo 'IMPORT_STATUS=COUNT_FAILED'
-          fi          REMOTE
+          fi
+          REMOTE
           )" || { echo 'IMPORT_STATUS=SSH_ERROR'; exit 0; }
           case "$result" in
             IMPORT_FILES=*) if [[ "$result" =~ ^IMPORT_FILES=[0-9]+\ IMPORT_DIRS=[0-9]+\ IMPORT_LINKS=[0-9]+$ ]]; then printf '%s\n' "$result"; else echo 'IMPORT_STATUS=INVALID_OUTPUT'; fi ;;
