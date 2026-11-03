@@ -70,7 +70,14 @@ try {
         $filesByArea[$area] = $files;
     }
     foreach ($filesByArea as $area => $files) {
-        $expected = $area === 'settings' ? ['company.json'] : [];
+        $expected = match ($area) {
+            'settings' => ['company.json'],
+            'imports' => [],
+            default => [],
+        };
+        if ($area === 'imports' && $files === ['audit-file-operations/.lock']) {
+            $expected = $files;
+        }
         if ($files !== $expected) {
             throw new RuntimeException('Staging-Nullbestand ist im Bereich ' . $area . ' verletzt.');
         }
