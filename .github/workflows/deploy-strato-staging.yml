@@ -811,6 +811,26 @@ jobs:
             "$private_root/provision-stdout.raw" \
             "$private_root/provision-stderr.raw"
 
+          # Inventory the validated test tenant only; no filenames or paths are logged.
+          test_binding="$private_root/tenant-binding.php"
+          if [ ! -f "$test_binding" ] || [ -L "$test_binding" ]; then
+            echo 'STAGING_IMPORTS_INVENTORY=BINDING_INVALID' >&2; exit 1
+          fi
+          test_company_id="$(grep -Eo 'LEHRFAHRER_LEGACY_COMPANY_ID=cmp_[0-9a-f]{32}' "$test_binding" | cut -d= -f2 || true)"
+          if [[ ! "$test_company_id" =~ ^cmp_[0-9a-f]{32}$ ]]; then
+            echo 'STAGING_IMPORTS_INVENTORY=COMPANY_ID_INVALID' >&2; exit 1
+          fi
+          test_imports="$private_root/companies/$test_company_id/imports"
+          if [ -L "$private_root/companies/$test_company_id" ] || [ -L "$test_imports" ] || [ ! -d "$test_imports" ]; then
+            echo 'STAGING_IMPORTS_INVENTORY=DIRECTORY_INVALID' >&2; exit 1
+          fi
+          import_files="$(find "$test_imports" -type f | wc -l | tr -d '[:space:]')"
+          import_dirs="$(find "$test_imports" -mindepth 1 -type d | wc -l | tr -d '[:space:]')"
+          import_links="$(find "$test_imports" -type l | wc -l | tr -d '[:space:]')"
+          if [[ ! "$import_files" =~ ^[0-9]+$ || ! "$import_dirs" =~ ^[0-9]+$ || ! "$import_links" =~ ^[0-9]+$ ]]; then
+            echo 'STAGING_IMPORTS_INVENTORY=COUNT_FAILED' >&2; exit 1
+          fi
+          echo "STAGING_IMPORTS_INVENTORY=FILES:$import_files,DIRS:$import_dirs,LINKS:$import_links"
           set +e
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_STAGING_CGI_SMOKE=1 \
