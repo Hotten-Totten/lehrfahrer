@@ -85,15 +85,16 @@ jobs:
           php_version="$(php -v 2>/dev/null)"
           case "$php_version" in
             *'(cli)'*) : ;;
-            *'(cgi-fcgi)'*) echo 'SMOKE_CATEGORY=PHP_SAPI_CGI'; exit 0 ;;
-            *) echo 'SMOKE_CATEGORY=PHP_SAPI_OTHER'; exit 0 ;;
+            *'(cgi-fcgi)'*) echo 'PHP_SAPI_CGI'; exit 0 ;;
+            *) echo 'PHP_SAPI_OTHER'; exit 0 ;;
           esac
           if ! php -r 'exit(0);' >/dev/null 2>&1; then
             if php -n -r 'exit(0);' >/dev/null 2>&1; then
-              echo 'SMOKE_CATEGORY=PHP_INI_OR_EXTENSION_FAILURE'; exit 0
+              echo 'PHP_INI_OR_EXTENSION_FAILURE'; exit 0
             fi
-            echo 'SMOKE_CATEGORY=PHP_R_FAILURE_WITHOUT_INI'; exit 0
-          fi          php_output="$(php -r 'echo "PHP_EXEC_OK";' 2>/dev/null)"
+            echo 'PHP_R_FAILURE_WITHOUT_INI'; exit 0
+          fi
+          php_output="$(php -r 'echo "PHP_EXEC_OK";' 2>/dev/null)"
           php_rc=$?
           if [ "$php_rc" -ne 0 ]; then
             echo 'PHP_OUTPUT_COMMAND_NONZERO'; exit 0
