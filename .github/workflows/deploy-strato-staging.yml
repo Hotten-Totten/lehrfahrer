@@ -822,12 +822,44 @@ jobs:
           set -e
           chmod 600 "$private_root/smoke-stdout.raw" "$private_root/smoke-stderr.raw"
           if [ "$smoke_status" -ne 0 ]; then
-            if grep -Fq 'Staging-Datenbank enthaelt unerwartete Tabellen.' "$private_root/smoke-stderr.raw"; then
-              echo 'Staging-Smoke: erwartete Control-DB-Tabellenliste stimmt nicht.' >&2
-            elif grep -Eiq 'trigger.*denied|command denied.*trigger' "$private_root/smoke-stderr.raw"; then
-              echo 'Staging-Smoke: MariaDB verweigert Trigger-Rechte.' >&2
+            # Only fixed, reviewed categories leave the private staging directory.
+            smoke_error="$private_root/smoke-stderr.raw"
+            smoke_category=UNCLASSIFIED
+            if grep -Fq 'Staging-Datenbank enthaelt unerwartete Tabellen.' "$smoke_error"; then
+              smoke_category=DB_TABLES
+            elif grep -Eiq 'trigger.*denied|command denied.*trigger' "$smoke_error"; then
+              smoke_category=DB_TRIGGER_GRANTS
+            elif grep -Fq 'Staging-Testgesellschaft ist nicht eindeutig.' "$smoke_error"; then
+              smoke_category=TEST_COMPANY
+            elif grep -Fq 'Staging-Gesellschaftsconfig fehlt oder ist ungueltig.' "$smoke_error"; then
+              smoke_category=COMPANY_CONFIG
+            elif grep -Eq 'Staging-Nullbestand ist im Bereich [a-z]+ verletzt\.' "$smoke_error"; then
+              smoke_category=TEST_COMPANY_NOT_EMPTY
+            elif grep -Fq 'Staging-Testadmin ist nicht eindeutig aktiv.' "$smoke_error"; then
+              smoke_category=TEST_ADMIN
+            elif grep -Fq 'Staging-Control-DB ist nicht MariaDB.' "$smoke_error"; then
+              smoke_category=DB_ENGINE
+            elif grep -Fq 'MariaDB-Verbindung verwendet kein verifiziert konfiguriertes TLS.' "$smoke_error"; then
+              smoke_category=DB_TLS
+            elif grep -Fq 'Staging-DB-Benutzer besitzt globale Rechte.' "$smoke_error"; then
+              smoke_category=DB_GRANTS
+            elif grep -Fq 'Staging-Tabelle verwendet Engine oder Zeichensatz nicht korrekt.' "$smoke_error"; then
+              smoke_category=DB_TABLE_FORMAT
+            elif grep -Fq 'Staging-Accountnummern sind inkonsistent.' "$smoke_error"; then
+              smoke_category=ACCOUNT_NUMBERS
+            elif grep -Fq 'CGI-Smoke-Ergebnisdatei konnte nicht atomar geschrieben werden.' "$smoke_error"; then
+              smoke_category=RESULT_WRITE
+            elif grep -Fq 'LEHRFAHRER_APP_ROOT ist ungueltig.' "$smoke_error"; then
+              smoke_category=APP_ROOT
+            elif grep -Fq 'Dieser Smoketest darf nur in der Staging-Umgebung laufen.' "$smoke_error"; then
+              smoke_category=ENVIRONMENT
+            elif grep -Fq 'CGI-Smoke-Ergebnisdatei liegt nicht im privaten Staging-Speicher.' "$smoke_error"; then
+              smoke_category=RESULT_PATH
+            elif grep -Fq 'LEHRFAHRER_STAGING_COMPANY_SLUG fehlt.' "$smoke_error"; then
+              smoke_category=COMPANY_SLUG
             fi
-            echo 'Staging-Smoke ist fehlgeschlagen; Roh-Ausgaben bleiben privat und werden nicht geloggt.' >&2
+            echo "STAGING_SMOKE_CATEGORY=$smoke_category" >&2
+            echo 'Staging-Smoke fehlgeschlagen; private Roh-Ausgaben bleiben geschützt.' >&2
             exit "$smoke_status"
           fi
           if [ -s "$private_root/smoke-stderr.raw" ]; then
