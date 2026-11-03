@@ -47,7 +47,7 @@ jobs:
           STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
           STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
           STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
-          LIVE_TARGET_PATH: ${{ vars.LIVE_TARGET_PATH }}
+          LIVE_TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
         run: |
           set -euo pipefail
           for path in "$STAGING_PRIVATE_PATH" "$STAGING_TARGET_PATH" "$LIVE_TARGET_PATH"; do
