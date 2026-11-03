@@ -842,7 +842,13 @@ jobs:
               gtfs/latest.zip) import_category=GTFS_SOURCE_ARCHIVE ;;
               gtfs/candidate/*) import_category=GTFS_CANDIDATE ;;
               gtfs/sessions/*) import_category=GTFS_SESSION ;;
-              audit-file-operations/*) import_category=FILE_OPERATION_AUDIT ;;
+              audit-file-operations/.lock)
+                if [ -f "$import_file" ] && [ ! -L "$import_file" ] && [ "$import_files" -eq 1 ]; then
+                  import_category=EXACT_AUDIT_LOCK_ONLY
+                else
+                  import_category=AUDIT_LOCK_UNSAFE
+                fi ;;
+              audit-file-operations/*) import_category=FILE_OPERATION_AUDIT_OTHER ;;
             esac
             echo "STAGING_IMPORTS_FILE_CATEGORY=$import_category"
           fi
