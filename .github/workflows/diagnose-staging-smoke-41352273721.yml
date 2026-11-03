@@ -71,7 +71,22 @@ jobs:
           else
             ssh_run=(sshpass -e "${ssh_base[@]}")
           fi
-          result="$(
+          if ! "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" 'printf SSH_OK' 2>/dev/null | grep -qx SSH_OK; then
+            echo 'SMOKE_CATEGORY=SSH_CONNECTION_FAILURE'; exit 0
+          fi
+          echo 'SMOKE_SSH=OK'
+          remote_check="$("${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'CHECK'
+          set -euo pipefail
+          if ! cd -- "./${1#./}" 2>/dev/null; then echo 'REMOTE_PATH_INACCESSIBLE'; exit 0; fi
+          if ! command -v php >/dev/null 2>&1; then echo 'REMOTE_PHP_UNAVAILABLE'; exit 0; fi
+          echo 'REMOTE_COMMAND_READY'
+          CHECK
+          )" || { echo 'SMOKE_CATEGORY=REMOTE_COMMAND_FAILURE'; exit 0; }
+          case "$remote_check" in
+            REMOTE_COMMAND_READY) echo 'SMOKE_REMOTE_COMMAND=READY' ;;
+            REMOTE_PATH_INACCESSIBLE|REMOTE_PHP_UNAVAILABLE) echo "SMOKE_CATEGORY=$remote_check"; exit 0 ;;
+            *) echo 'SMOKE_CATEGORY=REMOTE_COMMAND_UNEXPECTED'; exit 0 ;;
+          esac          result="$(
             "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" \
               "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
           set -euo pipefail
