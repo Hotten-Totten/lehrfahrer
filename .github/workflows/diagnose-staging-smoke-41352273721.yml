@@ -79,15 +79,26 @@ jobs:
           set -euo pipefail
           if ! cd -- "./${1#./}" 2>/dev/null; then echo 'REMOTE_PATH_INACCESSIBLE'; exit 0; fi
           if ! command -v php >/dev/null 2>&1; then echo 'REMOTE_PHP_UNAVAILABLE'; exit 0; fi
-          if ! php -r 'echo "PHP_EXEC_OK";' 2>/dev/null | grep -qx PHP_EXEC_OK; then
-            echo 'REMOTE_PHP_EXEC_FAILURE'; exit 0
+          if ! php -v >/dev/null 2>&1; then
+            echo 'PHP_VERSION_COMMAND_FAILED'; exit 0
+          fi
+          if ! php -r 'exit(0);' >/dev/null 2>&1; then
+            echo 'PHP_CLI_EXIT_FAILURE'; exit 0
+          fi
+          php_output="$(php -r 'echo "PHP_EXEC_OK";' 2>/dev/null)"
+          php_rc=$?
+          if [ "$php_rc" -ne 0 ]; then
+            echo 'PHP_OUTPUT_COMMAND_NONZERO'; exit 0
+          fi
+          if [ "$php_output" != 'PHP_EXEC_OK' ]; then
+            echo 'PHP_OUTPUT_MISMATCH'; exit 0
           fi
           echo 'REMOTE_COMMAND_READY'
           CHECK
           )" || { echo 'SMOKE_CATEGORY=REMOTE_COMMAND_FAILURE'; exit 0; }
           case "$remote_check" in
             REMOTE_COMMAND_READY) echo 'SMOKE_REMOTE_COMMAND=READY' ;;
-            REMOTE_PATH_INACCESSIBLE|REMOTE_PHP_UNAVAILABLE|REMOTE_PHP_EXEC_FAILURE) echo "SMOKE_CATEGORY=$remote_check"; exit 0 ;;
+            REMOTE_PATH_INACCESSIBLE|REMOTE_PHP_UNAVAILABLE|PHP_VERSION_COMMAND_FAILED|PHP_CLI_EXIT_FAILURE|PHP_OUTPUT_COMMAND_NONZERO|PHP_OUTPUT_MISMATCH) echo "SMOKE_CATEGORY=$remote_check"; exit 0 ;;
             *) echo 'SMOKE_CATEGORY=REMOTE_COMMAND_UNEXPECTED'; exit 0 ;;
           esac
           result="$(
