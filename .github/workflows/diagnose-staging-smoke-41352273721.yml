@@ -86,7 +86,8 @@ jobs:
             REMOTE_COMMAND_READY) echo 'SMOKE_REMOTE_COMMAND=READY' ;;
             REMOTE_PATH_INACCESSIBLE|REMOTE_PHP_UNAVAILABLE) echo "SMOKE_CATEGORY=$remote_check"; exit 0 ;;
             *) echo 'SMOKE_CATEGORY=REMOTE_COMMAND_UNEXPECTED'; exit 0 ;;
-          esac          result="$(
+          esac
+          result="$(
             "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" \
               "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
           set -euo pipefail
