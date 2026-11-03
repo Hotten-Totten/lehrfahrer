@@ -78,11 +78,10 @@ jobs:
           result="$("${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
           set -euo pipefail
           if ! cd -- "./${1#./}" 2>/dev/null; then echo 'IMPORT_STATUS=INACCESSIBLE'; exit 0; fi
-          # The provision result identifies the exact staging test company.
-          if [ -L provision-result.json ] || [ ! -f provision-result.json ]; then echo 'IMPORT_STATUS=PROVISION_RECORD_MISSING'; exit 0; fi
-          id="$(sed -nE 's/.*"company_id"[[:space:]]*:[[:space:]]*"(cmp_[0-9a-f]{32})".*/\1/p' provision-result.json | head -n 1)"
-          if [[ ! "$id" =~ ^cmp_[0-9a-f]{32}$ ]]; then echo 'IMPORT_STATUS=PROVISION_ID_INVALID'; exit 0; fi
-          if ! grep -Eq '"slug"[[:space:]]*:[[:space:]]*"lehrfahrer-test"' provision-result.json; then echo 'IMPORT_STATUS=SLUG_MISMATCH'; exit 0; fi
+          # The regular deployment already validates and writes tenant-binding.php.
+          if [ -L tenant-binding.php ] || [ ! -f tenant-binding.php ]; then echo 'IMPORT_STATUS=BINDING_MISSING'; exit 0; fi
+          id="$(grep -Eo 'LEHRFAHRER_LEGACY_COMPANY_ID=cmp_[0-9a-f]{32}' tenant-binding.php | head -n 1 | cut -d= -f2 || true)"
+          if [[ ! "$id" =~ ^cmp_[0-9a-f]{32}$ ]]; then echo 'IMPORT_STATUS=BINDING_INVALID'; exit 0; fi
           dir="companies/$id/imports"
           if [ -L "companies/$id" ] || [ -L "$dir" ] || [ ! -d "$dir" ]; then echo 'IMPORT_STATUS=DIRECTORY_INVALID'; exit 0; fi          files="$(find "$dir" -type f -print | wc -l | tr -d ' ')" || { echo 'IMPORT_STATUS=COUNT_FAILED'; exit 0; }
           directories="$(find "$dir" -mindepth 1 -type d -print | wc -l | tr -d ' ')" || { echo 'IMPORT_STATUS=COUNT_FAILED'; exit 0; }
