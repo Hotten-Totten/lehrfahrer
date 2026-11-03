@@ -9,6 +9,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - name: Configure existing staging SSH access
         shell: bash
