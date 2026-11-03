@@ -75,123 +75,20 @@ jobs:
             echo 'SMOKE_CATEGORY=SSH_CONNECTION_FAILURE'; exit 0
           fi
           echo 'SMOKE_SSH=OK'
-          remote_check="$("${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'CHECK'
+          # Read only the private smoke error and emit a validated area label.
+          result="$("${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
           set -euo pipefail
-          if ! cd -- "./${1#./}" 2>/dev/null; then echo 'REMOTE_PATH_INACCESSIBLE'; exit 0; fi
-          # Inventory only; never print candidate names, paths or error messages.
-          candidates=()
-          while IFS= read -r name; do
-            case "$name" in php*|PHP*) candidates+=("$name");; esac
-          done < <(compgen -c | sort -u)
-          for dir in /usr/bin /usr/local/bin /bin /opt/php /usr/local/php/bin; do
-            [ -d "$dir" ] || continue
-            for candidate in "$dir"/php* "$dir"/PHP*; do
-              [ -f "$candidate" ] && [ -x "$candidate" ] && candidates+=("$candidate")
-            done
-          done
-          found=0
-          for candidate in "${candidates[@]}"; do
-            if "$candidate" -r 'exit(0);' >/dev/null 2>&1; then
-              echo 'PHP_DISCOVERED_CLI_AVAILABLE'; exit 0
-            fi
-            found=1
-          done
-          if [ "$found" -eq 1 ]; then echo 'PHP_EXECUTABLES_PRESENT_NO_CLI'; exit 0; fi
-          echo 'PHP_NO_EXECUTABLE_CANDIDATES'; exit 0
-          if ! command -v php >/dev/null 2>&1; then echo 'REMOTE_PHP_UNAVAILABLE'; exit 0; fi
-          if ! php -v >/dev/null 2>&1; then
-            echo 'PHP_VERSION_COMMAND_FAILED'; exit 0
-          fi
-          php_version="$(php -v 2>/dev/null)"
-          case "$php_version" in
-            *'(cli)'*) : ;;
-            *'(cgi-fcgi)'*) echo 'PHP_SAPI_CGI'; exit 0 ;;
-            *) echo 'PHP_SAPI_OTHER'; exit 0 ;;
-          esac
-          if ! php -r 'exit(0);' >/dev/null 2>&1; then
-            if php -n -r 'exit(0);' >/dev/null 2>&1; then
-              echo 'PHP_INI_OR_EXTENSION_FAILURE'; exit 0
-            fi
-            echo 'PHP_R_FAILURE_WITHOUT_INI'; exit 0
-          fi
-          php_output="$(php -r 'echo "PHP_EXEC_OK";' 2>/dev/null)"
-          php_rc=$?
-          if [ "$php_rc" -ne 0 ]; then
-            echo 'PHP_OUTPUT_COMMAND_NONZERO'; exit 0
-          fi
-          if [ "$php_output" != 'PHP_EXEC_OK' ]; then
-            echo 'PHP_OUTPUT_MISMATCH'; exit 0
-          fi
-          echo 'REMOTE_COMMAND_READY'
-          CHECK
-          )" || { echo 'SMOKE_CATEGORY=REMOTE_COMMAND_FAILURE'; exit 0; }
-          case "$remote_check" in
-            REMOTE_COMMAND_READY) echo 'SMOKE_REMOTE_COMMAND=READY' ;;
-            REMOTE_PATH_INACCESSIBLE|REMOTE_PHP_UNAVAILABLE|PHP_VERSION_COMMAND_FAILED|PHP_CLI_EXIT_FAILURE|PHP_OUTPUT_COMMAND_NONZERO|PHP_OUTPUT_MISMATCH|PHP_SAPI_CGI|PHP_SAPI_OTHER|PHP_INI_OR_EXTENSION_FAILURE|PHP_R_FAILURE_WITHOUT_INI|PHP_SEPARATE_CLI_AVAILABLE|PHP_SEPARATE_CLI_NOT_FOUND|PHP_DOCUMENTED_BINARY_R_OK|PHP_DOCUMENTED_BINARY_FILE_OK|PHP_DOCUMENTED_BINARIES_NOT_EXECUTABLE_AS_CLI|PHP_DISCOVERED_CLI_AVAILABLE|PHP_EXECUTABLES_PRESENT_NO_CLI|PHP_NO_EXECUTABLE_CANDIDATES) echo "SMOKE_CATEGORY=$remote_check"; exit 0 ;;
-            *) echo 'SMOKE_CATEGORY=REMOTE_COMMAND_UNEXPECTED'; exit 0 ;;
-          esac
-          result="$(
-            "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" \
-              "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
-          set -euo pipefail
-          private_root="$(cd -- "./${1#./}" && pwd -P)"
-          case "$private_root" in
-            */*staging-private) ;;
-            *) echo 'SMOKE_CATEGORY=STAGING_ROOT_MISMATCH'; exit 0 ;;
-          esac
-          php -r '
-            $root = $argv[1];
-            $path = $root . "/smoke-stderr.raw";
-            if (!file_exists($path) && !is_link($path)) {
-                echo "SMOKE_CATEGORY=FILE_MISSING\n";
-                exit;
-            }
-            if (is_link($path) || !is_file($path) || realpath(dirname($path)) !== $root) {
-                echo "SMOKE_CATEGORY=FILE_TYPE_INVALID\n";
-                exit;
-            }
-            clearstatcache(true, $path);
-            $mtime = filemtime($path);
-            // The failed run wrote this file at 2026-11-01 21:31:25 UTC.
-            if ($mtime === false || $mtime < 1793568684 || $mtime > 1793568687) {
-                echo "SMOKE_CATEGORY=MTIME_MISMATCH\n";
-                exit;
-            }
-            $size = filesize($path);
-            if ($size === false || $size < 1 || $size > 4096) {
-                echo "SMOKE_CATEGORY=UNCLASSIFIED\n";
-                exit;
-            }
-            $raw = file_get_contents($path);
-            if (!is_string($raw) || !preg_match("/\\AStaging-Smoketest fehlgeschlagen: ([^\\r\\n]+)\\r?\\n?\\z/D", $raw, $matches)) {
-                echo "SMOKE_CATEGORY=UNCLASSIFIED\n";
-                exit;
-            }
-            $known = [
-                "LEHRFAHRER_APP_ROOT ist ungueltig." => "APP_ROOT",
-                "Dieser Smoketest darf nur in der Staging-Umgebung laufen." => "ENVIRONMENT",
-                "CGI-Smoke-Ergebnisdatei liegt nicht im privaten Staging-Speicher." => "RESULT_PATH",
-                "LEHRFAHRER_STAGING_COMPANY_SLUG fehlt." => "COMPANY_SLUG",
-                "Staging-Testgesellschaft ist nicht eindeutig." => "TEST_COMPANY",
-                "Staging-Gesellschaftsconfig fehlt oder ist ungueltig." => "COMPANY_CONFIG",
-                "Staging-Testadmin ist nicht eindeutig aktiv." => "TEST_ADMIN",
-                "Staging-Control-DB ist nicht MariaDB." => "DB_ENGINE",
-                "MariaDB-Verbindung verwendet kein verifiziert konfiguriertes TLS." => "DB_TLS",
-                "Staging-DB-Benutzer besitzt globale Rechte." => "DB_GRANTS",
-                "Staging-Datenbank enthaelt unerwartete Tabellen." => "DB_TABLES",
-                "Staging-Tabelle verwendet Engine oder Zeichensatz nicht korrekt." => "DB_TABLE_FORMAT",
-                "Staging-Accountnummern sind inkonsistent." => "ACCOUNT_NUMBERS",
-                "CGI-Smoke-Ergebnisdatei konnte nicht atomar geschrieben werden." => "RESULT_WRITE",
-            ];
-            $message = $matches[1];
-            $category = $known[$message] ?? (preg_match("/\\AStaging-Nullbestand ist im Bereich [a-z]+ verletzt\\.\\z/D", $message)
-                ? "TEST_COMPANY_NOT_EMPTY" : "UNCLASSIFIED");
-            echo "SMOKE_CATEGORY=", $category, "\n";
-          ' "$private_root" 2>/dev/null || { echo 'SMOKE_CATEGORY=PHP_EVALUATION_FAILURE'; exit 0; }
+          if ! cd -- "./${1#./}" 2>/dev/null; then echo 'AREA_STATUS=INACCESSIBLE'; exit 0; fi
+          file=smoke-stderr.raw
+          if [ -L "$file" ] || [ ! -f "$file" ]; then echo 'AREA_STATUS=INVALID_FILE'; exit 0; fi
+          size="$(wc -c < "$file")"
+          if [ "$size" -lt 1 ] || [ "$size" -gt 4096 ]; then echo 'AREA_STATUS=INVALID_SIZE'; exit 0; fi
+          area="$(LC_ALL=C grep -Eo '^Staging-Smoketest fehlgeschlagen: Staging-Nullbestand ist im Bereich [a-z]+ verletzt\.$' "$file" | sed -E 's/^.*Bereich ([a-z]+) verletzt\.$/\1/' || true)"
+          if [[ "$area" =~ ^[a-z]+$ ]]; then printf 'AREA=%s\n' "$area"; else echo 'AREA_STATUS=NOT_CLASSIFIED'; fi
           REMOTE
-          )" || { echo 'SMOKE_CATEGORY=ACCESS_FAILURE'; exit 0; }
+          )" || { echo 'AREA_STATUS=SSH_ERROR'; exit 0; }
           case "$result" in
-            SMOKE_CATEGORY=APP_ROOT|SMOKE_CATEGORY=ENVIRONMENT|SMOKE_CATEGORY=RESULT_PATH|SMOKE_CATEGORY=COMPANY_SLUG|SMOKE_CATEGORY=TEST_COMPANY|SMOKE_CATEGORY=COMPANY_CONFIG|SMOKE_CATEGORY=TEST_ADMIN|SMOKE_CATEGORY=DB_ENGINE|SMOKE_CATEGORY=DB_TLS|SMOKE_CATEGORY=DB_GRANTS|SMOKE_CATEGORY=DB_TABLES|SMOKE_CATEGORY=DB_TABLE_FORMAT|SMOKE_CATEGORY=ACCOUNT_NUMBERS|SMOKE_CATEGORY=RESULT_WRITE|SMOKE_CATEGORY=TEST_COMPANY_NOT_EMPTY|SMOKE_CATEGORY=FILE_MISSING|SMOKE_CATEGORY=PATH_CONFIG_INVALID_STAGING_PRIVATE_PATH|SMOKE_CATEGORY=PATH_CONFIG_INVALID_STAGING_TARGET_PATH|SMOKE_CATEGORY=PATH_CONFIG_INVALID_LIVE_TARGET_PATH|SMOKE_CATEGORY=PRIVATE_PATH_UNSAFE|SMOKE_CATEGORY=PATHS_OVERLAP|SMOKE_CATEGORY=STAGING_ROOT_MISMATCH|SMOKE_CATEGORY=FILE_TYPE_INVALID|SMOKE_CATEGORY=MTIME_MISMATCH|SMOKE_CATEGORY=PHP_EVALUATION_FAILURE|SMOKE_CATEGORY=UNCLASSIFIED)
-              printf '%s\n' "$result" ;;
-            *) echo 'SMOKE_CATEGORY=UNCLASSIFIED' ;;
+            AREA=*) if [[ "$result" =~ ^AREA=[a-z]+$ ]]; then printf '%s\n' "$result"; else echo 'AREA_STATUS=INVALID_OUTPUT'; fi ;;
+            AREA_STATUS=INACCESSIBLE|AREA_STATUS=INVALID_FILE|AREA_STATUS=INVALID_SIZE|AREA_STATUS=NOT_CLASSIFIED|AREA_STATUS=SSH_ERROR) printf '%s\n' "$result" ;;
+            *) echo 'AREA_STATUS=INVALID_OUTPUT' ;;
           esac
