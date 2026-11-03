@@ -78,27 +78,21 @@ jobs:
           result="$("${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "bash -s -- '$STAGING_PRIVATE_PATH'" 2>/dev/null <<'REMOTE'
           set -euo pipefail
           if ! cd -- "./${1#./}" 2>/dev/null; then echo 'IMPORT_STATUS=INACCESSIBLE'; exit 0; fi
-          if [ -L provision-result.json ] || [ ! -f provision-result.json ]; then echo 'IMPORT_STATUS=NO_PROVISION_RECORD'; exit 0; fi
-          id="$(sed -nE 's/.*"company_id"[[:space:]]*:[[:space:]]*"(cmp_[0-9a-f]{32})".*/\1/p' provision-result.json | head -n 1)"
-          if [[ ! "$id" =~ ^cmp_[0-9a-f]{32}$ ]]; then echo 'IMPORT_STATUS=INVALID_COMPANY'; exit 0; fi
-          dir="companies/$id/imports"
-          if [ -L "companies/$id" ] || [ -L "$dir" ] || [ ! -d "$dir" ]; then echo 'IMPORT_STATUS=INVALID_DIRECTORY'; exit 0; fi
-          total=0; files=0; dirs=0; links=0; recent=0; old=0; unknown=0
-          while IFS= read -r -d '' entry; do
-            total=$((total+1))
-            if [ -L "$entry" ]; then links=$((links+1)); continue; fi
-            if [ -d "$entry" ]; then dirs=$((dirs+1)); continue; fi
-            if [ -f "$entry" ]; then
-              files=$((files+1))
-              if [ "$entry" -nt provision-result.json ]; then recent=$((recent+1)); else old=$((old+1)); fi
-            else unknown=$((unknown+1)); fi
-          done < <(find "$dir" -mindepth 1 -print0 2>/dev/null)
-          if [ "$total" -eq 0 ]; then echo 'IMPORT_STATUS=EMPTY'; exit 0; fi
-          printf 'IMPORT_STATUS=NONEMPTY FILES=%s DIRS=%s LINKS=%s NEWER_THAN_PROVISION=%s OLDER_OR_EQUAL=%s OTHER=%s\n' "$files" "$dirs" "$links" "$recent" "$old" "$unknown"
-          REMOTE
+          # Only one isolated staging tenant directory may be inspected.
+          set -- companies/cmp_*/imports
+          if [ "$#" -ne 1 ] || [ ! -d "$1" ] || [ -L "$1" ]; then echo 'IMPORT_STATUS=TENANT_NOT_UNIQUE'; exit 0; fi
+          dir="$1"
+          files="$(find "$dir" -type f -print | wc -l | tr -d ' ')" || { echo 'IMPORT_STATUS=COUNT_FAILED'; exit 0; }
+          directories="$(find "$dir" -mindepth 1 -type d -print | wc -l | tr -d ' ')" || { echo 'IMPORT_STATUS=COUNT_FAILED'; exit 0; }
+          links="$(find "$dir" -type l -print | wc -l | tr -d ' ')" || { echo 'IMPORT_STATUS=COUNT_FAILED'; exit 0; }
+          if [[ "$files" =~ ^[0-9]+$ && "$directories" =~ ^[0-9]+$ && "$links" =~ ^[0-9]+$ ]]; then
+            printf 'IMPORT_FILES=%s IMPORT_DIRS=%s IMPORT_LINKS=%s\n' "$files" "$directories" "$links"
+          else
+            echo 'IMPORT_STATUS=COUNT_FAILED'
+          fi          REMOTE
           )" || { echo 'IMPORT_STATUS=SSH_ERROR'; exit 0; }
           case "$result" in
-            IMPORT_STATUS=EMPTY|IMPORT_STATUS=INACCESSIBLE|IMPORT_STATUS=NO_PROVISION_RECORD|IMPORT_STATUS=INVALID_COMPANY|IMPORT_STATUS=INVALID_DIRECTORY|IMPORT_STATUS=SSH_ERROR) printf '%s\n' "$result" ;;
-            IMPORT_STATUS=NONEMPTY\ *) if [[ "$result" =~ ^IMPORT_STATUS=NONEMPTY\ FILES=[0-9]+\ DIRS=[0-9]+\ LINKS=[0-9]+\ NEWER_THAN_PROVISION=[0-9]+\ OLDER_OR_EQUAL=[0-9]+\ OTHER=[0-9]+$ ]]; then printf '%s\n' "$result"; else echo 'IMPORT_STATUS=INVALID_OUTPUT'; fi ;;
+            IMPORT_FILES=*) if [[ "$result" =~ ^IMPORT_FILES=[0-9]+\ IMPORT_DIRS=[0-9]+\ IMPORT_LINKS=[0-9]+$ ]]; then printf '%s\n' "$result"; else echo 'IMPORT_STATUS=INVALID_OUTPUT'; fi ;;
+            IMPORT_STATUS=*) printf '%s\n' "$result" ;;
             *) echo 'IMPORT_STATUS=INVALID_OUTPUT' ;;
           esac
