@@ -831,6 +831,21 @@ jobs:
             echo 'STAGING_IMPORTS_INVENTORY=COUNT_FAILED' >&2; exit 1
           fi
           echo "STAGING_IMPORTS_INVENTORY=FILES:$import_files,DIRS:$import_dirs,LINKS:$import_links"
+          # Classify the single file by known application paths without exposing names/content.
+          if [ "$import_files" -eq 1 ] && [ "$import_links" -eq 0 ]; then
+            import_category=UNRECOGNIZED
+            import_file="$(find "$test_imports" -type f -print -quit)"
+            case "${import_file#"$test_imports"/}" in
+              gtfs/index/work-inventory.json) import_category=GTFS_WORK_INVENTORY ;;
+              gtfs/index/working-set.json) import_category=GTFS_WORKING_SET ;;
+              gtfs/index/variants.sqlite) import_category=GTFS_VARIANT_INDEX ;;
+              gtfs/latest.zip) import_category=GTFS_SOURCE_ARCHIVE ;;
+              gtfs/candidate/*) import_category=GTFS_CANDIDATE ;;
+              gtfs/sessions/*) import_category=GTFS_SESSION ;;
+              audit-file-operations/*) import_category=FILE_OPERATION_AUDIT ;;
+            esac
+            echo "STAGING_IMPORTS_FILE_CATEGORY=$import_category"
+          fi
           set +e
           LEHRFAHRER_APP_ROOT="$webroot" \
           LEHRFAHRER_STAGING_CGI_SMOKE=1 \
