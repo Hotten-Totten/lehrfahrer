@@ -64,6 +64,44 @@ function harness() {
 
 const own = { city: 'cottbus', lineFolder: 'Linie_16', categoryFolder: 'Standard', fileBase: 'Route_01_Nord' };
 
+test('Save dialog uses the current route remark instead of the last save target', async () => {
+  const elements = new Map();
+  let currentDescription = '';
+  const context = vm.createContext({
+    document: {
+      getElementById(id) {
+        if (!elements.has(id)) {
+          elements.set(id, Object.assign(new EventTarget(), {
+            value: '', classList: { add() {}, remove() {} }, focus() {}
+          }));
+        }
+        return elements.get(id);
+      }
+    },
+    window: { LehrfahrerTenantCache: { tenantStorageKey: key => key } },
+    localStorage: { getItem: () => JSON.stringify({ description: 'Previous route remark' }) },
+    citySelect: null,
+    lineNameInput: { value: 'Test352' },
+    routeNameInput: { value: '01' },
+    directionNameInput: { value: '' },
+    getVariantName: () => 'Abnahmetest',
+    getVariantCategory: () => 'Standard',
+    normalizeVariantCategory: value => value,
+    getLineDescription: () => currentDescription,
+    getLineValidity: () => ({}),
+    sanitizeFilename: value => value
+  });
+  vm.runInContext(section('function showSaveConfirmDialog(', 'async function findExistingLineEntry('), context);
+
+  for (const remark of ['', 'Current route remark', '']) {
+    currentDescription = remark;
+    const result = context.showSaveConfirmDialog({ data: { description: remark }, city: 'cottbus' });
+    assert.equal(elements.get('saveConfirmDescriptionInput').value, remark);
+    elements.get('saveConfirmOkBtn').dispatchEvent(new Event('click'));
+    assert.equal((await result).description, remark);
+  }
+});
+
 test('Save reicht changeType an denselben Erfolgstoast weiter', async () => {
   const h = harness();
   h.settings.target = own;

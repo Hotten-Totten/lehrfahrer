@@ -462,7 +462,7 @@ function showSaveConfirmDialog({ data, city }) {
     const initialDirection = String(directionNameInput?.value ?? lastTarget?.directionName ?? "").trim();
     const initialVariantName = String(getVariantName(initialRoute ? "Route " + initialRoute : "", initialDirection) || data.variantName || data.line?.variantName || lastTarget?.variantName || "").trim();
     const initialVariantCategory = normalizeVariantCategory(getVariantCategory() || data.variantCategory || data.line?.variantCategory || lastTarget?.variantCategory);
-    const initialDescription = String(getLineDescription() || data.description || data.line?.description || lastTarget?.description || "").trim();
+    const initialDescription = String(getLineDescription() || data.description || data.line?.description || "").trim();
     const currentValidity = getLineValidity();
     const initialValidFrom = String(currentValidity.validFrom || data.validFrom || data.line?.validFrom || lastTarget?.validFrom || "").trim();
     const initialValidUntil = String(currentValidity.validUntil || data.validUntil || data.line?.validUntil || lastTarget?.validUntil || "").trim();
