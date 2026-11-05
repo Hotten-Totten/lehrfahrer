@@ -87,9 +87,53 @@ try {
         cmp_service($dir.'/ambiguous.zip',$dir.'/old.zip');
         throw new RuntimeException('Ambiguous stops were merged');
     } catch (RuntimeException $error) {
-        if ($error->getMessage()==='Ambiguous stops were merged') throw $error;
+        if (!str_starts_with($error->getMessage(), 'Mehrdeutige Haltestellenidentitaet im GTFS: mitte|')) throw $error;
     }
     check_service(true, 'ambiguous real stops are not merged');
+
+    $postThrough = ['164719','Stadthalle Post','51.761242','14.329633'];
+    $postEnd = ['259157','Stadthalle Post','51.761190','14.329618'];
+    $oldPost = [['id'=>'old16','line'=>'16','trips'=>[
+        ['id'=>'through','service'=>'s','stops'=>[$a,$postThrough,$b]],
+        ['id'=>'terminating','service'=>'s','stops'=>[$b,$postEnd]],
+    ]]];
+    $newPost = [['id'=>'new16','line'=>'16','trips'=>[
+        ['id'=>'new-end','service'=>'s','stops'=>[$b2,['914','Stadthalle Post','51.761191','14.329618']]],
+        ['id'=>'new-through','service'=>'s','stops'=>[$a2,['917','Stadthalle Post','51.761241','14.329633'],$b2]],
+    ]]];
+    zip_service($dir.'/old-post.zip','143',$oldPost);
+    zip_service($dir.'/new-post.zip','325',$newPost);
+    $postResult = cmp_service($dir.'/new-post.zip',$dir.'/old-post.zip');
+    check_service($postResult['lineCounts']['UNVERAENDERT'] === 1
+        && $postResult['lines'][0]['variantCount'] === 2,
+        'colliding Stadthalle Post positions survive new IDs and small coordinate shifts');
+
+    $sameNeighbors = $oldPost;
+    $sameNeighbors[0]['trips'][1]['stops'] = [$a,$postEnd,$b];
+    zip_service($dir.'/same-neighbors.zip','143',$sameNeighbors);
+    check_service(cmp_service($dir.'/same-neighbors.zip',$dir.'/same-neighbors.zip')['lines'][0]['variantCount'] === 2,
+        'exact positions keep otherwise identical stop sequences distinct');
+
+    // Both trips now use the terminating position. Exact coordinates identify
+    // the replacement even though that position gains a different trip context.
+    $newPost[0]['trips'][0]['stops'][1][2] = $postEnd[2];
+    $newPost[0]['trips'][1]['stops'][1] = $newPost[0]['trips'][0]['stops'][1];
+    zip_service($dir.'/switched-post.zip','325',$newPost);
+    check_service(cmp_service($dir.'/switched-post.zip',$dir.'/old-post.zip')['lineCounts']['GEAENDERT'] === 1,
+        'switching to the other position is a real route change');
+
+    $newPost[0]['trips'][0]['stops'][1] = ['914','Stadthalle Post',$postThrough[2],$postThrough[3]];
+    $newPost[0]['trips'][1]['stops'][1] = ['917','Stadthalle Post',$postEnd[2],$postEnd[3]];
+    zip_service($dir.'/conflicting-post.zip','325',$newPost);
+    $conflict = null;
+    try {
+        cmp_service($dir.'/conflicting-post.zip',$dir.'/old-post.zip');
+    } catch (RuntimeException $error) {
+        $conflict = $error->getMessage();
+    }
+    check_service($conflict !== null && str_contains($conflict, 'stadthalle post'),
+        'conflicting coordinates and neighbors name the unresolved stop');
+
     $changed = $same; $changed[0]['trips'][0]['stops'] = [$a2,$x,$u2];
     zip_service($dir.'/changed.zip','325',$changed);
     $r = cmp_service($dir.'/changed.zip',$dir.'/old.zip');

@@ -104,14 +104,13 @@ function lehrfahrer_gtfs_service_stop_key(array $stop): string {
         throw new RuntimeException('GTFS-Haltestelle besitzt keine eindeutigen Vergleichsmerkmale.');
     }
     $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
-    // Feed-local stop_id/parent_station cannot identify a stop across feeds. Use exact
-    // normalized name plus ~10 m coordinates; reject duplicate keys within a feed.
-    // Prefer a detectable false change over silently merging different platforms.
+    // Feed-local stop IDs do not identify stops across feeds. Use normalized
+    // names and rounded coordinates as the initial grouping key.
     return $name . '|' . number_format((float)$stop['stop_lat'], 4, '.', '')
         . '|' . number_format((float)$stop['stop_lon'], 4, '.', '');
 }
 
-function lehrfahrer_gtfs_service_variants(array $feed, string $date): array {
+function lehrfahrer_gtfs_service_day(array $feed, string $date): array {
     $active = [];
     foreach ($feed['trips'] as $id => $trip) {
         if (isset($feed['serviceDays'][strval($trip['service_id'])][$date])) $active[$id] = $trip;
@@ -129,27 +128,116 @@ function lehrfahrer_gtfs_service_variants(array $feed, string $date): array {
                 $sequences[$id][(int)$sequence] = strval($r['stop_id']);
                 $usedStops[strval($r['stop_id'])] = true;
             });
-        $stops = []; $keyOwner = [];
+        $stops = [];
         lehrfahrer_gtfs_service_rows($zip, 'stops.txt', ['stop_id', 'stop_name', 'stop_lat', 'stop_lon'],
-            static function (array $r) use (&$stops, &$keyOwner, $usedStops): void {
+            static function (array $r) use (&$stops, $usedStops): void {
                 $id = strval($r['stop_id']);
                 if (!isset($usedStops[$id])) return;
-                $key = lehrfahrer_gtfs_service_stop_key($r);
-                if (isset($keyOwner[$key]) && $keyOwner[$key] !== $id) {
-                    throw new RuntimeException('Mehrdeutige Haltestellenidentitaet im GTFS.');
-                }
-                $keyOwner[$key] = $id; $stops[$id] = ['key' => $key, 'name' => strval($r['stop_name'])];
+                $stops[$id] = ['key' => lehrfahrer_gtfs_service_stop_key($r),
+                    'name' => strval($r['stop_name']),
+                    'position' => [(float)$r['stop_lat'], (float)$r['stop_lon']]];
             });
     } finally { $zip->close(); }
-    $routes = []; $tripCount = 0;
-    foreach ($active as $tripId => $trip) {
-        $sequence = $sequences[$tripId] ?? [];
+
+    foreach ($sequences as &$sequence) {
         ksort($sequence, SORT_NUMERIC);
+        $sequence = array_values($sequence);
+    }
+    unset($sequence);
+    return ['trips' => $active, 'sequences' => $sequences, 'stops' => $stops];
+}
+
+function lehrfahrer_gtfs_service_stop_contexts(array $day, array $collisions): array {
+    $contexts = [];
+    foreach ($day['sequences'] as $sequence) {
+        if (count($sequence) < 2) continue;
+        foreach ($sequence as $index => $id) {
+            if (!isset($collisions[$day['stops'][$id]['key'] ?? ''])) continue;
+            $previous = $sequence[$index - 1] ?? null;
+            $next = $sequence[$index + 1] ?? null;
+            $context = json_encode([$day['stops'][$previous]['key'] ?? null,
+                $day['stops'][$next]['key'] ?? null], JSON_THROW_ON_ERROR);
+            $contexts[$id][$context] = true;
+        }
+    }
+    foreach ($contexts as &$context) ksort($context);
+    unset($context);
+    return $contexts;
+}
+
+function lehrfahrer_gtfs_service_stop_matches(array $from, array $to): array {
+    $matches = [];
+    foreach ($from as $id => $stop) {
+        $position = array_filter($to, static fn(array $other): bool => $stop['position'] === $other['position']);
+        $context = array_filter($to, static fn(array $other): bool =>
+            $stop['context'] !== [] && $stop['context'] === $other['context']);
+        // When both sources provide evidence, require them to agree.
+        $options = $position && $context ? array_intersect_key($position, $context) : ($position ?: $context);
+        if (count($options) === 1) $matches[$id] = array_key_first($options);
+    }
+    return $matches;
+}
+
+function lehrfahrer_gtfs_service_resolve_stop_keys(array $newDay, array $oldDay): array {
+    $days = [$newDay, $oldDay];
+    $keys = [[], []];
+    $groups = [];
+    foreach ($days as $side => $day) {
+        foreach ($day['stops'] as $id => $stop) {
+            $keys[$side][$id] = $stop['key'];
+            $groups[$stop['key']][$side][$id] = $stop;
+        }
+    }
+    $collisions = array_filter($groups, static fn(array $group): bool =>
+        count($group[0] ?? []) > 1 || count($group[1] ?? []) > 1);
+    if (!$collisions) return $keys;
+
+    $contexts = [lehrfahrer_gtfs_service_stop_contexts($newDay, $collisions),
+        lehrfahrer_gtfs_service_stop_contexts($oldDay, $collisions)];
+    foreach ($collisions as $key => $group) {
+        $message = 'Mehrdeutige Haltestellenidentitaet im GTFS: ' . $key;
+        $group += [[], []];
+        foreach ($group as $side => &$stops) {
+            $seen = [];
+            foreach ($stops as $id => &$stop) {
+                $stop['context'] = $contexts[$side][$id] ?? [];
+                $fingerprint = serialize([$stop['position'], $stop['context']]);
+                if (isset($seen[$fingerprint])) throw new RuntimeException($message);
+                $seen[$fingerprint] = true;
+            }
+            unset($stop);
+        }
+        unset($stops);
+
+        $forward = lehrfahrer_gtfs_service_stop_matches($group[0], $group[1]);
+        $backward = lehrfahrer_gtfs_service_stop_matches($group[1], $group[0]);
+        $suffix = 0;
+        foreach ($forward as $newId => $oldId) {
+            if (($backward[$oldId] ?? null) !== $newId) continue;
+            $keys[0][$newId] = $keys[1][$oldId] = $key . "\0" . ++$suffix;
+            unset($group[0][$newId], $group[1][$oldId]);
+        }
+        // Only one-sided leftovers can safely count as additions or removals.
+        if ($group[0] && $group[1]) throw new RuntimeException($message);
+        foreach ($group as $side => $stops) {
+            foreach ($stops as $id => $stop) {
+                $keys[$side][$id] = $key . "\0" . ++$suffix;
+            }
+        }
+    }
+    return $keys;
+}
+
+function lehrfahrer_gtfs_service_variants(array $feed, array $day, array $stopKeys): array {
+    $routes = []; $tripCount = 0;
+    foreach ($day['trips'] as $tripId => $trip) {
+        $sequence = $day['sequences'][$tripId] ?? [];
         if (count($sequence) < 2) continue;
         $keys = []; $names = [];
         foreach ($sequence as $stopId) {
-            if (!isset($stops[$stopId])) throw new RuntimeException('GTFS-Stopfolge verweist auf unbekannte Haltestelle.');
-            $keys[] = $stops[$stopId]['key']; $names[] = $stops[$stopId]['name'];
+            if (!isset($stopKeys[$stopId])) throw new RuntimeException('GTFS-Stopfolge verweist auf unbekannte Haltestelle.');
+            $keys[] = $stopKeys[$stopId];
+            $names[] = $day['stops'][$stopId]['name'];
         }
         $route = $feed['routes'][strval($trip['route_id'])];
         $line = trim(strval($route['route_short_name'])) . "\0" . strval($route['route_type']);
@@ -215,8 +303,11 @@ function lehrfahrer_gtfs_compare_service_zips(string $candidateZip, string $curr
         'currentValidLines' => $currentCounts['lines'], 'candidateValidLines' => $candidateCounts['lines'],
         'lineCounts' => ['NEU' => 0, 'GEAENDERT' => 0, 'UNVERAENDERT' => 0, 'ENTFALLEN' => 0], 'lines' => []];
     if (!$result['comparable']) return $result;
-    $new = lehrfahrer_gtfs_service_variants($candidate, $date);
-    $old = lehrfahrer_gtfs_service_variants($current, $date);
+    $newDay = lehrfahrer_gtfs_service_day($candidate, $date);
+    $oldDay = lehrfahrer_gtfs_service_day($current, $date);
+    [$newKeys, $oldKeys] = lehrfahrer_gtfs_service_resolve_stop_keys($newDay, $oldDay);
+    $new = lehrfahrer_gtfs_service_variants($candidate, $newDay, $newKeys);
+    $old = lehrfahrer_gtfs_service_variants($current, $oldDay, $oldKeys);
     $result['currentValidTrips'] = $old['tripCount']; $result['candidateValidTrips'] = $new['tripCount'];
     $result['currentValidLines'] = $old['lineCount']; $result['candidateValidLines'] = $new['lineCount'];
     $keys = array_unique(array_merge(array_keys($new['routes']), array_keys($old['routes'])));
