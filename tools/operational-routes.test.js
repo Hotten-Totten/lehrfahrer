@@ -81,6 +81,52 @@ test('Editor-Normalisierung restauriert pullout, pullin und transfer ohne Haltes
   }
 });
 
+test('Editor preserves raw input while typing and populates fields when loading a route', () => {
+  const inputs = {
+    operationalRouteTypeInput: { value: 'transfer' },
+    operationalNameInput: { value: 'Depot ' },
+    operationalFromLabelInput: { value: 'Main ' },
+    operationalToLabelInput: { value: 'Central ' },
+    operationalRelatedRouteIdsInput: { value: 'route-1, ' },
+    operationalRemarkInput: { value: 'Platform ' }
+  };
+  const state = {};
+  const editorSandbox = vm.createContext({
+    ...inputs,
+    state,
+    document: { querySelectorAll: () => [] }
+  });
+  vm.runInContext(`
+    ${editorStateSource.slice(editorStateSource.indexOf('const OPERATIONAL_ROUTE_TYPES'), editorStateSource.indexOf('const state ='))}
+    ${editorStateSource.slice(editorStateSource.indexOf('function getLineValidity'), editorStateSource.indexOf('function normalizeVariantCategory'))}
+  `, editorSandbox);
+
+  const rawValues = Object.values(inputs).map(input => input.value);
+  editorSandbox.syncOperationalRouteFieldsFromInputs();
+  assert.deepEqual(Object.values(inputs).map(input => input.value), rawValues);
+  assert.equal(state.routeType, 'transfer');
+  assert.equal(state.operationalName, 'Depot');
+  assert.equal(state.fromLabel, 'Main');
+  assert.equal(state.toLabel, 'Central');
+  assert.deepEqual(Array.from(state.relatedRouteIds), ['route-1']);
+  assert.equal(state.operationalRemark, 'Platform');
+
+  editorSandbox.setOperationalRouteFields({ line: {
+    routeType: 'pullout',
+    operationalName: 'Start',
+    fromLabel: 'Depot',
+    toLabel: 'Station',
+    relatedRouteIds: ['route-2', 'route-3'],
+    remark: 'Gate 2'
+  } });
+  assert.deepEqual(Object.values(inputs).map(input => input.value),
+    ['pullout', 'Start', 'Depot', 'Station', 'route-2, route-3', 'Gate 2']);
+  assert.equal(state.fromLabel, 'Depot');
+
+  editorSandbox.setOperationalRouteFields({});
+  assert.deepEqual(Object.values(inputs).map(input => input.value), ['line', '', '', '', '', '']);
+});
+
 test('exakte relatedRouteIds-Zuordnung hat Vorrang', () => {
   const exact = { id: 'depot-exact', routeType: 'pullout', relatedRouteIds: [target.id] };
   const other = { id: 'depot-other', routeType: 'pullout', relatedRouteIds: ['andere-route'] };

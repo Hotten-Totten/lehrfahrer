@@ -598,8 +598,7 @@ function getLineValidity() {
   };
 }
 
-function setOperationalRouteFields(source = {}) {
-  const fields = readOperationalRouteFields(source);
+function updateOperationalRouteFieldsState(fields) {
   state.routeType = fields.routeType;
   state.operationalName = fields.operationalName;
   state.fromLabel = fields.fromLabel;
@@ -608,6 +607,11 @@ function setOperationalRouteFields(source = {}) {
   state.startCoordinate = fields.startCoordinate;
   state.endCoordinate = fields.endCoordinate;
   state.operationalRemark = fields.remark;
+}
+
+function setOperationalRouteFields(source = {}) {
+  const fields = readOperationalRouteFields(source);
+  updateOperationalRouteFieldsState(fields);
   if (operationalRouteTypeInput) operationalRouteTypeInput.value = fields.routeType;
   if (operationalNameInput) operationalNameInput.value = fields.operationalName;
   if (operationalFromLabelInput) operationalFromLabelInput.value = fields.fromLabel;
@@ -632,7 +636,7 @@ function getOperationalRouteFields() {
 }
 
 function syncOperationalRouteFieldsFromInputs() {
-  return setOperationalRouteFields(getOperationalRouteFields());
+  updateOperationalRouteFieldsState(getOperationalRouteFields());
 }
 
 function updateOperationalRouteFieldsVisibility() {

@@ -183,7 +183,10 @@ if (variantCategoryInput) {
   variantCategoryInput.addEventListener("change", syncVariantCategoryFromInput);
 }
 if (operationalRouteTypeInput) {
-  operationalRouteTypeInput.addEventListener("change", syncOperationalRouteFieldsFromInputs);
+  operationalRouteTypeInput.addEventListener("change", () => {
+    syncOperationalRouteFieldsFromInputs();
+    updateOperationalRouteFieldsVisibility();
+  });
 }
 [
   operationalNameInput,
