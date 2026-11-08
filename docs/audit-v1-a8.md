@@ -100,6 +100,34 @@ anschließende ausdrückliche Nutzerfreigabe. Keine Produktionsumschaltung in A8
 
 ## Staging-Status
 
-Staging-Deployment, isolierte MariaDB-Prüfung und abschließender rein lesender
-Bestands-/Integritätsnachcheck sind nach ihren tatsächlichen Ergebnissen hier zu
-ergänzen. A8 ist bis dahin nicht abschließend abgenommen; kein grüner Live-Release.
+Die technischen A8-Sicherheits- und Mandantennachweise sind abgeschlossen.
+Geprüfter Funktionsstand: `8cfe8c8704f3c3ae1c62ef4f6323997b77423f3f`.
+Die oben genannten offenen Releasepunkte bleiben bestehen; kein fehlerfreier
+Gesamttestsatz, keine Gesamt-/Live-Freigabe und keine Produktionsumschaltung.
+
+- Staging-Deployment erfolgreich:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42501320716
+  Bestehende Account-Anmeldung, A6-Zugang und A7-Zugriffsabwehr bestanden;
+  öffentlicher Live-Inhalt unverändert.
+- Isolierte MariaDB-Abnahme erfolgreich:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42501320765
+  Neue Firmen bleiben leer; Admin-/Rollen-/Kategoriengrunddaten vorhanden;
+  Account-Aktivierung und Anmeldung funktionieren; Audit-Ausfälle atomar;
+  Aktivierungs-Replay und globale Login-Dublette abgewiesen; bisherige synthetische
+  Firma unverändert; Audit-Kette gültig; Kategoriengrenzen ohne Warnung bestanden.
+- Abschließender ausschließlich lesender Servercheck ohne Deployment erfolgreich:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42517026362
+  Zehn bereitgestellte A8-/Auditdateien stimmen per SHA-256 mit dem geprüften Git-
+  Stand überein. READ ONLY-Datenbanktransaktion; Account-primary-Modus offen;
+  Accountnummern konsistent; neutrale Template-Defaults; Audit-Kette gültig;
+  sämtliche geprüften Mandanten-Dateijournale geschlossen. Bestehende A5-Abnahme,
+  archivierte Testeinweisung, entfernte Testperson/-paket/-artefakte und gewünschte
+  dauerhaft gespeicherte Telefonnummer erneut bestätigt. Keine bestehenden
+  Mandanten als Neuanlage-Test benutzt und keine Bestandsdaten verändert.
+
+Die isolierte Neuanlage und die tatsächlichen HTTP-Schnittstellen sind automatisiert
+geprüft; es wurde keine zusätzliche Firma im laufenden Staging-Bestand erzeugt.
+Die manuellen A6-/A7-/Support-Abnahmen bleiben gültig. Als nächster fachlicher
+Arbeitsblock ist die separate Bewertung/Behebung der zwei Navigationstestfehler
+zu klären; anschließend die gesonderte Live-Vorbereitung. Eine Nutzerfreigabe
+zum Live-Deploy liegt weiterhin nicht vor.
