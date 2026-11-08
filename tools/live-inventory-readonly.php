@@ -14,6 +14,25 @@ function live_inventory(string $root, ?string $expectedVersionSha256=null): arra
     $report['version']=preg_match('/^V[0-9]+\.[0-9]+\.[0-9]+$/D',$version) ? $version : null;
     if ($report['version']===null) throw new RuntimeException('PUBLIC_ROOT_VERSION_UNCLEAR');
     if ($expectedVersionSha256!==null && !hash_equals($expectedVersionSha256,(string)$report['files']['VERSION'])) throw new RuntimeException('DOMAIN_TARGET_MAPPING');
+    $report['identityInfrastructure']=[];
+    foreach (['login.html','account-login.php','api/_auth.php','api/_session_auth.php','api/auth/login.php','api/auth/runtime.php','api/_secret.php'] as $file) {
+        $path=$web.'/'.$file;
+        $report['identityInfrastructure'][$file]=is_file($path)&&!is_link($path);
+    }
+    $authPath=$web.'/api/_auth.php';
+    if (is_file($authPath)&&!is_link($authPath)&&filesize($authPath)<131072) {
+        $auth=(string)file_get_contents($authPath);
+        $report['legacyAuthSource']=['sha256'=>hash('sha256',$auth),
+            'apiTokenReaderPresent'=>str_contains($auth,'lehrfahrer_get_write_token'),
+            'writeAuthGuardPresent'=>str_contains($auth,'lehrfahrer_require_write_auth')];
+    }
+    $report['knownPublicBackupDirectories']=[];
+    foreach (['backup','backup_liniendaten','backups','WorkingSystem'] as $name) {
+        $path=$web.'/'.$name;
+        $report['knownPublicBackupDirectories'][$name]=is_dir($path)&&!is_link($path)
+            ? ['present'=>true,'topLevelEntries'=>count(array_diff(scandir($path)?:[],['.','..']))] : ['present'=>false];
+    }
+    $report['providerSnapshotsVerified']=false;
     $keys=['LEHRFAHRER_ENV','LEHRFAHRER_PUBLIC_ORIGIN','LEHRFAHRER_PRIVATE_DATA_DIR','LEHRFAHRER_DB_DRIVER',
         'LEHRFAHRER_DB_DSN','LEHRFAHRER_DB_HOST','LEHRFAHRER_DB_PORT','LEHRFAHRER_DB_NAME',
         'LEHRFAHRER_DB_USER','LEHRFAHRER_DB_PASSWORD','LEHRFAHRER_DB_TLS_CA','LEHRFAHRER_DB_TLS_REQUIRED'];
@@ -53,6 +72,10 @@ function live_inventory(string $root, ?string $expectedVersionSha256=null): arra
         $path=$private.'/'.$area;
         $report['privateStorage']['areas'][$area]=is_dir($path)&&!is_link($path)
             ? ['present'=>true,'mode'=>sprintf('%04o',fileperms($path)&0777)] : ['present'=>false];
+    }
+    $report['knownIdentityFilePresence']=[];
+    foreach ([$web.'/data/users.json',$web.'/data/companies.json',$private.'/users.json',$private.'/companies.json',$private.'/control/lehrfahrer.sqlite'] as $index=>$path) {
+        $report['knownIdentityFilePresence']['candidate'.($index+1)]=is_file($path)&&!is_link($path);
     }
     $backups=$private.'/backups/control-db'; $backupReports=[];
     if (is_dir($backups) && !is_link($backups)) {
