@@ -831,7 +831,12 @@ function createDriverPackageActions(packageInfo, body) {
     selectedItems: packageInfo.selectedItems
   }));
   makeButton("Umbenennen", async () => {
-    const newName = prompt("Neuer Fahrername:", packageInfo.driverName || "");
+    const newName = await askTextInputModal({
+      title: "Einweisungspaket umbenennen",
+      message: "Name Fahrer/in im Paket",
+      defaultValue: packageInfo.driverName || "",
+      placeholder: "Name Fahrer/in"
+    });
     if (newName === null) return;
     try {
       await manageDriverPackage("rename", packageInfo.id, { driverName: newName.trim() });
