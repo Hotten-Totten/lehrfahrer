@@ -578,7 +578,7 @@ test('AE: bewusste Bestätigung erzeugt nur neue Routen und verlangt Server-Reva
   assert.match(html, /Routen jetzt anlegen/);
   assert.match(html, /Abbrechen/);
   assert.doesNotMatch(dialog, /\b(?:alert|prompt|confirm)\s*\(/);
-  assert.match(endpoint, /lehrfahrer_route_authorize\('routes\.write', true, true\)/);
+  assert.match(endpoint, /lehrfahrer_route_require_account_write\('routes\.write'\)/);
   assert.match(endpoint, /lehrfahrer_gtfs_candidate_preflight\(gtfs_candidate_dir\(\), gtfs_server_zip_path\(\), gtfs_index_path\(\)\)/);
   assert.match(endpoint, /lehrfahrer_gtfs_creation_fingerprint/);
   assert.match(endpoint, /lehrfahrer_gtfs_creation_install/);

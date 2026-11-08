@@ -16,10 +16,22 @@ function lehrfahrer_audit_file_object_id(string $companyId, string $routeRelativ
     return 'route_' . substr(hash('sha256', $companyId . "\0" . $routeRelative), 0, 32);
 }
 
-function lehrfahrer_audit_file_related_path(string $routeRelative, string $relative, string $area): bool {
+function lehrfahrer_audit_file_related_path(string $routeRelative, string $relative, string $area,
+    string $kind = 'UPDATE'): bool {
     if ($area === 'imports') return $relative === 'gtfs/index/work-inventory.json';
     $stem = substr($routeRelative, 0, -5);
-    return in_array($relative, [$routeRelative, $stem . '.gpx', $stem . '.pdf'], true);
+    if (in_array($relative, [$routeRelative, $stem . '.gpx', $stem . '.pdf'], true)) return true;
+    if ($kind !== 'DELETE') return false;
+    $directory = dirname($routeRelative);
+    $parts = explode('/', $routeRelative);
+    $city = $parts[0];
+    $base = basename($stem);
+    $prefix = trim(implode('_', array_slice($parts, 1, -1)), '_');
+    $legacyPdf = $city . '/pdf/' . ($prefix === '' ? '' : $prefix . '__') . $base . '.pdf';
+    $allowed = [$routeRelative, $stem . '.gpx', $stem . '.pdf',
+        $directory . '/gpx/' . $base . '.pdf', $legacyPdf];
+    if ($directory === $city) $allowed[] = $city . '/gpx/' . $base . '.gpx';
+    return in_array($relative, $allowed, true);
 }
 
 function lehrfahrer_audit_file_directory(string $companyId): string {
@@ -108,6 +120,8 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
     }
     $seal = lehrfahrer_audit_file_seal($record);
     $required = ['id','companyId','routeRelative','objectId','kind','state','auditEventId','files','checksum'];
+    $batch = ($record['version'] ?? null) === 2;
+    if ($batch) $required = array_merge($required, ['version', 'routes']);
     $keys = array_keys($record);
     sort($required); sort($keys);
     if ($keys !== $required || !hash_equals($seal['checksum'], $record['checksum'])
@@ -122,6 +136,7 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
         || ($record['objectId'] ?? null) !== lehrfahrer_audit_file_object_id($companyId, (string)($record['routeRelative'] ?? ''))) {
         throw new RuntimeException('Journal wurde manipuliert oder ist ungueltig.');
     }
+    $batchReferences = $batch ? lehrfahrer_audit_file_batch_references($record) : [];
     foreach ($record['files'] as $i => $file) {
         $fileKeys = is_array($file) ? array_keys($file) : [];
         sort($fileKeys);
@@ -131,7 +146,11 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
                 ['area','kind','newHash','oldHash','relative'],
             ], true)
             || !in_array($file['area'] ?? null, ['lines','imports'], true)
-            || !lehrfahrer_audit_file_related_path($record['routeRelative'], $file['relative'], $file['area'])
+            || ($batch
+                ? ($file['area'] !== 'lines' || ($file['kind'] ?? $record['kind']) !== 'CREATE'
+                    || !isset($batchReferences[$file['relative']]))
+                : !lehrfahrer_audit_file_related_path($record['routeRelative'], $file['relative'], $file['area'],
+                    $file['kind'] ?? $record['kind']))
             || ($file['area'] === 'imports'
                 && ($file['relative'] !== 'gtfs/index/work-inventory.json' || ($file['kind'] ?? $record['kind']) !== 'UPDATE'))
             || !in_array($file['kind'] ?? $record['kind'], ['CREATE','UPDATE','DELETE'], true)
@@ -147,7 +166,41 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
         }
         lehrfahrer_tenant_segments($file['relative']);
     }
+    if ($batch && (count($record['files']) !== count($batchReferences)
+        || count(array_unique(array_column($record['files'], 'relative'))) !== count($batchReferences))) {
+        throw new RuntimeException('Mehrfachanlage besitzt keine vollstaendige Dateiliste.');
+    }
     return $record;
+}
+
+/** Version 2 is restricted to a complete batch of new JSON routes. */
+function lehrfahrer_audit_file_batch_references(array $record): array {
+    if ($record['kind'] !== 'CREATE' || !is_array($record['routes'] ?? null)
+        || !array_is_list($record['routes']) || $record['routes'] === []) {
+        throw new RuntimeException('Mehrfachanlage ist ungueltig.');
+    }
+    $references = [];
+    $hasWitness = $record['auditEventId'] !== null;
+    foreach ($record['routes'] as $route) {
+        $keys = is_array($route) ? array_keys($route) : [];
+        sort($keys);
+        if ($keys !== ['auditEventId', 'objectId', 'relative']
+            || !is_string($route['relative'] ?? null) || count(explode('/', $route['relative'])) !== 4
+            || isset($references[$route['relative']])
+            || $route['objectId'] !== lehrfahrer_audit_file_object_id($record['companyId'], $route['relative'])
+            || ($hasWitness ? preg_match('/^aud_[a-f0-9]{32}$/D', (string)$route['auditEventId']) !== 1
+                : $route['auditEventId'] !== null)) {
+            throw new RuntimeException('Mehrfachanlage enthaelt eine ungueltige Route.');
+        }
+        $references[$route['relative']] = $route['objectId'];
+    }
+    $first = $record['routes'][0];
+    if ($first['relative'] !== $record['routeRelative'] || $first['objectId'] !== $record['objectId']
+        || $first['auditEventId'] !== $record['auditEventId']
+        || ($hasWitness && count(array_unique(array_column($record['routes'], 'auditEventId'))) !== count($references))) {
+        throw new RuntimeException('Mehrfachanlage besitzt widerspruechliche Auditzeugen.');
+    }
+    return $references;
 }
 
 function lehrfahrer_audit_file_transition(string $directory, array &$record, string $next): void {
@@ -181,6 +234,9 @@ function lehrfahrer_audit_file_route_blocked(string $companyId, string $absolute
             return true;
         }
         if ($record['objectId'] === $objectId) return true;
+        foreach ($record['routes'] ?? [] as $route) {
+            if ($route['objectId'] === $objectId) return true;
+        }
     }
     return false;
 }
@@ -248,6 +304,17 @@ function lehrfahrer_audit_file_event_committed(PDO $pdo, array $record): bool {
     if ($id === null) return false;
     if (!is_string($id) || preg_match('/^aud_[a-f0-9]{32}$/D', $id) !== 1) {
         throw new RuntimeException('Audit-Witness ist ungueltig.');
+    }
+    if (($record['version'] ?? null) === 2) {
+        $committed = 0;
+        foreach ($record['routes'] as $route) {
+            $single = ['auditEventId' => $route['auditEventId'], 'objectId' => $route['objectId']];
+            if (lehrfahrer_audit_file_event_committed($pdo, $single)) $committed++;
+        }
+        if ($committed !== 0 && $committed !== count($record['routes'])) {
+            throw new RuntimeException('Mehrfachanlage besitzt nur teilweise Auditzeugen.');
+        }
+        return $committed !== 0;
     }
     $query = $pdo->prepare('SELECT object_id,result FROM audit_events WHERE event_id = ?');
     $query->execute([$id]);
@@ -344,11 +411,12 @@ function lehrfahrer_audit_file_recover(PDO $pdo, string $companyId): array {
 }
 
 /**
- * Infrastructure only. Callers must supply a catalogued SUCCESS event whose
- * objectId is the server-derived route ID; no live route writer uses this yet.
+ * Callers supply catalogued SUCCESS events for the server-derived route ID.
+ * All events commit with the files; the first event witnesses that transaction.
  */
 function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, string $companyId,
-    string $routeRelative, string $kind, array $files, array $event, ?callable $checkpoint = null): string {
+    string $routeRelative, string $kind, array $files, array $event, ?callable $checkpoint = null,
+    array $additionalEvents = [], array $batchRoutes = []): string {
     if (!in_array($kind, ['CREATE', 'UPDATE', 'DELETE'], true) || $files === []
         || !in_array($actor->contextType, ['TENANT', 'SYSTEM'], true)
         || ($actor->contextType === 'TENANT' && $actor->companyId !== $companyId)
@@ -356,18 +424,41 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
         throw new InvalidArgumentException('Audit-Dateivorgang ungueltig.');
     }
     $objectId = lehrfahrer_audit_file_object_id($companyId, $routeRelative);
-    if (($event['objectId'] ?? null) !== $objectId || ($event['result'] ?? null) !== 'SUCCESS') {
-        throw new InvalidArgumentException('Audit-Ereignis gehoert nicht zum Routenobjekt.');
+    $additionalEvents = array_values($additionalEvents);
+    $events = array_merge([$event], $additionalEvents);
+    $batchReferences = [];
+    foreach ($batchRoutes as $relative) {
+        if ($kind !== 'CREATE' || !is_string($relative) || count(explode('/', $relative)) !== 4
+            || isset($batchReferences[$relative])) throw new InvalidArgumentException('Mehrfachanlage ungueltig.');
+        $batchReferences[$relative] = lehrfahrer_audit_file_object_id($companyId, $relative);
     }
-    lehrfahrer_audit_validate_event($actor, $event, LEHRFAHRER_AUDIT_CRITICAL);
+    if ($batchRoutes !== [] && (array_key_first($batchReferences) !== $routeRelative
+        || array_values($batchReferences) !== array_column($events, 'objectId'))) {
+        throw new InvalidArgumentException('Mehrfachanlage und Auditziele stimmen nicht ueberein.');
+    }
+    foreach ($events as $item) {
+        if (($batchRoutes === [] && ($item['objectId'] ?? null) !== $objectId)
+            || ($batchRoutes !== [] && ($item['action'] ?? null) !== 'ROUTE_CREATE')
+            || ($item['result'] ?? null) !== 'SUCCESS') {
+            throw new InvalidArgumentException('Audit-Ereignis gehoert nicht zum Routenobjekt.');
+        }
+        lehrfahrer_audit_validate_event($actor, $item, LEHRFAHRER_AUDIT_CRITICAL);
+    }
     $operation = static function (string $directory) use (
-        $pdo, $actor, $companyId, $routeRelative, $kind, $files, $event, $checkpoint, $objectId
+        $pdo, $actor, $companyId, $routeRelative, $kind, $files, $event, $checkpoint, $objectId, $additionalEvents, $batchReferences
     ): string {
         lehrfahrer_audit_file_recover_locked($pdo, $companyId, $directory);
         $id = 'op_' . bin2hex(random_bytes(16));
         $record = ['id' => $id, 'companyId' => $companyId, 'routeRelative' => $routeRelative,
             'objectId' => $objectId, 'kind' => $kind, 'state' => 'PREPARING',
             'auditEventId' => null, 'files' => []];
+        if ($batchReferences !== []) {
+            $record['version'] = 2;
+            $record['routes'] = [];
+            foreach ($batchReferences as $relative => $routeObjectId) {
+                $record['routes'][] = ['relative' => $relative, 'objectId' => $routeObjectId, 'auditEventId' => null];
+            }
+        }
         $payloads = [];
         $seen = [];
         foreach (array_values($files) as $i => $file) {
@@ -381,7 +472,9 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             $relative = $file['relative'];
             $area = $file['area'] ?? 'lines';
             if (!is_string($area) || !in_array($area, ['lines','imports'], true)
-                || !lehrfahrer_audit_file_related_path($routeRelative, $relative, $area)
+                || ($batchReferences !== []
+                    ? ($area !== 'lines' || $fileKind !== 'CREATE' || !isset($batchReferences[$relative]))
+                    : !lehrfahrer_audit_file_related_path($routeRelative, $relative, $area, $fileKind))
                 || ($area === 'imports'
                     && ($relative !== 'gtfs/index/work-inventory.json' || $fileKind !== 'UPDATE'))) {
                 throw new InvalidArgumentException('Audit-Dateibereich ungueltig.');
@@ -398,6 +491,9 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
                 'newHash' => $fileKind === 'DELETE' ? null : hash('sha256', $file['content'])];
             if ($fileKind !== $kind) $record['files'][$i]['kind'] = $fileKind;
             if ($fileKind !== 'DELETE') $payloads[$i] = $file['content'];
+        }
+        if ($batchReferences !== [] && count($seen) !== count($batchReferences)) {
+            throw new InvalidArgumentException('Mehrfachanlage ist unvollstaendig.');
         }
         if ($kind !== 'UPDATE' && !isset($seen['lines/' . $routeRelative])) {
             throw new InvalidArgumentException('Routenobjekt fehlt im Dateivorgang.');
@@ -427,6 +523,11 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             $pdo->beginTransaction();
             $audit = lehrfahrer_audit_append($pdo, $actor, $event, LEHRFAHRER_AUDIT_CRITICAL);
             $record['auditEventId'] = $audit['eventId'];
+            if ($batchReferences !== []) $record['routes'][0]['auditEventId'] = $audit['eventId'];
+            foreach ($additionalEvents as $index => $additionalEvent) {
+                $additionalAudit = lehrfahrer_audit_append($pdo, $actor, $additionalEvent, LEHRFAHRER_AUDIT_CRITICAL);
+                if ($batchReferences !== []) $record['routes'][$index + 1]['auditEventId'] = $additionalAudit['eventId'];
+            }
             lehrfahrer_audit_file_transition($directory, $record, 'AUDIT_PREPARED');
             if ($checkpoint !== null) $checkpoint('AUDIT_PREPARED');
             lehrfahrer_audit_file_transition($directory, $record, 'ACTIVATING');

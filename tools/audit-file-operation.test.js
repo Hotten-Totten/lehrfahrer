@@ -373,3 +373,159 @@ test('gemischter UPDATE/CREATE-Dateisatz aktiviert und rollt als Einheit zurueck
   assert.equal(fs.readFileSync(gpxPath, 'utf8'), 'new-gpx');
   assert.equal(fs.readFileSync(inventoryPath, 'utf8'), 'new-inventory');
 });
+test('Mehrere Auditereignisse rollen bei Fehler des zweiten gemeinsam zurueck', () => {
+  const f = fixture();
+  fs.writeFileSync(f.routePath, 'old');
+  const result = JSON.parse(run(f, `
+    $first=['action'=>'ROUTE_CHANGE','objectType'=>'ROUTE','objectId'=>$object,'result'=>'SUCCESS'];
+    $second=['action'=>'ROUTE_AUTO_DOWNGRADE','objectType'=>'ROUTE','objectId'=>$object,'result'=>'SUCCESS'];
+    $pdo->exec("CREATE TRIGGER reject_second BEFORE INSERT ON audit_events
+      WHEN NEW.action='ROUTE_AUTO_DOWNGRADE' BEGIN SELECT RAISE(ABORT,'isolated'); END");
+    $failed=false;
+    try {
+      lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'UPDATE',
+        [['relative'=>$route,'content'=>'new']],$first,null,[$second]);
+    } catch (LehrfahrerAuditWriteFailure $error) { $failed=true; }
+    echo json_encode(['failed'=>$failed,'events'=>(int)$pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn(),
+      'chain'=>lehrfahrer_audit_verify_chain($pdo)]);
+  `));
+  assert.deepEqual(result, { failed: true, events: 0, chain: true });
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'old');
+});
+
+test('Crash nach gemeinsamem Commit behaelt beide Ereignisse und die aktivierten Dateien', () => {
+  const f = fixture();
+  fs.writeFileSync(f.routePath, 'old');
+  run(f, `
+    $first=['action'=>'ROUTE_CHANGE','objectType'=>'ROUTE','objectId'=>$object,'result'=>'SUCCESS'];
+    $second=['action'=>'ROUTE_AUTO_DOWNGRADE','objectType'=>'ROUTE','objectId'=>$object,'result'=>'SUCCESS'];
+    lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'UPDATE',
+      [['relative'=>$route,'content'=>'new']],$first,
+      static function($stage) { if($stage==='DB_COMMIT') exit(18); },[$second]);
+  `, 18);
+  const result = JSON.parse(run(f, `
+    lehrfahrer_audit_file_recover($pdo,$company);
+    echo json_encode(['events'=>(int)$pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn(),
+      'chain'=>lehrfahrer_audit_verify_chain($pdo)]);
+  `));
+  assert.deepEqual(result, { events: 2, chain: true });
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'new');
+});
+
+test('Legacy-PDF und GPX duerfen nur als Begleiter derselben Route geloescht werden', () => {
+  const f = fixture();
+  fs.writeFileSync(f.routePath, 'old');
+  run(f, `
+    $pdf='cottbus/pdf/Linie_1_Standard__Route_01.pdf';
+    $path=lehrfahrer_tenant_path($company,'lines',$pdf,true);
+    file_put_contents($path,'legacy PDF');
+    $event=['action'=>'ROUTE_DELETE','objectType'=>'ROUTE','objectId'=>$object,'result'=>'SUCCESS'];
+    lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'DELETE',
+      [['relative'=>$route],['relative'=>$pdf]],$event,
+      static function($stage) { if($stage==='FILE_ACTIVATED') exit(19); });
+  `, 19);
+  run(f, `lehrfahrer_audit_file_recover($pdo,$company);`);
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'old');
+  assert.equal(fs.readFileSync(path.join(f.privateRoot, 'companies', company, 'lines',
+    'cottbus', 'pdf', 'Linie_1_Standard__Route_01.pdf'), 'utf8'), 'legacy PDF');
+});
+
+function batchSource(checkpoint = 'null') {
+  return `
+    $second=str_replace('Route_01.json','Route_02.json',$route);
+    $references=[$route,$second];
+    $events=array_map(static fn($relative)=>[
+      'action'=>'ROUTE_CREATE','objectType'=>'ROUTE',
+      'objectId'=>lehrfahrer_audit_file_object_id($company,$relative),'result'=>'SUCCESS'], $references);
+    lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,'CREATE',
+      [['relative'=>$route,'content'=>'route one'],['relative'=>$second,'content'=>'route two']],
+      $events[0],${checkpoint},[$events[1]],$references);
+  `;
+}
+
+test('Mehrfachanlage sperrt und recovert jede Route an allen Crash-Grenzen', () => {
+  for (const stage of ['PREPARING', 'PREPARED', 'AUDIT_PREPARED', 'ACTIVATING',
+    'ACTIVATED_0', 'ACTIVATED_1', 'FILE_ACTIVATED', 'DB_COMMIT']) {
+    const f = fixture();
+    run(f, batchSource(`static function($stage) { if($stage===${quote(stage)}) exit(21); }`), 21);
+    const result = JSON.parse(run(f, `
+      $second=str_replace('Route_01.json','Route_02.json',$route);
+      $secondPath=lehrfahrer_audit_file_target($company,$second);
+      $blocked=[lehrfahrer_audit_file_route_blocked($company,$fpath=lehrfahrer_audit_file_target($company,$route)),
+        lehrfahrer_audit_file_route_blocked($company,$secondPath)];
+      lehrfahrer_audit_file_recover($pdo,$company);
+      echo json_encode(['blocked'=>$blocked,'files'=>[is_file($fpath),is_file($secondPath)],
+        'events'=>(int)$pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn(),
+        'chain'=>lehrfahrer_audit_verify_chain($pdo)]);
+    `));
+    const committed = stage === 'DB_COMMIT';
+    assert.deepEqual(result, { blocked: [true, true], files: [committed, committed],
+      events: committed ? 2 : 0, chain: true }, stage);
+  }
+});
+
+test('Fehler beim zweiten Batch-Audit verhindert beide Routen', () => {
+  const f = fixture();
+  run(f, `
+    $second=str_replace('Route_01.json','Route_02.json',$route);
+    $secondObject=lehrfahrer_audit_file_object_id($company,$second);
+    $pdo->exec("CREATE TRIGGER reject_batch BEFORE INSERT ON audit_events
+      WHEN NEW.object_id='$secondObject' BEGIN SELECT RAISE(ABORT,'isolated'); END");
+    try { ${batchSource()} throw new Exception('Batch accepted'); }
+    catch (LehrfahrerAuditWriteFailure $error) {}
+    if ((int)$pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn() !== 0) throw new Exception('partial audit');
+  `);
+  assert.equal(fs.existsSync(f.routePath), false);
+  assert.equal(fs.existsSync(f.routePath.replace('Route_01.json', 'Route_02.json')), false);
+});
+
+test('Batch-Journalmanipulation sperrt weiterhin beide Routen', () => {
+  const f = fixture();
+  run(f, batchSource("static function($stage) { if($stage==='ACTIVATED_0') exit(22); }"), 22);
+  const journalPath = path.join(f.journalDir, fs.readdirSync(f.journalDir).find(name => name.endsWith('.json')));
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
+  journal.routes.pop();
+  // Recompute the checksum with PHP to exercise structural validation independently.
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  const result = JSON.parse(run(f, `
+    $path=${quote(journalPath)};
+    $record=json_decode(file_get_contents($path),true);
+    file_put_contents($path,json_encode(lehrfahrer_audit_file_seal($record)));
+    $failed=false;
+    try { lehrfahrer_audit_file_recover($pdo,$company); }
+    catch(RuntimeException $error) { $failed=true; }
+    echo json_encode(['failed'=>$failed,'blocked'=>lehrfahrer_audit_file_route_blocked($company,
+      lehrfahrer_audit_file_target($company,$route))]);
+  `));
+  assert.deepEqual(result, { failed: true, blocked: true });
+});
+
+test('Parallele Mehrfachanlagen erzeugen einen vollstaendigen Satz ohne Ueberschreiben', async () => {
+  const f = fixture();
+  run(f, ''); // Initialize the isolated database before concurrent mutations.
+  const code = `try { ${batchSource("static function($stage) { if($stage==='PREPARED') usleep(150000); }")} }
+    catch(RuntimeException $error) {}`;
+  const results = await Promise.all([runAsync(f, code), runAsync(f, code)]);
+  assert.ok(results.every(result => result.status === 0), JSON.stringify(results));
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'route one');
+  assert.equal(fs.readFileSync(f.routePath.replace('Route_01.json', 'Route_02.json'), 'utf8'), 'route two');
+  assert.equal(run(f, "echo $pdo->query('SELECT COUNT(*) FROM audit_events')->fetchColumn();"), '2');
+});
+
+test('Fehlender Auditzeuge eines committierten Batches erzwingt BLOCKED statt Rollback', () => {
+  const f = fixture();
+  run(f, batchSource("static function($stage) { if($stage==='DB_COMMIT') exit(23); }"), 23);
+  const result = JSON.parse(run(f, `
+    $pdo->exec('DELETE FROM audit_events WHERE sequence_number=2');
+    $failed=false;
+    try { lehrfahrer_audit_file_recover($pdo,$company); }
+    catch(RuntimeException $error) { $failed=true; }
+    $second=str_replace('Route_01.json','Route_02.json',$route);
+    echo json_encode(['failed'=>$failed,
+      'blocked'=>lehrfahrer_audit_file_route_blocked($company,lehrfahrer_audit_file_target($company,$second)),
+      'chain'=>lehrfahrer_audit_verify_chain($pdo)]);
+  `));
+  assert.deepEqual(result, { failed: true, blocked: true, chain: false });
+  assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'route one');
+  assert.equal(fs.readFileSync(f.routePath.replace('Route_01.json', 'Route_02.json'), 'utf8'), 'route two');
+});

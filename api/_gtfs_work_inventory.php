@@ -346,8 +346,8 @@ function lehrfahrer_gtfs_work_unique_entry(array $inventory, string $routeId, st
     return $matches[0];
 }
 
-function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update, bool $requireUnique = false, bool $touchEntry = true, bool $skipUnchanged = false): array {
-    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $routeId, $variantId, $update, $requireUnique, $touchEntry, $skipUnchanged): array {
+function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, string $variantId, callable $update, bool $requireUnique = false, bool $touchEntry = true, bool $skipUnchanged = false, ?callable $persist = null): array {
+    return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use ($companyId, $routeId, $variantId, $update, $requireUnique, $touchEntry, $skipUnchanged, $persist): array {
         $path = lehrfahrer_gtfs_work_inventory_path($companyId);
         $inventory = lehrfahrer_gtfs_work_read_json($path);
         if (!is_array($inventory)) throw new RuntimeException('GTFS-Arbeitsvorrat fehlt.');
@@ -365,7 +365,8 @@ function lehrfahrer_gtfs_work_update_entry(string $companyId, string $routeId, s
         unset($entry);
         if (!$found) throw new RuntimeException('GTFS-Arbeitsvariante fehlt.');
         $inventory['updatedAt'] = date('c');
-        lehrfahrer_gtfs_work_write_json($path, $inventory);
+        if ($persist === null) lehrfahrer_gtfs_work_write_json($path, $inventory);
+        else $persist($inventory, $updated);
         return $inventory;
     });
 }
@@ -396,7 +397,8 @@ function lehrfahrer_gtfs_work_set_archived(string $companyId, string $indexPath,
         }, true, false);
 }
 
-function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, string $variantId, string $status): array {
+function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, string $variantId,
+    string $status, ?callable $persist = null): array {
     if (!in_array($status, LEHRFAHRER_GTFS_WORK_STATUSES, true)) throw new InvalidArgumentException('Ungueltiger Freigabestatus.');
     return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry) use ($companyId, $routeId, $variantId, $status): array {
         $current = strval($entry['status'] ?? '');
@@ -429,10 +431,11 @@ function lehrfahrer_gtfs_work_set_status(string $companyId, string $routeId, str
         $entry['status'] = $status;
         $entry['reviewRequired'] = $status !== 'FREIGEGEBEN';
         return $entry;
-    }, true, true, true);
+    }, true, true, true, $persist);
 }
 
-function lehrfahrer_gtfs_work_revoke_release(string $companyId, string $routeId, string $variantId): array {
+function lehrfahrer_gtfs_work_revoke_release(string $companyId, string $routeId, string $variantId,
+    ?callable $persist = null): array {
     return lehrfahrer_gtfs_work_update_entry($companyId, $routeId, $variantId, static function (array $entry): array {
         if (($entry['status'] ?? '') !== 'FREIGEGEBEN') {
             throw new RuntimeException('Nur eine freigegebene GTFS-Fuehrung kann zurueckgenommen werden.');
@@ -440,7 +443,7 @@ function lehrfahrer_gtfs_work_revoke_release(string $companyId, string $routeId,
         $entry['status'] = 'IN_BEARBEITUNG';
         $entry['reviewRequired'] = true;
         return $entry;
-    }, true);
+    }, true, true, false, $persist);
 }
 
 function lehrfahrer_gtfs_work_prepare_route_file(string $path, string $json, string $routeId, string $variantId, ?callable $writer = null): string {

@@ -190,8 +190,10 @@ test('Freigabe-Rücknahme erfordert Session, Importrecht, CSRF und Cottbus-Scope
   const section = endpoint.slice(endpoint.indexOf('function gtfs_work_revoke(): void {'),
     endpoint.indexOf('function gtfs_work_archive(): void {'));
   assert.match(section, /gtfs_require_cottbus_change_scope\(\)/);
-  assert.match(section, /lehrfahrer_api_require_session\(\)/);
-  assert.match(section, /lehrfahrer_auth_require_capability\(\$auth, 'routes.import'\)/);
-  assert.match(section, /lehrfahrer_auth_require_csrf\(\$auth\['session'\]\)/);
+  assert.match(section, /lehrfahrer_route_require_account_write\('routes.import'\)/);
+  const storage = fs.readFileSync(path.join(root, 'api/_tenant_route_storage.php'), 'utf8');
+  assert.match(storage, /lehrfahrer_api_require_session\(\)/);
+  assert.match(storage, /lehrfahrer_auth_require_capability\(\$auth, \$capability\)/);
+  assert.match(storage, /lehrfahrer_auth_require_csrf\(\$auth\['session'\]\)/);
   assert.match(endpoint, /if \(\$action === 'workrevoke'\) gtfs_work_revoke\(\)/);
 });

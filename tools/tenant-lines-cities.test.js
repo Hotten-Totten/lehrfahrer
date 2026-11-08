@@ -50,21 +50,23 @@ async function port() {
   });
 }
 async function request(url, options = {}, session = sessionA) {
-  if (/^\/api\/save_(?:line|gpx)\.php(?:\?|$)/.test(url)) {
+  if (/^\/api\/(?:save_(?:line|gpx)|delete_line|regenerate_pdfs|normalize_ghost_points)\.php(?:\?|$)/.test(url)) {
     if (session === sessionA) session = accountSessionA;
     else if (session === sessionB) session = accountSessionB;
   }
   const headers = { ...(options.headers || {}) };
   if (session) headers.Cookie = session.cookie;
-  if (options.json !== undefined) {
-    headers['Content-Type'] = 'application/json';
+  if (options.json !== undefined || options.form !== undefined) {
+    headers['Content-Type'] = options.form !== undefined
+      ? 'application/x-www-form-urlencoded' : 'application/json';
     headers.Origin = origin;
     headers['X-CSRF-Token'] = session?.csrf || '';
   }
   const response = await fetch(origin + url, {
-    method: options.method || (options.json !== undefined ? 'POST' : 'GET'),
+    method: options.method || (options.json !== undefined || options.form !== undefined ? 'POST' : 'GET'),
     headers,
-    body: options.json !== undefined ? JSON.stringify(options.json) : undefined,
+    body: options.form !== undefined ? new URLSearchParams(options.form).toString()
+      : options.json !== undefined ? JSON.stringify(options.json) : undefined,
     redirect: 'manual'
   });
   const body = await response.text();
@@ -139,7 +141,9 @@ before(async () => {
   [accountSessionA, accountSessionB] = seeded.accountSessions;
   seedCity(companyA, 'stadt-a', 'Route_A');
   seedCity(companyB, 'stadt-b', 'Route_B');
-  server = spawn(php, ['-S', origin.replace('http://', ''), '-t', webroot], {
+  const zipArgs = spawnSync(php, ['-r', 'echo class_exists("ZipArchive") ? "1" : "0";'],
+    { encoding: 'utf8' }).stdout === '1' ? [] : ['-d', 'extension=zip'];
+  server = spawn(php, [...zipArgs, '-S', origin.replace('http://', ''), '-t', webroot], {
     cwd: webroot, env: environment(), stdio: 'ignore', windowsHide: true
   });
   for (let i = 0; i < 50; i++) {
@@ -532,4 +536,245 @@ test('Account-Route-Write erzwingt CSRF und lehnt Legacy-Session ab', async () =
       { ...sessionA });
     assert.equal(legacy.status, 403, legacy.body);
   }
+});
+function auditRouteEvents() {
+  return JSON.parse(runPhp(`
+    require ${phpString(path.join(root, 'api/_audit.php'))};
+    $pdo=lehrfahrer_control_database();
+    echo json_encode(['chain'=>lehrfahrer_audit_verify_chain($pdo),
+      'events'=>$pdo->query("SELECT action,object_id,company_id,account_id,membership_id,result FROM audit_events WHERE object_type='ROUTE' ORDER BY sequence_number")->fetchAll(PDO::FETCH_ASSOC)]);
+  `));
+}
+
+function auditStatus(routeId, variantId, status, revoke = false, company = companyA.id) {
+  return JSON.parse(runPhp(`
+    require ${phpString(path.join(root, 'api/_route_audit.php'))};
+    $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=${phpString(accountSessionA.cookie.split('=').slice(1).join('='))};
+    $auth=lehrfahrer_api_require_session();
+    $auth['company_id']=${phpString(company)};
+    try {
+      $inventory=lehrfahrer_route_audit_status($auth,${phpString(routeId)},${phpString(variantId)},
+        ${phpString(status)},${revoke ? 'true' : 'false'});
+      echo json_encode(['ok'=>true,'inventory'=>$inventory]);
+    } catch (Throwable $error) {
+      echo json_encode(['ok'=>false,'error'=>get_class($error)]);
+    }
+  `));
+}
+
+function rejectAuditAction(action) {
+  runPhp(`
+    require ${phpString(path.join(root, 'api/_audit.php'))};
+    $pdo=lehrfahrer_control_database();
+    $pdo->exec("CREATE TRIGGER reject_route_audit BEFORE INSERT ON audit_events WHEN NEW.action='${action}' BEGIN SELECT RAISE(ABORT,'isolated audit failure'); END");
+  `);
+}
+
+function restoreAuditWrites() {
+  runPhp(`
+    require ${phpString(path.join(root, 'api/_audit.php'))};
+    lehrfahrer_control_database()->exec('DROP TRIGGER IF EXISTS reject_route_audit');
+  `);
+}
+
+test('A4 koppelt den echten Save, Freigaben und Loeschen an technische Auditziele', async () => {
+  const routeId = 'audit-route';
+  const variantId = 'audit-variant';
+  const inventoryPath = path.join(privateRoot, 'companies', companyA.id, 'imports', 'gtfs', 'index', 'work-inventory.json');
+  const entry = { routeId, variantId, status: 'UNGEPRUEFT', timetableStatus: 'UNVERAENDERT' };
+  fs.writeFileSync(inventoryPath, JSON.stringify({ entries: [entry] }));
+  assert.equal(auditStatus(routeId, variantId, 'IN_BEARBEITUNG').ok, true);
+  const route = {
+    city: 'stadt-a', lineFolder: 'Linie_51', categoryFolder: 'Standard',
+    fileBase: 'Route_Audit', lineName: 'Private route name', routeName: 'Audit route',
+    description: 'Private remark must never enter audit',
+    stops: [{ name: 'A', lat: 51.7, lon: 14.3 }, { name: 'B', lat: 51.71, lon: 14.31 }],
+    routePoints: [[51.7, 14.3], [51.71, 14.31]],
+    meta: { gtfsWork: { routeId, variantId } }
+  };
+  const save = payload => request('/api/save_line.php', { json: payload });
+  assert.equal((await save(route)).status, 200);
+  const before = auditRouteEvents().events.length;
+  const loadUrl = '/api/load_line.php?city=stadt-a&line=Route_Audit&lineFolder=Linie_51&categoryFolder=Standard';
+  assert.equal((await request(loadUrl)).status, 200);
+  assert.equal(auditRouteEvents().events.length, before);
+  assert.equal(auditStatus(routeId, variantId, 'GEPRUEFT').ok, true);
+  assert.equal(auditStatus(routeId, variantId, 'FREIGEGEBEN').ok, true);
+  assert.equal((await request(loadUrl + '&scope=driver')).status, 200);
+  const releasedBytes = fs.readFileSync(inventoryPath, 'utf8');
+  const eventCount = auditRouteEvents().events.length;
+  assert.equal(auditStatus(routeId, variantId, 'FREIGEGEBEN').ok, true);
+  assert.equal((await save({ ...route, forceOverwrite: true })).json().changeType, 'UNCHANGED');
+  assert.equal(fs.readFileSync(inventoryPath, 'utf8'), releasedBytes);
+  assert.equal(auditRouteEvents().events.length, eventCount);
+
+  const routeDir = path.join(privateRoot, 'companies', companyA.id, 'lines', 'stadt-a', 'Linie_51', 'Standard');
+  const files = ['json', 'pdf', 'gpx'].map(ext => path.join(routeDir, 'Route_Audit.' + ext));
+  const original = files.map(file => fs.readFileSync(file));
+  const changed = { ...route, forceOverwrite: true, description: 'Changed private remark' };
+  rejectAuditAction('ROUTE_AUTO_DOWNGRADE');
+  try {
+    assert.equal((await save(changed)).status, 409);
+    assert.deepEqual(files.map(file => fs.readFileSync(file)), original);
+    assert.equal(fs.readFileSync(inventoryPath, 'utf8'), releasedBytes);
+    assert.equal(auditRouteEvents().events.length, eventCount);
+  } finally { restoreAuditWrites(); }
+
+  assert.equal((await save(changed)).json().changeType, 'CHANGED');
+  assert.equal(JSON.parse(fs.readFileSync(inventoryPath)).entries[0].status, 'IN_BEARBEITUNG');
+  assert.equal((await request(loadUrl + '&scope=driver')).status, 404);
+  const statusBefore = fs.readFileSync(inventoryPath, 'utf8');
+  const countBefore = auditRouteEvents().events.length;
+  rejectAuditAction('ROUTE_REVIEW');
+  try {
+    assert.equal(auditStatus(routeId, variantId, 'GEPRUEFT').ok, false);
+    assert.equal(fs.readFileSync(inventoryPath, 'utf8'), statusBefore);
+    assert.equal(auditRouteEvents().events.length, countBefore);
+  } finally { restoreAuditWrites(); }
+  assert.equal(auditStatus(routeId, variantId, 'GEPRUEFT').ok, true);
+  assert.equal(auditStatus(routeId, variantId, 'FREIGEGEBEN').ok, true);
+  assert.equal(auditStatus(routeId, variantId, 'IN_BEARBEITUNG', true).ok, true);
+  assert.equal((await request(loadUrl + '&scope=driver')).status, 404);
+  const inventoryBefore = fs.readFileSync(inventoryPath, 'utf8');
+  assert.equal(auditStatus(routeId, variantId, 'GEPRUEFT', false, companyB.id).ok, false);
+  assert.equal(fs.readFileSync(inventoryPath, 'utf8'), inventoryBefore);
+
+  const deletePayload = { city: 'stadt-a', line: 'Route_Audit', lineFolder: 'Linie_51', categoryFolder: 'Standard' };
+  const deleteBefore = files.map(file => fs.readFileSync(file));
+  rejectAuditAction('ROUTE_DELETE');
+  try {
+    assert.equal((await request('/api/delete_line.php', { json: deletePayload })).status, 503);
+    assert.deepEqual(files.map(file => fs.readFileSync(file)), deleteBefore);
+  } finally { restoreAuditWrites(); }
+  assert.equal((await request('/api/delete_line.php', { json: deletePayload })).status, 200);
+  assert.ok(files.every(file => !fs.existsSync(file)));
+  const ledger = auditRouteEvents();
+  assert.equal(ledger.chain, true);
+  const ownEvents = ledger.events.slice(before - 1);
+  assert.deepEqual(ownEvents.map(event => event.action), [
+    'ROUTE_CREATE', 'ROUTE_REVIEW', 'ROUTE_RELEASE', 'ROUTE_CHANGE', 'ROUTE_AUTO_DOWNGRADE',
+    'ROUTE_REVIEW', 'ROUTE_RELEASE', 'ROUTE_RELEASE_REVOKE', 'ROUTE_DELETE'
+  ]);
+  assert.equal(new Set(ownEvents.map(event => event.object_id)).size, 1);
+  assert.ok(ownEvents.every(event => event.company_id === companyA.id && event.account_id
+    && event.membership_id && event.result === 'SUCCESS'));
+  assert.doesNotMatch(JSON.stringify(ledger), /Private route name|Private remark|Changed private remark|51\.7|Route_Audit/);
+});
+
+test('A4 verweigert Token und Legacy-Session fuer Loeschen und GTFS-Status', async () => {
+  for (const [url, payload] of [
+    ['/api/delete_line.php', {}],
+    ['/api/import_gtfs.php', { action: 'workstatus', routeId: 'r', variantId: 'v', status: 'GEPRUEFT' }]
+  ]) {
+    const body = url.includes('import_gtfs') ? { form: payload } : { json: payload };
+    const tokenResult = await request(url, { ...body, headers: { 'X-Api-Token': legacyToken } }, null);
+    assert.ok([401, 403].includes(tokenResult.status), tokenResult.body);
+  }
+  // Preserve the legacy cookie deliberately; the request helper normally selects the account.
+  const legacy = { ...sessionA };
+  const result = await request('/api/delete_line.php', { json: {} }, legacy);
+  assert.equal(result.status, 403);
+});
+
+test('GTFS-Pilot verwendet die gemeinsame Mehrfachanlage mit einem Audit je Route', () => {
+  const result = JSON.parse(runPhp(`
+    require ${phpString(path.join(root, 'api/_route_audit.php'))};
+    require ${phpString(path.join(root, 'api/_gtfs_route_creation.php'))};
+    $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=${phpString(accountSessionA.cookie.split('=').slice(1).join('='))};
+    $auth=lehrfahrer_api_require_session();
+    $company=$auth['company_id'];
+    $writes=[];
+    foreach (['Route_Pilot_01','Route_Pilot_02'] as $file) {
+      $writes[]=['path'=>lehrfahrer_route_file($company,'stadt-a',$file,'json','Linie_52','Standard',true),
+        'data'=>['stops'=>[],'routePoints'=>[],'meta'=>['source'=>'GTFS-Fahrplanwechsel']]];
+    }
+    $root=lehrfahrer_route_line_city_path($company,'stadt-a');
+    lehrfahrer_gtfs_creation_install($root,$writes,static function(){},null,null,
+      static fn($batch)=>lehrfahrer_route_audit_create_batch($auth,$batch));
+    $foreign=lehrfahrer_route_file(${phpString(companyB.id)},'stadt-b','Route_ForeignBatch','json','Linie_52','Standard',true);
+    $rejected=false;
+    try {
+      lehrfahrer_route_audit_create_batch($auth,[['path'=>$foreign,'data'=>['stops'=>[]]]]);
+    } catch (InvalidArgumentException | RuntimeException $error) { $rejected=true; }
+    if (!$rejected || is_file($foreign)) throw new RuntimeException('Foreign batch accepted');
+    echo json_encode(['present'=>array_map(static fn($write)=>is_file($write['path']),$writes),
+      'chain'=>lehrfahrer_audit_verify_chain($auth['pdo'])]);
+  `));
+  assert.deepEqual(result, { present: [true, true], chain: true });
+  assert.ok(auditRouteEvents().events.slice(-2).every(event =>
+    event.action === 'ROUTE_CREATE' && event.company_id === companyA.id && event.account_id));
+});
+
+test('Wartung koppelt PDF/GPX und Ghost-Normalisierung samt Freigaberueckstufung', async () => {
+  const city = 'wartung-a';
+  runPhp(`
+    require ${phpString(path.join(root, 'api/_tenant_route_storage.php'))};
+    lehrfahrer_route_register_city(${phpString(companyA.id)},${phpString(city)});
+  `);
+  const routeId = 'maintenance-route';
+  const variantId = 'maintenance-variant';
+  const inventoryPath = path.join(privateRoot, 'companies', companyA.id, 'imports', 'gtfs', 'index', 'work-inventory.json');
+  fs.writeFileSync(inventoryPath, JSON.stringify({ entries: [{
+    routeId, variantId, status: 'IN_BEARBEITUNG', timetableStatus: 'UNVERAENDERT'
+  }] }));
+  const route = {
+    city, lineFolder: 'Linie_53', categoryFolder: 'Standard', fileBase: 'Route_Wartung',
+    lineName: 'Linie 53', routeName: 'Route Wartung',
+    stops: [
+      { name: 'Freie Haltestelle 1', sourceType: 'free', lat: 51.7, lon: 14.3 },
+      { name: 'Ziel', sourceType: 'catalog', lat: 51.71, lon: 14.31 }
+    ],
+    routePoints: [[51.7, 14.3], [51.71, 14.31]],
+    meta: { gtfsWork: { routeId, variantId } }
+  };
+  assert.equal((await request('/api/save_line.php', { json: route })).status, 200);
+  assert.equal(auditStatus(routeId, variantId, 'GEPRUEFT').ok, true);
+  assert.equal(auditStatus(routeId, variantId, 'FREIGEGEBEN').ok, true);
+  const dir = path.join(privateRoot, 'companies', companyA.id, 'lines', city, 'Linie_53', 'Standard');
+  const files = ['json', 'pdf', 'gpx'].map(ext => path.join(dir, 'Route_Wartung.' + ext));
+  fs.writeFileSync(files[1], '%PDF-old');
+  fs.writeFileSync(files[2], '<gpx>old</gpx>');
+  const original = files.map(file => fs.readFileSync(file));
+  const released = fs.readFileSync(inventoryPath);
+  const count = auditRouteEvents().events.length;
+  rejectAuditAction('ROUTE_ARTIFACT_REPAIR');
+  try {
+    const failed = await request('/api/regenerate_pdfs.php', { json: { city } });
+    assert.equal(failed.status, 200);
+    assert.equal(failed.json().generatedPdfCount, 0);
+    assert.equal(failed.json().errors.length, 1);
+    assert.deepEqual(files.map(file => fs.readFileSync(file)), original);
+    assert.equal(auditRouteEvents().events.length, count);
+  } finally { restoreAuditWrites(); }
+  const regenerated = await request('/api/regenerate_pdfs.php', { json: { city } });
+  assert.equal(regenerated.json().generatedPdfCount, 1, regenerated.body);
+  assert.equal(regenerated.json().generatedGpxCount, 1);
+  assert.deepEqual(fs.readFileSync(files[0]), original[0]);
+  assert.deepEqual(fs.readFileSync(inventoryPath), released);
+
+  const beforeGhost = files.map(file => fs.readFileSync(file));
+  const beforeGhostCount = auditRouteEvents().events.length;
+  rejectAuditAction('ROUTE_AUTO_DOWNGRADE');
+  try {
+    const failed = await request('/api/normalize_ghost_points.php', { json: { city } });
+    assert.equal(failed.json().modifiedLineCount, 0, failed.body);
+    assert.equal(failed.json().modifiedStopCount, 0);
+    assert.equal(failed.json().errors.length, 1);
+    assert.deepEqual(files.map(file => fs.readFileSync(file)), beforeGhost);
+    assert.deepEqual(fs.readFileSync(inventoryPath), released);
+    assert.equal(auditRouteEvents().events.length, beforeGhostCount);
+  } finally { restoreAuditWrites(); }
+  const normalized = await request('/api/normalize_ghost_points.php', { json: { city } });
+  assert.equal(normalized.json().modifiedLineCount, 1, normalized.body);
+  assert.equal(normalized.json().modifiedStopCount, 1);
+  assert.equal(normalized.json().errors.length, 0);
+  assert.equal(JSON.parse(fs.readFileSync(files[0])).stops[0].isGhostPoint, true);
+  assert.equal(JSON.parse(fs.readFileSync(inventoryPath)).entries[0].status, 'IN_BEARBEITUNG');
+  const afterGhostCount = auditRouteEvents().events.length;
+  const repeated = await request('/api/normalize_ghost_points.php', { json: { city } });
+  assert.equal(repeated.json().modifiedLineCount, 0);
+  assert.equal(auditRouteEvents().events.length, afterGhostCount);
+  assert.deepEqual(auditRouteEvents().events.slice(-2).map(event => event.action),
+    ['ROUTE_CHANGE', 'ROUTE_AUTO_DOWNGRADE']);
+  assert.equal(auditRouteEvents().chain, true);
 });

@@ -35,7 +35,7 @@ function lehrfahrer_route_authorize(
 }
 
 /** Route mutations with an audit actor require a verified account membership. */
-function lehrfahrer_route_require_account_write(): array {
+function lehrfahrer_route_require_account_write(string $capability = 'routes.write'): array {
     if (in_array(strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')), ['GET', 'HEAD'], true)) {
         header('Allow: POST');
         lehrfahrer_api_authorization_error(405, 'Methode nicht erlaubt.');
@@ -46,7 +46,7 @@ function lehrfahrer_route_require_account_write(): array {
         || !isset($auth['account_id'], $auth['membership_id'])) {
         lehrfahrer_api_authorization_error(403, 'Account-Anmeldung mit aktiver Gesellschaft erforderlich.');
     }
-    lehrfahrer_auth_require_capability($auth, 'routes.write');
+    lehrfahrer_auth_require_capability($auth, $capability);
     lehrfahrer_auth_require_same_origin();
     lehrfahrer_auth_require_csrf($auth['session']);
     return $auth;

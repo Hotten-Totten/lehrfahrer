@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/_audit_file_operation.php';
+require_once __DIR__ . '/_route_audit.php';
 require_once __DIR__ . '/_route_gpx.php';
 
 function lehrfahrer_route_bundle_target(string $companyId, string $city, string $lineFolder,
@@ -137,13 +137,7 @@ function lehrfahrer_route_bundle_save(array $auth, array $data, string $city, st
         $pdo, $auth, $companyId, $data, $city, $lineFolder, $categoryFolder, $fileBase, $forceOverwrite
     ): array {
         lehrfahrer_audit_file_recover_locked($pdo, $companyId, $directory);
-        $actor = LehrfahrerAuditActor::currentAccount($pdo);
-        if ($actor->contextType !== 'TENANT' || $actor->accountId !== $auth['account_id']
-            || $actor->membershipId !== $auth['membership_id'] || $actor->companyId !== $companyId
-            || !in_array('routes.write', lehrfahrer_account_tenant_capabilities(
-                $pdo, $actor->accountId, $actor->membershipId), true)) {
-            throw new RuntimeException('Account-Berechtigung fuer Routensave ist nicht mehr gueltig.');
-        }
+        $actor = lehrfahrer_route_audit_actor($auth, 'routes.write');
         return lehrfahrer_gtfs_work_with_inventory_lock($companyId, static function () use (
             $pdo, $actor, $companyId, $data, $city, $lineFolder, $categoryFolder, $fileBase, $forceOverwrite
         ): array {
@@ -203,9 +197,28 @@ function lehrfahrer_route_bundle_save(array $auth, array $data, string $city, st
 
             if ($files !== []) {
                 $kind = $oldRaw === null ? 'CREATE' : 'UPDATE';
-                $event = ['action' => 'ROUTE_SAVE', 'objectType' => 'ROUTE',
-                    'objectId' => lehrfahrer_audit_file_object_id($companyId, $reference), 'result' => 'SUCCESS'];
-                lehrfahrer_audit_file_mutate($pdo, $actor, $companyId, $reference, $kind, $files, $event);
+                $action = match ($changeType) {
+                    'NEW' => 'ROUTE_CREATE',
+                    'CHANGED' => 'ROUTE_CHANGE',
+                    default => 'ROUTE_ARTIFACT_REPAIR',
+                };
+                $event = lehrfahrer_route_audit_event($companyId, $reference, $action, 'routes.write');
+                $additionalEvents = [];
+                if ($inventoryBytes !== null) {
+                    $nextInventory = json_decode($inventoryBytes, true, 512, JSON_THROW_ON_ERROR);
+                    $work = $effective['meta']['gtfsWork'];
+                    $before = lehrfahrer_gtfs_work_unique_entry($inventory, (string)$work['routeId'], (string)$work['variantId']);
+                    $after = lehrfahrer_gtfs_work_unique_entry($nextInventory, (string)$work['routeId'], (string)$work['variantId']);
+                    if (($before['status'] ?? '') !== ($after['status'] ?? '')) {
+                        $statusAction = $changeType === 'CHANGED'
+                            && in_array($before['status'], ['GEPRUEFT', 'FREIGEGEBEN'], true)
+                            ? 'ROUTE_AUTO_DOWNGRADE' : 'ROUTE_STATUS_CHANGE';
+                        $additionalEvents[] = lehrfahrer_route_audit_event(
+                            $companyId, $reference, $statusAction, 'routes.write');
+                    }
+                }
+                lehrfahrer_audit_file_mutate($pdo, $actor, $companyId, $reference, $kind,
+                    $files, $event, null, $additionalEvents);
             }
             return ['city' => $city, 'lineFolder' => $lineFolder, 'categoryFolder' => $categoryFolder,
                 'fileBase' => $fileBase, 'file' => basename($path), 'changeType' => $changeType,

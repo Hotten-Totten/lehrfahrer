@@ -1,14 +1,10 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_tenant_route_storage.php';
-require_once __DIR__ . '/_audit_file_operation.php';
-$companyId = lehrfahrer_route_authorize('routes.maintain', true, true);
-$auditFileWriteLock = lehrfahrer_audit_file_write_lock($companyId);
-if (lehrfahrer_audit_file_any_blocked($companyId)) {
-    http_response_code(503);
-    echo json_encode(['ok' => false, 'error' => 'Route voruebergehend gesperrt.']);
-    exit;
-}
+require_once __DIR__ . '/_route_maintenance.php';
+$auth = lehrfahrer_route_require_account_write('routes.maintain');
+$companyId = lehrfahrer_route_company_id($auth);
+
 
 function collectJsonLinesForCity(string $cityDir, string $citySlug): array {
     $entries = lehrfahrer_route_safe_entries($cityDir);
@@ -73,130 +69,126 @@ function isLegacyFreeGhostStop(array $stop): bool {
     return (bool)preg_match('/^Freie Haltestelle\s+\d+$/i', $name);
 }
 
-$raw = file_get_contents('php://input');
-$input = json_decode($raw ?: '{}', true);
-if (!is_array($input)) {
-    $input = [];
-}
+try {
+    lehrfahrer_audit_file_lock($companyId, static function (string $directory) use ($auth, $companyId): void {
+        lehrfahrer_audit_file_recover_locked($auth['pdo'], $companyId, $directory);
 
-$requestedCity = strtolower(trim((string)($input['city'] ?? '')));
-$requestedCity = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $requestedCity);
-
-$linienBaseDir = lehrfahrer_tenant_area($companyId, 'lines');
-$citiesBaseDir = lehrfahrer_tenant_area($companyId, 'cities');
-
-if (!is_dir($linienBaseDir)) {
-    echo json_encode([
-        'ok' => true,
-        'totalLines' => 0,
-        'modifiedLineCount' => 0,
-        'modifiedStopCount' => 0,
-        'cityScope' => $requestedCity ?: 'alle',
-        'errors' => []
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-$cities = [];
-if ($requestedCity !== '') {
-    if (lehrfahrer_route_city_exists($companyId, $requestedCity)) {
-        $cities[] = $requestedCity;
-    } else {
-        http_response_code(404);
-        echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden']);
-        exit;
-    }
-} else {
-    foreach (lehrfahrer_route_safe_entries($citiesBaseDir) as $entry) {
-        if (lehrfahrer_route_city_exists($companyId, $entry)) {
-            $cities[] = $entry;
-        }
-    }
-}
-
-$totalLines = 0;
-$modifiedLineCount = 0;
-$modifiedStopCount = 0;
-$errors = [];
-
-foreach ($cities as $citySlug) {
-    $cityDir = lehrfahrer_route_line_city_path($companyId, $citySlug);
-    $lineEntries = collectJsonLinesForCity($cityDir, $citySlug);
-
-    foreach ($lineEntries as $entry) {
-        $totalLines++;
-
-        $jsonRaw = @file_get_contents($entry['jsonPath']);
-        $lineData = $jsonRaw ? @json_decode($jsonRaw, true) : null;
-
-        if (!is_array($lineData)) {
-            $errors[] = [
-                'file' => basename($entry['jsonPath']),
-                'error' => 'JSON ungueltig'
-            ];
-            continue;
+        $raw = file_get_contents('php://input');
+        $input = json_decode($raw ?: '{}', true);
+        if (!is_array($input)) {
+            $input = [];
         }
 
-        if (!isset($lineData['stops']) || !is_array($lineData['stops'])) {
-            continue;
+        $requestedCity = strtolower(trim((string)($input['city'] ?? '')));
+        $requestedCity = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $requestedCity);
+
+        $linienBaseDir = lehrfahrer_tenant_area($companyId, 'lines');
+        $citiesBaseDir = lehrfahrer_tenant_area($companyId, 'cities');
+
+        if (!is_dir($linienBaseDir)) {
+            echo json_encode([
+                'ok' => true,
+                'totalLines' => 0,
+                'modifiedLineCount' => 0,
+                'modifiedStopCount' => 0,
+                'cityScope' => $requestedCity ?: 'alle',
+                'errors' => []
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
         }
 
-        $lineChanged = false;
-        foreach ($lineData['stops'] as $idx => $stop) {
-            if (!is_array($stop)) {
-                continue;
+        $cities = [];
+        if ($requestedCity !== '') {
+            if (lehrfahrer_route_city_exists($companyId, $requestedCity)) {
+                $cities[] = $requestedCity;
+            } else {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Ort nicht gefunden']);
+                exit;
             }
-
-            $isGhost = !empty($stop['isGhostPoint']) || !empty($stop['isGhost']) || (($stop['sourceType'] ?? '') === 'ghost');
-            if ($isGhost) {
-                continue;
+        } else {
+            foreach (lehrfahrer_route_safe_entries($citiesBaseDir) as $entry) {
+                if (lehrfahrer_route_city_exists($companyId, $entry)) {
+                    $cities[] = $entry;
+                }
             }
+        }
 
-            if (!isLegacyFreeGhostStop($stop)) {
-                continue;
+        $totalLines = 0;
+        $modifiedLineCount = 0;
+        $modifiedStopCount = 0;
+        $errors = [];
+
+        foreach ($cities as $citySlug) {
+            $cityDir = lehrfahrer_route_line_city_path($companyId, $citySlug);
+            $lineEntries = collectJsonLinesForCity($cityDir, $citySlug);
+
+            foreach ($lineEntries as $entry) {
+                $totalLines++;
+
+                $jsonRaw = @file_get_contents($entry['jsonPath']);
+                $lineData = $jsonRaw ? @json_decode($jsonRaw, true) : null;
+
+                if (!is_array($lineData)) {
+                    $errors[] = [
+                        'file' => basename($entry['jsonPath']),
+                        'error' => 'JSON ungueltig'
+                    ];
+                    continue;
+                }
+
+                if (!isset($lineData['stops']) || !is_array($lineData['stops'])) {
+                    continue;
+                }
+
+                $lineChanged = false;
+                $lineModifiedStopCount = 0;
+                foreach ($lineData['stops'] as $idx => $stop) {
+                    if (!is_array($stop)) {
+                        continue;
+                    }
+
+                    $isGhost = !empty($stop['isGhostPoint']) || !empty($stop['isGhost']) || (($stop['sourceType'] ?? '') === 'ghost');
+                    if ($isGhost) {
+                        continue;
+                    }
+
+                    if (!isLegacyFreeGhostStop($stop)) {
+                        continue;
+                    }
+
+                    $lineData['stops'][$idx]['isGhostPoint'] = true;
+                    $lineData['stops'][$idx]['isGhost'] = true;
+                    $lineModifiedStopCount++;
+                    $lineChanged = true;
+                }
+
+                if (!$lineChanged) {
+                    continue;
+                }
+
+                try {
+                    lehrfahrer_route_maintenance_change($auth, $entry['jsonPath'], $lineData);
+                } catch (Throwable $error) {
+                    $errors[] = ['file' => basename($entry['jsonPath']), 'error' => 'Route konnte nicht sicher normalisiert werden.'];
+                    continue;
+                }
+                $modifiedStopCount += $lineModifiedStopCount;
+                $modifiedLineCount++;
             }
-
-            $lineData['stops'][$idx]['isGhostPoint'] = true;
-            $lineData['stops'][$idx]['isGhost'] = true;
-            $modifiedStopCount++;
-            $lineChanged = true;
         }
 
-        if (!$lineChanged) {
-            continue;
-        }
-
-        $encoded = json_encode(
-            $lineData,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        );
-
-        if ($encoded === false) {
-            $errors[] = [
-                'file' => basename($entry['jsonPath']),
-                'error' => 'JSON-Encoding fehlgeschlagen'
-            ];
-            continue;
-        }
-
-        $checkedJsonPath = lehrfahrer_route_checked_path($companyId, $entry['jsonPath']);
-        if (@file_put_contents($checkedJsonPath, $encoded) === false) {
-            $errors[] = [
-                'file' => basename($entry['jsonPath']),
-                'error' => 'Datei konnte nicht geschrieben werden'
-            ];
-            continue;
-        }
-
-        $modifiedLineCount++;
-    }
+        echo json_encode([
+            'ok' => true,
+            'totalLines' => $totalLines,
+            'modifiedLineCount' => $modifiedLineCount,
+            'modifiedStopCount' => $modifiedStopCount,
+            'cityScope' => $requestedCity ?: 'alle',
+            'errors' => array_slice($errors, 0, 50)
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    });
+} catch (Throwable $error) {
+    error_log('Audit-Routenwartung fehlgeschlagen.');
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'Routenwartung konnte nicht sicher ausgefuehrt werden.']);
 }
-
-echo json_encode([
-    'ok' => true,
-    'totalLines' => $totalLines,
-    'modifiedLineCount' => $modifiedLineCount,
-    'modifiedStopCount' => $modifiedStopCount,
-    'cityScope' => $requestedCity ?: 'alle',
-    'errors' => array_slice($errors, 0, 50)
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

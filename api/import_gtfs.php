@@ -12,6 +12,7 @@ require_once __DIR__ . '/_gtfs_route_assignment.php';
 require_once __DIR__ . '/_route_categories.php';
 require_once __DIR__ . '/_gtfs_route_creation.php';
 require_once __DIR__ . '/_audit_file_operation.php';
+require_once __DIR__ . '/_route_audit.php';
 $companyId = lehrfahrer_route_authorize('routes.import', true, true);
 define('LEHRFAHRER_GTFS_COMPANY_ID', $companyId);
 
@@ -622,6 +623,10 @@ function gtfs_candidate_status(): void {
 }
 
 function gtfs_candidate_selection(): void {
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     gtfs_require_cottbus_change_scope();
     $candidateId = trim(strval($_POST['candidateId'] ?? ''));
     $line = trim(strval($_POST['line'] ?? ''));
@@ -674,61 +679,71 @@ function gtfs_candidate_preview(): void {
 
 function gtfs_candidate_create_routes(): void {
     if (strval($_POST['confirm'] ?? '') !== '1') gtfs_error(400, 'Explizite Bestaetigung fehlt.');
-    $writeCompany = lehrfahrer_route_authorize('routes.write', true, true);
+    $writeAuth = lehrfahrer_route_require_account_write('routes.write');
+    $writeCompany = lehrfahrer_route_company_id($writeAuth);
     if (!hash_equals(LEHRFAHRER_GTFS_COMPANY_ID, $writeCompany)) gtfs_error(403, 'Falscher Gesellschaftskontext.');
     try {
-    [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
-    $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
-    $assignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
-    $fingerprint = lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments);
-    if (!hash_equals($fingerprint, strval($_POST['planFingerprint'] ?? ''))) {
-        gtfs_error(409, 'Vorbereitete Routenauswahl wurde geaendert; Vorschau neu laden.');
-    }
-    $keys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
-    $indexRows = lehrfahrer_gtfs_creation_zip_rows(gtfs_candidate_dir() . '/candidate.zip', '16', $keys);
-    $categories = lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes);
-    $plans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $routes, $categories, $sha, $indexRows);
-    $cityRoot = lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus');
-    $writes = [];
-    foreach ($plans as $plan) {
-        $data = $plan['data'];
-        $writes[] = ['path' => lehrfahrer_route_file(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus',
-            $data['fileBase'], 'json', $data['lineFolder'], $data['categoryFolder'], true), 'data' => $data];
-    }
-    lehrfahrer_gtfs_creation_install($cityRoot, $writes, static function () use ($cityRoot, $plans, $sha, $fingerprint): void {
-        $fresh = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
-        if (!hash_equals($sha, $fresh['manifest']['checkedSourceSha256'])) {
-            throw new RuntimeException('GTFS-Kandidat wurde vor dem Schreiben gewechselt.');
-        }
-        $marked = lehrfahrer_gtfs_route_selection_valid($fresh['analysis'],
-            lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha));
-        $freshPreview = lehrfahrer_gtfs_preview_line($fresh['analysis'], $marked,
-            lehrfahrer_gtfs_preview_route_files($cityRoot, '16'), '16');
-        $freshAssignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
-        if (!hash_equals($fingerprint, lehrfahrer_gtfs_creation_fingerprint($sha, $freshPreview, $freshAssignments))) {
-            throw new RuntimeException('Markierung oder Routenzuordnung wurde vor dem Schreiben geaendert.');
-        }
-        $existing = lehrfahrer_gtfs_preview_route_files($cityRoot, '16');
-        foreach ($plans as $plan) foreach ($existing as $route) {
-            if (strcasecmp($plan['routeNumber'], strval($route['routeNumber'] ?? '')) === 0) {
-                throw new RuntimeException('Route ' . $plan['routeNumber'] . ' existiert bereits; nichts wurde ueberschrieben.');
+        lehrfahrer_audit_file_lock($writeCompany, static function (string $directory) use ($writeAuth, $writeCompany): void {
+            lehrfahrer_audit_file_recover_locked($writeAuth['pdo'], $writeCompany, $directory);
+            [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
+            $preview = lehrfahrer_gtfs_preview_line($ready['analysis'], $selected, $routes, '16');
+            $assignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
+            $fingerprint = lehrfahrer_gtfs_creation_fingerprint($sha, $preview, $assignments);
+            if (!hash_equals($fingerprint, strval($_POST['planFingerprint'] ?? ''))) {
+                gtfs_error(409, 'Vorbereitete Routenauswahl wurde geaendert; Vorschau neu laden.');
             }
-        }
-    }, null, static function () use ($writeCompany): void {
-        if (lehrfahrer_route_city_exists($writeCompany, 'cottbus')) return;
-        if (!hash_equals($writeCompany, lehrfahrer_route_authorize('cities.manage', true, true))) {
-            throw new RuntimeException('Ortsverwaltung hat einen anderen Gesellschaftskontext.');
-        }
-        lehrfahrer_route_register_city($writeCompany, 'Cottbus');
-    });
-    gtfs_reply(['ok' => true, 'created' => array_map(static fn(array $plan): array => [
-        'line' => $plan['line'], 'routeNumber' => $plan['routeNumber']], $plans)]);
+            $keys = array_fill_keys(array_column($preview['variants'], 'selectionKey'), true);
+            $indexRows = lehrfahrer_gtfs_creation_zip_rows(gtfs_candidate_dir() . '/candidate.zip', '16', $keys);
+            $categories = lehrfahrer_route_categories_read(gtfs_route_categories_path(), $routes);
+            $plans = lehrfahrer_gtfs_creation_plans($preview, $assignments, $routes, $categories, $sha, $indexRows);
+            $cityRoot = lehrfahrer_route_line_city_path(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus');
+            $writes = [];
+            foreach ($plans as $plan) {
+                $data = $plan['data'];
+                $writes[] = ['path' => lehrfahrer_route_file(LEHRFAHRER_GTFS_COMPANY_ID, 'cottbus',
+                    $data['fileBase'], 'json', $data['lineFolder'], $data['categoryFolder'], true), 'data' => $data];
+            }
+            lehrfahrer_gtfs_creation_install($cityRoot, $writes, static function () use ($cityRoot, $plans, $sha, $fingerprint): void {
+                $fresh = lehrfahrer_gtfs_candidate_preflight(gtfs_candidate_dir(), gtfs_server_zip_path(), gtfs_index_path());
+                if (!hash_equals($sha, $fresh['manifest']['checkedSourceSha256'])) {
+                    throw new RuntimeException('GTFS-Kandidat wurde vor dem Schreiben gewechselt.');
+                }
+                $marked = lehrfahrer_gtfs_route_selection_valid($fresh['analysis'],
+                    lehrfahrer_gtfs_route_selection_read(gtfs_route_selection_dir(), $sha));
+                $freshPreview = lehrfahrer_gtfs_preview_line($fresh['analysis'], $marked,
+                    lehrfahrer_gtfs_preview_route_files($cityRoot, '16'), '16');
+                $freshAssignments = lehrfahrer_gtfs_assignment_read(gtfs_route_assignment_dir(), $sha);
+                if (!hash_equals($fingerprint, lehrfahrer_gtfs_creation_fingerprint($sha, $freshPreview, $freshAssignments))) {
+                    throw new RuntimeException('Markierung oder Routenzuordnung wurde vor dem Schreiben geaendert.');
+                }
+                $existing = lehrfahrer_gtfs_preview_route_files($cityRoot, '16');
+                foreach ($plans as $plan) foreach ($existing as $route) {
+                    if (strcasecmp($plan['routeNumber'], strval($route['routeNumber'] ?? '')) === 0) {
+                        throw new RuntimeException('Route ' . $plan['routeNumber'] . ' existiert bereits; nichts wurde ueberschrieben.');
+                    }
+                }
+            }, null, static function () use ($writeCompany): void {
+                if (lehrfahrer_route_city_exists($writeCompany, 'cottbus')) return;
+                if (!hash_equals($writeCompany, lehrfahrer_route_authorize('cities.manage', true, true))) {
+                    throw new RuntimeException('Ortsverwaltung hat einen anderen Gesellschaftskontext.');
+                }
+                lehrfahrer_route_register_city($writeCompany, 'Cottbus');
+            }, static function (array $batch) use ($writeAuth): void {
+                lehrfahrer_route_audit_create_batch($writeAuth, $batch);
+            });
+            gtfs_reply(['ok' => true, 'created' => array_map(static fn(array $plan): array => [
+                'line' => $plan['line'], 'routeNumber' => $plan['routeNumber']], $plans)]);
+        });
     } catch (InvalidArgumentException | RuntimeException $error) {
         gtfs_error(409, $error->getMessage());
     }
 }
 
 function gtfs_candidate_assignment(): void {
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     [$ready, $sha, $selected, $routes] = gtfs_pilot_context();
     $key = trim(strval($_POST['variantKey'] ?? ''));
     try { $id = lehrfahrer_gtfs_route_selection_id('16', $key); }
@@ -747,6 +762,10 @@ function gtfs_candidate_assignment(): void {
 }
 
 function gtfs_candidate_category_add(): void {
+    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
+    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
+        gtfs_error(503, 'Route voruebergehend gesperrt.');
+    }
     gtfs_pilot_context();
     try { $categories = lehrfahrer_route_categories_add(gtfs_route_categories_path(), strval($_POST['name'] ?? '')); }
     catch (InvalidArgumentException $error) { gtfs_error(400, $error->getMessage()); }
@@ -884,17 +903,14 @@ function gtfs_work_open(): void {
 }
 
 function gtfs_work_status(): void {
+    $auth = lehrfahrer_route_require_account_write('routes.import');
     gtfs_require_cottbus_change_scope();
-    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
-    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
-        gtfs_error(503, 'Route voruebergehend gesperrt.');
-    }
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     $status = strtoupper(trim(strval($_POST['status'] ?? '')));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
     try {
-        $inventory = lehrfahrer_gtfs_work_set_status(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId, $status);
+        $inventory = lehrfahrer_route_audit_status($auth, $routeId, $variantId, $status);
     } catch (InvalidArgumentException $error) {
         gtfs_error(400, 'Ungueltiger Freigabestatus.');
     } catch (RuntimeException $error) {
@@ -911,20 +927,13 @@ function gtfs_work_status(): void {
 }
 
 function gtfs_work_revoke(): void {
+    $auth = lehrfahrer_route_require_account_write('routes.import');
     gtfs_require_cottbus_change_scope();
-    $auditFileWriteLock = lehrfahrer_audit_file_write_lock(LEHRFAHRER_GTFS_COMPANY_ID);
-    if (lehrfahrer_audit_file_any_blocked(LEHRFAHRER_GTFS_COMPANY_ID)) {
-        gtfs_error(503, 'Route voruebergehend gesperrt.');
-    }
-    $auth = lehrfahrer_api_require_session();
-    lehrfahrer_auth_require_capability($auth, 'routes.import');
-    lehrfahrer_auth_require_same_origin();
-    lehrfahrer_auth_require_csrf($auth['session']);
     $routeId = trim(strval($_POST['routeId'] ?? ''));
     $variantId = trim(strval($_POST['variantId'] ?? ''));
     if ($routeId === '' || $variantId === '') gtfs_error(400, 'routeId oder variantId fehlt.');
     try {
-        $inventory = lehrfahrer_gtfs_work_revoke_release(LEHRFAHRER_GTFS_COMPANY_ID, $routeId, $variantId);
+        $inventory = lehrfahrer_route_audit_status($auth, $routeId, $variantId, 'IN_BEARBEITUNG', true);
     } catch (RuntimeException $error) {
         gtfs_error(409, $error->getMessage());
     }
