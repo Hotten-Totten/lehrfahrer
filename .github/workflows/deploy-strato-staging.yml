@@ -122,14 +122,15 @@ jobs:
           done
           test "$(awk '{print $1}' /tmp/live-before.sha256 | sort -u | wc -l)" -eq 1
           expected_version_sha="$(head -n 1 /tmp/live-before.sha256 | awk '{print $1}')"
-          printf '%s\n' '<?php echo json_encode(array("phpVersion"=>PHP_VERSION,"sapi"=>PHP_SAPI)), "\n";' \
-            | sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
-              -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" \
-              'php -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin'
+          cli_binary="$(sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+            -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" 'for p in /opt/RZphp*/bin/php-cli /opt/RZphp*/bin/php /usr/bin/php-cli /usr/bin/php; do if [ -x "$p" ] && "$p" -v 2>/dev/null | head -n 1 | grep -q "(cli)"; then if "$p" -d auto_prepend_file= -d auto_append_file= -r "exit(PHP_VERSION_ID >= 80100 ? 0 : 1);"; then printf "%s" "$p"; break; fi; fi; done')"
+          if [[ ! "$cli_binary" =~ ^/opt/RZphp[0-9]+/bin/php(-cli)?$ && ! "$cli_binary" =~ ^/usr/bin/php(-cli)?$ ]]; then
+            echo SUPPORTED_READONLY_PHP_CLI_UNAVAILABLE; exit 2
+          fi
           remote_path="${TARGET_PATH#/}"
           if [ -z "$remote_path" ]; then remote_path=.; fi
           printf -v quoted_path '%q' "$remote_path"
-          remote_command="LEHRFAHRER_STREAMED_LIVE_READONLY=1 php -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin -- $quoted_path $expected_version_sha"
+          remote_command="LEHRFAHRER_STREAMED_LIVE_READONLY=1 $cli_binary -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin -- $quoted_path $expected_version_sha"
           set +e
           sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" "$remote_command" \

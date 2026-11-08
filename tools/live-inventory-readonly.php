@@ -4,7 +4,7 @@ declare(strict_types=1);
 function live_inventory(string $root, ?string $expectedVersionSha256=null): array {
     $web = realpath($root);
     if (!$web || !is_dir($web) || str_contains(strtolower(basename($web)), 'staging')) throw new RuntimeException('PUBLIC_ROOT_UNCLEAR');
-    $report = ['readOnly'=>true, 'releaseReady'=>false, 'findings'=>[],
+    $report = ['readOnly'=>true, 'releaseReady'=>false, 'inspectionPhpVersion'=>PHP_VERSION,'inspectionSapi'=>PHP_SAPI,'findings'=>[],
         'publicRootSha256'=>hash('sha256',$web), 'files'=>[]];
     foreach (['VERSION','index.php','api/_control_database.php','api/_account_auth.php','.user.ini','.htaccess'] as $file) {
         $path=$web.'/'.$file;
