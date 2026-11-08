@@ -58,6 +58,7 @@ const BUS_REROUTE_VALHALLA_URL = 'https://valhalla1.openstreetmap.de';
 let navOffRouteActive = false;
 let navRejoinBlend = 0;
 let navOffRouteEnterFixCount = 0;
+let navRouteRecoveryCandidate = null;
 let navRejoinFixCount = 0;
 let navLastRouteDistanceM = null;
 let navOffRouteAlertTimer = null;
@@ -3760,6 +3761,7 @@ function setConfirmedNavOffRoute(active, announce = false) {
   }
   navRejoinBlend = 0;
   navOffRouteEnterFixCount = 0;
+  navRouteRecoveryCandidate = null;
   navRejoinFixCount = 0;
   syncNavOffRouteUi(active && announce);
   persistActiveDriveState(true);
@@ -3843,6 +3845,7 @@ function startNavigation(options = {}) {
   navOffRouteActive = restoredNavigation?.offRouteActive === true;
   navRejoinBlend = 0;
   navOffRouteEnterFixCount = 0;
+  navRouteRecoveryCandidate = null;
   navRejoinFixCount = 0;
   navLastRouteDistanceM = Number.isFinite(restoredNavigation?.offRouteDistanceM)
     ? restoredNavigation.offRouteDistanceM
@@ -4109,6 +4112,7 @@ function stopNavigation() {
   navOffRouteActive = false;
   navRejoinBlend = 0;
   navOffRouteEnterFixCount = 0;
+  navRouteRecoveryCandidate = null;
   navRejoinFixCount = 0;
   navLastRouteDistanceM = null;
   navLastRawGpsPos = null;
@@ -4659,12 +4663,40 @@ function lerpValue(a, b, t) {
   return a + (b - a) * t;
 }
 
+// Reacquire a later route section only from coherent raw fixes; the display filter is not evidence.
+function findNavRouteRecovery(gpsLat, gpsLon, pts, accuracyM, localSnap) {
+  const reset = () => {
+    if (navRouteRecoveryCandidate && navOffRouteActive) navRejoinFixCount = 0;
+    navRouteRecoveryCandidate = null;
+    return null;
+  };
+  const accurate = Number.isFinite(accuracyM) && accuracyM >= 0 && accuracyM <= NAV_OFF_ROUTE_MAX_ACCURACY_M;
+  const thresholdM = NAV_OFF_ROUTE_ENTER_M + Math.min(20, Math.max(0, accuracyM || 0) * 0.5);
+  const needsRecovery = localSnap && (navOffRouteActive
+    ? localSnap.distanceM > NAV_REJOIN_START_M : localSnap.distanceM >= thresholdM);
+  if (!accurate || !Number.isFinite(gpsLat) || !Number.isFinite(gpsLon)
+      || !localSnap || !Number.isFinite(localSnap.distanceM) || !needsRecovery) return reset();
+  const candidate = snapGpsToRoute(gpsLat, gpsLon, pts, navNearestIdx, pts.length, false);
+  if (!candidate || !Number.isFinite(candidate.distanceM) || candidate.distanceM > NAV_REJOIN_START_M
+      || candidate.index < navProgressIdx || candidate.distanceM >= localSnap.distanceM) return reset();
+  const previous = navRouteRecoveryCandidate;
+  const now = Date.now();
+  // A signal gap restarts confirmation; old fixes are not fresh evidence.
+  const coherent = previous && previous.points === pts && now >= previous.at && now - previous.at <= 10000 && (
+    Number.isFinite(previous.progressM) && Number.isFinite(candidate.routeProgressM)
+      ? Math.abs(previous.progressM - candidate.routeProgressM) <= 100
+      : Math.abs(previous.index - candidate.index) <= Math.max(2, NAV_SNAP_WINDOW)
+  );
+  if (!coherent && navOffRouteActive) navRejoinFixCount = 0;
+  const fixes = coherent ? previous.fixes + 1 : 1;
+  navRouteRecoveryCandidate = { points: pts, index: candidate.index, progressM: candidate.routeProgressM, fixes, at: now };
+  return { snap: candidate, confirmed: fixes >= NAV_REJOIN_FIXES };
+}
+
 function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gpsLat = displayLat, gpsLon = displayLon) {
-  const snap = snapGpsToRoute(displayLat, displayLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
-  // Die Zustandsentscheidung darf weder von der geglaetteten Position noch
-  // vom Route-Lock abhaengen. Dafuer wird der echte Fix separat gegen den
-  // aktuellen Routenkorridor projiziert, ohne global zu einer weit entfernten
-  // Stelle derselben Route zu springen.
+  let snap = snapGpsToRoute(displayLat, displayLon, pts, navNearestIdx, NAV_SNAP_WINDOW, false);
+  // Erst den aktuellen Korridor pruefen. Ein veralteter Index wird nur nach
+  // mehreren zusammenpassenden Raw-GPS-Fixes auf einem spaeteren Abschnitt ersetzt.
   const rawGpsSnap = snapGpsToRoute(
     gpsLat,
     gpsLon,
@@ -4673,6 +4705,20 @@ function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gps
     NAV_SNAP_WINDOW,
     false
   );
+  const recovery = findNavRouteRecovery(gpsLat, gpsLon, pts, accuracyM, rawGpsSnap);
+  // OFF-Route already has its three-fix rejoin gate. While ON, keep local
+  // deviation evidence until the recovery candidate itself is confirmed.
+  let stateSnap = recovery && (navOffRouteActive || recovery.confirmed) ? recovery.snap : rawGpsSnap;
+  const rawReliable = !Number.isFinite(accuracyM) || (accuracyM >= 0 && accuracyM <= NAV_OFF_ROUTE_MAX_ACCURACY_M);
+  // Dense geometry may advance by many vertices within a few metres. Preserve
+  // normal short forward movement, but never use proximity to skip a long loop.
+  if (!navOffRouteActive && rawReliable && rawGpsSnap && rawGpsSnap.index - navNearestIdx >= NAV_SNAP_WINDOW) {
+    const nearby = snapGpsToRoute(gpsLat, gpsLon, pts, navNearestIdx, NAV_SNAP_WINDOW);
+    const advanceM = nearby ? nearby.routeProgressM - navCumDists[navNearestIdx] : NaN;
+    if (nearby && Number.isFinite(advanceM) && advanceM >= 0 && advanceM <= 100
+        && nearby.index >= navProgressIdx && nearby.distanceM <= NAV_REJOIN_START_M
+        && nearby.distanceM < rawGpsSnap.distanceM) stateSnap = nearby;
+  }
   if (!snap) {
     noteNavRouteState(navOffRouteActive ? 'OFF' : 'ON', navRejoinBlend);
     return {
@@ -4687,9 +4733,13 @@ function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gps
     };
   }
 
-  if (rawGpsSnap) updateNavOffRouteState(rawGpsSnap.distanceM, accuracyM);
+  if (stateSnap) updateNavOffRouteState(stateSnap.distanceM, accuracyM);
   const offRouteSuspected = !navOffRouteActive && navOffRouteEnterFixCount > 0;
 
+  const onRoute = !navOffRouteActive && !offRouteSuspected;
+  if (onRoute && rawReliable && stateSnap) {
+    snap = snapGpsToRoute(displayLat, displayLon, pts, stateSnap.index, NAV_SNAP_WINDOW, false) || snap;
+  }
   let trackedLat = displayLat;
   let trackedLon = displayLon;
   let snapAppliedNow = false;
@@ -4710,22 +4760,23 @@ function resolveNavTrackPoint(displayLat, displayLon, pts, accuracyM = null, gps
 
   let reportedIdx = navNearestIdx;
   if (!navOffRouteActive && !offRouteSuspected) {
-    reportedIdx = snap.index;
-    navNearestIdx = snap.index;
-    navProgressIdx = Math.max(navProgressIdx, snap.index);
+    // A lagging smoothed marker must not undo a confirmed raw-GPS recovery.
+    reportedIdx = rawReliable && stateSnap ? stateSnap.index : navNearestIdx;
+    navNearestIdx = reportedIdx;
+    navProgressIdx = Math.max(navProgressIdx, reportedIdx);
   }
 
   noteNavRouteState(routeState, navRejoinBlend);
-  noteNavSnap(rawGpsSnap ? rawGpsSnap.distanceM : snap.distanceM, snapAppliedNow);
+  noteNavSnap(stateSnap ? stateSnap.distanceM : snap.distanceM, snapAppliedNow);
 
   return {
     lat: trackedLat,
     lon: trackedLon,
     index: reportedIdx,
-    routeHeading: snap.routeHeading,
-    routeProgressM: snap.routeProgressM,
+    routeHeading: onRoute && rawReliable && stateSnap ? stateSnap.routeHeading : snap.routeHeading,
+    routeProgressM: onRoute && rawReliable && stateSnap ? stateSnap.routeProgressM : snap.routeProgressM,
     routeState,
-    snapDistanceM: rawGpsSnap ? rawGpsSnap.distanceM : snap.distanceM,
+    snapDistanceM: stateSnap ? stateSnap.distanceM : snap.distanceM,
     snapApplied: snapAppliedNow
   };
 }

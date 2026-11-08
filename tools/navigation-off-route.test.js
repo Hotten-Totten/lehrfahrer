@@ -109,6 +109,7 @@ test('mehrere Raw-GPS-Fixes auf spaeterem Routenteil bleiben trotz veraltetem In
     NAV_OFF_ROUTE_ENTER_FIXES: 3,
     NAV_REJOIN_START_M: 25,
     NAV_REJOIN_FIXES: 3,
+    navRouteRecoveryCandidate: null,
     navNearestIdx: 20,
     navProgressIdx: 20,
     navCumDists: [],
@@ -170,6 +171,7 @@ test('Rejoin erfordert weiter drei Fixes, auch wenn der Routenindex veraltet ist
     NAV_OFF_ROUTE_ENTER_FIXES: 3,
     NAV_REJOIN_START_M: 25,
     NAV_REJOIN_FIXES: 3,
+    navRouteRecoveryCandidate: null,
     navNearestIdx: 0,
     navProgressIdx: 0,
     navCumDists: [],
@@ -212,4 +214,122 @@ test('Rejoin erfordert weiter drei Fixes, auch wenn der Routenindex veraltet ist
   assert.equal(result.routeState, 'ON');
   assert.equal(sandbox.navOffRouteActive, false);
   assert.equal(sandbox.navNearestIdx, 80);
+});
+
+function recoveryHarness({hint=0,off=true}={}) {
+  const sandbox={console:{info(){}},NAV_SNAP_WINDOW:2,NAV_SNAP_MAX_M:120,NAV_OFF_ROUTE_MAX_ACCURACY_M:50,
+    NAV_OFF_ROUTE_ENTER_M:50,NAV_OFF_ROUTE_ENTER_FIXES:3,NAV_REJOIN_START_M:25,NAV_REJOIN_FIXES:3,
+    navNearestIdx:hint,navProgressIdx:hint,navCumDists:[],navOffRouteActive:off,navOffRouteEnterFixCount:0,
+    navRejoinFixCount:0,navRouteRecoveryCandidate:null,navLastRouteDistanceM:null,navRejoinBlend:0,timeMs:0,
+    noteNavPerfFallback(){},noteNavRouteState(){},noteNavSnap(){},transitions:[]};
+  sandbox.Date={now:()=>sandbox.timeMs};
+  // Mirror only the UI-independent transition effects.
+  sandbox.setConfirmedNavOffRoute=active=>{sandbox.navOffRouteActive=active;sandbox.navOffRouteEnterFixCount=0;sandbox.navRejoinFixCount=0;sandbox.navRouteRecoveryCandidate=null;sandbox.transitions.push(active);};
+  vm.createContext(sandbox);
+  vm.runInContext([
+    functionSource('navGetLatLon','haversineM'),functionSource('haversineM','bearingDeg'),
+    functionSource('bearingDeg','buildNavCumDists'),functionSource('buildNavCumDists','detectNavRoundabouts'),
+    functionSource('navGetRouteHeadingAtIndex','navGetStableRouteTangent'),functionSource('findNearestNavIdx','snapGpsToRoute'),
+    functionSource('snapGpsToRoute','lerpValue'),functionSource('lerpValue','resolveNavTrackPoint'),
+    functionSource('resolveNavTrackPoint','getTurnInfo'),functionSource('updateNavOffRouteState','startNavigation')
+  ].join('\n'),sandbox);
+  sandbox.route=Array.from({length:220},(_,index)=>[51+index*0.0001,14]);
+  sandbox.navCumDists=sandbox.buildNavCumDists(sandbox.route);
+  sandbox.fix=(index,accuracy=8,displayIndex=index)=>sandbox.resolveNavTrackPoint(...sandbox.route[displayIndex],sandbox.route,accuracy,...sandbox.route[index]);
+  return sandbox;
+}
+
+test('Wiedererkennung nach veraltetem Index bleibt bis zum dritten Fix bestaetigungsbeduerftig',()=>{
+ const h=recoveryHarness({off:false});
+ assert.equal(h.fix(80).routeState,'SUSPECTED');assert.equal(h.navNearestIdx,0);
+ assert.equal(h.fix(80).routeState,'SUSPECTED');assert.equal(h.navNearestIdx,0);
+ const r=h.fix(80);assert.equal(r.routeState,'ON');assert.equal(h.navNearestIdx,80);assert.equal(h.navProgressIdx,80);
+ assert.deepEqual(h.transitions,[]);assert.equal(h.navOffRouteEnterFixCount,0);
+});
+
+test('Glaettung auf altem Abschnitt kann bestaetigte Wiedererkennung nicht zuruecksetzen',()=>{
+ const h=recoveryHarness();
+ for(let i=0;i<3;i++)h.fix(80,8,0);
+ assert.equal(h.navOffRouteActive,false);assert.equal(h.navNearestIdx,80);
+ for(let i=0;i<4;i++){
+  const r=h.fix(80,8,0);assert.equal(r.routeState,'ON');assert.equal(r.index,80);assert.equal(h.navNearestIdx,80);
+  assert.equal(r.routeProgressM,h.navCumDists[80]);
+ }
+ assert.deepEqual(h.transitions,[false]);
+});
+
+test('Ein GPS-Ausreisser springt nicht auf einen spaeteren Streckenabschnitt',()=>{
+ const h=recoveryHarness({off:false});h.fix(80);h.fix(0);
+ assert.equal(h.navNearestIdx,0);assert.equal(h.navRouteRecoveryCandidate,null);assert.equal(h.navOffRouteEnterFixCount,0);
+ assert.equal(h.fix(80).routeState,'SUSPECTED');assert.equal(h.navNearestIdx,0);
+});
+
+test('Wechselnde weit auseinanderliegende Rueckkehrpunkte werden nicht zusammengezaehlt',()=>{
+ const h=recoveryHarness();
+ for(const index of [80,170,80,170]){h.fix(index);assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,1);assert.equal(h.navNearestIdx,0);}
+ h.fix(170);assert.equal(h.navOffRouteActive,true);
+ h.fix(170);assert.equal(h.navOffRouteActive,false);assert.equal(h.navNearestIdx,170);
+});
+
+test('Unzuverlaessige und unbekannte GPS-Genauigkeit bestaetigen keine globale Wiedererkennung',()=>{
+ const h=recoveryHarness();h.fix(80);h.fix(80);h.fix(80,60);
+ assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,0);assert.equal(h.navRouteRecoveryCandidate,null);
+ h.fix(80,null);assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,0);
+ h.fix(80);h.fix(80);assert.equal(h.navOffRouteActive,true);
+ h.fix(80);assert.equal(h.navOffRouteActive,false);
+});
+
+test('Globale Rueckkehr und lokaler Korridor muessen jeweils drei zusammenpassende Fixes haben',()=>{
+ const h=recoveryHarness();h.fix(80);h.fix(80);
+ h.fix(0);assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,1);
+ h.fix(0);assert.equal(h.navOffRouteActive,true);
+ h.fix(0);assert.equal(h.navOffRouteActive,false);assert.equal(h.navNearestIdx,0);
+});
+
+test('Ein bereits abgefahrener entfernter Abschnitt loest keinen globalen Ruecksprung aus',()=>{
+ const h=recoveryHarness({hint:150});
+ for(let i=0;i<4;i++)h.fix(0);
+ assert.equal(h.navOffRouteActive,true);assert.equal(h.navNearestIdx,150);assert.equal(h.navProgressIdx,150);
+ assert.equal(h.navRouteRecoveryCandidate,null);
+});
+
+test('Geglaettete Position auf Route verdeckt echte Raw-GPS-Abweichung nicht',()=>{
+ const h=recoveryHarness({hint:20,off:false});
+ let r;for(let i=0;i<3;i++)r=h.resolveNavTrackPoint(...h.route[20],h.route,8,h.route[20][0],14.005);
+ assert.equal(h.navOffRouteActive,true);assert.equal(r.routeState,'OFF');assert.equal(r.snapApplied,false);assert.equal(h.navNearestIdx,20);
+});
+
+test('Spaeterer langer Abschnitt wird als Segment erkannt statt nur anhand seiner Stuetzpunkte',()=>{
+ const h=recoveryHarness({hint:20,off:false});
+ h.route=Array.from({length:61},(_,index)=>[51+index*0.0001,14]);
+ h.route.push([51.006,14.01],[51.002,14.01],[51.002,13.99]);h.navCumDists=h.buildNavCumDists(h.route);
+ let r;for(let i=0;i<3;i++)r=h.resolveNavTrackPoint(51.002,14.001,h.route,8);
+ assert.equal(r.routeState,'ON');assert.ok(r.snapDistanceM<1);assert.ok(h.navNearestIdx>=61);
+});
+
+test('Nahe spaetere Schleife verdraengt den weiterhin passenden aktuellen Korridor nicht',()=>{
+ const h=recoveryHarness({hint:20,off:false});
+ h.route.push([51.002,14]);h.navCumDists=h.buildNavCumDists(h.route);
+ for(let i=0;i<4;i++)h.fix(20);
+ assert.equal(h.navNearestIdx,20);assert.equal(h.navRouteRecoveryCandidate,null);assert.deepEqual(h.transitions,[]);
+});
+
+test('Routenwechsel verwirft eine bereits angefangene Wiedererkennung',()=>{
+ const h=recoveryHarness();h.fix(80);h.fix(80);
+ h.route=h.route.map(p=>[...p]);h.navCumDists=h.buildNavCumDists(h.route);
+ h.fix(80);assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,1);
+});
+
+test('Eine laengere GPS-Pause startet die Wiedererkennungsbestaetigung neu',()=>{
+ const h=recoveryHarness();h.fix(80);h.timeMs=1000;h.fix(80);
+ h.timeMs=20000;h.fix(80);assert.equal(h.navOffRouteActive,true);assert.equal(h.navRejoinFixCount,1);
+ h.timeMs=21000;h.fix(80);assert.equal(h.navOffRouteActive,true);
+ h.timeMs=22000;h.fix(80);assert.equal(h.navOffRouteActive,false);
+});
+
+for(const accuracy of [8,null])test(`Dichte Routenpunkte erhalten normalen Fortschritt (${accuracy===null?'Simulation':'GPS'})`,()=>{
+ const h=recoveryHarness({off:false});h.route=Array.from({length:1001},(_,index)=>[51+index*0.000001,14]);
+ h.navCumDists=h.buildNavCumDists(h.route);
+ for(const index of [80,160,240,320,400]){const r=h.fix(index,accuracy);assert.equal(r.routeState,'ON');assert.equal(r.index,index);}
+ assert.deepEqual(h.transitions,[]);
 });
