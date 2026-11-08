@@ -17,8 +17,11 @@ function driverText($value, int $maxLength = 200): string {
 
 function loadDrivers(string $file): array {
     if (!is_file($file)) return [];
-    $data = json_decode((string)@file_get_contents($file), true);
-    return is_array($data) ? array_values(array_filter($data, 'is_array')) : [];
+    $data = json_decode((string)file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+    if (!is_array($data) || !array_is_list($data) || count(array_filter($data, 'is_array')) !== count($data)) {
+        throw new RuntimeException('Fahrerliste ungueltig.');
+    }
+    return $data;
 }
 
 function driverRoles($value): array {
@@ -37,24 +40,7 @@ function normalizeDriver(array $driver): array {
     return $driver;
 }
 
-function saveDrivers(string $companyId, string $directory, string $file, array $drivers): bool {
-    if (!is_dir($directory)) return false;
-    $json = json_encode(array_values($drivers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) return false;
-    $tempFile = $file . '.tmp';
-    lehrfahrer_tenant_path($companyId, 'drivers', basename($tempFile));
-    if (file_put_contents($tempFile, $json, LOCK_EX) === false) return false;
-    if (@rename($tempFile, $file)) return true;
-    $written = file_put_contents($file, $json, LOCK_EX) !== false;
-    @unlink($tempFile);
-    return $written;
-}
-
-if (!is_file($dataFile) && !saveDrivers($companyId, $dataDir, $dataFile, [])) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Fahrerliste konnte nicht angelegt werden.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+lehrfahrer_business_request($companyId, $driverMethod !== 'GET', static function () use ($companyId, $driverMethod, $dataFile, $dataDir): void {
 $drivers = array_map('normalizeDriver', loadDrivers($dataFile));
 if ($driverMethod === 'GET') {
     usort($drivers, static function (array $a, array $b): int {
@@ -71,7 +57,7 @@ $action = driverText($input['action'] ?? '', 30);
 $id = driverText($input['id'] ?? '', 80);
 $index = null;
 foreach ($drivers as $driverIndex => $driver) {
-    if (($driver['id'] ?? '') === $id) {
+    if (($driver['id'] ?? '') === $id && ($input['action'] ?? '') !== 'create') {
         $index = $driverIndex;
         break;
     }
@@ -104,6 +90,14 @@ if ($action === 'create' || $action === 'update') {
         'created' => $existing['created'] ?? $now,
         'updated' => $now
     ];
+    if ($index !== null) {
+        $before = $existing; $after = $record;
+        unset($before['updated'], $after['updated']);
+        if ($before == $after) {
+            echo json_encode(['ok' => true, 'driver' => $existing], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+    }
     if ($index === null) $drivers[] = $record;
     else $drivers[$index] = $record;
 } elseif ($action === 'toggle') {
@@ -130,10 +124,11 @@ if ($action === 'create' || $action === 'update') {
     exit;
 }
 
-if (!saveDrivers($companyId, $dataDir, $dataFile, $drivers)) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Fahrerliste konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+$eventAction = match ($action) { 'create' => 'DRIVER_CREATE', 'update' => 'DRIVER_CHANGE',
+    'toggle' => 'DRIVER_STATUS_CHANGE', 'delete' => 'DRIVER_DELETE' };
+lehrfahrer_business_commit($companyId, 'DRIVER', $record['id'], $eventAction, 'drivers.manage',
+    [['area' => 'drivers', 'relative' => 'drivers.json', 'content' => lehrfahrer_business_json(array_values($drivers))]]);
 
 echo json_encode(['ok' => true, 'driver' => $record], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+});

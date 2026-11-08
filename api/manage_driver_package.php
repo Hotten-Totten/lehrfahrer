@@ -3,6 +3,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_driver_packages.php';
 $companyId = lehrfahrer_personnel_authorize('packages.manage', true);
 
+lehrfahrer_business_request($companyId, true, static function () use ($companyId): void {
 $input = json_decode(file_get_contents('php://input'), true);
 $action = trim((string)($input['action'] ?? ''));
 $packageId = trim((string)($input['id'] ?? ''));
@@ -33,18 +34,19 @@ if ($action === 'rename') {
     $data['updated'] = date('c');
     $data['version'] = max(2, (int)($data['version'] ?? 1));
     $data['status'] = 'Erstellt';
-    if (file_put_contents(
-        $package['file'],
-        json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-    ) === false) {
-        http_response_code(500);
-        echo json_encode(['ok' => false, 'error' => 'Fahrername konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
+    if (($package['data']['driverName'] ?? '') === $driverName) {
+        echo json_encode(['ok' => true, 'id' => $packageId, 'updated' => $package['data']['updated'] ?? null]);
         exit;
     }
-    @unlink($package['dir'] . '/paket.zip');
+    $files = [['area' => 'packages', 'relative' => $packageId . '/paket.json', 'content' => lehrfahrer_business_json($data)]];
+    if (is_file($package['dir'] . '/paket.zip')) $files[] = ['area' => 'packages',
+        'relative' => $packageId . '/paket.zip', 'kind' => 'DELETE'];
+    lehrfahrer_business_commit($companyId, 'PACKAGE', $packageId, 'PACKAGE_CHANGE', 'packages.manage', $files);
     echo json_encode(['ok' => true, 'id' => $data['id'], 'updated' => $data['updated']], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 http_response_code(400);
 echo json_encode(['ok' => false, 'error' => 'Ungültige Paketaktion.'], JSON_UNESCAPED_UNICODE);
+
+});

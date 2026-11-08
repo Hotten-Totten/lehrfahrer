@@ -529,3 +529,73 @@ test('Fehlender Auditzeuge eines committierten Batches erzwingt BLOCKED statt Ro
   assert.equal(fs.readFileSync(f.routePath, 'utf8'), 'route one');
   assert.equal(fs.readFileSync(f.routePath.replace('Route_01.json', 'Route_02.json'), 'utf8'), 'route two');
 });
+
+function businessSource(type, id) {
+  return '$business=["type"=>'+quote(type)+',"id"=>'+quote(id)+'];' +
+    '$identity=lehrfahrer_audit_file_business_identity($company,$business);' +
+    '$route=$identity["reference"]; $event=["action"=>'+quote({DRIVER:'DRIVER_CHANGE',
+      TRAINING:'TRAINING_STATUS_CHANGE',PACKAGE:'PACKAGE_CHANGE',SETTING:'SETTING_CHANGE'}[type])+
+    ',"objectType"=>'+quote(type)+',"objectId"=>$identity["objectId"],"result"=>"SUCCESS"];' +
+    '$path=lehrfahrer_tenant_path($company,$identity["area"],$identity["relative"],true);' +
+    '$files=[["area"=>$identity["area"],"relative"=>$identity["relative"],"content"=>"new manifest"]];';
+}
+
+test('A5-Journale recovern alle vier Fachbereiche an jeder Aktivierungsgrenze', () => {
+  for(const [type,id] of [['DRIVER','drv_'+'b'.repeat(32)],['TRAINING','training_000001'],
+    ['PACKAGE','pkg_'+'b'.repeat(32)],['SETTING','cottbus']]) {
+    const business=businessSource(type,id);
+    for(const stage of ['PREPARING','PREPARED','AUDIT_PREPARED','ACTIVATING','ACTIVATED_0',
+      'FILE_ACTIVATED','DB_COMMIT']) {
+      const f=fixture();
+      const extra=type==='PACKAGE'
+        ? '$doc=lehrfahrer_tenant_path($company,"documents",'+quote(id+'/old.pdf')+',true);file_put_contents($doc,"old pdf");'+
+          '$new=lehrfahrer_tenant_path($company,"documents",'+quote(id+'/new.pdf')+',true);'+
+          '$files[]=["area"=>"documents","relative"=>'+quote(id+'/old.pdf')+',"kind"=>"DELETE"];'+
+          '$files[]=["area"=>"documents","relative"=>'+quote(id+'/new.pdf')+',"kind"=>"CREATE","content"=>"new pdf"];'
+        :'';
+      run(f,business+'file_put_contents($path,"old manifest");'+extra+
+        'lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,"UPDATE",$files,$event,'+
+        'static function($stage){if($stage==='+quote(stage)+')exit(32);},[],[],$business);',32);
+      const result=JSON.parse(run(f,business+
+        '$before=lehrfahrer_audit_file_any_blocked($company);lehrfahrer_audit_file_recover($pdo,$company);'+
+        'echo json_encode(["before"=>$before,"after"=>lehrfahrer_audit_file_any_blocked($company),'+
+        '"content"=>file_get_contents($path),"events"=>(int)$pdo->query("SELECT COUNT(*) FROM audit_events")->fetchColumn(),'+
+        '"chain"=>lehrfahrer_audit_verify_chain($pdo)]);'));
+      assert.deepEqual(result,{before:true,after:false,content:stage==='DB_COMMIT'?'new manifest':'old manifest',
+        events:stage==='DB_COMMIT'?1:0,chain:true},type+' '+stage);
+      if(type==='PACKAGE') {
+        const docs=path.join(f.privateRoot,'companies',company,'documents',id);
+        assert.equal(fs.existsSync(path.join(docs,'old.pdf')),stage!=='DB_COMMIT');
+        assert.equal(fs.existsSync(path.join(docs,'new.pdf')),stage==='DB_COMMIT');
+      }
+    }
+  }
+});
+
+test('A5-Paketsatz rollt nach jeder einzelnen Dateiaktivierung vollstaendig zurueck', () => {
+  for(const stage of ['ACTIVATED_0','ACTIVATED_1','ACTIVATED_2']) {
+    const f=fixture(), id='pkg_'+'c'.repeat(32), business=businessSource('PACKAGE',id);
+    run(f,business+'file_put_contents($path,"old manifest");'+
+      '$pdf=lehrfahrer_tenant_path($company,"documents",'+quote(id+'/test.pdf')+',true);file_put_contents($pdf,"old pdf");'+
+      '$files[]=["area"=>"documents","relative"=>'+quote(id+'/test.pdf')+',"content"=>"new pdf"];'+
+      '$files[]=["area"=>"packages","relative"=>'+quote(id+'/paket.zip')+',"kind"=>"CREATE","content"=>"new zip"];'+
+      'lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,"UPDATE",$files,$event,'+
+      'static function($stage){if($stage==='+quote(stage)+')exit(33);},[],[],$business);',33);
+    run(f,'lehrfahrer_audit_file_recover($pdo,$company);');
+    assert.equal(fs.readFileSync(path.join(f.privateRoot,'companies',company,'packages',id,'paket.json'),'utf8'),'old manifest');
+    assert.equal(fs.readFileSync(path.join(f.privateRoot,'companies',company,'documents',id,'test.pdf'),'utf8'),'old pdf');
+    assert.equal(fs.existsSync(path.join(f.privateRoot,'companies',company,'packages',id,'paket.zip')),false);
+  }
+});
+
+test('A5-Geschaeftsobjekte duerfen keine fremden Bereiche oder Pakete anfassen', () => {
+  for(const [area,relative] of [['drivers','drivers.json'],['lines',route],
+    ['documents','pkg_'+'d'.repeat(32)+'/test.pdf'],['packages','pkg_'+'d'.repeat(32)+'/paket.json']]) {
+    const f=fixture(),business=businessSource('PACKAGE','pkg_'+'e'.repeat(32));
+    const output=JSON.parse(run(f,business+
+      '$files[]=["area"=>'+quote(area)+',"relative"=>'+quote(relative)+',"kind"=>"CREATE","content"=>"bad"];'+
+      '$failed=false;try{lehrfahrer_audit_file_mutate($pdo,$actor,$company,$route,"CREATE",$files,$event,null,[],[],$business);'+
+      '}catch(InvalidArgumentException $e){$failed=true;}echo json_encode(["failed"=>$failed,"events"=>(int)$pdo->query("SELECT COUNT(*) FROM audit_events")->fetchColumn()]);'));
+    assert.deepEqual(output,{failed:true,events:0});
+  }
+});

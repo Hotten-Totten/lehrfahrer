@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_business_audit.php';
 
 function citySettingsRespond(int $status, array $payload): void {
     http_response_code($status);
@@ -16,24 +16,13 @@ function citySettingsCity($value): string {
 
 function citySettingsLoad(string $file): array {
     if (!is_file($file)) return [];
-    $decoded = json_decode((string)@file_get_contents($file), true);
-    return is_array($decoded) ? $decoded : [];
+    $decoded = json_decode((string)file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+    if (!is_array($decoded)) throw new RuntimeException('Ortseinstellungen ungueltig.');
+    return $decoded;
 }
 
 function citySettingsExists(string $companyId, string $city): bool {
     return lehrfahrer_route_city_exists($companyId, $city);
-}
-
-function citySettingsSave(string $directory, string $file, array $settings): bool {
-    if (!is_dir($directory)) return false;
-    $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) return false;
-    $tempFile = $file . '.tmp';
-    if (file_put_contents($tempFile, $json, LOCK_EX) === false) return false;
-    if (@rename($tempFile, $file)) return true;
-    $written = file_put_contents($file, $json, LOCK_EX) !== false;
-    @unlink($tempFile);
-    return $written;
 }
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
@@ -42,6 +31,7 @@ if ($method === 'GET') {
     $city = citySettingsCity($_GET['city'] ?? '');
     if ($city === '') citySettingsRespond(400, ['ok' => false, 'error' => 'Ort fehlt.']);
     if (!citySettingsExists($companyId, $city)) citySettingsRespond(404, ['ok' => false, 'error' => 'Ort wurde nicht gefunden.']);
+    lehrfahrer_business_request($companyId, false, static function () use ($companyId, $city): void {
     $dataFile = lehrfahrer_route_settings_path($companyId);
     $settings = citySettingsLoad($dataFile);
     $entry = $settings[$city] ?? [];
@@ -50,6 +40,8 @@ if ($method === 'GET') {
         'city' => $city,
         'dispatchPhone' => is_array($entry) ? trim((string)($entry['dispatchPhone'] ?? '')) : ''
     ]);
+    });
+    exit;
 }
 
 if ($method !== 'POST') {
@@ -57,7 +49,8 @@ if ($method !== 'POST') {
     citySettingsRespond(405, ['ok' => false, 'error' => 'Methode nicht erlaubt.']);
 }
 
-$companyId = lehrfahrer_route_authorize('operations.settings.write', true, true);
+$companyId = lehrfahrer_route_company_id(lehrfahrer_route_require_account_write('operations.settings.write'));
+lehrfahrer_business_request($companyId, true, static function () use ($companyId): void {
 
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) citySettingsRespond(400, ['ok' => false, 'error' => 'Ungültige JSON-Daten.']);
@@ -75,18 +68,22 @@ if ($phoneLength > 80 || preg_match('/[\x00-\x1F\x7F]/u', $dispatchPhone)) {
 $dataFile = lehrfahrer_route_settings_path($companyId, true);
 $dataDir = dirname($dataFile);
 $settings = citySettingsLoad($dataFile);
+if (is_array($settings[$city] ?? null) && ($settings[$city]['dispatchPhone'] ?? '') === $dispatchPhone) {
+    citySettingsRespond(200, ['ok' => true, 'city' => $city, 'dispatchPhone' => $dispatchPhone]);
+}
 $settings[$city] = [
     'dispatchPhone' => $dispatchPhone,
     'updatedAt' => date('c')
 ];
 ksort($settings, SORT_NATURAL | SORT_FLAG_CASE);
 
-if (!citySettingsSave($dataDir, $dataFile, $settings)) {
-    citySettingsRespond(500, ['ok' => false, 'error' => 'Leitstellennummer konnte nicht gespeichert werden.']);
-}
+lehrfahrer_business_commit($companyId, 'SETTING', $city, 'SETTING_CHANGE', 'operations.settings.write',
+    [['area' => 'settings', 'relative' => 'city_settings.json', 'content' => lehrfahrer_business_json($settings)]]);
 
 citySettingsRespond(200, [
     'ok' => true,
     'city' => $city,
     'dispatchPhone' => $dispatchPhone
 ]);
+
+});

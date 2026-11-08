@@ -83,17 +83,12 @@ function trainingNormalizeRoutes(array $routes): array {
     }, $routes));
 }
 
-function trainingSave(string $companyId, string $directory, string $file, array $training): bool {
-    if (!is_dir($directory)) return false;
-    $json = json_encode($training, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) return false;
-    $tempFile = $file . '.tmp';
-    lehrfahrer_tenant_path($companyId, 'trainings', basename($tempFile));
-    if (file_put_contents($tempFile, $json, LOCK_EX) === false) return false;
-    if (@rename($tempFile, $file)) return true;
-    $written = file_put_contents($file, $json, LOCK_EX) !== false;
-    @unlink($tempFile);
-    return $written;
+function trainingSave(string $companyId, string $directory, string $file, array $training, string $action): bool {
+    $event = match ($action) { 'create' => 'TRAINING_CREATE', 'updateStatus' => 'TRAINING_STATUS_CHANGE',
+        'completeRoute' => 'TRAINING_ROUTE_COMPLETE', default => throw new LogicException('Einweisungsaktion fehlt.') };
+    lehrfahrer_business_commit($companyId, 'TRAINING', $training['trainingId'], $event, 'trainings.manage',
+        [['area' => 'trainings', 'relative' => basename($file), 'content' => lehrfahrer_business_json($training)]]);
+    return true;
 }
 
 function trainingFileForId(string $companyId, string $trainingId): string {
@@ -120,6 +115,7 @@ function trainingCanChangeStatus(string $current, string $target): bool {
     return in_array($target, $allowed[$current] ?? [], true);
 }
 
+lehrfahrer_business_request($companyId, $trainingMethod !== 'GET', static function () use ($companyId, $trainingMethod, $trainingDir): void {
 if ($trainingMethod === 'GET') {
     $status = trainingText($_GET['status'] ?? '', 40);
     $trainings = trainingLoadAll($trainingDir);
@@ -171,7 +167,7 @@ if ($action === 'updateStatus') {
         $training['completed'] = $now;
     }
     $file = trainingFileForId($companyId, $trainingId);
-    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training)) {
+    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training, $action)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht aktualisiert werden.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -199,6 +195,10 @@ if ($action === 'completeRoute') {
         echo json_encode(['ok' => false, 'error' => 'Linie in Einweisung nicht gefunden.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    if (($training['routes'][$routeIndex]['routeStatus'] ?? '') === 'completed') {
+        echo json_encode(['ok' => true, 'training' => $training], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
     $now = date('c');
     $training['trainingId'] = $training['trainingId'] ?? $trainingId;
     $training['status'] = 'running';
@@ -206,7 +206,7 @@ if ($action === 'completeRoute') {
     $training['routes'][$routeIndex]['routeStatus'] = 'completed';
     $training['routes'][$routeIndex]['completedAt'] = $now;
     $file = trainingFileForId($companyId, $trainingId);
-    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training)) {
+    if ($file === '' || !trainingSave($companyId, $trainingDir, $file, $training, $action)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Linienstatus konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -260,10 +260,12 @@ $training = [
 ];
 
 $file = lehrfahrer_personnel_training_file($companyId, $trainingId, true);
-if (!trainingSave($companyId, $trainingDir, $file, $training)) {
+if (!trainingSave($companyId, $trainingDir, $file, $training, $action)) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Einweisung konnte nicht gespeichert werden.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 echo json_encode(['ok' => true, 'training' => $training], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+});

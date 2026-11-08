@@ -3,6 +3,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/_driver_packages.php';
 $companyId = lehrfahrer_personnel_authorize('packages.read');
 
+lehrfahrer_business_request($companyId, false, static function () use ($companyId): void {
 $root = driverPackageRoot($companyId);
 $packages = [];
 
@@ -69,3 +70,5 @@ echo json_encode([
     'ok' => true,
     'packages' => $packages
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+});

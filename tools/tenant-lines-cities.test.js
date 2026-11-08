@@ -50,7 +50,7 @@ async function port() {
   });
 }
 async function request(url, options = {}, session = sessionA) {
-  if (/^\/api\/(?:save_(?:line|gpx)|delete_line|regenerate_pdfs|normalize_ghost_points)\.php(?:\?|$)/.test(url)) {
+  if (/^\/api\/(?:save_(?:line|gpx)|delete_line|regenerate_pdfs|normalize_ghost_points|city_settings)\.php(?:\?|$)/.test(url) && (options.json !== undefined || options.form !== undefined)) {
     if (session === sessionA) session = accountSessionA;
     else if (session === sessionB) session = accountSessionB;
   }

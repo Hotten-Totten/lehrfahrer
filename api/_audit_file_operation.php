@@ -16,9 +16,42 @@ function lehrfahrer_audit_file_object_id(string $companyId, string $routeRelativ
     return 'route_' . substr(hash('sha256', $companyId . "\0" . $routeRelative), 0, 32);
 }
 
+/**
+ * Version 3 reuses the proven file activation/recovery engine for A5.
+ * The caller supplies a closed technical business identity, never display data.
+ */
+function lehrfahrer_audit_file_business_identity(string $companyId, array $business): array {
+    $keys = array_keys($business); sort($keys);
+    $type = $business['type'] ?? ''; $id = $business['id'] ?? '';
+    $patterns = ['DRIVER' => '/^drv_[a-f0-9]{32}$/D',
+        'TRAINING' => '/^training_[0-9]{6}$/D', 'PACKAGE' => '/^pkg_[a-f0-9]{32}$/D',
+        'SETTING' => '/^[a-z0-9][a-z0-9_-]*$/D'];
+    lehrfahrer_tenant_company_id($companyId);
+    if ($keys !== ['id','type'] || !is_string($type) || !is_string($id)
+        || !isset($patterns[$type]) || preg_match($patterns[$type], $id) !== 1) {
+        throw new InvalidArgumentException('Audit-Geschaeftsobjekt ungueltig.');
+    }
+    return ['reference' => $type . '/' . $id . '.json',
+        'objectId' => strtolower($type) . '_' . substr(hash('sha256', $companyId . "\0" . $type . "\0" . $id), 0, 32),
+        'area' => match ($type) { 'DRIVER' => 'drivers', 'TRAINING' => 'trainings',
+            'PACKAGE' => 'packages', 'SETTING' => 'settings' },
+        'relative' => match ($type) { 'DRIVER' => 'drivers.json', 'TRAINING' => $id . '.json',
+            'PACKAGE' => $id . '/paket.json', 'SETTING' => 'city_settings.json' }];
+}
+
+function lehrfahrer_audit_file_business_related(array $business, string $relative, string $area): bool {
+    $identity = lehrfahrer_audit_file_business_identity('cmp_' . str_repeat('0', 32), $business);
+    if ($area === $identity['area'] && $relative === $identity['relative']) return true;
+    if ($business['type'] !== 'PACKAGE') return false;
+    if ($area === 'packages') return $relative === $business['id'] . '/paket.zip';
+    return $area === 'documents' && preg_match('/^' . preg_quote($business['id'], '/')
+        . '\/[a-zA-Z0-9][a-zA-Z0-9._-]*\.pdf$/D', $relative) === 1;
+}
+
 function lehrfahrer_audit_file_related_path(string $routeRelative, string $relative, string $area,
     string $kind = 'UPDATE'): bool {
     if ($area === 'imports') return $relative === 'gtfs/index/work-inventory.json';
+    if ($area !== 'lines') return false;
     $stem = substr($routeRelative, 0, -5);
     if (in_array($relative, [$routeRelative, $stem . '.gpx', $stem . '.pdf'], true)) return true;
     if ($kind !== 'DELETE') return false;
@@ -121,6 +154,9 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
     $seal = lehrfahrer_audit_file_seal($record);
     $required = ['id','companyId','routeRelative','objectId','kind','state','auditEventId','files','checksum'];
     $batch = ($record['version'] ?? null) === 2;
+    $business = ($record['version'] ?? null) === 3 ? ($record['business'] ?? []) : null;
+    $identity = $business === null ? null : lehrfahrer_audit_file_business_identity($companyId, $business);
+    if ($business !== null) $required = array_merge($required, ['version', 'business']);
     if ($batch) $required = array_merge($required, ['version', 'routes']);
     $keys = array_keys($record);
     sort($required); sort($keys);
@@ -133,7 +169,8 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
             && (!is_string($record['auditEventId'])
                 || preg_match('/^aud_[a-f0-9]{32}$/D', $record['auditEventId']) !== 1))
         || lehrfahrer_audit_file_journal_path(dirname($path), (string)($record['id'] ?? '')) !== $path
-        || ($record['objectId'] ?? null) !== lehrfahrer_audit_file_object_id($companyId, (string)($record['routeRelative'] ?? ''))) {
+        || ($record['objectId'] ?? null) !== ($identity['objectId'] ?? lehrfahrer_audit_file_object_id($companyId, (string)($record['routeRelative'] ?? '')))
+        || ($identity !== null && ($record['routeRelative'] ?? null) !== $identity['reference'])) {
         throw new RuntimeException('Journal wurde manipuliert oder ist ungueltig.');
     }
     $batchReferences = $batch ? lehrfahrer_audit_file_batch_references($record) : [];
@@ -145,12 +182,14 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
                 ['area','newHash','oldHash','relative'],
                 ['area','kind','newHash','oldHash','relative'],
             ], true)
-            || !in_array($file['area'] ?? null, ['lines','imports'], true)
+            || !in_array($file['area'] ?? null, ['lines','imports','drivers','trainings','packages','documents','settings'], true)
             || ($batch
                 ? ($file['area'] !== 'lines' || ($file['kind'] ?? $record['kind']) !== 'CREATE'
                     || !isset($batchReferences[$file['relative']]))
-                : !lehrfahrer_audit_file_related_path($record['routeRelative'], $file['relative'], $file['area'],
-                    $file['kind'] ?? $record['kind']))
+                : ($business !== null
+                    ? !lehrfahrer_audit_file_business_related($business, $file['relative'], $file['area'])
+                    : !lehrfahrer_audit_file_related_path($record['routeRelative'], $file['relative'], $file['area'],
+                        $file['kind'] ?? $record['kind'])))
             || ($file['area'] === 'imports'
                 && ($file['relative'] !== 'gtfs/index/work-inventory.json' || ($file['kind'] ?? $record['kind']) !== 'UPDATE'))
             || !in_array($file['kind'] ?? $record['kind'], ['CREATE','UPDATE','DELETE'], true)
@@ -165,6 +204,17 @@ function lehrfahrer_audit_file_read(string $path, string $companyId): array {
             throw new RuntimeException('Journal-Dateieintrag ungueltig.');
         }
         lehrfahrer_tenant_segments($file['relative']);
+    }
+    if ($identity !== null) {
+        $seen = [];
+        foreach ($record['files'] as $file) {
+            $key = $file['area'] . '/' . $file['relative'];
+            if (isset($seen[$key])) throw new RuntimeException('Doppeltes Journal-Dateiziel.');
+            $seen[$key] = true;
+        }
+        if (!isset($seen[$identity['area'] . '/' . $identity['relative']])) {
+            throw new RuntimeException('Journal-Hauptdatei fehlt.');
+        }
     }
     if ($batch && (count($record['files']) !== count($batchReferences)
         || count(array_unique(array_column($record['files'], 'relative'))) !== count($batchReferences))) {
@@ -265,7 +315,7 @@ function lehrfahrer_audit_file_request_blocked(string $companyId, string $city, 
 }
 
 function lehrfahrer_audit_file_target(string $companyId, string $relative, string $area = 'lines'): string {
-    if (!in_array($area, ['lines','imports'], true)
+    if (!in_array($area, ['lines','imports','drivers','trainings','packages','documents','settings'], true)
         || ($area === 'imports' && $relative !== 'gtfs/index/work-inventory.json')) {
         throw new InvalidArgumentException('Audit-Dateibereich ungueltig.');
     }
@@ -416,14 +466,19 @@ function lehrfahrer_audit_file_recover(PDO $pdo, string $companyId): array {
  */
 function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, string $companyId,
     string $routeRelative, string $kind, array $files, array $event, ?callable $checkpoint = null,
-    array $additionalEvents = [], array $batchRoutes = []): string {
+    array $additionalEvents = [], array $batchRoutes = [], ?array $business = null): string {
     if (!in_array($kind, ['CREATE', 'UPDATE', 'DELETE'], true) || $files === []
         || !in_array($actor->contextType, ['TENANT', 'SYSTEM'], true)
         || ($actor->contextType === 'TENANT' && $actor->companyId !== $companyId)
         || lehrfahrer_control_transaction_active($pdo)) {
         throw new InvalidArgumentException('Audit-Dateivorgang ungueltig.');
     }
-    $objectId = lehrfahrer_audit_file_object_id($companyId, $routeRelative);
+    $identity = $business === null ? null : lehrfahrer_audit_file_business_identity($companyId, $business);
+    if ($identity !== null && ($batchRoutes !== [] || $additionalEvents !== []
+        || $routeRelative !== $identity['reference'] || ($event['objectType'] ?? null) !== $business['type'])) {
+        throw new InvalidArgumentException('Audit-Geschaeftsvorgang ungueltig.');
+    }
+    $objectId = $identity['objectId'] ?? lehrfahrer_audit_file_object_id($companyId, $routeRelative);
     $additionalEvents = array_values($additionalEvents);
     $events = array_merge([$event], $additionalEvents);
     $batchReferences = [];
@@ -445,13 +500,14 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
         lehrfahrer_audit_validate_event($actor, $item, LEHRFAHRER_AUDIT_CRITICAL);
     }
     $operation = static function (string $directory) use (
-        $pdo, $actor, $companyId, $routeRelative, $kind, $files, $event, $checkpoint, $objectId, $additionalEvents, $batchReferences
+        $pdo, $actor, $companyId, $routeRelative, $kind, $files, $event, $checkpoint, $objectId, $additionalEvents, $batchReferences, $business, $identity
     ): string {
         lehrfahrer_audit_file_recover_locked($pdo, $companyId, $directory);
         $id = 'op_' . bin2hex(random_bytes(16));
         $record = ['id' => $id, 'companyId' => $companyId, 'routeRelative' => $routeRelative,
             'objectId' => $objectId, 'kind' => $kind, 'state' => 'PREPARING',
             'auditEventId' => null, 'files' => []];
+        if ($business !== null) { $record['version'] = 3; $record['business'] = $business; }
         if ($batchReferences !== []) {
             $record['version'] = 2;
             $record['routes'] = [];
@@ -471,10 +527,11 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
             }
             $relative = $file['relative'];
             $area = $file['area'] ?? 'lines';
-            if (!is_string($area) || !in_array($area, ['lines','imports'], true)
+            if (!is_string($area) || !in_array($area, ['lines','imports','drivers','trainings','packages','documents','settings'], true)
                 || ($batchReferences !== []
                     ? ($area !== 'lines' || $fileKind !== 'CREATE' || !isset($batchReferences[$relative]))
-                    : !lehrfahrer_audit_file_related_path($routeRelative, $relative, $area, $fileKind))
+                    : ($business !== null ? !lehrfahrer_audit_file_business_related($business, $relative, $area)
+                        : !lehrfahrer_audit_file_related_path($routeRelative, $relative, $area, $fileKind)))
                 || ($area === 'imports'
                     && ($relative !== 'gtfs/index/work-inventory.json' || $fileKind !== 'UPDATE'))) {
                 throw new InvalidArgumentException('Audit-Dateibereich ungueltig.');
@@ -495,10 +552,13 @@ function lehrfahrer_audit_file_mutate(PDO $pdo, LehrfahrerAuditActor $actor, str
         if ($batchReferences !== [] && count($seen) !== count($batchReferences)) {
             throw new InvalidArgumentException('Mehrfachanlage ist unvollstaendig.');
         }
-        if ($kind !== 'UPDATE' && !isset($seen['lines/' . $routeRelative])) {
+        if ($identity !== null && !isset($seen[$identity['area'] . '/' . $identity['relative']])) {
+            throw new InvalidArgumentException('Geschaeftsobjekt fehlt im Dateivorgang.');
+        }
+        if ($identity === null && $kind !== 'UPDATE' && !isset($seen['lines/' . $routeRelative])) {
             throw new InvalidArgumentException('Routenobjekt fehlt im Dateivorgang.');
         }
-        if ($kind === 'UPDATE' && !isset($seen['lines/' . $routeRelative])
+        if ($identity === null && $kind === 'UPDATE' && !isset($seen['lines/' . $routeRelative])
             && !isset($seen['imports/gtfs/index/work-inventory.json'])
             && !is_file(lehrfahrer_audit_file_target($companyId, $routeRelative))) {
             throw new InvalidArgumentException('Routenbezug fehlt im Dateivorgang.');

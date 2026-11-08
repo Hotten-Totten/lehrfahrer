@@ -217,7 +217,7 @@ for (const apiCase of apiCases) {
       csrf: mutation ? sessions[apiCase.role].csrf : '',
       origin: mutation
     });
-    if (['save_line', 'save_gpx', 'delete_line', 'regenerate_pdfs', 'normalize_ghost_points'].includes(apiCase.name)) {
+    if (['save_line', 'save_gpx', 'delete_line', 'regenerate_pdfs', 'normalize_ghost_points', 'city_settings POST', 'drivers mutate', 'trainings mutate', 'create_driver_documents', 'manage_driver_package', 'download_driver_package'].includes(apiCase.name)) {
       assert.equal(allowed.response.status, 403, allowed.text); // Legacy session has no account actor.
     } else {
       assert.notEqual(allowed.response.status, 401, allowed.text);
@@ -226,7 +226,7 @@ for (const apiCase of apiCases) {
     }
 
     const legacy = await request(apiCase, { legacy: true });
-    if (['save_line', 'save_gpx', 'delete_line', 'regenerate_pdfs', 'normalize_ghost_points'].includes(apiCase.name)) {
+    if (['save_line', 'save_gpx', 'delete_line', 'regenerate_pdfs', 'normalize_ghost_points', 'city_settings POST', 'drivers mutate', 'trainings mutate', 'create_driver_documents', 'manage_driver_package', 'download_driver_package'].includes(apiCase.name)) {
       assert.equal(legacy.response.status, 401, legacy.text);
     } else {
       assert.notEqual(legacy.response.status, 401, legacy.text);

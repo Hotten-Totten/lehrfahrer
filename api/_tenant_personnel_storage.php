@@ -1,10 +1,19 @@
 <?php
 
-// PREPARATORY / NOT DEPLOYABLE UNTIL PHASE 4E.
 require_once __DIR__ . '/_tenant_route_storage.php';
+require_once __DIR__ . '/_business_audit.php';
 
 function lehrfahrer_personnel_authorize(string $capability, bool $mutation = false): string {
-    return lehrfahrer_route_authorize($capability, $mutation, true);
+    if ($mutation) return lehrfahrer_route_company_id(lehrfahrer_route_require_account_write($capability));
+    if ($capability === 'packages.download') {
+        $auth = lehrfahrer_api_require_session();
+        lehrfahrer_auth_require_capability($auth, $capability);
+        if (($auth['auth_source'] ?? null) !== 'ACCOUNT') {
+            lehrfahrer_api_authorization_error(403, 'Account-Anmeldung mit aktiver Gesellschaft erforderlich.');
+        }
+        return lehrfahrer_route_company_id($auth);
+    }
+    return lehrfahrer_route_authorize($capability, false, true);
 }
 
 function lehrfahrer_personnel_driver_file(string $companyId, bool $create = false): string {

@@ -304,6 +304,7 @@ function driverDocBuildPdf(array $data, string $driverName): string {
     return driverDocSimplePdf($pages);
 }
 
+lehrfahrer_business_request($companyId, true, static function () use ($companyId): void {
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input) || !is_array($input['items'] ?? null) || !$input['items']) {
     http_response_code(400);
@@ -379,7 +380,7 @@ if ($mode === 'update') {
     $packageId = $requestedPackageId;
     $created = trim((string)($existingPackage['data']['created'] ?? ($existingPackage['data']['createdAt'] ?? ''))) ?: $now;
     $oldPdfPaths = glob(lehrfahrer_tenant_path($companyId, 'documents', $packageId) . '/*.pdf') ?: [];
-    @unlink($packageDir . '/paket.zip');
+
 } else {
     $packageId = driverPackageNewId($companyId);
     $packageDir = lehrfahrer_tenant_ensure_directory($companyId, 'packages', $packageId);
@@ -389,6 +390,8 @@ $documentDir = lehrfahrer_tenant_ensure_directory($companyId, 'documents', $pack
 
 $documents = [];
 $usedNames = [];
+$pdfs = [];
+$files = [];
 foreach ($routeData as $data) {
 
     $lineLabel = driverDocSlug(driverDocValue($data, 'lineName'), 'Linie');
@@ -401,9 +404,11 @@ foreach ($routeData as $data) {
     }
     $usedNames[strtolower($pdfName)] = true;
     $pdfPath = lehrfahrer_personnel_document_file($companyId, $packageId, $pdfName, true);
-    if ($pdfPath === null || file_put_contents($pdfPath, driverDocBuildPdf($data, $driverName)) === false) {
-        continue;
-    }
+    if ($pdfPath === null) throw new RuntimeException('Dokumentpfad ungueltig.');
+    $bytes = driverDocBuildPdf($data, $driverName);
+    if (!str_starts_with($bytes, '%PDF')) throw new RuntimeException('PDF konnte nicht erzeugt werden.');
+    $pdfs[$pdfName] = $bytes;
+    $files[] = ['area' => 'documents', 'relative' => $packageId . '/' . $pdfName, 'content' => $bytes];
     $documents[] = [
         'lineName' => driverDocValue($data, 'lineName'),
         'routeName' => driverDocValue($data, 'routeName'),
@@ -429,7 +434,7 @@ $currentPdfNames = array_map(static function (array $document): string {
 }, $documents);
 foreach ($oldPdfPaths as $oldPdfPath) {
     if (!in_array(basename($oldPdfPath), $currentPdfNames, true)) {
-        @unlink($oldPdfPath);
+        $files[] = ['area' => 'documents', 'relative' => $packageId . '/' . basename($oldPdfPath), 'kind' => 'DELETE'];
     }
 }
 
@@ -466,29 +471,17 @@ $package = [
     'documents' => $documents,
     'selectedItems' => $selectedItems
 ];
-$packageWrite = file_put_contents(
-    lehrfahrer_tenant_path($companyId, 'packages', $packageId . '/paket.json', true),
-    json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-);
-if ($packageWrite === false) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Paketuebersicht konnte nicht gespeichert werden.']);
-    exit;
-}
-
+$manifest = lehrfahrer_business_json($package);
+$files[] = ['area' => 'packages', 'relative' => $packageId . '/paket.json', 'content' => $manifest];
 $zipAvailable = class_exists('ZipArchive');
 if ($zipAvailable) {
-    $zip = new ZipArchive();
-    $zipPath = lehrfahrer_tenant_path($companyId, 'packages', $packageId . '/paket.zip');
-    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
-        $zip->addFile($packageDir . '/paket.json', 'paket.json');
-        foreach ($documents as $document) {
-            $pdfFile = lehrfahrer_personnel_document_file($companyId, $packageId, $document['file']);
-            if ($pdfFile !== null && is_file($pdfFile)) $zip->addFile($pdfFile, $document['file']);
-        }
-        $zip->close();
-    }
+    $files[] = ['area' => 'packages', 'relative' => $packageId . '/paket.zip',
+        'content' => lehrfahrer_business_zip($manifest, $pdfs)];
+} elseif (is_file($packageDir . '/paket.zip')) {
+    $files[] = ['area' => 'packages', 'relative' => $packageId . '/paket.zip', 'kind' => 'DELETE'];
 }
+lehrfahrer_business_commit($companyId, 'PACKAGE', $packageId,
+    $mode === 'update' ? 'PACKAGE_CHANGE' : 'PACKAGE_CREATE', 'packages.create', $files);
 
 echo json_encode([
     'ok' => true,
@@ -496,3 +489,5 @@ echo json_encode([
     'packagePath' => '',
     'zipAvailable' => $zipAvailable
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+});

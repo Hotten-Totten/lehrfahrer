@@ -1,6 +1,5 @@
 <?php
 
-// PREPARATORY / NOT DEPLOYABLE UNTIL PHASE 4E.
 require_once __DIR__ . '/_tenant_personnel_storage.php';
 
 function driverPackageRoot(string $companyId, bool $create = false): string {
@@ -37,20 +36,22 @@ function driverPackageNewId(string $companyId): string {
 function driverPackageDeleteDirectory(string $companyId, string $packageId): bool {
     $package = driverPackageFind($companyId, $packageId);
     if ($package === null) return false;
-    foreach (scandir($package['dir']) ?: [] as $entry) {
-        if ($entry === '.' || $entry === '..') continue;
-        $file = lehrfahrer_tenant_path($companyId, 'packages', $packageId . '/' . $entry);
-        if (!is_file($file) || !@unlink($file)) return false;
-    }
-    if (!@rmdir($package['dir'])) return false;
-    $documentDir = lehrfahrer_tenant_path($companyId, 'documents', $packageId);
-    if (is_dir($documentDir)) {
-        foreach (scandir($documentDir) ?: [] as $entry) {
+    $files = [];
+    foreach (['packages' => $package['dir'],
+        'documents' => lehrfahrer_tenant_path($companyId, 'documents', $packageId)] as $area => $dir) {
+        if (!is_dir($dir)) continue;
+        foreach (scandir($dir) ?: [] as $entry) {
             if ($entry === '.' || $entry === '..') continue;
-            $file = lehrfahrer_personnel_document_file($companyId, $packageId, $entry);
-            if ($file === null || !is_file($file) || !@unlink($file)) return false;
+            $relative = $packageId . '/' . $entry;
+            $file = lehrfahrer_tenant_path($companyId, $area, $relative);
+            if (!is_file($file) || !lehrfahrer_audit_file_business_related(
+                ['type' => 'PACKAGE', 'id' => $packageId], $relative, $area)) {
+                throw new RuntimeException('Paket enthaelt unerwartete Dateien.');
+            }
+            $files[] = ['area' => $area, 'relative' => $relative, 'kind' => 'DELETE'];
         }
-        if (!@rmdir($documentDir)) return false;
     }
+    lehrfahrer_business_commit($companyId, 'PACKAGE', $packageId, 'PACKAGE_DELETE', 'packages.manage', $files);
+    // Empty technical directories can safely remain; no independent deletion after commit.
     return true;
 }

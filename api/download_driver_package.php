@@ -2,6 +2,7 @@
 require_once __DIR__ . '/_driver_packages.php';
 $companyId = lehrfahrer_personnel_authorize('packages.download');
 
+lehrfahrer_business_request($companyId, false, static function () use ($companyId): void {
 $package = driverPackageFind($companyId, trim((string)($_GET['id'] ?? '')));
 if ($package === null) {
     http_response_code(404);
@@ -33,6 +34,7 @@ if ($documentName !== '') {
         echo json_encode(['ok' => false, 'error' => 'Dokument nicht gefunden.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    lehrfahrer_business_download($companyId, $package['id']);
     header('Content-Type: application/pdf');
     header('Content-Length: ' . filesize($documentPath));
     header('Content-Disposition: inline; filename="' . rawurlencode($documentName) . '"; filename*=UTF-8\'\'' . rawurlencode($documentName));
@@ -51,24 +53,16 @@ if (!class_exists('ZipArchive')) {
     exit;
 }
 
-$zipPath = lehrfahrer_tenant_path($companyId, 'packages', $package['id'] . '/paket.zip');
-if (!is_file($zipPath)) {
-    $zip = new ZipArchive();
-    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok' => false, 'error' => 'ZIP-Datei konnte nicht erstellt werden.'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-    $zip->addFile($packageFile, 'paket.json');
-    foreach (($packageData['documents'] ?? []) as $document) {
-        if (!is_array($document)) continue;
-        $pdfName = (string)($document['file'] ?? '');
-        $pdfFile = lehrfahrer_personnel_document_file($companyId, $package['id'], $pdfName);
-        if ($pdfFile !== null && is_file($pdfFile)) $zip->addFile($pdfFile, $pdfName);
-    }
-    $zip->close();
+$pdfs = [];
+foreach (($packageData['documents'] ?? []) as $document) {
+    if (!is_array($document)) throw new RuntimeException('Paketdokument ungueltig.');
+    $name = (string)($document['file'] ?? '');
+    $file = lehrfahrer_personnel_document_file($companyId, $package['id'], $name);
+    if ($file === null || !is_file($file)) throw new RuntimeException('Paketdokument fehlt.');
+    $pdfs[$name] = file_get_contents($file);
 }
+$zipBytes = lehrfahrer_business_zip((string)file_get_contents($packageFile), $pdfs);
+lehrfahrer_business_download($companyId, $package['id']);
 
 $driverName = trim((string)($packageData['driverName'] ?? ''));
 $driverSlug = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $driverName);
@@ -77,8 +71,10 @@ $packageTimestamp = basename($packageDir);
 $downloadName = 'Fahrerunterlagen_' . $driverSlug . '_' . $packageTimestamp . '.zip';
 
 header('Content-Type: application/zip');
-header('Content-Length: ' . filesize($zipPath));
+header('Content-Length: ' . strlen($zipBytes));
 header('Content-Disposition: attachment; filename="' . rawurlencode($downloadName) . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
 header('X-Content-Type-Options: nosniff');
-readfile($zipPath);
+echo $zipBytes;
 exit;
+
+});
