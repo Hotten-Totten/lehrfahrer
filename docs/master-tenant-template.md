@@ -80,3 +80,13 @@ Beim Provisioning entstehen ausschließlich Verzeichnisse und
 `settings/company.json`. Die Bereiche für Linien, Orte, Fahrer, Einweisungen,
 Pakete, Dokumente, Kataloge und Importe bleiben leer. Es werden keine bestehenden
 Fach- oder Live-Daten kopiert.
+
+## Account-primary-Ergänzung (A8)
+
+Im expliziten ACCOUNT_PRIMARY-Modus der Staging-/Testspur ergänzt der interne
+CLI-Provisioner den Erstadmin um einen deaktivierten Account, eine inaktive eigene
+Mitgliedschaft, die ADMIN-Rolle und die nächste globale Benutzernummer. Ein
+vorhandener globaler Login wird abgewiesen; es gibt keine automatische Verknüpfung.
+Die geprüfte Einmalaktivierung aktiviert Benutzer, Account und Mitgliedschaft
+atomar mit dem Audit. Die Fachbereiche bleiben leer. Details und Fehlergrenzen:
+`docs/audit-v1-a8.md`. Produktion wird dadurch nicht auf Account-Anmeldung umgestellt.

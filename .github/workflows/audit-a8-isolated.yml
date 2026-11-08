@@ -1,0 +1,44 @@
+name: A8 isolated account-primary acceptance
+on:
+  push:
+    branches: [staging]
+    paths:
+      - 'api/_company*'
+      - 'api/_audit.php'
+      - 'api/_route_categories.php'
+      - 'tools/a8-*'
+      - 'tools/route-categories.test.php'
+      - '.github/workflows/audit-a8-isolated.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-mariadb:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: a8-isolated-fixture-only
+          MARIADB_DATABASE: lf_a8_20261108
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify new empty companies and atomic account activation in isolated MariaDB
+        env:
+          LEHRFAHRER_A8_MYSQL: '1'
+          LEHRFAHRER_A8_ISOLATED: '1'
+          LEHRFAHRER_DB_HOST: 127.0.0.1
+          LEHRFAHRER_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+          LEHRFAHRER_DB_NAME: lf_a8_20261108
+          LEHRFAHRER_DB_USER: root
+          LEHRFAHRER_DB_PASSWORD: a8-isolated-fixture-only
+          LEHRFAHRER_DB_TLS_REQUIRED: '0'
+        run: |
+          set -euo pipefail
+          php tools/a8-new-company.test.php
+          php tools/route-categories.test.php

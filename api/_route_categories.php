@@ -20,8 +20,10 @@ function lehrfahrer_route_categories_read(string $path, array $routes = []): arr
 }
 
 function lehrfahrer_route_categories_add(string $path, string $name): array {
-    $name = trim(preg_replace('/\s+/u', ' ', $name));
-    if ($name === '' || mb_strlen($name, 'UTF-8') > 80 || preg_match('/[\x00-\x1f<>\\\/]/u', $name)) {
+    $normalized = preg_replace('/\s+/u', ' ', $name);
+    if ($normalized === null) throw new InvalidArgumentException('Ungueltiger Kategoriename.');
+    $name = trim($normalized);
+    if ($name === '' || mb_strlen($name, 'UTF-8') > 80 || preg_match('~[\x00-\x1f<>/\\\\]~u', $name) !== 0) {
         throw new InvalidArgumentException('Ungueltiger Kategoriename.');
     }
     $directory = dirname($path);

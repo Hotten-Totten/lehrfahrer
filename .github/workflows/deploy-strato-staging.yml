@@ -213,6 +213,7 @@ jobs:
           php tools/gtfs-route-creation.test.php
           php tools/sysop-mfa.test.php
           php tools/audit-writer.test.php
+          php tools/route-categories.test.php
           python3 tools/gtfs-official-candidate-filter.test.py
           python3 tools/staging-http-assets.test.py
 
@@ -223,6 +224,7 @@ jobs:
             tools/control-database.test.js \
             tools/audit-writer-concurrency.test.js \
             tools/audit-read.test.js \
+            tools/a8-empty-company.test.js \
             tools/platform-audit-read.test.js \
             tools/support-diagnostics.test.js \
             tools/audit-file-operation.test.js \

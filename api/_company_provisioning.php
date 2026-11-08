@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/_control_repositories.php';
 require_once __DIR__ . '/_master_tenant_template.php';
+require_once __DIR__ . '/_company_account_provisioning.php';
 
 const LEHRFAHRER_COMPANY_ACTIVATION_TTL_SECONDS = 172800;
 
@@ -90,6 +91,10 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
     if (lehrfahrer_control_transaction_active($pdo)) {
         throw new RuntimeException('Aktivierung benoetigt eine eigene Datenbanktransaktion.');
     }
+    return lehrfahrer_with_auth_mutation_gate($pdo, static fn(): array => lehrfahrer_activate_company_admin_unguarded($pdo,$token,$password));
+}
+
+function lehrfahrer_activate_company_admin_unguarded(PDO $pdo, string $token, string $password): array {
     if (preg_match('/^[A-Za-z0-9_-]{43}$/D', $token) !== 1) {
         throw new InvalidArgumentException('Ungueltiger Aktivierungstoken.');
     }
@@ -99,13 +104,13 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
 
     $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
     $transactionOpen = false;
+    $ownsTransaction = !lehrfahrer_control_transaction_active($pdo);
     try {
-        if ($sqlite) {
-            lehrfahrer_control_sqlite_begin_immediate($pdo);
-        } else {
-            $pdo->beginTransaction();
+        if ($ownsTransaction) {
+            if ($sqlite) lehrfahrer_control_sqlite_begin_immediate($pdo);
+            else $pdo->beginTransaction();
+            $transactionOpen = true;
         }
-        $transactionOpen = true;
         $sql =
             'SELECT user_activation_tokens.id, user_activation_tokens.user_id,
                     user_activation_tokens.company_id, user_activation_tokens.expires_at,
@@ -128,13 +133,14 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         }
 
         $now = gmdate('c');
+        $passwordHash = lehrfahrer_password_hash($password);
         $updateUser = $pdo->prepare(
             'UPDATE users
              SET password_hash = :password_hash, active = 1, must_change_password = 0, updated_at = :updated_at
              WHERE id = :user_id AND company_id = :company_id AND active = 0'
         );
         $updateUser->execute([
-            ':password_hash' => lehrfahrer_password_hash($password),
+            ':password_hash' => $passwordHash,
             ':updated_at' => $now,
             ':user_id' => $activation['user_id'],
             ':company_id' => $activation['company_id'],
@@ -142,6 +148,7 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         if ($updateUser->rowCount() !== 1) {
             throw new DomainException('Der zugehoerige Admin kann nicht aktiviert werden.');
         }
+        lehrfahrer_company_activate_linked_account($pdo,(string)$activation['company_id'],(string)$activation['user_id'],$passwordHash);
         // The token hash and its expiry must not remain usable or stored after activation.
         $consume = $pdo->prepare(
             'DELETE FROM user_activation_tokens
@@ -154,10 +161,9 @@ function lehrfahrer_activate_company_admin(PDO $pdo, string $token, string $pass
         if ($consume->rowCount() !== 1) {
             throw new DomainException('Aktivierungstoken wurde bereits verwendet.');
         }
-        if ($sqlite) {
-            lehrfahrer_control_sqlite_finish($pdo, true);
-        } else {
-            $pdo->commit();
+        if ($ownsTransaction) {
+            if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, true);
+            else $pdo->commit();
         }
         $transactionOpen = false;
         return [
@@ -281,21 +287,51 @@ function lehrfahrer_company_remove_uncommitted_tenant(string $companyId): void {
     }
 }
 
+/** Never remove a tenant directory after an ambiguous commit or a failed lock release. */
+function lehrfahrer_company_cleanup_failed_provision(PDO $pdo, string $companyId): void {
+    try {
+        $query=$pdo->prepare('SELECT id FROM companies WHERE id=?');
+        $query->execute([$companyId]);
+        if ($query->fetchColumn()!==false) return;
+    } catch (Throwable $error) {
+        throw new RuntimeException('Provisioning-Zustand unklar; Tenant-Dateien bleiben zur Pruefung erhalten.',0,$error);
+    }
+    lehrfahrer_company_remove_uncommitted_tenant($companyId);
+}
+
 function lehrfahrer_create_company_from_template(PDO $pdo, array $input): array {
     if (lehrfahrer_control_transaction_active($pdo)) {
         throw new RuntimeException('Provisioning benoetigt eine eigene Datenbanktransaktion.');
     }
+    $primary=lehrfahrer_company_account_primary($pdo);
+    if (!$primary) return lehrfahrer_create_company_from_template_unguarded($pdo,$input,false);
+    if (PHP_SAPI !== 'cli' || isset($_SERVER['REQUEST_METHOD'])) throw new RuntimeException('Neue Account-Firmen nur ueber internes CLI-Provisioning.');
+    $attemptedCompany=null;
+    try {
+        return lehrfahrer_with_auth_mutation_gate($pdo, static function()use($pdo,$input,&$attemptedCompany):array{
+            if (!lehrfahrer_company_account_primary($pdo)) throw new RuntimeException('Anmeldemodus hat sich geaendert.');
+            return lehrfahrer_create_company_from_template_unguarded($pdo,$input,true,$attemptedCompany);
+        });
+    } catch (Throwable $error) {
+        if ($attemptedCompany!==null) lehrfahrer_company_cleanup_failed_provision($pdo,$attemptedCompany);
+        throw $error;
+    }
+}
+
+function lehrfahrer_create_company_from_template_unguarded(PDO $pdo, array $input, bool $primary, ?string &$attemptedCompany = null): array {
     $values = lehrfahrer_company_provision_validate($input);
     $template = lehrfahrer_master_tenant_template();
     $templateVersion = (int)$template['template_version'];
     $companyId = lehrfahrer_control_id('cmp');
+    $attemptedCompany = $companyId;
     $activationToken = lehrfahrer_company_activation_token();
     $createdAt = gmdate('c');
     $expiresAt = gmdate('c', time() + LEHRFAHRER_COMPANY_ACTIVATION_TTL_SECONDS);
     $tenantCreated = false;
+    $ownsTransaction = !lehrfahrer_control_transaction_active($pdo);
 
     try {
-        $pdo->beginTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
         $companies = new LehrfahrerCompanyRepository($pdo);
         $users = new LehrfahrerUserRepository($pdo);
         $roles = new LehrfahrerRoleRepository($pdo);
@@ -318,6 +354,7 @@ function lehrfahrer_create_company_from_template(PDO $pdo, array $input): array 
             'must_change_password' => true,
         ]);
         $roles->assignRole($companyId, $admin['id'], 'ADMIN');
+        if ($primary) lehrfahrer_company_seed_account($pdo,$companyId,$admin['id']);
 
         $activation = $pdo->prepare(
             'INSERT INTO user_activation_tokens
@@ -340,7 +377,7 @@ function lehrfahrer_create_company_from_template(PDO $pdo, array $input): array 
         }
         $config = lehrfahrer_company_config($company, $template);
         lehrfahrer_company_write_config($companyId, $config);
-        $pdo->commit();
+        if ($ownsTransaction) $pdo->commit();
 
         return [
             'company' => $company,
@@ -352,10 +389,10 @@ function lehrfahrer_create_company_from_template(PDO $pdo, array $input): array 
             'config' => $config,
         ];
     } catch (Throwable $error) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        if ($tenantCreated) {
+        if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+        if ($tenantCreated && !$primary) {
             try {
-                lehrfahrer_company_remove_uncommitted_tenant($companyId);
+                lehrfahrer_company_cleanup_failed_provision($pdo,$companyId);
             } catch (Throwable $_cleanupError) {
                 throw new RuntimeException(
                     'Provisioning fehlgeschlagen; unvollstaendiger Tenant konnte nicht bereinigt werden.',

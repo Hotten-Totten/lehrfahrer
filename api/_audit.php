@@ -76,6 +76,7 @@ final class LehrfahrerAuditActor {
 /** A1 contract: actions and their only permitted object types. */
 function lehrfahrer_audit_event_catalog(): array {
     return [
+        'AUTH_ACCOUNT_ACTIVATE' => 'ACCOUNT', 'AUTH_MEMBERSHIP_ACTIVATE' => 'MEMBERSHIP',
         'AUTH_LOGIN' => null, 'AUTH_LOGOUT' => 'SESSION', 'AUTH_SESSION_REVOKE' => 'SESSION',
         'AUTH_MFA' => 'PASSKEY', 'AUTH_MFA_PENDING' => 'PASSKEY',
         'AUTH_CONTEXT_CHANGE' => 'MEMBERSHIP',

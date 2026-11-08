@@ -13,6 +13,7 @@
   let requestNumber = 0;
   const results = { SUCCESS: 'Erfolgreich', DENIED: 'Abgewiesen', FAILED: 'Fehlgeschlagen' };
   const actions = {
+    AUTH_ACCOUNT_ACTIVATE: 'Benutzerkonto aktiviert', AUTH_MEMBERSHIP_ACTIVATE: 'Firmenzuordnung aktiviert',
     AUTH_LOGIN: 'Angemeldet', AUTH_LOGOUT: 'Abgemeldet', AUTH_SESSION_REVOKE: 'Anmeldung beendet',
     AUTH_MFA: 'Zusätzliche Anmeldeprüfung', AUTH_MFA_PENDING: 'Zusätzliche Anmeldeprüfung angefordert',
     AUTH_CONTEXT_CHANGE: 'Anmeldebereich gewechselt', AUTH_PASSKEY_REGISTER: 'Passkey eingerichtet',
