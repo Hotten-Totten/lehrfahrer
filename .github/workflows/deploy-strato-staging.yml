@@ -1719,6 +1719,25 @@ jobs:
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/primary-account.cookies "$origin/app/index.html" > /tmp/primary-app.html
           grep -q '<title>Lehrfahrer</title>' /tmp/primary-app.html
+          # A6: read-only HTTP postcheck with the existing tenant admin session.
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            -b /tmp/primary-account.cookies "$origin/api/audit_read.php?limit=2" > /tmp/primary-audit.json
+          jq -e '.ok == true and (.events | type == "array" and length <= 2)
+            and all(.events[]; (keys | sort) == (["event_id","occurred_at","account_id","membership_id","action","object_type","object_id","result","reason_code"] | sort))' \
+            /tmp/primary-audit.json >/dev/null
+          audit_denied="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/api/audit_read.php")"
+          test "$audit_denied" = 401
+          audit_method="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/primary-account.cookies -X POST "$origin/api/audit_read.php")"
+          test "$audit_method" = 405
+          audit_filter="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b /tmp/primary-account.cookies "$origin/api/audit_read.php?companyId=foreign")"
+          test "$audit_filter" = 400
+          for asset in audit.html audit.css js/audit.js; do
+            curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" "$origin/$asset" > /dev/null
+          done
+          echo 'A6_TENANT_AUDIT_HTTP=OK'
           csrf="$(jq -r '.csrfToken' /tmp/primary-response.json)"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             -b /tmp/primary-account.cookies -c /tmp/primary-account.cookies \
