@@ -43,7 +43,11 @@ try {
             if ($file->isLink()) throw new RuntimeException('Symlink im Cottbus-Fachbereich: ' . $area);
             if ($file->isFile()) $hasFile = true;
         }
-        if (!$hasFile) throw new RuntimeException('Cottbus-Fachbereich ist leer: ' . $area);
+        // A5 acceptance removes its disposable package and PDF/ZIP artifacts.
+        // Empty package/document directories are valid; existence and symlink checks remain mandatory.
+        if (!$hasFile && !in_array($area, ['packages', 'documents'], true)) {
+            throw new RuntimeException('Cottbus-Fachbereich ist leer: ' . $area);
+        }
     }
 
     $pdo = lehrfahrer_control_database();

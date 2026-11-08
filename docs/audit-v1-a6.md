@@ -35,3 +35,8 @@ Staging deployment and manual acceptance must be recorded after their actual che
 Local validation 2026-11-08: focused Node suites 67/67; standalone PHP audit
 writer passed; full Node suite 714 tests, 703 passed, 9 skipped, only the
 two previously documented navigation-off-route failures (tests at 102/163).
+
+Deployment follow-up: the historical Cottbus postcheck required nonempty package
+and document directories even after A5 explicitly removed its test package.
+These two areas may now be empty; directory and symlink checks stay in force.
+No package or document is created to satisfy a deployment check.
