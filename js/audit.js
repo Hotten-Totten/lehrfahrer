@@ -9,6 +9,40 @@
   let activeFilters = new URLSearchParams();
   let requestNumber = 0;
   const results = { SUCCESS: 'Erfolgreich', DENIED: 'Abgewiesen', FAILED: 'Fehlgeschlagen' };
+  const actions = {
+    AUTH_LOGIN: 'Angemeldet', AUTH_LOGOUT: 'Abgemeldet', AUTH_SESSION_REVOKE: 'Anmeldung beendet',
+    AUTH_MFA: 'Zusätzliche Anmeldeprüfung', AUTH_MFA_PENDING: 'Zusätzliche Anmeldeprüfung angefordert',
+    AUTH_CONTEXT_CHANGE: 'Anmeldebereich gewechselt', AUTH_PASSKEY_REGISTER: 'Passkey eingerichtet',
+    AUTH_PASSKEY_RENAME: 'Passkey umbenannt', AUTH_PASSKEY_REVOKE: 'Passkey entfernt', AUTH_PASSKEY_MANAGE: 'Passkeys verwaltet',
+    ACCOUNT_CREATE: 'Benutzerkonto angelegt', ACCOUNT_CHANGE: 'Benutzerkonto geändert', ACCOUNT_DEACTIVATE: 'Benutzerkonto deaktiviert',
+    MEMBERSHIP_CHANGE: 'Firmenzuordnung geändert', TENANT_ROLE_CHANGE: 'Firmenrolle geändert', TENANT_ROLE_ASSIGN: 'Firmenrolle zugewiesen',
+    PLATFORM_ROLE_CHANGE: 'Plattformrolle geändert', SYSOP_CHANGE: 'Systemadministrator geändert', PASSKEY_CHANGE: 'Passkey geändert',
+    ROUTE_SAVE: 'Route gespeichert', ROUTE_DELETE: 'Route gelöscht', ROUTE_CREATE: 'Route angelegt', ROUTE_CHANGE: 'Route geändert',
+    ROUTE_REVIEW: 'Route geprüft', ROUTE_AUTO_DOWNGRADE: 'Routenstatus automatisch zurückgestuft',
+    ROUTE_ARTIFACT_REPAIR: 'Routendateien repariert', GTFS_WORK_START: 'Fahrplanbearbeitung begonnen',
+    ROUTE_STATUS_CHANGE: 'Routenstatus geändert', ROUTE_RELEASE: 'Route freigegeben', ROUTE_RELEASE_REVOKE: 'Routenfreigabe zurückgenommen',
+    DRIVER_CREATE: 'Person angelegt', DRIVER_CHANGE: 'Person geändert', DRIVER_STATUS_CHANGE: 'Person aktiviert / deaktiviert', DRIVER_DELETE: 'Person gelöscht',
+    TRAINING_CREATE: 'Einweisung angelegt', TRAINING_CHANGE: 'Einweisung geändert', TRAINING_STATUS_CHANGE: 'Einweisungsstatus geändert',
+    TRAINING_ROUTE_COMPLETE: 'Linie einer Einweisung abgeschlossen', PACKAGE_DELETE: 'Einweisungspaket gelöscht',
+    PACKAGE_CREATE: 'Einweisungspaket erstellt', PACKAGE_CHANGE: 'Einweisungspaket geändert', PACKAGE_DOWNLOAD: 'Paketdownload bereitgestellt',
+    SETTING_CHANGE: 'Betriebseinstellung geändert', SECURITY_DENIAL: 'Zugriff abgewiesen', SYSTEM_CHANGE: 'Systemeinstellung geändert'
+  };
+  const types = { SESSION: 'Anmeldung', PASSKEY: 'Passkey', ACCOUNT: 'Benutzerkonto', MEMBERSHIP: 'Firmenzuordnung',
+    ROUTE: 'Route', DRIVER: 'Person', TRAINING: 'Einweisung', PACKAGE: 'Einweisungspaket', SETTING: 'Betriebseinstellung', SYSTEM: 'System' };
+  const reasons = { INVALID_CREDENTIALS: 'Anmeldedaten ungültig', MFA_REJECTED: 'Zusätzliche Anmeldeprüfung abgewiesen',
+    EXPIRED: 'Gültigkeit abgelaufen', FORBIDDEN: 'Berechtigung fehlt', CSRF_REJECTED: 'Sicherheitsprüfung abgewiesen',
+    NOT_FOUND: 'Eintrag nicht gefunden', INVALID_INPUT: 'Eingabe ungültig', CONFLICT: 'Widersprüchlicher Bearbeitungsstand',
+    STORAGE_FAILURE: 'Speicherfehler', INTERNAL_FAILURE: 'Interner Fehler', ACCOUNT_DISABLED: 'Benutzerkonto deaktiviert',
+    ACCOUNT_LOCKED: 'Benutzerkonto gesperrt', CHALLENGE_REPLAY: 'Anmeldeprüfung bereits verwendet' };
+  function cell(row, text) {
+    const td = document.createElement('td'); td.textContent = text || '—'; row.append(td); return td;
+  }
+  function readableTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Zeitangabe nicht verfügbar' : new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(date) + ' UTC';
+  }
   async function load(before = null) {
     const request = ++requestNumber;
     body.replaceChildren();
@@ -23,18 +57,32 @@
       if (!response.ok || !data.ok) throw new Error(data.error || 'Auditprotokoll konnte nicht geladen werden.');
       const select = form.elements.action;
       if (select.options.length === 1) {
-        for (const action of data.actions) select.add(new Option(action, action));
+        for (const action of data.actions) select.add(new Option(actions[action] || 'Weiteres Ereignis (' + action + ')', action));
       }
       for (const event of data.events) {
         const row = document.createElement('tr');
-        for (const value of [event.occurred_at, event.action,
-          [results[event.result] || event.result, event.reason_code].filter(Boolean).join(' · '),
-          [event.account_id, event.membership_id].filter(Boolean).join(' / '),
-          [event.object_type, event.object_id].filter(Boolean).join(' / '), event.event_id]) {
-          const cell = document.createElement('td');
-          cell.textContent = value || '—';
-          row.append(cell);
+        cell(row, readableTime(event.occurred_at));
+        const activity = cell(row, actions[event.action] || 'Weiteres Ereignis');
+        if (event.action === 'PACKAGE_DOWNLOAD') {
+          const note = document.createElement('small');
+          note.textContent = 'Der Server hat den Download erlaubt und die Datei bereitgestellt. Ob sie beim Empfänger angekommen ist, wird nicht bestätigt.';
+          activity.append(note);
         }
+        cell(row, results[event.result] || 'Unbekanntes Ergebnis');
+        cell(row, types[event.object_type] || 'Allgemeiner Vorgang');
+        const detailCell = cell(row, ''); detailCell.textContent = '';
+        const details = document.createElement('details');
+        const summary = document.createElement('summary'); summary.textContent = 'Technische Details'; details.append(summary);
+        const list = document.createElement('dl');
+        for (const [label, value] of [['Ereigniscode', event.action], ['Benutzerkonto-Kennung', event.account_id],
+          ['Firmenzuordnungs-Kennung', event.membership_id], ['Eintragskennung', event.object_id],
+          ['Protokollkennung', event.event_id], ['Grund', reasons[event.reason_code] || event.reason_code]]) {
+          if (!value) continue;
+          const term = document.createElement('dt'); term.textContent = label;
+          const description = document.createElement('dd'); description.textContent = value;
+          list.append(term, description);
+        }
+        details.append(list); detailCell.append(details);
         body.append(row);
       }
       nextBefore = data.nextBefore;
