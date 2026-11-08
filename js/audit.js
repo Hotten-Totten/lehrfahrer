@@ -43,6 +43,27 @@
       timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(date) + ' UTC';
   }
+  const actionSearch = document.getElementById('auditActionSearch');
+  const actionHint = document.getElementById('auditActionHint');
+  let availableActions = [];
+  const actionLabel = action => actions[action] || 'Weiteres Ereignis (' + action + ')';
+  const searchText = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('de-DE').replace(/ß/g, 'ss');
+  function updateActionOptions() {
+    const select = form.elements.action;
+    const selected = select.value;
+    const term = searchText(actionSearch.value.trim());
+    const matches = availableActions.filter(action => searchText(actionLabel(action) + ' ' + action).includes(term));
+    const shown = availableActions.filter(action => matches.includes(action) || action === selected);
+    select.replaceChildren(new Option('Alle Ereignisarten', ''));
+    for (const action of shown) select.add(new Option(actionLabel(action), action));
+    select.value = selected;
+    const retained = selected && !matches.includes(selected);
+    actionHint.textContent = term
+      ? `${matches.length} passende Ereignisarten. ${retained ? 'Die bisherige Auswahl bleibt zusätzlich sichtbar. ' : ''}Ereignisart auswählen und anwenden.`
+      : 'Alphabetisch sortiert. Suchbegriff eingeben, dann eine Ereignisart auswählen.';
+  }
+  actionSearch.addEventListener('input', updateActionOptions);
+  form.elements.action.addEventListener('change', updateActionOptions);
   async function load(before = null) {
     const request = ++requestNumber;
     body.replaceChildren();
@@ -55,10 +76,8 @@
       const data = await response.json();
       if (request !== requestNumber) return;
       if (!response.ok || !data.ok) throw new Error(data.error || 'Auditprotokoll konnte nicht geladen werden.');
-      const select = form.elements.action;
-      if (select.options.length === 1) {
-        for (const action of data.actions) select.add(new Option(actions[action] || 'Weiteres Ereignis (' + action + ')', action));
-      }
+      availableActions = [...data.actions].sort((a, b) => actionLabel(a).localeCompare(actionLabel(b), 'de-DE'));
+      updateActionOptions();
       for (const event of data.events) {
         const row = document.createElement('tr');
         cell(row, readableTime(event.occurred_at));
