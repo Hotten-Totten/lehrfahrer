@@ -99,6 +99,10 @@ Staging-MFA- und Audit-Writer-PHP-Suiten bestanden; PHP-Syntaxprüfungen bestand
 - Dieselbe Suite auf separater lokaler MariaDB 10.4.32 bestanden, einschließlich
   zweitem gleichzeitigem Login-Prozess am benannten Cutover-Lock. Kein Login
   überschreitet die Sperrgrenze; keine Sitzung wird dabei angelegt.
+- Der öffentliche synthetische Schlüssel in tools/fixtures/p256-leading-zero-test.pem
+  prüft eine führende Null in einer P-256-Koordinate. COSE-Testfelder werden auf
+  die vorgeschriebenen 32 Byte aufgefüllt; die Runtime-Prüfung bleibt unverändert.
+  Dies ist ausschließlich Testmaterial, niemals ein Produktionsschlüssel.
 - Reproduzierbare MariaDB-11.4-Prüfung in
   `.github/workflows/production-login-preflight-isolated.yml`, ohne Projekt-Secrets
   oder Deployment. Staging-Deploy führt Produktions- und Staging-MFA-Regressionen

@@ -153,11 +153,19 @@ $keyOptions = ['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime2
 $opensslConfig = getenv('OPENSSL_CONF') ?: (PHP_OS_FAMILY === 'Windows'
     ? 'C:/xampp/php/extras/openssl/openssl.cnf' : '');
 if ($opensslConfig !== '') $keyOptions['config'] = $opensslConfig;
-$private = openssl_pkey_new($keyOptions);
+// Public synthetic test key deliberately has a leading-zero EC coordinate.
+// OpenSSL exposes coordinates as minimal integers; COSE requires fixed 32-byte fields.
+$private = $productionFixture
+    ? openssl_pkey_get_private(file_get_contents(__DIR__.'/fixtures/p256-leading-zero-test.pem'))
+    : openssl_pkey_new($keyOptions);
 if ($private === false) throw new RuntimeException('Test EC key generation unavailable: ' . openssl_error_string());
 $details = openssl_pkey_get_details($private);
+if ($productionFixture) check(strlen($details['ec']['x'])<32 || strlen($details['ec']['y'])<32,
+    'production fixture covers leading-zero P256 coordinate');
 $credentialId = random_bytes(32);
-$cose = cbor([1 => 2, 3 => -7, -1 => 1, -2 => new BinaryValue($details['ec']['x']), -3 => new BinaryValue($details['ec']['y'])]);
+$cose = cbor([1 => 2, 3 => -7, -1 => 1,
+    -2 => new BinaryValue(str_pad($details['ec']['x'],32,"\0",STR_PAD_LEFT)),
+    -3 => new BinaryValue(str_pad($details['ec']['y'],32,"\0",STR_PAD_LEFT))]);
 $authData = hash('sha256', lehrfahrer_sysop_mfa_rp_id(), true) . chr(0x45) . pack('N', 0)
     . str_repeat("\0", 16) . pack('n', strlen($credentialId)) . $credentialId . $cose;
 $attestation = cbor(['fmt' => 'none', 'attStmt' => [], 'authData' => new BinaryValue($authData)]);
@@ -295,7 +303,8 @@ $secondPrivate = openssl_pkey_new($keyOptions);
 $secondDetails = openssl_pkey_get_details($secondPrivate);
 $secondCredentialId = random_bytes(32);
 $secondCose = cbor([1 => 2, 3 => -7, -1 => 1,
-    -2 => new BinaryValue($secondDetails['ec']['x']), -3 => new BinaryValue($secondDetails['ec']['y'])]);
+    -2 => new BinaryValue(str_pad($secondDetails['ec']['x'],32,"\0",STR_PAD_LEFT)),
+    -3 => new BinaryValue(str_pad($secondDetails['ec']['y'],32,"\0",STR_PAD_LEFT))]);
 $secondAuthData = hash('sha256', lehrfahrer_sysop_mfa_rp_id(), true) . chr(0x45) . pack('N', 0)
     . str_repeat("\0", 16) . pack('n', strlen($secondCredentialId)) . $secondCredentialId . $secondCose;
 $secondClient = json_encode(['type' => 'webauthn.create',
