@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const allowedTargets = new Set(['/', '/index.php', '/index.html', '/app/', '/app/index.html', '/hilfe/', '/academy/']);
+  const allowedTargets = new Set(['/', '/index.php', '/index.html', '/app/', '/app/index.html', '/hilfe/', '/academy/', '/platform-audit.html']);
   const requestedTarget = new URLSearchParams(window.location.search).get('next') || '/';
   const target = allowedTargets.has(requestedTarget) ? requestedTarget : '/';
   const manageMode = new URLSearchParams(window.location.search).get('mode') === 'manage';
@@ -343,6 +343,8 @@
     csrfToken = '';
     membershipChoices.replaceChildren();
     accountDetails.replaceChildren();
+    const platformAuditLink = document.getElementById('platformAuditLink');
+    if (platformAuditLink) platformAuditLink.hidden = true;
     activeCompany.textContent = '';
     window.LehrfahrerTenantCache.clearForLogout().catch(() => {});
     show('login');
@@ -350,8 +352,11 @@
   }
 
   async function handleSession(body) {
+    const platformAuditLink = document.getElementById('platformAuditLink');
+    if (platformAuditLink) platformAuditLink.hidden = !(Array.isArray(body.platformCapabilities) && body.platformCapabilities.includes('platform.audit.read'));
     csrfToken = typeof body.csrfToken === 'string' ? body.csrfToken : '';
     if (body.context === 'TENANT') {
+      continueTarget.hidden = false;
       await window.LehrfahrerTenantCache.applyValidatedContext(body, 'account');
       if (!manageMode) {
         window.location.replace(target);
@@ -379,6 +384,17 @@
       row('Rolle', Array.isArray(body.tenantRoles) ? body.tenantRoles.join(' / ') : '');
       row('Plattformrolle', Array.isArray(body.platformRoles) ? body.platformRoles.join(' / ') : '');
       switchCompany.hidden = (memberships.body.memberships || []).length < 2;
+      passkeyManageButton.hidden = !Array.isArray(body.platformRoles) || !body.platformRoles.includes('SYSOP');
+      show('account');
+      notice('');
+      return;
+    }
+    if (body.context === 'PLATFORM') {
+      await window.LehrfahrerTenantCache.clearForLogout();
+      accountDetails.replaceChildren();
+      activeCompany.textContent = 'Plattformkonto ohne aktive Firmenauswahl';
+      continueTarget.hidden = true;
+      switchCompany.hidden = true;
       passkeyManageButton.hidden = !Array.isArray(body.platformRoles) || !body.platformRoles.includes('SYSOP');
       show('account');
       notice('');

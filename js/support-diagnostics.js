@@ -6,7 +6,7 @@
   const base = new URL('../', document.currentScript.src).href;
   const path = location.pathname.slice(new URL(base).pathname.length);
   const area = path.startsWith('app/') ? 'driver_app' : path === 'account-login.php' ? 'account_login'
-    : path === 'login.html' ? 'legacy_login' : path === 'audit.html' ? 'audit' : 'editor';
+    : path === 'login.html' ? 'legacy_login' : ['audit.html','platform-audit.html'].includes(path) ? 'audit' : 'editor';
   const key = 'lehrfahrer-support-v1';
   let events = [];
   let dropped = 0;

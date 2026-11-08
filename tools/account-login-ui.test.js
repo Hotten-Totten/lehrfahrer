@@ -282,3 +282,16 @@ test('Editor-Staging-Redirect und Account-Menü bleiben vom Legacy-Pfad getrennt
   assert.match(gate, /\$auth\['auth_source'\] === 'ACCOUNT'/);
   assert.match(editor, /id="accountMenuRoot" style="display:none"/);
 });
+
+test('A7 reines Plattformkonto kann sein Protokoll oeffnen, ohne Tenant-Zugang zu erfinden', async()=>{
+ const h=harness('?mode=manage',{me:{status:200,body:{ok:true,context:'PLATFORM',platformRoles:['SYSOP'],platformCapabilities:['platform.audit.read'],csrfToken:'csrf'}}});
+ await h.settle();
+ assert.equal(h.element('accountSection').hidden,false);assert.equal(h.element('platformAuditLink').hidden,false);
+ assert.equal(h.element('continueTarget').hidden,true);assert.equal(h.element('switchCompany').hidden,true);
+ assert.equal(h.element('accountLoginForm').hidden,true);assert.deepEqual(h.redirects,[]);
+ assert.ok(!h.requests.some(r=>r.action==='memberships'));
+});
+test('A7 reines Plattformkonto ohne Audit-Recht zeigt keinen Protokolleinstieg', async()=>{
+ const h=harness('?mode=manage',{me:{status:200,body:{ok:true,context:'PLATFORM',platformRoles:['COSYSOP'],platformCapabilities:['platform.system.read']}}});
+ await h.settle();assert.equal(h.element('platformAuditLink').hidden,true);
+});

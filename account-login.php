@@ -63,8 +63,8 @@ try {
     #passkeyHint { color: #526171; font-size: .9rem; }
   </style>
 <link rel="stylesheet" href="support-diagnostics.css?v=1">
-<script src="js/support-diagnostics-core.js?v=1"></script>
-<script src="js/support-diagnostics.js?v=1"></script>
+<script src="js/support-diagnostics-core.js?v=2"></script>
+<script src="js/support-diagnostics.js?v=2"></script>
 </head>
 <body>
   <main>
@@ -94,6 +94,7 @@ try {
       <div id="accountDetails"></div>
       <a id="continueTarget" class="link-button" href="/">Zum Editor</a>
       <button id="passkeyManageButton" class="secondary" type="button" hidden>Passkeys verwalten</button>
+      <a id="platformAuditLink" class="link-button secondary" href="platform-audit.html" hidden>Plattformprotokoll öffnen</a>
       <button id="switchCompany" class="secondary" type="button">Gesellschaft wechseln</button>
       <button id="accountLogout" class="secondary" type="button">Abmelden</button>
     </section>
@@ -112,6 +113,6 @@ try {
     <button type="button" class="secondary" data-support-diagnostics>Diagnose für den Support …</button>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=ac4d50ee682c" defer></script>
+  <script src="js/account-login.js?v=1e2deba3a159" defer></script>
 </body>
 </html>

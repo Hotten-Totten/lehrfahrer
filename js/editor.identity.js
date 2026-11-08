@@ -4,6 +4,7 @@
   const status = document.getElementById('apiTokenStatus');
   const details = document.getElementById('accountContextDetails');
   const passkeysMenuItem = document.getElementById('sysopPasskeysMenuItem');
+  const platformAuditMenuItem = document.getElementById('platformAuditMenuItem');
   if (!status) return;
 
   function labels(values) {
@@ -14,6 +15,7 @@
     if (!data || !data.company) { renderUnavailable(); return; }
     const tenantRoles = labels(data.tenantRoles);
     const platformRoles = labels(data.platformRoles);
+    if (platformAuditMenuItem) platformAuditMenuItem.hidden = !(data.account && labels(data.platformCapabilities).includes('platform.audit.read'));
     if (passkeysMenuItem) passkeysMenuItem.hidden = !(data.account && platformRoles.includes('SYSOP'));
     status.replaceChildren();
     status.classList.add('identity-status');
@@ -57,6 +59,7 @@
   }
 
   function renderUnavailable() {
+    if (platformAuditMenuItem) platformAuditMenuItem.hidden = true;
     if (passkeysMenuItem) passkeysMenuItem.hidden = true;
     status.replaceChildren();
     status.classList.remove('identity-status', 'token-status-on');
@@ -78,7 +81,7 @@
       if (body.context !== 'TENANT') { renderUnavailable(); return; }
       renderIdentity({ account: true, name: body.displayName,
         company: body.companyName, tenantRoles: body.tenantRoles,
-        platformRoles: body.platformRoles, number: body.userNumber });
+        platformRoles: body.platformRoles, platformCapabilities: body.platformCapabilities, number: body.userNumber });
       return;
     }
     if (account.status !== 401 && account.status !== 404) { renderUnavailable(); return; }

@@ -3711,3 +3711,5 @@ button.danger:hover {
   .gtfs-work-table-head { display: none; }
   .gtfs-work-row { grid-template-columns: 80px 1fr; }
 }
+
+#platformAuditMenuItem[hidden] { display: none !important; }

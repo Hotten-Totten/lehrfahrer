@@ -33,11 +33,12 @@ async function fixture(accountResponse, legacyResponse = { status: 401 }) {
   status.textContent = 'Sitzung: aktiv';
   const details = element();
   const passkeysMenuItem = element();
+  const platformAuditMenuItem = element();
   const calls = [];
   const document = {
     getElementById(id) { return id === 'apiTokenStatus' ? status
       : id === 'accountContextDetails' ? details
-      : id === 'sysopPasskeysMenuItem' ? passkeysMenuItem : null; },
+      : id === 'sysopPasskeysMenuItem' ? passkeysMenuItem : id === 'platformAuditMenuItem' ? platformAuditMenuItem : null; },
     createElement: element
   };
   const fetch = async (url, options) => {
@@ -48,7 +49,7 @@ async function fixture(accountResponse, legacyResponse = { status: 401 }) {
   };
   vm.runInNewContext(script, { document, fetch });
   await new Promise(resolve => setImmediate(resolve));
-  return { status, details, passkeysMenuItem, calls };
+  return { status, details, passkeysMenuItem, platformAuditMenuItem, calls };
 }
 
 const account = (companyName, tenantRoles, userNumber = '00101', platformRoles = []) => ({
@@ -132,4 +133,12 @@ test('Editor-Cache-Key und schmale Darstellung vorhanden', () => {
   assert.match(css, /\.identity-tenant-role,\s*\.identity-platform-separator/);
   assert.match(css, /\.identity-status \{ max-width: 46vw; \}/);
   assert.match(mainScript, /classList\.contains\('identity-status'\).*classList\.contains\('identity-unavailable'\)/);
+});
+
+test('A7 Menue-Einstieg erfordert gelieferte Plattform-Capability, nicht Nummer oder Firmenrolle', async()=>{
+ const no=await fixture(account('A',['ADMIN'],'00001',['SYSOP']));
+ const allowed=account('A',['ADMIN']);allowed.body.platformCapabilities=['platform.audit.read'];
+ const yes=await fixture(allowed);
+ assert.equal(no.platformAuditMenuItem.hidden,true);assert.equal(yes.platformAuditMenuItem.hidden,false);
+ const expired=await fixture({status:401});assert.equal(expired.platformAuditMenuItem.hidden,true);
 });

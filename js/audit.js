@@ -1,5 +1,8 @@
 'use strict';
 (() => {
+  const platformView = document.body.dataset.auditScope === 'platform';
+  const endpoint = platformView ? 'api/platform_audit_read.php' : 'api/audit_read.php';
+  const contexts = {TENANT:'Firmenbereich',PLATFORM:'Plattformbereich',PREAUTH:'Anmeldeprüfung',SYSTEM:'Systemvorgang'};
   const form = document.getElementById('auditFilters');
   const body = document.getElementById('auditEvents');
   const status = document.getElementById('auditStatus');
@@ -72,15 +75,17 @@
     const params = new URLSearchParams(activeFilters);
     if (before) params.set('before', before);
     try {
-      const response = await fetch(`api/audit_read.php?${params}`, { cache: 'no-store', credentials: 'same-origin' });
+      const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', credentials: 'same-origin' });
       const data = await response.json();
       if (request !== requestNumber) return;
       if (!response.ok || !data.ok) throw new Error(data.error || 'Auditprotokoll konnte nicht geladen werden.');
+      if (platformView && data.accessContext !== 'PLATFORM') throw new Error('Plattformkontext konnte nicht bestätigt werden.');
       availableActions = [...data.actions].sort((a, b) => actionLabel(a).localeCompare(actionLabel(b), 'de-DE'));
       updateActionOptions();
       for (const event of data.events) {
         const row = document.createElement('tr');
         cell(row, readableTime(event.occurred_at));
+        if (platformView) cell(row,contexts[event.context_type] || 'Unbekannter Kontext');
         const activity = cell(row, actions[event.action] || 'Weiteres Ereignis');
         if (event.action === 'PACKAGE_DOWNLOAD') {
           const note = document.createElement('small');
@@ -95,13 +100,19 @@
         const list = document.createElement('dl');
         for (const [label, value] of [['Ereigniscode', event.action], ['Benutzerkonto-Kennung', event.account_id],
           ['Firmenzuordnungs-Kennung', event.membership_id], ['Eintragskennung', event.object_id],
-          ['Protokollkennung', event.event_id], ['Grund', reasons[event.reason_code] || event.reason_code]]) {
+          ['Firmenkennung', platformView ? event.company_id : null], ['Protokollkennung', event.event_id], ['Grund', reasons[event.reason_code] || event.reason_code]]) {
           if (!value) continue;
           const term = document.createElement('dt'); term.textContent = label;
           const description = document.createElement('dd'); description.textContent = value;
           list.append(term, description);
         }
-        details.append(list); detailCell.append(details);
+        details.append(list);
+        if (platformView) {
+          const note = document.createElement('small');
+          note.textContent = 'Identitäts- und Objektkennungen sind in der Plattformansicht ausgeblendet.';
+          details.append(note);
+        }
+        detailCell.append(details);
         body.append(row);
       }
       nextBefore = data.nextBefore;

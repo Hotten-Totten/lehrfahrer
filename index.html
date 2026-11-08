@@ -11,10 +11,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 
-<link rel="stylesheet" href="editor.css?v=d9e285cd73cf&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
+<link rel="stylesheet" href="editor.css?v=6b65cb7a5f92&amp;layout=phase2a&amp;sidebar=phase2b&amp;toolbar=phase2c&amp;servermenu=phase3b">
 <link rel="stylesheet" href="support-diagnostics.css?v=1">
-<script src="js/support-diagnostics-core.js?v=1"></script>
-<script src="js/support-diagnostics.js?v=1"></script>
+<script src="js/support-diagnostics-core.js?v=2"></script>
+<script src="js/support-diagnostics.js?v=2"></script>
 </head>
 <body data-editor-version="V2.1.070">
 
@@ -57,6 +57,7 @@
             <button type="button" class="menu-item menu-submenu-trigger" aria-haspopup="true">Verwaltung</button>
             <div class="menu-submenu-panel">
               <button type="button" class="menu-item" onclick="window.location.href='audit.html'" title="Auditprotokoll der aktiven Gesellschaft lesen; erfordert audit.read">Auditprotokoll</button>
+              <button type="button" class="menu-item" id="platformAuditMenuItem" hidden onclick="window.open('platform-audit.html', '_blank', 'noopener')">Plattformprotokoll</button>
               <button type="button" class="menu-item" id="createCityMenuItem" onclick="createCityViaPrompt()" title="Einen neuen Ort (Stadt) anlegen, unter dem Linien gespeichert werden">Neuen Ort anlegen …</button>
             </div>
           </div>
@@ -1008,7 +1009,7 @@
   <script src="js/editor.linelogic.js?v=V2.1.063"></script>
   <script src="js/editor.main.js?v=e6ffe251e4dd"></script>
   <script src="js/editor.events.js?v=81136360b41b"></script>
-  <script src="js/editor.identity.js?v=a767efdc2f90"></script>
+  <script src="js/editor.identity.js?v=bd4d491e0cd1"></script>
   <script src="js/editor.test-drive.js?v=54cf512502fa"></script>
   <script src="js/editor.fetchStops.js?v=V2.1.063"></script>
   <script>

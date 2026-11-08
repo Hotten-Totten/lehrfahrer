@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="same-origin">
+<title>Plattformprotokoll · Lehrfahrer</title>
+<link rel="stylesheet" href="audit.css?v=3">
+<link rel="stylesheet" href="support-diagnostics.css?v=1">
+<script src="js/support-diagnostics-core.js?v=2"></script>
+<script src="js/support-diagnostics.js?v=2"></script>
+<script src="js/audit.js?v=4" defer></script>
+</head>
+<body data-audit-scope="platform">
+<main>
+<header><div><p>Lehrfahrer®</p><h1>Plattformprotokoll</h1></div><a href="account-login.php?mode=manage">Zum Konto</a></header>
+<p>Plattformansicht für berechtigte Administratoren: Hier sehen Sie bereinigte Ereignisse über Firmengrenzen hinweg sowie Anmelde- und Systemereignisse. Die ausgewählte Firma Ihrer Anmeldung bleibt unverändert. Dies ist ein ausschließlich lesender Zugang.</p>
+<p>„Erfolgreich“ bedeutet: Die jeweilige Aktion wurde ausgeführt. „Abgewiesen“ bedeutet: Sie wurde nicht erlaubt. „Fehlgeschlagen“ weist auf einen Fehler bei der Aktion hin. Ein normaler Eintrag erfordert keine Maßnahme.</p>
+<p>Alle Uhrzeiten und Datumsfilter verwenden UTC: in Deutschland im Winter eine Stunde, im Sommer zwei Stunden hinzurechnen. Namen, Bemerkungen sowie Konto-, Mitgliedschafts- und Objektkennungen werden ausgeblendet. Firmen- und Protokollkennungen zur technischen Zuordnung finden Sie unter „Technische Details“.</p>
+<p><button type="button" data-support-diagnostics>Diagnose für den Support …</button></p>
+<form id="auditFilters">
+<label>Von (UTC)<input type="date" name="from"></label>
+<label>Bis (UTC)<input type="date" name="to"></label>
+<div class="audit-action-filter">
+<label for="auditActionSearch">Ereignisart suchen<input id="auditActionSearch" type="search" placeholder="z. B. Paket oder Person" autocomplete="off" aria-controls="auditAction" aria-describedby="auditActionHint"></label>
+<label for="auditAction">Ereignisart (A–Z)<select id="auditAction" name="action"><option value="">Alle Ereignisarten</option></select></label>
+<small id="auditActionHint" role="status" aria-live="polite">Suchbegriff eingeben, dann eine Ereignisart auswählen.</small>
+</div>
+<label>Ergebnis<select name="result"><option value="">Alle Ergebnisse</option><option value="SUCCESS">Erfolgreich</option><option value="DENIED">Abgewiesen</option><option value="FAILED">Fehlgeschlagen</option></select></label>
+<label>Kontext<select name="context"><option value="">Alle Kontexte</option><option value="TENANT">Firmenbereich</option><option value="PLATFORM">Plattformbereich</option><option value="PREAUTH">Anmeldeprüfung</option><option value="SYSTEM">Systemvorgang</option></select></label>
+<label>Firmenkennung (optional)<input name="companyId" maxlength="36" placeholder="Firmenkennung aus den Details"></label>
+<button type="submit">Anwenden / Aktualisieren</button>
+</form>
+<p id="auditStatus" role="status" aria-live="polite"></p>
+<div class="table-scroll"><table><caption>Ereignisse – neueste zuerst</caption><thead><tr><th>Zeitpunkt</th><th>Kontext</th><th>Was ist passiert?</th><th>Ergebnis</th><th>Betroffener Bereich</th><th>Details</th></tr></thead><tbody id="auditEvents"></tbody></table></div>
+<nav aria-label="Protokollseiten"><button id="auditFirst" type="button">Neueste Einträge</button><button id="auditNext" type="button" disabled>Ältere Einträge</button></nav>
+</main>
+</body></html>
