@@ -238,6 +238,20 @@ $verified = lehrfahrer_sysop_mfa_finish($pdo, $login['csrf'], $assertion);
 check(is_array($verified) && !$verified['enrolled'], 'signed assertion creates full session');
 $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE] = $verified['session']['token'];
 check(lehrfahrer_account_current_session($pdo, false) !== null, 'MFA session accepted');
+if ($productionFixture) {
+    $sessionBefore=lehrfahrer_account_current_session($pdo,false);
+    $oldActivity=lehrfahrer_auth_timestamp(time()-600);
+    $pdo->prepare('UPDATE account_sessions SET last_activity_at=? WHERE id=?')->execute([$oldActivity,$sessionBefore['id']]);
+    lehrfahrer_auth_cutover_set_lock($pdo,'LOCKED','20261108-3');
+    $blocked=false;
+    try { lehrfahrer_account_logout_session($pdo,$sessionBefore); } catch(LehrfahrerAuthCutoverBusy $e) { $blocked=true; }
+    check($blocked && lehrfahrer_account_current_session($pdo,true)===null,'production gate blocks logout and session touch');
+    $q=$pdo->prepare('SELECT last_activity_at,revoked_at FROM account_sessions WHERE id=?'); $q->execute([$sessionBefore['id']]);
+    $unchanged=$q->fetch(PDO::FETCH_ASSOC);
+    check($unchanged['last_activity_at']===$oldActivity && $unchanged['revoked_at']===null,'locked session remains unmodified');
+    lehrfahrer_auth_cutover_set_lock($pdo,'OPEN','20261108-3');
+    check(lehrfahrer_account_current_session($pdo,true)!==null,'production session touch resumes after explicit unlock');
+}
 $public = lehrfahrer_account_public_session($pdo, lehrfahrer_account_current_session($pdo, false));
 check($public['companyName'] === 'Cottbusverkehr' && in_array('ADMIN', $public['tenantRoles'], true),
     'Cottbus ADMIN tenant context preserved');

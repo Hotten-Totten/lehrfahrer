@@ -117,11 +117,15 @@ function lehrfahrer_account_login(PDO $pdo, string $login, string $password, ?st
 
 /** Called only after the endpoint has verified the current session and CSRF. */
 function lehrfahrer_account_logout_session(PDO $pdo, array $session): void {
+    lehrfahrer_with_auth_mutation_gate($pdo,
+        static fn() => lehrfahrer_account_logout_session_unguarded($pdo, $session));
+}
+
+function lehrfahrer_account_logout_session_unguarded(PDO $pdo, array $session): void {
     $actor = LehrfahrerAuditActor::currentAccount($pdo);
     if ($actor->accountId !== (string)$session['account_id']) throw new RuntimeException('Logout-Session abweichend.');
     $sqlite = lehrfahrer_control_driver($pdo) === 'sqlite';
-    if ($sqlite) lehrfahrer_control_sqlite_begin_immediate($pdo);
-    else $pdo->beginTransaction();
+    if (!$sqlite) $pdo->beginTransaction();
     try {
         $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
             WHERE id = ? AND environment = ? AND revoked_at IS NULL');
@@ -129,13 +133,9 @@ function lehrfahrer_account_logout_session(PDO $pdo, array $session): void {
         if ($revoke->rowCount() !== 1) throw new RuntimeException('Account-Logout fehlgeschlagen.');
         lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_LOGOUT',
             'objectType' => 'SESSION', 'objectId' => (string)$session['id'], 'result' => 'SUCCESS']);
-        if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, true);
-        else $pdo->commit();
+        if (!$sqlite) $pdo->commit();
     } catch (Throwable $error) {
-        if (lehrfahrer_control_transaction_active($pdo)) {
-            if ($sqlite) lehrfahrer_control_sqlite_finish($pdo, false);
-            else $pdo->rollBack();
-        }
+        if (!$sqlite && $pdo->inTransaction()) $pdo->rollBack();
         throw $error;
     }
 }
@@ -241,12 +241,17 @@ function lehrfahrer_account_current_session(PDO $pdo, bool $touch = true,
     } elseif ($session['context_type'] !== 'PENDING' || $session['membership_id'] !== null) return null;
     $last = strtotime((string)$session['last_activity_at']);
     if ($touch && ($last === false || $now - $last >= LEHRFAHRER_SESSION_TOUCH_INTERVAL_SECONDS)) {
+        // Recheck the shared lock after resolving the session; no expiry extension
+        // or logout may race a production maintenance boundary.
+        $updated = lehrfahrer_with_auth_mutation_gate($pdo, static function () use ($pdo, $now, $absolute, $session): bool {
         $query = $pdo->prepare('UPDATE account_sessions
             SET last_activity_at = ?, idle_expires_at = ? WHERE id = ? AND environment = ? AND revoked_at IS NULL');
         $query->execute([lehrfahrer_auth_timestamp($now),
             lehrfahrer_auth_timestamp(min($now + LEHRFAHRER_SESSION_IDLE_SECONDS, $absolute)),
             $session['id'], lehrfahrer_environment()]);
-        if ($query->rowCount() !== 1) return null;
+        return $query->rowCount() === 1;
+        });
+        if (!$updated) return null;
         $session['last_activity_at'] = lehrfahrer_auth_timestamp($now);
         $session['idle_expires_at'] = lehrfahrer_auth_timestamp(min($now + LEHRFAHRER_SESSION_IDLE_SECONDS, $absolute));
     }
