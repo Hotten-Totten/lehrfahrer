@@ -56,6 +56,9 @@ und gegebenenfalls eine bestätigte alte DB wieder her. Nach Öffnung neu angele
 Geschäftsdaten müssen vor jedem Rückweg separat gesichert und berücksichtigt
 werden. Keine blinde Rücksicherung über neue Daten.
 
-Nächster technischer Schritt: vollständigen lesenden Datei-/Platzbedarfscheck für
-die Sicherung vorbereiten; anschließend Sicherung/Restore-Probe und Implementierung
-des geschützten Erststarts. Die praktische GPS-Abnahme bleibt vorgemerkt.
+Datei-/Platzbedarfscheck abgeschlossen: 7.048 Dateien, 1.500.519.191 Bytes, keine
+erkannten Lesehindernisse. Details: `production-storage-inventory-2026-11-08.md`.
+Noch keine konsistente Sicherung angelegt. Nächster technischer Schritt:
+Backupziel und geschützten Kopierweg bestätigen, Sicherung/Restore-Probe und
+Implementierung des geschützten Erststarts vorbereiten. Die praktische GPS-Abnahme
+bleibt vorgemerkt.
