@@ -40,3 +40,26 @@ Deployment follow-up: the historical Cottbus postcheck required nonempty package
 and document directories even after A5 explicitly removed its test package.
 These two areas may now be empty; directory and symlink checks stay in force.
 No package or document is created to satisfy a deployment check.
+## Staging-Abnahme am 08.11.2026
+
+A6 ist fachlich und technisch abgenommen, geprüfter Stand `5f26b901ed3ce58528ff0a817e0da050c263fc8b`.
+
+Gemeinsam mit dem Nutzer geprüft: verständliche deutsche Darstellung, Ereignisfilter
+(drei Paketdownloads), Suche und alphabetische Auswahl der Ereignisarten,
+Seitennavigation bis zum Ende, Datumsgrenze mit leerem Ergebnis, aufklappbare
+technische Details, exakter Kennungsfilter, Ergebnisfilter und kombinierter
+Kennungs-/Ergebnisfilter sowie Rückkehr zur ungefilterten Ansicht.
+
+Deployment einschließlich Account-/Audit-HTTP-Checks und unverändertem öffentlichen
+Live-Inhalt erfolgreich:
+https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42495202388
+
+Abschließender rein lesender Nachcheck auf separatem Diagnose-Branch, ohne Deployment:
+https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42496282643
+
+Nachgewiesen: SHA-256 der fünf bereitgestellten A6-Dateien stimmt mit dem geprüften
+Git-Stand überein; gesamte Audit-Kette gültig; keine offenen Cottbus-Dateijournale;
+A5-Akteur/Mandant/Berechtigungen konsistent; archivierte Testeinweisung und abgeschlossene
+Linie erhalten; Testperson und Testpaket mit Artefakten entfernt; dauerhaft gewünschte
+Leitstellennummer erhalten. Datenbankprüfung in einer READ ONLY-Transaktion.
+A7 und A8 bleiben offen; keine Live-Freigabe erteilt.
