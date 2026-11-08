@@ -171,8 +171,8 @@ $pdo->prepare('UPDATE audit_events SET hash_format=2 WHERE sequence_number=?')->
 audit_check(lehrfahrer_audit_verify_chain($pdo), 'Hashformat-Wiederherstellung verifiziert');
 audit_rejected(fn() => lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::unauthenticated(), $event),
     'Preauth-Kontext kann keine Systemaktion behaupten');
-audit_check(!is_file(dirname(__DIR__) . '/api/audit_read.php')
-    && !is_file(dirname(__DIR__) . '/api/list_audit.php'), 'Keine Audit-Lese-API in A1');
+audit_check(!function_exists('lehrfahrer_audit_update') && !function_exists('lehrfahrer_audit_delete'),
+    'Auch nach A6 keine Audit-Schreibschnittstelle zum Aendern oder Loeschen');
 $pdo->exec("UPDATE audit_events SET action='ROUTE_SAVE' WHERE sequence_number=1");
 audit_check(!lehrfahrer_audit_verify_chain($pdo), 'Manipulation erkannt');
 $pdo->exec("UPDATE audit_events SET action='SYSTEM_CHANGE' WHERE sequence_number=1");
