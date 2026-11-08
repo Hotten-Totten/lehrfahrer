@@ -137,7 +137,7 @@ test('A7 echte SysOp-Zuweisung und bestehende MFA-Pruefung werden ausgewertet',(
 putenv('LEHRFAHRER_ENV=staging');
 $pdo->prepare('INSERT INTO sysop_assignment(singleton_key,account_id,assigned_at) VALUES(1,?,?)')->execute([$accountB,gmdate('c')]);
 $pdo->prepare("INSERT INTO account_passkeys(id,account_id,credential_id,public_key,rp_id,status,created_at) VALUES(?,?,?,?,?,'active',?)")
- ->execute(['pk_'.str_repeat('d',32),$accountB,'fixture-credential','fixture-public-key',LEHRFAHRER_SYSOP_MFA_RP_ID,gmdate('c')]);
+ ->execute(['pk_'.str_repeat('d',32),$accountB,'fixture-credential','fixture-public-key',lehrfahrer_sysop_mfa_rp_id(),gmdate('c')]);
 $noMfa=lehrfahrer_account_create_session($pdo,$accountB,'TENANT',$membershipB);
 $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$noMfa['token'];
 $denied=0;try{lehrfahrer_platform_audit_page($pdo,[]);}catch(LehrfahrerAuditReadDenied $e){$denied=$e->status;}

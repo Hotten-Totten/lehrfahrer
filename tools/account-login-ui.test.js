@@ -53,7 +53,7 @@ function harness(search = '', responses = {}) {
 }
 
 test('Staging-Seite hat semantisches Login ohne Gesellschaft und mit Legacy-Rückweg', () => {
-  assert.match(page, /lehrfahrer_environment\(\) !== 'staging'/);
+  assert.match(page, /!lehrfahrer_account_login_enabled\(\)/);
   assert.match(page, /<form id="accountLoginForm"/);
   assert.match(page, /name="username" autocomplete="username"/);
   assert.match(page, /name="password" type="password" autocomplete="current-password"/);
@@ -276,7 +276,7 @@ test('Abgelaufene Session zeigt Login statt Weiterleitung oder Offline-Meldung',
 test('Editor-Staging-Redirect und Account-Menü bleiben vom Legacy-Pfad getrennt', () => {
   const gate = fs.readFileSync(path.join(root, 'index.php'), 'utf8');
   const editor = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.match(gate, /lehrfahrer_environment\(\) === 'staging'/);
+  assert.match(gate, /lehrfahrer_account_login_enabled\(\)/);
   assert.match(gate, /account-login\.php\?next=%2F/);
   assert.match(gate, /: 'login\.html'/);
   assert.match(gate, /\$auth\['auth_source'\] === 'ACCOUNT'/);

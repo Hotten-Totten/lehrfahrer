@@ -1,0 +1,65 @@
+name: Production login inventory isolated MariaDB acceptance
+on:
+  push:
+    branches: [staging]
+    paths:
+      - 'api/_account*'
+      - 'api/_auth_cutover_gate.php'
+      - 'api/_mfa_enrollment_grant.php'
+      - 'api/_sysop*'
+      - 'tools/production-*'
+      - 'tools/sysop-mfa.test.php'
+      - '.github/workflows/production-login-preflight-isolated.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-mariadb:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: isolated-preflight-fixture-only
+          MARIADB_DATABASE: lf_preflight_fixture_20261108
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check inventory using SELECT-only fixture credentials
+        env:
+          LEHRFAHRER_PREFLIGHT_ISOLATED: '1'
+          LEHRFAHRER_DB_DRIVER: mysql
+          LEHRFAHRER_DB_HOST: 127.0.0.1
+          LEHRFAHRER_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+          LEHRFAHRER_DB_NAME: lf_preflight_fixture_20261108
+          LEHRFAHRER_DB_USER: root
+          LEHRFAHRER_DB_PASSWORD: isolated-preflight-fixture-only
+        run: php tools/production-login-preflight-mariadb.test.php
+  isolated-production-mfa:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: isolated-mfa-fixture-only
+          MARIADB_DATABASE: lf_mfa_fixture_20261108
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify production MFA, recovery and concurrent cutover with synthetic identities
+        env:
+          LEHRFAHRER_MFA_ISOLATED: '1'
+          LEHRFAHRER_DB_HOST: 127.0.0.1
+          LEHRFAHRER_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+          LEHRFAHRER_DB_NAME: lf_mfa_fixture_20261108
+          LEHRFAHRER_DB_USER: root
+          LEHRFAHRER_DB_PASSWORD: isolated-mfa-fixture-only
+        run: php tools/sysop-mfa.test.php --production --mariadb

@@ -26,7 +26,7 @@ try {
     if ($auth === null) {
         header('Cache-Control: no-store, private');
         header('Pragma: no-cache');
-        header('Location: ' . (lehrfahrer_environment() === 'staging'
+        header('Location: ' . (lehrfahrer_account_login_enabled()
             ? 'account-login.php?next=%2F' : 'login.html'), true, 302);
         exit;
     }

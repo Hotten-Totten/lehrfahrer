@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/api/_runtime_info.php';
 require_once __DIR__ . '/api/_auth_cutover_gate.php';
-if (lehrfahrer_environment() !== 'staging') {
+if (!lehrfahrer_account_login_enabled()) {
     http_response_code(404);
     exit;
 }
@@ -75,6 +75,10 @@ try {
       <input id="accountLogin" name="username" autocomplete="username" required>
       <label for="accountPassword">Passwort</label>
       <input id="accountPassword" name="password" type="password" autocomplete="current-password" required>
+      <?php if (lehrfahrer_environment() === 'production'): ?>
+      <label for="enrollmentCode">Freigabecode (nur bei erster Passkey-Einrichtung)</label>
+      <input id="enrollmentCode" type="password" autocomplete="off" maxlength="43">
+      <?php endif; ?>
       <button id="accountLoginButton" type="submit">Anmelden</button>
     </form>
     <section id="mfaSection" aria-labelledby="mfaTitle" hidden>
@@ -113,6 +117,6 @@ try {
     <button type="button" class="secondary" data-support-diagnostics>Diagnose für den Support …</button>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=1e2deba3a159" defer></script>
+  <script src="js/account-login.js?v=617a84cdcee5" defer></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_control_database.php';
+require_once __DIR__ . '/_account_configuration.php';
 
 final class LehrfahrerAuthCutoverBusy extends RuntimeException {}
 
@@ -9,6 +10,13 @@ function lehrfahrer_auth_cutover_state(PDO $pdo): array {
     $query = $pdo->prepare('SELECT `key`, value FROM control_metadata WHERE `key` IN (?, ?)');
     $query->execute(['auth_mode', 'auth_cutover_lock']);
     $values = $query->fetchAll(PDO::FETCH_KEY_PAIR);
+    if (lehrfahrer_environment() === 'production' && lehrfahrer_account_login_enabled()) {
+        $environment = $pdo->prepare('SELECT value FROM control_metadata WHERE `key` = ?');
+        $environment->execute(['environment']);
+        if ($environment->fetchColumn() !== 'production' || !isset($values['auth_mode'], $values['auth_cutover_lock'])) {
+            throw new RuntimeException('Produktiver Auth-Zustand ist nicht eindeutig gebunden.');
+        }
+    }
     $mode = $values['auth_mode'] ?? 'PARALLEL';
     $lock = $values['auth_cutover_lock'] ?? 'OPEN';
     if (!in_array($mode, ['PARALLEL', 'ACCOUNT_PRIMARY'], true)
@@ -35,7 +43,6 @@ function lehrfahrer_auth_cutover_begin_sqlite(PDO $pdo): void {
 }
 
 function lehrfahrer_with_auth_mutation_gate(PDO $pdo, callable $action): mixed {
-    if (lehrfahrer_environment() === 'production') return $action();
     static $active = [];
     $id = spl_object_id($pdo);
     if (isset($active[$id])) return $action();
@@ -71,7 +78,9 @@ function lehrfahrer_with_auth_mutation_gate(PDO $pdo, callable $action): mixed {
 
 /** Explicit recovery only. No timer may reopen authentication during a running cutover. */
 function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state, ?string $owner = null): void {
-    if (lehrfahrer_environment() === 'production' || !in_array($state, ['LOCKED', 'OPEN'], true)) {
+    if (!in_array($state, ['LOCKED', 'OPEN'], true) || (lehrfahrer_environment() === 'production'
+        && (PHP_SAPI !== 'cli' || isset($_SERVER['REQUEST_METHOD']) || $owner === null
+            || !lehrfahrer_account_login_enabled()))) {
         throw new RuntimeException('Cutover-Sperre ist hier nicht erlaubt.');
     }
     if ($owner !== null && !preg_match('/^[0-9]+-[0-9]+$/D', $owner)) {
@@ -92,7 +101,7 @@ function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state, ?string $owne
         $ownerQuery = $pdo->prepare('SELECT value FROM control_metadata WHERE `key` = ?');
         $ownerQuery->execute(['auth_cutover_owner']);
         $storedOwner = $ownerQuery->fetchColumn();
-        if ($state === 'LOCKED' && $current['mode'] !== 'PARALLEL') {
+        if ($state === 'LOCKED' && $current['mode'] !== 'PARALLEL' && lehrfahrer_environment() !== 'production') {
             throw new RuntimeException('Auth-Modus ist nicht PARALLEL.');
         }
         if ($state === 'LOCKED' && $current['lock'] !== 'OPEN') throw new RuntimeException('Cutover bereits gesperrt.');
@@ -115,6 +124,10 @@ function lehrfahrer_auth_cutover_set_lock(PDO $pdo, string $state, ?string $owne
         if ($state === 'LOCKED' && $owner !== null) {
             $insertOwner = $pdo->prepare('INSERT INTO control_metadata (`key`, value, updated_at) VALUES (?, ?, ?)');
             $insertOwner->execute(['auth_cutover_owner', $owner, $now]);
+        }
+        if ($state === 'OPEN' && lehrfahrer_environment() === 'production') {
+            $deleteOwner = $pdo->prepare('DELETE FROM control_metadata WHERE `key` = ? AND value = ?');
+            $deleteOwner->execute(['auth_cutover_owner', $owner]);
         }
         if ($mysql) $pdo->commit(); else lehrfahrer_control_sqlite_finish($pdo, true);
     } catch (Throwable $error) {

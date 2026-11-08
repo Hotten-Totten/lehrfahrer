@@ -64,9 +64,9 @@ function lehrfahrer_api_require_session(): array {
 
 /** Resolve one identity. A valid staging account takes precedence over a legacy cookie. */
 function lehrfahrer_api_resolve_session(PDO $pdo): ?array {
-    $accountPrimary = lehrfahrer_environment() === 'staging'
+    $accountPrimary = in_array(lehrfahrer_environment(), ['staging', 'production'], true)
         && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY';
-    if (lehrfahrer_environment() !== 'production'
+    if ((lehrfahrer_environment() !== 'production' || lehrfahrer_account_login_enabled())
         && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE)) {
         $session = lehrfahrer_account_current_session($pdo);
         if ($session !== null) {
@@ -126,7 +126,7 @@ function lehrfahrer_api_authorize(
     }
 
     $sessionCookieSupplied = array_key_exists(LEHRFAHRER_SESSION_COOKIE, $_COOKIE)
-        || (lehrfahrer_environment() !== 'production'
+        || ((lehrfahrer_environment() !== 'production' || lehrfahrer_account_login_enabled())
             && array_key_exists(LEHRFAHRER_ACCOUNT_TEST_COOKIE, $_COOKIE));
     if ($sessionCookieSupplied) {
         $context = lehrfahrer_api_require_session();
@@ -140,6 +140,12 @@ function lehrfahrer_api_authorize(
     }
 
     if (lehrfahrer_api_legacy_token_supplied($allowLegacyParameterFallback)) {
+        if (lehrfahrer_environment() === 'production') {
+            $state = lehrfahrer_auth_cutover_state(lehrfahrer_control_database());
+            if ($state['mode'] === 'ACCOUNT_PRIMARY' || $state['lock'] !== 'OPEN') {
+                lehrfahrer_api_authorization_error(403, 'Account-Anmeldung erforderlich.');
+            }
+        }
         $transport = lehrfahrer_get_header_ci('X-Api-Token') !== ''
             ? 'HEADER' : 'REQUEST_PARAMETER';
         lehrfahrer_require_write_auth(

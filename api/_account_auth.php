@@ -6,11 +6,11 @@ require_once __DIR__ . '/_auth_cutover_gate.php';
 require_once __DIR__ . '/_sysop_mfa.php';
 require_once __DIR__ . '/_audit.php';
 
-/** P2.1 is a staging-only, parallel test lane; the old session cookie remains untouched. */
+/** Retain the host-bound cookie name across the explicit production opt-in. */
 const LEHRFAHRER_ACCOUNT_TEST_COOKIE = '__Host-lehrfahrer_account_test';
 
 function lehrfahrer_account_test_only(): void {
-    if (lehrfahrer_environment() !== 'staging') {
+    if (!lehrfahrer_account_login_enabled()) {
         lehrfahrer_auth_json_response(404, ['ok' => false, 'error' => 'Nicht verfügbar.']);
     }
 }
@@ -101,10 +101,10 @@ function lehrfahrer_account_create_session_unguarded(PDO $pdo, string $accountId
         'absoluteExpiresAt' => $now + LEHRFAHRER_SESSION_ABSOLUTE_SECONDS];
 }
 
-function lehrfahrer_account_login(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
+function lehrfahrer_account_login(PDO $pdo, string $login, string $password, ?string $deviceLabel = null, ?string $enrollmentCode = null): ?array {
     try {
         return lehrfahrer_with_auth_mutation_gate($pdo,
-            static fn(): ?array => lehrfahrer_account_login_unguarded($pdo, $login, $password, $deviceLabel));
+            static fn(): ?array => lehrfahrer_account_login_unguarded($pdo, $login, $password, $deviceLabel, $enrollmentCode));
     } catch (Throwable $error) {
         if (!$error instanceof LehrfahrerAuditWriteFailure && !$error instanceof LehrfahrerAuthCutoverBusy) {
             lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::unauthenticated(),
@@ -140,7 +140,7 @@ function lehrfahrer_account_logout_session(PDO $pdo, array $session): void {
     }
 }
 
-function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $password, ?string $deviceLabel = null): ?array {
+function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $password, ?string $deviceLabel = null, ?string $enrollmentCode = null): ?array {
     $normalized = lehrfahrer_control_normalize_login($login);
     $query = $pdo->prepare('SELECT id, password_hash, active, must_change_password, blocked_until
         FROM accounts WHERE login_normalized = ?');
@@ -179,7 +179,12 @@ function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $pas
             }
         }
         if (lehrfahrer_sysop_mfa_required($pdo, (string)$account['id'])) {
-            $pending = lehrfahrer_sysop_mfa_start_unguarded($pdo, (string)$account['id'], $deviceLabel);
+            $pending = lehrfahrer_sysop_mfa_start_unguarded($pdo, (string)$account['id'], $deviceLabel, $enrollmentCode);
+            if ($pending === null) {
+                lehrfahrer_audit_append($pdo, $actor, ['action'=>'AUTH_LOGIN', 'result'=>'DENIED', 'reasonCode'=>'FORBIDDEN'], LEHRFAHRER_AUDIT_OPERATIONAL);
+                if ($mysql) $pdo->commit();
+                return null;
+            }
             lehrfahrer_audit_append($pdo, $actor, ['action' => 'AUTH_MFA_PENDING',
                 'objectType' => 'PASSKEY', 'result' => 'SUCCESS']);
             if ($mysql) $pdo->commit();
@@ -203,6 +208,8 @@ function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $pas
 
 function lehrfahrer_account_current_session(PDO $pdo, bool $touch = true,
     bool $lock = false): ?array {
+    if (lehrfahrer_environment() === 'production' && !lehrfahrer_account_login_enabled()) return null;
+    if (lehrfahrer_auth_cutover_state($pdo)['lock'] !== 'OPEN') return null;
     $token = lehrfahrer_account_cookie_token();
     if ($token === '') return null;
     $query = $pdo->prepare('SELECT s.*, a.active AS account_active, a.must_change_password,
@@ -222,7 +229,7 @@ function lehrfahrer_account_current_session(PDO $pdo, bool $touch = true,
         || (int)$session['must_change_password'] !== 0
         || ($blocked !== null && ($blockedUntil === false || $blockedUntil > $now))) return null;
     if (lehrfahrer_sysop_mfa_required($pdo, (string)$session['account_id'])
-        && lehrfahrer_sysop_mfa_credentials($pdo, (string)$session['account_id']) !== []
+        && (lehrfahrer_environment() === 'production' || lehrfahrer_sysop_mfa_credentials($pdo, (string)$session['account_id']) !== [])
         && $session['mfa_verified_at'] === null) return null;
     if ($session['context_type'] === 'TENANT') {
         $memberships = lehrfahrer_account_memberships($pdo, (string)$session['account_id']);

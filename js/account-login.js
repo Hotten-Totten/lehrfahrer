@@ -460,9 +460,13 @@
     notice('');
     try {
       const { response, body } = await request('login', 'POST', {
-        login: loginInput.value, password: passwordInput.value
+        login: loginInput.value, password: passwordInput.value,
+        ...(document.getElementById('enrollmentCode')?.value
+          ? { enrollmentCode: document.getElementById('enrollmentCode').value } : {})
       });
       passwordInput.value = '';
+      const enrollmentInput = document.getElementById('enrollmentCode');
+      if (enrollmentInput) enrollmentInput.value = '';
       if (!response.ok || !body.ok) {
         notice('Anmeldung nicht möglich. Bitte Loginname und Passwort prüfen.');
         return;
@@ -475,6 +479,8 @@
       await handleSession(body);
     } catch (_error) {
       passwordInput.value = '';
+      const enrollmentInput = document.getElementById('enrollmentCode');
+      if (enrollmentInput) enrollmentInput.value = '';
       notice('Anmeldung derzeit nicht möglich. Bitte später erneut versuchen.');
     } finally {
       busy = false;

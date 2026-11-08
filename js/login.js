@@ -16,6 +16,10 @@
     try {
       const response = await fetch('api/auth/runtime.php', { cache: 'no-store', credentials: 'same-origin' });
       const result = await response.json();
+      if (response.ok && result.ok && result.accountLoginUrl === 'account-login.php') {
+        window.location.replace('account-login.php' + window.location.search);
+        return;
+      }
       if (response.ok && result.ok) showRuntime(result.runtime);
     } catch (_error) {
       environment.textContent = '–';

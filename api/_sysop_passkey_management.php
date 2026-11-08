@@ -14,7 +14,7 @@ function lehrfahrer_sysop_passkeys_audit_denial(PDO $pdo, string $reason): void 
 
 /** Authentication, second factor and SYSOP assignment are all server authoritative. */
 function lehrfahrer_sysop_passkeys_session(PDO $pdo, ?string $csrf = null): ?array {
-    if (lehrfahrer_environment() !== 'staging') return null;
+    if (!lehrfahrer_account_login_enabled()) return null;
     $session = lehrfahrer_account_current_session($pdo, false);
     if ($session === null || $session['mfa_verified_at'] === null
         || !lehrfahrer_sysop_mfa_required($pdo, (string)$session['account_id'])) return null;
@@ -36,7 +36,7 @@ function lehrfahrer_sysop_passkeys_list(PDO $pdo): ?array {
     if ($session === null) return null;
     $query = $pdo->prepare("SELECT id, display_name, created_at, last_used_at, status FROM account_passkeys
         WHERE account_id = ? AND rp_id = ? AND status = 'active' ORDER BY created_at, id");
-    $query->execute([$session['account_id'], LEHRFAHRER_SYSOP_MFA_RP_ID]);
+    $query->execute([$session['account_id'], lehrfahrer_sysop_mfa_rp_id()]);
     $rows = $query->fetchAll(PDO::FETCH_ASSOC);
     return array_map(static fn(array $row, int $index): array => [
         'id' => (string)$row['id'],
@@ -73,9 +73,9 @@ function lehrfahrer_sysop_passkeys_begin(PDO $pdo, string $csrf, string $name): 
             $insert = $pdo->prepare("INSERT INTO account_mfa_pending
                 (id, account_id, token_hash, purpose, environment, challenge, challenge_expires_at,
                  created_at, expires_at, device_label, session_id)
-                VALUES (?, ?, ?, 'ENROLL', 'staging', ?, ?, ?, ?, ?, ?)");
+                VALUES (?, ?, ?, 'ENROLL', ?, ?, ?, ?, ?, ?, ?)");
             $insert->execute([lehrfahrer_control_id('mfa'), $accountId,
-                lehrfahrer_auth_token_hash(lehrfahrer_auth_random_token()),
+                lehrfahrer_auth_token_hash(lehrfahrer_auth_random_token()), lehrfahrer_environment(),
                 lehrfahrer_sysop_mfa_encode($webauthn->getChallenge()->getBinaryString()),
                 lehrfahrer_auth_timestamp($now + 300), lehrfahrer_auth_timestamp($now),
                 lehrfahrer_auth_timestamp($now + 300), $name, $session['id']]);
@@ -97,8 +97,8 @@ function lehrfahrer_sysop_passkeys_finish(PDO $pdo, string $csrf, array $input):
             if ($session === null) { if ($mysql) $pdo->rollBack(); return false; }
             $query = $pdo->prepare("SELECT * FROM account_mfa_pending
                 WHERE account_id = ? AND session_id = ? AND purpose = 'ENROLL'
-                  AND environment = 'staging' AND consumed_at IS NULL" . ($mysql ? ' FOR UPDATE' : ''));
-            $query->execute([$session['account_id'], $session['id']]);
+                  AND environment = ? AND consumed_at IS NULL" . ($mysql ? ' FOR UPDATE' : ''));
+            $query->execute([$session['account_id'], $session['id'], lehrfahrer_environment()]);
             $rows = $query->fetchAll(PDO::FETCH_ASSOC);
             if (count($rows) !== 1) { if ($mysql) $pdo->rollBack(); return false; }
             $pending = $rows[0];
@@ -121,7 +121,7 @@ function lehrfahrer_sysop_passkeys_finish(PDO $pdo, string $csrf, array $input):
                     VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)");
                 $passkeyId = lehrfahrer_control_id('pkey');
                 $insert->execute([$passkeyId, $session['account_id'], $created['credentialId'],
-                    $created['publicKey'], $created['signCount'], LEHRFAHRER_SYSOP_MFA_RP_ID,
+                    $created['publicKey'], $created['signCount'], lehrfahrer_sysop_mfa_rp_id(),
                     lehrfahrer_auth_timestamp(time()), $pending['device_label']]);
                 lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::currentAccount($pdo),
                     ['action' => 'AUTH_PASSKEY_REGISTER', 'objectType' => 'PASSKEY',
@@ -151,13 +151,13 @@ function lehrfahrer_sysop_passkeys_rename(PDO $pdo, string $csrf, string $id, st
             if ($session === null || $id === '') { if ($mysql) $pdo->rollBack(); return false; }
             $query = $pdo->prepare("SELECT display_name FROM account_passkeys
                 WHERE id = ? AND account_id = ? AND rp_id = ? AND status = 'active'" . ($mysql ? ' FOR UPDATE' : ''));
-            $query->execute([$id, $session['account_id'], LEHRFAHRER_SYSOP_MFA_RP_ID]);
+            $query->execute([$id, $session['account_id'], lehrfahrer_sysop_mfa_rp_id()]);
             $current = $query->fetchColumn();
             if ($current === false) { if ($mysql) $pdo->rollBack(); return false; }
             if ($current !== $name) {
                 $update = $pdo->prepare("UPDATE account_passkeys SET display_name = ?
                     WHERE id = ? AND account_id = ? AND rp_id = ? AND status = 'active'");
-                $update->execute([$name, $id, $session['account_id'], LEHRFAHRER_SYSOP_MFA_RP_ID]);
+                $update->execute([$name, $id, $session['account_id'], lehrfahrer_sysop_mfa_rp_id()]);
                 if ($update->rowCount() !== 1) throw new RuntimeException('Passkey-Umbenennung fehlgeschlagen.');
                 lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::currentAccount($pdo),
                     ['action' => 'AUTH_PASSKEY_RENAME', 'objectType' => 'PASSKEY',
@@ -183,7 +183,7 @@ function lehrfahrer_sysop_passkeys_revoke(PDO $pdo, string $csrf, string $id): b
             if ($session === null || $id === '') { if ($mysql) $pdo->rollBack(); return false; }
             $query = $pdo->prepare("SELECT id FROM account_passkeys
                 WHERE account_id = ? AND rp_id = ? AND status = 'active'" . ($mysql ? ' FOR UPDATE' : ''));
-            $query->execute([$session['account_id'], LEHRFAHRER_SYSOP_MFA_RP_ID]);
+            $query->execute([$session['account_id'], lehrfahrer_sysop_mfa_rp_id()]);
             $active = $query->fetchAll(PDO::FETCH_COLUMN);
             if (count($active) < 2 || !in_array($id, $active, true)) {
                 if ($mysql) $pdo->rollBack();
@@ -191,7 +191,7 @@ function lehrfahrer_sysop_passkeys_revoke(PDO $pdo, string $csrf, string $id): b
             }
             $update = $pdo->prepare("UPDATE account_passkeys SET status = 'revoked', revoked_at = ?
                 WHERE id = ? AND account_id = ? AND rp_id = ? AND status = 'active'");
-            $update->execute([lehrfahrer_auth_timestamp(time()), $id, $session['account_id'], LEHRFAHRER_SYSOP_MFA_RP_ID]);
+            $update->execute([lehrfahrer_auth_timestamp(time()), $id, $session['account_id'], lehrfahrer_sysop_mfa_rp_id()]);
             if ($update->rowCount() !== 1) throw new RuntimeException('Passkey-Widerruf fehlgeschlagen.');
             lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::currentAccount($pdo),
                 ['action' => 'AUTH_PASSKEY_REVOKE', 'objectType' => 'PASSKEY',

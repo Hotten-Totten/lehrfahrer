@@ -23,7 +23,7 @@ try {
     }
 
     $pdo = lehrfahrer_control_database();
-    if (lehrfahrer_environment() === 'staging'
+    if (in_array(lehrfahrer_environment(), ['staging', 'production'], true)
         && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY') {
         lehrfahrer_auth_json_response(403, ['ok' => false, 'error' => 'Bisherige Anmeldung ist nicht mehr verfuegbar.']);
     }

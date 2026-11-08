@@ -212,6 +212,7 @@ jobs:
           php tools/gtfs-route-preview.test.php
           php tools/gtfs-route-creation.test.php
           php tools/sysop-mfa.test.php
+          php tools/sysop-mfa.test.php --production
           php tools/audit-writer.test.php
           php tools/route-categories.test.php
           python3 tools/gtfs-official-candidate-filter.test.py
@@ -240,6 +241,8 @@ jobs:
             tools/control-account-migrate.test.js \
             tools/account-auth.test.js \
             tools/account-login-ui.test.js \
+            tools/production-auth.test.js \
+            tools/production-login-preflight.test.js \
             tools/editor-identity.test.js \
             tools/tenant-cache-boundary.test.js \
             tools/session-auth.test.js \

@@ -16,13 +16,14 @@ try {
     $pdo = lehrfahrer_control_database();
     if ($action === 'login') {
         $input = json_decode((string)file_get_contents('php://input'), true);
-        if (!is_array($input) || array_diff(array_keys($input), ['login', 'password', 'deviceLabel']) !== []
+        if (!is_array($input) || array_diff(array_keys($input), ['login', 'password', 'deviceLabel', 'enrollmentCode']) !== []
             || !is_string($input['login'] ?? null) || !is_string($input['password'] ?? null)
-            || (isset($input['deviceLabel']) && !is_string($input['deviceLabel']))) {
+            || (isset($input['deviceLabel']) && !is_string($input['deviceLabel']))
+            || (isset($input['enrollmentCode']) && !is_string($input['enrollmentCode']))) {
             lehrfahrer_auth_json_response(400, ['ok' => false, 'error' => 'Anmeldung nicht möglich.']);
         }
         $created = lehrfahrer_account_login($pdo, (string)($input['login'] ?? ''),
-            (string)($input['password'] ?? ''), (string)($input['deviceLabel'] ?? ''));
+            (string)($input['password'] ?? ''), (string)($input['deviceLabel'] ?? ''), $input['enrollmentCode'] ?? null);
         if ($created === null) {
             usleep(random_int(20000, 50000));
             lehrfahrer_auth_json_response(401, ['ok' => false, 'error' => 'Anmeldung nicht möglich.']);

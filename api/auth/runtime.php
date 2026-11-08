@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/_control_database.php';
+require_once dirname(__DIR__) . '/_auth_cutover_gate.php';
 
 if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'GET') {
     header('Allow: GET');
@@ -16,7 +17,10 @@ header('Cache-Control: no-store, private');
 header('Pragma: no-cache');
 try {
     $pdo = lehrfahrer_control_database();
-    echo json_encode(['ok' => true, 'runtime' => lehrfahrer_runtime_info($pdo)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok' => true, 'runtime' => lehrfahrer_runtime_info($pdo),
+        'accountLoginUrl' => lehrfahrer_account_login_enabled()
+            && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY' ? 'account-login.php' : null],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $error) {
     error_log('Lehrfahrer runtime info failed internally: ' . $error->getMessage());
     http_response_code(500);

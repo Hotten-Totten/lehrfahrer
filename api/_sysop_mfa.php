@@ -2,14 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_auth_cutover_gate.php';
+require_once __DIR__ . '/_mfa_enrollment_grant.php';
 
 const LEHRFAHRER_SYSOP_MFA_COOKIE = '__Host-lehrfahrer_mfa_pending';
-const LEHRFAHRER_SYSOP_MFA_RP_ID = 'staging.lehrfahrer.de';
-const LEHRFAHRER_SYSOP_MFA_ORIGIN = 'https://staging.lehrfahrer.de';
 final class LehrfahrerMfaRejected extends RuntimeException {}
 
 function lehrfahrer_sysop_mfa_required(PDO $pdo, string $accountId): bool {
-    if (lehrfahrer_environment() !== 'staging') return false;
+    if (!lehrfahrer_account_login_enabled()) return false;
     $query = $pdo->prepare('SELECT COUNT(*) FROM sysop_assignment WHERE account_id = ?');
     $query->execute([$accountId]);
     return (int)$query->fetchColumn() === 1;
@@ -18,7 +17,7 @@ function lehrfahrer_sysop_mfa_required(PDO $pdo, string $accountId): bool {
 function lehrfahrer_sysop_mfa_credentials(PDO $pdo, string $accountId): array {
     $query = $pdo->prepare("SELECT id, credential_id, public_key, sign_count FROM account_passkeys
         WHERE account_id = ? AND status = 'active' AND rp_id = ? ORDER BY created_at, id");
-    $query->execute([$accountId, LEHRFAHRER_SYSOP_MFA_RP_ID]);
+    $query->execute([$accountId, lehrfahrer_sysop_mfa_rp_id()]);
     return $query->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -58,12 +57,13 @@ function lehrfahrer_sysop_mfa_library(): \lbuchs\WebAuthn\WebAuthn {
     set_include_path($path . PATH_SEPARATOR . $old);
     try { require_once $path . '/WebAuthn.php'; }
     finally { set_include_path($old); }
-    return new \lbuchs\WebAuthn\WebAuthn('Lehrfahrer Staging', LEHRFAHRER_SYSOP_MFA_RP_ID, ['none'], true);
+    return new \lbuchs\WebAuthn\WebAuthn(lehrfahrer_account_configuration()['name'], lehrfahrer_sysop_mfa_rp_id(), ['none'], true);
 }
 
-function lehrfahrer_sysop_mfa_start_unguarded(PDO $pdo, string $accountId, ?string $deviceLabel): array {
+function lehrfahrer_sysop_mfa_start_unguarded(PDO $pdo, string $accountId, ?string $deviceLabel, ?string $enrollmentCode = null): ?array {
     $credentials = lehrfahrer_sysop_mfa_credentials($pdo, $accountId);
     $purpose = $credentials === [] ? 'ENROLL' : 'AUTH';
+    if ($purpose === 'ENROLL' && !lehrfahrer_mfa_consume_enrollment_grant($pdo, $accountId, $enrollmentCode)) return null;
     $token = lehrfahrer_auth_random_token();
     $now = time();
     $label = trim((string)$deviceLabel);
@@ -146,7 +146,7 @@ function lehrfahrer_sysop_mfa_begin(PDO $pdo, string $csrf): ?array {
 function lehrfahrer_sysop_mfa_validate_client(string $clientData, string $type): void {
     $client = json_decode($clientData, true, 32, JSON_THROW_ON_ERROR);
     if (!is_array($client) || ($client['type'] ?? null) !== $type
-        || ($client['origin'] ?? null) !== LEHRFAHRER_SYSOP_MFA_ORIGIN) {
+        || ($client['origin'] ?? null) !== lehrfahrer_sysop_mfa_origin()) {
         throw new LehrfahrerMfaRejected('WebAuthn-Origin oder Typ ungueltig.');
     }
 }
@@ -164,7 +164,7 @@ function lehrfahrer_sysop_mfa_verify_creation(array $input, string $challenge): 
         lehrfahrer_sysop_mfa_decode($input['attestationObject']),
         lehrfahrer_sysop_mfa_decode($challenge), true);
     $credentialId = lehrfahrer_sysop_mfa_encode((string)$data->credentialId);
-    if (!hash_equals($credentialId, $input['id']) || $data->rpId !== LEHRFAHRER_SYSOP_MFA_RP_ID) {
+    if (!hash_equals($credentialId, $input['id']) || $data->rpId !== lehrfahrer_sysop_mfa_rp_id()) {
         throw new LehrfahrerMfaRejected('Credential ungueltig.');
     }
     return ['credentialId' => $credentialId, 'publicKey' => (string)$data->credentialPublicKey,
@@ -213,10 +213,10 @@ function lehrfahrer_sysop_mfa_finish(PDO $pdo, string $csrf, array $input): ?arr
                         VALUES (?, ?, ?, ?, ?, ?, 'active', ?)");
                     $insert->execute([$passkeyId, $pending['account_id'], $created['credentialId'],
                         $created['publicKey'], $created['signCount'],
-                        LEHRFAHRER_SYSOP_MFA_RP_ID, lehrfahrer_auth_timestamp(time())]);
+                        lehrfahrer_sysop_mfa_rp_id(), lehrfahrer_auth_timestamp(time())]);
                     $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
                         WHERE account_id = ? AND environment = ? AND revoked_at IS NULL');
-                    $revoke->execute([lehrfahrer_auth_timestamp(time()), $pending['account_id'], 'staging']);
+                    $revoke->execute([lehrfahrer_auth_timestamp(time()), $pending['account_id'], lehrfahrer_environment()]);
                     require_once __DIR__ . '/_audit.php';
                     lehrfahrer_audit_append($pdo, LehrfahrerAuditActor::knownAccount($pdo, (string)$pending['account_id']),
                         ['action' => 'AUTH_PASSKEY_REGISTER', 'objectType' => 'PASSKEY',

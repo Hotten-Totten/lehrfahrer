@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_audit.php';
 
 function lehrfahrer_company_account_primary(PDO $pdo): bool {
-    return lehrfahrer_environment() !== 'production' && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY';
+    return (lehrfahrer_environment() !== 'production' || lehrfahrer_account_login_enabled()) && lehrfahrer_auth_cutover_state($pdo)['mode'] === 'ACCOUNT_PRIMARY';
 }
 
 /** Trusted CLI provisioning only; never attach a new company to an existing account by login. */
