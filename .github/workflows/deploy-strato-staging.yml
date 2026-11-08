@@ -122,13 +122,35 @@ jobs:
           done
           test "$(awk '{print $1}' /tmp/live-before.sha256 | sort -u | wc -l)" -eq 1
           expected_version_sha="$(head -n 1 /tmp/live-before.sha256 | awk '{print $1}')"
+          printf '%s\n' '<?php echo json_encode(array("phpVersion"=>PHP_VERSION,"sapi"=>PHP_SAPI)), "\n";' \
+            | sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" \
+              'php -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin'
           remote_path="${TARGET_PATH#/}"
           if [ -z "$remote_path" ]; then remote_path=.; fi
           printf -v quoted_path '%q' "$remote_path"
           remote_command="LEHRFAHRER_STREAMED_LIVE_READONLY=1 php -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin -- $quoted_path $expected_version_sha"
+          set +e
           sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" "$remote_command" \
-            < tools/live-inventory-readonly.php > /tmp/live-inventory.json
+            < tools/live-inventory-readonly.php > /tmp/live-inventory.json 2> /tmp/live-inventory.stderr
+          inspection_status=$?
+          set -e
+          if [ "$inspection_status" -ne 0 ]; then
+            echo "LIVE_READONLY_EXIT=$inspection_status"
+            python3 - <<'PY'
+          from pathlib import Path
+          import json
+          text=Path('/tmp/live-inventory.json').read_text(errors='replace')
+          try:
+              report=json.loads(text)
+              assert report.get('readOnly') is True
+              print(json.dumps(report,sort_keys=True))
+          except Exception:
+              print('LIVE_READONLY_REPORT_UNAVAILABLE')
+          PY
+            exit "$inspection_status"
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
