@@ -111,3 +111,21 @@ Staging-MFA- und Audit-Writer-PHP-Suiten bestanden; PHP-Syntaxprüfungen bestand
 Eine echte Passkey-Bedienung auf der endgültigen Produktionsdomain und eine
 reale Produktionsumstellung sind damit noch nicht freigegeben. Die praktische
 GPS-Abnahme bleibt separat vorgemerkt.
+
+## Abgeschlossene automatisierte Staging-Abnahme
+
+Funktionsstand: c9b1d3306c7a779fd20d24070312b22b4f868c73.
+
+- Isolierte MariaDB 11.4, Inventar und Produktions-MFA einschließlich Recovery,
+  Audit-Rollback und konkurrierendem Login erfolgreich:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42521368044
+- Staging-Deployment mit PHP-/Node-Regressionen, HTTP-/Runtime-/Anmelde-/Session-
+  und Account-primary-Prüfung erfolgreich; öffentlicher Live-Inhalt unverändert:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42521368054
+- Firmenanlage/Aktivierung in isolierter MariaDB nach der gemeinsamen
+  Auth-/Provisioning-Anpassung erfolgreich:
+  https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42520772711
+
+Keine bestehenden SysOp-Passkeys zurückgesetzt, keine Produktiv-Freischaltung,
+keine Produktionsdatenmigration. Offen bleiben tatsächliche Produktionsbindung,
+Bestandsmigration und vollständiger Sicherungs-/Restore-Nachweis samt Freigabe.
