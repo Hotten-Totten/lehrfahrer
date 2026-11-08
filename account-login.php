@@ -62,6 +62,9 @@ try {
     .passkey-card input { margin-top: 8px; }
     #passkeyHint { color: #526171; font-size: .9rem; }
   </style>
+<link rel="stylesheet" href="support-diagnostics.css?v=1">
+<script src="js/support-diagnostics-core.js?v=1"></script>
+<script src="js/support-diagnostics.js?v=1"></script>
 </head>
 <body>
   <main>
@@ -106,6 +109,7 @@ try {
     <p id="message" role="status" aria-live="polite"></p>
     <div id="runtime"></div>
     <?php if ($legacyFallbackVisible): ?><p id="legacyFallback"><a href="login.html">Bisherige Anmeldung verwenden</a></p><?php endif; ?>
+    <button type="button" class="secondary" data-support-diagnostics>Diagnose für den Support …</button>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
   <script src="js/account-login.js?v=ac4d50ee682c" defer></script>

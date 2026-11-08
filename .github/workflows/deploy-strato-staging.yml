@@ -223,6 +223,7 @@ jobs:
             tools/control-database.test.js \
             tools/audit-writer-concurrency.test.js \
             tools/audit-read.test.js \
+            tools/support-diagnostics.test.js \
             tools/audit-file-operation.test.js \
             tools/control-phase2-schema.test.js \
             tools/control-user-numbers.test.js \

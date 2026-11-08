@@ -5,6 +5,9 @@
 <meta name="referrer" content="same-origin">
 <title>Auditprotokoll · Lehrfahrer</title>
 <link rel="stylesheet" href="audit.css?v=3">
+<link rel="stylesheet" href="support-diagnostics.css?v=1">
+<script src="js/support-diagnostics-core.js?v=1"></script>
+<script src="js/support-diagnostics.js?v=1"></script>
 <script src="js/audit.js?v=3" defer></script>
 </head>
 <body>
@@ -13,6 +16,7 @@
 <p>Hier sehen Sie, welche Aktionen in Ihrer aktiven Firma ausgeführt oder abgewiesen wurden – zum Beispiel Änderungen an Routen, Personen oder Einweisungspaketen. Das hilft bei Rückfragen und der Fehlersuche.</p>
 <p>„Erfolgreich“ bedeutet: Die jeweilige Aktion wurde ausgeführt. „Abgewiesen“ bedeutet: Sie wurde nicht erlaubt. „Fehlgeschlagen“ weist auf einen Fehler bei der Aktion hin. Ein normaler Eintrag erfordert keine Maßnahme.</p>
 <p>Alle Uhrzeiten und Datumsfilter verwenden UTC: in Deutschland im Winter eine Stunde, im Sommer zwei Stunden hinzurechnen. Namen und Bemerkungen werden hier nicht angezeigt. Kennungen für die genaue Zuordnung finden Sie unter „Technische Details“.</p>
+<p><button type="button" data-support-diagnostics>Diagnose für den Support …</button></p>
 <form id="auditFilters">
 <label>Von (UTC)<input type="date" name="from"></label>
 <label>Bis (UTC)<input type="date" name="to"></label>
