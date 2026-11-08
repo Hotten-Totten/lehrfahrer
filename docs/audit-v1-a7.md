@@ -59,7 +59,38 @@ synthetischen Daten: Plattformkontexte, lesbare Darstellung und geschützte Deta
 Vollständiger Node-Testsatz: 731 Tests, 720 bestanden, 9 übersprungen und nur die
 beiden bekannten Fehler in `tools/navigation-off-route.test.js` (102/163).
 
-A7 ist noch nicht abgenommen. Staging-Deployment, gemeinsame Praxisabnahme mit
-einem wirklich berechtigten Plattformaccount und der abschließende serverseitige
-Nachcheck sind nach ihren tatsächlichen Ergebnissen zu dokumentieren. Keine
-Live-Freigabe; A8 bleibt offen.
+## Staging-Abnahme am 08.11.2026
+
+A7 ist fachlich und technisch abgenommen. Geprüfter Funktionsstand:
+`61f23169ccba43d0aae82c4739b1ddb07f378b79`.
+
+Gemeinsam praktisch geprüft: Einstieg mit dem berechtigten Plattformkonto,
+25 Einträge auf der ersten Seite, bereinigte Details ohne Konto-/Mitgliedschafts-/
+Objektkennungen, Kontextfilter „Anmeldeprüfung“ mit 12 passenden Einträgen,
+Firmenfilter, kombinierter Firmen-/Kontextfilter mit leerem Ergebnis,
+Seitennavigation bis zum Ende und Rückkehr zu den neuesten Einträgen.
+Anschließend lädt das normale Firmen-Aktivitätenprotokoll weiterhin mit den
+zugehörigen technischen Details der eigenen Firma. Die Firma wurde durch den
+Plattformbesuch nicht gewechselt.
+
+Deployment und Zugriffs-Nachprüfungen erfolgreich:
+https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42498370539
+
+Nachgewiesen: bestehender Account-/A6-Zugriff weiterhin erfolgreich;
+Plattform-API ohne Anmeldung 401, für den gewöhnlichen Firmenadministrator 403,
+Schreibanfrage 405; öffentlicher Live-Inhalt unverändert.
+
+Abschließender rein lesender Servercheck auf separatem Diagnose-Branch,
+ohne Deployment und mit READ ONLY-Datenbanktransaktion:
+https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42499477039
+
+Nachgewiesen: acht bereitgestellte A6-/A7-/Zugangsdateien stimmen per SHA-256
+mit dem geprüften Git-Stand überein; SysOp-Account aktiv und Plattform-Auditrecht
+vorhanden; reduzierte Plattformprojektion; gesamte Audit-Kette gültig; keine
+offenen Dateijournale in den geprüften Mandantenverzeichnissen. Zusätzlich
+bestehende A5-Abnahme geprüft: Testeinweisung archiviert und Linie abgeschlossen,
+Testperson und Testpaket samt Artefakten entfernt, gewünschte Leitstellennummer
+erhalten. Keine Fachbestandsänderung durch den Nachcheck.
+
+Keine Live-Freigabe erteilt. A8 bleibt offen, einschließlich des Nachweises,
+dass eine neue Firma mit einem leeren eigenen Fachbestand beginnt.
