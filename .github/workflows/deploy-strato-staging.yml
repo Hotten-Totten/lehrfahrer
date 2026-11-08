@@ -8,6 +8,11 @@ on:
     branches: ["staging"]
   workflow_dispatch:
     inputs:
+      inspect_live_readonly:
+        description: Read-only live inventory, no staging or production deployment
+        required: true
+        default: false
+        type: boolean
       create_control_db_restore_point:
         description: Create the private Control-DB restore point after all staging preflights
         required: true
@@ -89,7 +94,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  inspect-live-readonly:
+    if: ${{ inputs.inspect_live_readonly == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Inspect confirmed live target without deploying or loading application code
+        env:
+          SSH_HOST: ${{ secrets.STRATO_HOST }}
+          SSH_PORT: ${{ secrets.STRATO_PORT }}
+          SSH_USER: ${{ secrets.STRATO_USER }}
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          TARGET_PATH: ${{ secrets.STRATO_TARGET_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sshpass >/dev/null || { sudo apt-get update -qq; sudo apt-get install -y -qq sshpass; }
+          mkdir -p ~/.ssh
+          # Pin the existing workstation-trusted host key; do not learn a new key with credentials.
+          printf '[%s]:%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINbBMvvDjN4IP04VAZlDH42A+HL25ifeIK9CorAvaMA/\n' "$SSH_HOST" "$SSH_PORT" > ~/.ssh/known_hosts
+          printf '%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINbBMvvDjN4IP04VAZlDH42A+HL25ifeIK9CorAvaMA/\n' "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          for host in lehrfahrer.de www.lehrfahrer.de; do
+            curl --fail --silent --show-error --location --max-time 20 "https://$host/VERSION" | sha256sum >> /tmp/live-before.sha256
+          done
+          test "$(awk '{print $1}' /tmp/live-before.sha256 | sort -u | wc -l)" -eq 1
+          expected_version_sha="$(head -n 1 /tmp/live-before.sha256 | awk '{print $1}')"
+          remote_path="${TARGET_PATH#/}"
+          if [ -z "$remote_path" ]; then remote_path=.; fi
+          printf -v quoted_path '%q' "$remote_path"
+          remote_command="LEHRFAHRER_STREAMED_LIVE_READONLY=1 php -q -d register_argc_argv=1 -d auto_prepend_file= -d auto_append_file= -f /dev/stdin -- $quoted_path $expected_version_sha"
+          sshpass -e ssh -T -p "$SSH_PORT" -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+            -o UpdateHostKeys=no "$SSH_USER@$SSH_HOST" "$remote_command" \
+            < tools/live-inventory-readonly.php > /tmp/live-inventory.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('/tmp/live-inventory.json').read_text())
+          hashes=[line.split()[0] for line in Path('/tmp/live-before.sha256').read_text().splitlines()]
+          assert report['readOnly'] is True and report['releaseReady'] is False
+          assert hashes and all(value==report['files']['VERSION'] for value in hashes), 'DOMAIN_TARGET_MAPPING_UNCONFIRMED'
+          print(json.dumps(report, sort_keys=True))
+          print('DOMAIN_TARGET_MAPPING=CONFIRMED')
+          PY
+          for host in lehrfahrer.de www.lehrfahrer.de; do
+            curl --fail --silent --show-error --location --max-time 20 "https://$host/VERSION" | sha256sum >> /tmp/live-after.sha256
+          done
+          cmp /tmp/live-before.sha256 /tmp/live-after.sha256
+          echo LIVE_PUBLIC_VERSION_UNCHANGED
   deploy-staging:
+    if: ${{ inputs.inspect_live_readonly != true }}
     runs-on: ubuntu-latest
     environment:
       name: staging
