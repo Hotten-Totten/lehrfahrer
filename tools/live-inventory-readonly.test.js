@@ -21,7 +21,8 @@ function fixture(mode) {
   const result=spawnSync(php,['-r',`require ${q(path.join(root,'tools/live-inventory-readonly.php'))}; echo json_encode(live_inventory(${q(web)}),JSON_THROW_ON_ERROR);`],{encoding:'utf8',env});
   assert.equal(result.status,0,result.stderr); assert.equal(fs.existsSync(marker),false);
   assert.deepEqual([fs.readFileSync(config,'utf8'),fs.readFileSync(path.join(web,'.user.ini'),'utf8')],before);
-  assert.doesNotMatch(result.stdout,/file_put_contents|MUTATION|runtime\.php|[A-Z]:\\|password|SELECT /);
+  assert.doesNotMatch(result.stdout,/file_put_contents|MUTATION|[A-Z]:\\|password|SELECT /);
+  assert.equal(result.stdout.includes(base.replaceAll('\\','/')),false);
   const report=JSON.parse(result.stdout); assert.equal(report.readOnly,true); assert.equal(report.releaseReady,false);
   return report;
 }
