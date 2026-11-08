@@ -22,7 +22,7 @@ test('production configuration binds HTTPS origin and exact RP host', () => {
   assert.deepEqual(configuration({LEHRFAHRER_ACCOUNT_LOGIN_ENABLED:'1',LEHRFAHRER_PUBLIC_ORIGIN:'https://lehrfahrer.example',LEHRFAHRER_PASSKEY_RP_ID:'lehrfahrer.example'}),
     {enabled:true,origin:'https://lehrfahrer.example',rpId:'lehrfahrer.example',name:'Lehrfahrer'});
   for (const [origin,rp] of [['http://lehrfahrer.example','lehrfahrer.example'],['https://staging.lehrfahrer.de','staging.lehrfahrer.de'],
-    ['https://lehrfahrer.example','example'],['https://lehrfahrer.example:443','lehrfahrer.example'],['https://127.0.0.1','127.0.0.1'],['https://localhost','localhost']]) {
+    ['https://lehrfahrer.example','example'],['https://LEHRFAHRER.example','lehrfahrer.example'],['https://lehrfahrer.example:443','lehrfahrer.example'],['https://127.0.0.1','127.0.0.1'],['https://localhost','localhost']]) {
     assert.equal(configuration({LEHRFAHRER_ACCOUNT_LOGIN_ENABLED:'1',LEHRFAHRER_PUBLIC_ORIGIN:origin,LEHRFAHRER_PASSKEY_RP_ID:rp}),null);
   }
 });

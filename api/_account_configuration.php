@@ -12,7 +12,7 @@ function lehrfahrer_account_configuration(): array {
     $origin = lehrfahrer_public_origin();
     $host = strtolower((string)parse_url($origin, PHP_URL_HOST));
     $rpId = trim((string)getenv('LEHRFAHRER_PASSKEY_RP_ID'));
-    if ($host === '' || !str_contains($host, '.') || $host === 'staging.lehrfahrer.de' || $rpId !== $host
+    if ($host === '' || $origin !== 'https://' . $host || !str_contains($host, '.') || $host === 'staging.lehrfahrer.de' || $rpId !== $host
         || filter_var($host, FILTER_VALIDATE_IP) || parse_url($origin, PHP_URL_PORT) !== null
         || !filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
         throw new RuntimeException('Produktive Passkey-Konfiguration ist ungueltig.');

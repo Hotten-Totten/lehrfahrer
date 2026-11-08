@@ -27,8 +27,10 @@ for ($i=0; $i<4; $i++) {
 }
 $pdo->exec("INSERT INTO control_metadata (`key`,value,updated_at) VALUES ('auth_mode','PARALLEL','2026-11-08'),('auth_cutover_lock','OPEN','2026-11-08') ON DUPLICATE KEY UPDATE value=VALUES(value)");
 // A genuinely SELECT-only user validates the real CLI, independently of transaction flags.
-$pdo->exec("CREATE USER 'lf_preflight_reader'@'127.0.0.1' IDENTIFIED BY 'fixture-reader-only'");
-$pdo->exec("GRANT SELECT ON `$name`.* TO 'lf_preflight_reader'@'127.0.0.1'");
+// Docker forwards the loopback connection from its bridge address, not 127.0.0.1.
+// This disposable user has SELECT only on the isolated fixture database.
+$pdo->exec("CREATE USER 'lf_preflight_reader'@'%' IDENTIFIED BY 'fixture-reader-only'");
+$pdo->exec("GRANT SELECT ON `$name`.* TO 'lf_preflight_reader'@'%'");
 function fingerprint(PDO $pdo): string {
     $tables=$pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN); sort($tables); $out=[];
     foreach($tables as $table) {
