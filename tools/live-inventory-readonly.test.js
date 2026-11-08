@@ -44,3 +44,30 @@ test('read-only workflow skips deployment and pins the previously trusted SSH ke
   assert.match(workflow,/StrictHostKeyChecking=yes/);
   assert.match(workflow,/auto_prepend_file= -d auto_append_file=/);
 });
+test('storage scan includes hidden and legacy files but emits only aggregate facts',()=>{
+  const base=fs.mkdtempSync(path.join(os.tmpdir(),'lf-storage-scan-'));
+  fs.mkdirSync(path.join(base,'WorkingSystem'));
+  fs.writeFileSync(path.join(base,'.private-canary'),'secret-canary');
+  fs.writeFileSync(path.join(base,'WorkingSystem','old-person-name.json'),'{}');
+  const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('LEHRFAHRER_')));
+  const read=()=>{
+    const result=spawnSync(php,['-r',`require ${q(path.join(root,'tools/live-inventory-readonly.php'))}; echo json_encode(live_storage_scan(${q(base)},true));`],{encoding:'utf8',env});
+    assert.equal(result.status,0,result.stderr);
+    assert.doesNotMatch(result.stdout,/secret-canary|old-person-name|private-canary/);
+    return JSON.parse(result.stdout);
+  };
+  const before=read(); assert.equal(before.complete,true); assert.equal(before.files,2);
+  assert.equal(before.bytes,Buffer.byteLength('secret-canary{}'));
+  assert.equal(before.groups.legacyCopies.files,1); assert.equal(before.consistentSnapshot,false);
+  assert.equal(read().manifestSha256,before.manifestSha256);
+  fs.writeFileSync(path.join(base,'.private-canary'),'changed-canary');
+  assert.notEqual(read().manifestSha256,before.manifestSha256);
+});
+test('explicit excluded roots are not traversed or added to backup size',()=>{
+  const base=fs.mkdtempSync(path.join(os.tmpdir(),'lf-storage-exclusion-'));
+  const excluded=path.join(base,'other-system'); fs.mkdirSync(excluded);
+  fs.writeFileSync(path.join(excluded,'foreign.json'),'foreign'); fs.writeFileSync(path.join(base,'own.json'),'{}');
+  const result=spawnSync(php,['-r',`require ${q(path.join(root,'tools/live-inventory-readonly.php'))}; echo json_encode(live_storage_scan(${q(base)},true,[realpath(${q(excluded)})]));`],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr); const report=JSON.parse(result.stdout);
+  assert.equal(report.files,1); assert.equal(report.bytes,2); assert.equal(report.excludedDirectories,1);
+});

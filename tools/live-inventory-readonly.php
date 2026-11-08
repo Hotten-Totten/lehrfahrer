@@ -1,7 +1,57 @@
 <?php
 declare(strict_types=1);
 // Streamed over SSH. No application includes, schema factories, sessions or file writes.
-function live_inventory(string $root, ?string $expectedVersionSha256=null): array {
+function live_storage_scan(string $root, bool $public, array $excludedRoots=[]): array {
+    $result=['complete'=>true,'files'=>0,'directories'=>0,'bytes'=>0,'symlinks'=>0,'unreadable'=>0,
+        'changedDuringRead'=>0,'specialEntries'=>0,'excludedDirectories'=>0,'groups'=>[],'consistentSnapshot'=>false];
+    $root=realpath($root)?:$root;
+    $rootCompare=str_replace('\\','/',$root);
+    if (PHP_OS_FAMILY==='Windows') $rootCompare=strtolower($rootCompare);
+    $rows=[]; $stack=[['path'=>$root,'relative'=>'']]; $started=microtime(true);
+    while ($stack) {
+        if (count($rows)>200000 || microtime(true)-$started>180) { $result['complete']=false; break; }
+        $current=array_pop($stack); $path=$current['path']; $relative=$current['relative'];
+        if (is_link($path)) { $result['symlinks']++; $result['complete']=false; continue; }
+        $real=realpath($path);
+        $compare=$real===false?'':str_replace('\\','/',$real);
+        if (PHP_OS_FAMILY==='Windows') $compare=strtolower($compare);
+        if ($real===false || !str_starts_with($compare.'/', $rootCompare.'/')) { $result['unreadable']++; $result['complete']=false; continue; }
+        if (in_array($real,$excludedRoots,true)) { $result['excludedDirectories']++; continue; }
+        $before=@stat($path);
+        if ($before===false) { $result['unreadable']++; $result['complete']=false; continue; }
+        $mode=$before['mode']&07777;
+        if (is_dir($path)) {
+            $entries=@scandir($path);
+            if ($entries===false) { $result['unreadable']++; $result['complete']=false; continue; }
+            $result['directories']++; $rows[$relative]="D\0".$mode;
+            foreach (array_reverse(array_diff($entries,['.','..'])) as $entry) {
+                $child=$relative===''?$entry:$relative.'/'.$entry;
+                $stack[]=['path'=>$path.'/'.$entry,'relative'=>$child];
+            }
+        } elseif (is_file($path)) {
+            $hash=@hash_file('sha256',$path);
+            clearstatcache(true,$path); $after=@stat($path);
+            if ($hash===false || $after===false) { $result['unreadable']++; $result['complete']=false; continue; }
+            foreach (['dev','ino','size','mtime','ctime'] as $key) if ($before[$key]!==$after[$key]) {
+                $result['changedDuringRead']++; $result['complete']=false; break;
+            }
+            $result['files']++; $result['bytes']+=$before['size'];
+            $rows[$relative]="F\0".$mode."\0".$before['size']."\0".$before['mtime']."\0".$hash;
+            $top=explode('/',$relative)[0];
+            $group=!$public?'privateFiles':(in_array($top,['WorkingSystem','backup','backup_liniendaten','backups'],true)?'legacyCopies':'publicApplicationAndData');
+            if (!isset($result['groups'][$group])) $result['groups'][$group]=['files'=>0,'bytes'=>0];
+            $result['groups'][$group]['files']++; $result['groups'][$group]['bytes']+=$before['size'];
+        } else { $result['specialEntries']++; $result['complete']=false; }
+    }
+    ksort($rows,SORT_STRING); $hash=hash_init('sha256');
+    foreach ($rows as $relative=>$row) hash_update($hash,strlen((string)$relative).':'.$relative.strlen($row).':'.$row);
+    $result['manifestSha256']=hash_final($hash);
+    $result['elapsedSeconds']=round(microtime(true)-$started,2);
+    // Paths and individual content hashes stay in memory, never in CI output.
+    return $result;
+}
+
+function live_inventory(string $root, ?string $expectedVersionSha256=null, bool $scanStorage=false): array {
     $web = realpath($root);
     if (!$web || !is_dir($web) || str_contains(strtolower(basename($web)), 'staging')) throw new RuntimeException('PUBLIC_ROOT_UNCLEAR');
     $report = ['readOnly'=>true, 'releaseReady'=>false, 'inspectionPhpVersion'=>PHP_VERSION,'inspectionSapi'=>PHP_SAPI,'findings'=>[],
@@ -68,10 +118,23 @@ function live_inventory(string $root, ?string $expectedVersionSha256=null): arra
     }
     $report['privateStorage']=['source'=>$privateSource,'rootSha256'=>hash('sha256',$private),'outsidePublicRoot'=>true,
         'mode'=>sprintf('%04o',fileperms($private)&0777),'areas'=>[]];
-    foreach (['control','tenants','personnel','trainings','fahrerunterlagen','backups'] as $area) {
+    foreach (['control','companies','tenants','personnel','trainings','fahrerunterlagen','backups'] as $area) {
         $path=$private.'/'.$area;
         $report['privateStorage']['areas'][$area]=is_dir($path)&&!is_link($path)
             ? ['present'=>true,'mode'=>sprintf('%04o',fileperms($path)&0777)] : ['present'=>false];
+    }
+    if ($scanStorage) {
+        $excluded=[];
+        foreach (['lehrfahrer-staging','lehrfahrer-staging-private','lehrfahrer-staging-auth'] as $candidate) {
+            $resolved=realpath($candidate); if ($resolved!==false) $excluded[]=$resolved;
+        }
+        $publicScan=live_storage_scan($web,true,$excluded); $privateScan=live_storage_scan($private,false,$excluded);
+        $total=$publicScan['bytes']+$privateScan['bytes'];
+        $free=@disk_free_space($private);
+        $report['storageInventory']=['public'=>$publicScan,'private'=>$privateScan,
+            'totalSourceBytes'=>$total,'twoUncompressedCopiesBytes'=>2*$total,
+            'filesystemFreeBytes'=>$free===false?null:(int)$free,'hostingQuotaVerified'=>false,
+            'backupCreated'=>false,'restoreVerified'=>false];
     }
     $report['knownIdentityFilePresence']=[];
     foreach ([$web.'/data/users.json',$web.'/data/companies.json',$private.'/users.json',$private.'/companies.json',$private.'/control/lehrfahrer.sqlite'] as $index=>$path) {
@@ -140,7 +203,7 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME']??''))===__FILE__ || (getenv('L
         if (isset($_SERVER['REQUEST_METHOD']) || !in_array(PHP_SAPI,['cli','cgi-fcgi'],true)) throw new RuntimeException('CLI_ONLY');
         $expected=$argv[2]??'';
         if (!preg_match('/^[a-f0-9]{64}$/D',$expected)) throw new RuntimeException('EXPECTED_PUBLIC_VERSION_REQUIRED');
-        echo json_encode(live_inventory($argv[1]??'',$expected),JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES),"\n";
+        echo json_encode(live_inventory($argv[1]??'',$expected,getenv('LEHRFAHRER_LIVE_STORAGE_SCAN')==='1'),JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES),"\n";
     } catch (Throwable $e) {
         echo json_encode(['readOnly'=>true,'releaseReady'=>false,'findings'=>['LIVE_READONLY_INSPECTION_BLOCKED']],JSON_THROW_ON_ERROR),"\n";
         exit(2);
