@@ -82,13 +82,9 @@ Datenbank. Keine Staging-/Live-Datenbankdaten oder -Zugangsdaten werden dafür b
 
 ## Offene Releasepunkte
 
-Die zwei bekannten Fehler in `tools/navigation-off-route.test.js` (Testanfänge
-102/163) sind weiterhin reproduzierbar. Sie betreffen Raw-GPS auf einem späteren
-Routenabschnitt bei veraltetem Index und die Rückkehr auf die Route nach drei
-Fixes. Der aktuelle Code beurteilt bewusst den lokalen Routenkorridor ohne
-globalen Sprung; die Tests erwarten in diesen Fällen eine andere Wiedererkennung.
-Die Tests werden nicht entfernt oder als bestanden ausgegeben. Eine belastbare
-Bewertung/Behebung gehört zur separat vorgemerkten Navigation/Umleitungsarbeit.
+Die beiden Navigationstestfehler wurden anschließend behoben. Aktueller Nachweis
+und Schutzprüfungen: siehe navigation-recovery.md. Der vollständige Node-Testsatz
+ist jetzt fehlerfrei (741 bestanden, 9 übersprungen).
 
 Vor Live ist außerdem die Produktions-Anmeldung gesondert vorzubereiten:
 `account-login.php`/`account_test.php` und die Account-Auflösung sind derzeit bewusst
@@ -102,7 +98,7 @@ anschließende ausdrückliche Nutzerfreigabe. Keine Produktionsumschaltung in A8
 
 Die technischen A8-Sicherheits- und Mandantennachweise sind abgeschlossen.
 Geprüfter Funktionsstand: `8cfe8c8704f3c3ae1c62ef4f6323997b77423f3f`.
-Die oben genannten offenen Releasepunkte bleiben bestehen; kein fehlerfreier
+Historischer A8-Abnahmestand vor der Navigation-Nacharbeit: kein fehlerfreier
 Gesamttestsatz, keine Gesamt-/Live-Freigabe und keine Produktionsumschaltung.
 
 - Staging-Deployment erfolgreich:
@@ -127,7 +123,7 @@ Gesamttestsatz, keine Gesamt-/Live-Freigabe und keine Produktionsumschaltung.
 
 Die isolierte Neuanlage und die tatsächlichen HTTP-Schnittstellen sind automatisiert
 geprüft; es wurde keine zusätzliche Firma im laufenden Staging-Bestand erzeugt.
-Die manuellen A6-/A7-/Support-Abnahmen bleiben gültig. Als nächster fachlicher
-Arbeitsblock ist die separate Bewertung/Behebung der zwei Navigationstestfehler
-zu klären; anschließend die gesonderte Live-Vorbereitung. Eine Nutzerfreigabe
+Die manuellen A6-/A7-/Support-Abnahmen bleiben gültig. Die Navigationsfehler sind
+inzwischen behoben (siehe navigation-recovery.md). Als nächster Arbeitsblock bleibt
+die gesonderte Vorbereitung der Produktions-Anmeldung. Eine Nutzerfreigabe
 zum Live-Deploy liegt weiterhin nicht vor.

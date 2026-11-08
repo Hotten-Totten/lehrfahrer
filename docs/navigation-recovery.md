@@ -24,3 +24,7 @@ Dies ersetzt keine praktische GPS-Abnahme auf einem Gerät.
 
 Die Produktions-Anmeldung bleibt ein eigener offener Releasepunkt gemäß
 `audit-v1-a8.md`; keine Live-Freigabe und keine Produktionsumschaltung.
+
+Staging-Code: 711b03e. Deployment und nachgelagerte HTTP-/Account-Prüfungen
+erfolgreich; öffentlicher Live-Inhalt unverändert:
+https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42518397901
