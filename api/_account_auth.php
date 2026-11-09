@@ -192,6 +192,19 @@ function lehrfahrer_account_login_unguarded(PDO $pdo, string $login, string $pas
         }
         $memberships = lehrfahrer_account_memberships($pdo, (string)$account['id']);
         $platform = lehrfahrer_account_platform_capabilities($pdo, (string)$account['id']);
+        if ($platform === [] && $memberships !== []) {
+            $roles = $pdo->prepare("SELECT DISTINCT r.code FROM account_memberships m
+                JOIN companies c ON c.id = m.company_id
+                JOIN membership_roles mr ON mr.membership_id = m.id
+                JOIN roles r ON r.id = mr.role_id
+                WHERE m.account_id = ? AND m.status = 'active' AND c.status = 'active'");
+            $roles->execute([$account['id']]);
+            if ($roles->fetchAll(PDO::FETCH_COLUMN) === ['FAHRER']) {
+                $revoke = $pdo->prepare('UPDATE account_sessions SET revoked_at = ?
+                    WHERE account_id = ? AND environment = ? AND revoked_at IS NULL');
+                $revoke->execute([lehrfahrer_auth_timestamp(time()), $account['id'], lehrfahrer_environment()]);
+            }
+        }
         $count = count($memberships);
         $context = $count === 1 ? 'TENANT' : ($count === 0 && $platform !== [] ? 'PLATFORM' : 'PENDING');
         $membershipId = $context === 'TENANT' ? (string)$memberships[0]['id'] : null;

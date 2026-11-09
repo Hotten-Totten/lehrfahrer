@@ -112,6 +112,20 @@ echo json_encode(['inside'=>$inside,'rolledBack'=>$rolledBack,'blocked'=>$blocke
   assert.deepEqual(data, { inside: 1, rolledBack: true, blocked: true, sessions: 0 });
 });
 
+test('Fahrer-Anmeldung ersetzt die bisherige Sitzung auf einem anderen Gerät', () => {
+  const data = fixture(String.raw`
+$first=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$other=lehrfahrer_account_login($pdo,'beta','test-password-12345');
+$second=lehrfahrer_account_login($pdo,'alpha','test-password-12345');
+$valid=[];
+foreach ([$first,$second,$other] as $login) {
+    $_COOKIE[LEHRFAHRER_ACCOUNT_TEST_COOKIE]=$login['token'];
+    $valid[]=lehrfahrer_account_current_session($pdo,false)!==null;
+}
+echo json_encode($valid, JSON_THROW_ON_ERROR);`);
+  assert.deepEqual(data, [false, true, true]);
+});
+
 test('A2 Logout widerruft Session und auditieren beide atomar', () => {
   const data = fixture(String.raw`
 $login=lehrfahrer_account_login($pdo,'alpha','test-password-12345');

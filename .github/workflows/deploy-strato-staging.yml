@@ -1896,6 +1896,40 @@ jobs:
           printf '%s\n' "$result" | jq -e '.ok == true and .releasedRoutes > 0 and .smokeAccountPresent == true and .smokeAccountValid == true and .userNumber > 100 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
           echo "DRIVER_SMOKE_PROVISION=PASS user_number=$(printf '%s\n' "$result" | jq -r '.userNumber')"
 
+      - name: Verify single Driver session with two independent clients
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_driver_api }}
+        shell: bash
+        env:
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          DRIVER_SMOKE_PASSWORD: ${{ secrets.STAGING_DRIVER_SMOKE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$DRIVER_SMOKE_PASSWORD"
+          origin='https://staging.lehrfahrer.de'
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$temp_dir"' EXIT
+          auth_url="$origin/api/auth/account_test.php"
+          jq -n --arg password "$DRIVER_SMOKE_PASSWORD" '{login:"staging-driver-smoke",password:$password}' > "$temp_dir/login.json"
+          login() {
+            curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD"               -H "Origin: $origin" -H 'Content-Type: application/json'               -c "$temp_dir/$1.cookies" --data-binary @"$temp_dir/login.json"               "$auth_url?action=login" > "$temp_dir/$1.json"
+            jq -e '.ok == true and .context == "TENANT" and .tenantRoles == ["FAHRER"] and .platformRoles == []'               "$temp_dir/$1.json" >/dev/null
+          }
+          status() {
+            curl --silent --show-error --output /dev/null --write-out '%{http_code}'               -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/$1.cookies" "$2"
+          }
+          login first
+          test "$(status first "$auth_url?action=me")" = 200
+          login second
+          test "$(status first "$auth_url?action=me")" = 401
+          test "$(status first "$origin/api/list_lines.php?scope=driver")" = 401
+          test "$(status second "$auth_url?action=me")" = 200
+          test "$(status second "$origin/api/list_lines.php?scope=driver")" = 200
+          csrf="$(jq -er '.csrfToken' "$temp_dir/second.json")"
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD"             -b "$temp_dir/second.cookies" -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -X POST             "$auth_url?action=logout" | jq -e '.ok == true' >/dev/null
+          echo 'PASS: first Driver session revoked, second session can read routes'
+
       - name: Diagnose Driver API with dedicated staging smoke account
         if: ${{ github.event_name == 'workflow_dispatch' && (inputs.diagnose_driver_api || inputs.provision_driver_smoke) && steps.auth_preflight.outputs.mode == 'PARALLEL' }}
         shell: bash
