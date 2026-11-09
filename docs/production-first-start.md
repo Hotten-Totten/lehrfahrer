@@ -45,3 +45,16 @@ HTTP aus. Geprüft werden insbesondere falsche und abgelaufene Codes, fremder Or
 Vorgaben erst nach Code-Eingabe, Audit-Rollback, leere Fachbereiche, Rollen,
 Wiederholschutz und der auf Passkey-Einrichtung begrenzte Anmeldestatus. Die
 reguläre Staging-Bereitstellung prüft den Code mit deaktivierter Erststart-Freigabe.
+
+Abnahme am 09.11.2026 für `725d93b`. Die lokalen Tests ergaben 758 bestandene
+und 9 übersprungene Tests. Der vollständige Erststart per HTTP bestand lokal
+und in der isolierten MariaDB-11.4-Prüfung. Die Bereitstellung und reguläre
+Anmeldung auf Staging bestanden ebenfalls. Vier bereitgestellte Dateien wurden
+direkt verglichen. Die Erststart-Freigabe fehlt in der Staging-Konfiguration.
+
+- [Isolierte MariaDB-Prüfung](https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42569970749)
+- [Staging-Bereitstellung und Serverprüfung](https://github.com/Hotten-Totten/lehrfahrer/actions/runs/42569970744)
+
+Für das Wartungsfenster ist eine Stunde als vorläufige Planungsreserve vorgesehen.
+Vor dem Start stehen die verbindliche Zuordnung der Produktions-DB, die Prüfung
+des Schreibstopps und der Ablauf für die Wiederherstellung der Anwendung an.
