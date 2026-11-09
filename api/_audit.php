@@ -65,6 +65,14 @@ final class LehrfahrerAuditActor {
         return self::fromSessionRow($pdo, $session);
     }
 
+    public static function authorizedFirstStart(PDO $pdo, string $code): self {
+        lehrfahrer_first_start_check_code($code);
+        if (!lehrfahrer_control_transaction_active($pdo) || !lehrfahrer_first_start_empty($pdo)) {
+            throw new RuntimeException('SETUP_ALREADY_USED');
+        }
+        return new self(null, 'SYSTEM', null, null, null);
+    }
+
     public static function authorizedCli(): self {
         if (PHP_SAPI !== 'cli' || isset($_SERVER['REQUEST_METHOD'])) {
             throw new RuntimeException('CLI-Auditkontext nicht verfuegbar.');

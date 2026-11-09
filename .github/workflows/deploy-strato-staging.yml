@@ -303,6 +303,7 @@ jobs:
           php tools/gtfs-route-creation.test.php
           php tools/sysop-mfa.test.php
           php tools/sysop-mfa.test.php --production
+          php tools/first-start.test.php
           php tools/audit-writer.test.php
           php tools/route-categories.test.php
           python3 tools/gtfs-official-candidate-filter.test.py

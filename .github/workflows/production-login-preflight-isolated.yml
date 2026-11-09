@@ -6,6 +6,9 @@ on:
       - 'api/_account*'
       - 'api/_auth_cutover_gate.php'
       - 'api/_mfa_enrollment_grant.php'
+      - 'api/_first_start.php'
+      - 'first-start.php'
+      - 'tools/first-start*'
       - 'api/_sysop*'
       - 'tools/production-*'
       - 'tools/sysop-mfa.test.php'
@@ -63,3 +66,27 @@ jobs:
           LEHRFAHRER_DB_USER: root
           LEHRFAHRER_DB_PASSWORD: isolated-mfa-fixture-only
         run: php tools/sysop-mfa.test.php --production --mariadb
+  isolated-first-start:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: isolated-first-start-fixture-only
+          MARIADB_DATABASE: lf_first_start_fixture_20261109
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify protected first-start form against an empty isolated database
+        env:
+          LEHRFAHRER_FIRST_START_ISOLATED: '1'
+          LEHRFAHRER_DB_HOST: 127.0.0.1
+          LEHRFAHRER_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+          LEHRFAHRER_DB_NAME: lf_first_start_fixture_20261109
+          LEHRFAHRER_DB_USER: root
+          LEHRFAHRER_DB_PASSWORD: isolated-first-start-fixture-only
+        run: php tools/first-start.test.php

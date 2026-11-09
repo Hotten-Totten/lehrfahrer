@@ -3,7 +3,8 @@
 Nutzerentscheidung: Die bisherigen Live-Daten werden nicht übernommen. Sie dürfen
 für den Neustart gelöscht werden; der Nutzer legt die fachlichen Daten neu an.
 Dies ersetzt den bisherigen Übernahmeplan. Noch keine Löschung oder Live-Umstellung
-ausgeführt; der Erststart-Assistent ist weiterhin geplant, nicht implementiert.
+ausgeführt. Der Erststart-Assistent ist implementiert und unter
+`production-first-start.md` dokumentiert.
 
 ## Bestätigtes Ziel
 

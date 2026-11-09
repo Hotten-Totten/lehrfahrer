@@ -75,7 +75,7 @@ try {
       <input id="accountLogin" name="username" autocomplete="username" required>
       <label for="accountPassword">Passwort</label>
       <input id="accountPassword" name="password" type="password" autocomplete="current-password" required>
-      <?php if (lehrfahrer_environment() === 'production'): ?>
+      <?php if (lehrfahrer_environment() === 'production' || getenv('LEHRFAHRER_FIRST_START_ENABLED') === '1'): ?>
       <label for="enrollmentCode">Freigabecode (nur bei erster Passkey-Einrichtung)</label>
       <input id="enrollmentCode" type="password" autocomplete="off" maxlength="43">
       <?php endif; ?>
