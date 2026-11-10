@@ -1940,9 +1940,10 @@ jobs:
           touch "$temp_dir/anonymous.cookies"
           expect_status anonymous-directory 401 anonymous "$origin/platform-accounts.php"
           expect_status driver-directory 403 second "$origin/platform-accounts.php"
-          redirect="$(curl --silent --show-error -o /dev/null -w '%{redirect_url}' \
+          redirect="$(curl --silent --show-error -o /dev/null -w '%{http_code} %{redirect_url}' \
             -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/second.cookies" "$origin/index.php")"
-          if [ "$redirect" != "$origin/app/index.html" ]; then
+          if [ "$redirect" != "302 $origin/app/index.html" ]; then
+            echo "Driver editor entry HTTP status: ${redirect%% *}" >&2
             echo 'Driver editor entry did not redirect to the app' >&2
             exit 1
           fi

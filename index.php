@@ -33,7 +33,7 @@ try {
 
     if ($auth['auth_source'] === 'ACCOUNT' && $auth['roles'] === ['FAHRER']) {
         header('Cache-Control: no-store, private');
-        header('Location: /app/index.html', true, 302);
+        header('Location: ' . lehrfahrer_public_origin() . '/app/index.html', true, 302);
         exit;
     }
 
