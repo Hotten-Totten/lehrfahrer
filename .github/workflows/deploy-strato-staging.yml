@@ -1934,7 +1934,7 @@ jobs:
           fi
           fixture() {
             local command
-            command="bash -c 'set -e; webroot=\$(cd \"./${STAGING_TARGET_PATH#./}\" && pwd -P); private_root=\$(cd \"./${STAGING_PRIVATE_PATH#./}\" && pwd -P); LF_TEST_PASSWORD=\$(cat) LF_TEST_LOGIN=$login_name LF_TEST_ACTION=$1 LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT=\"\$webroot\" php -q -d \"auto_prepend_file=\$private_root/runtime-env.php\" -f \"\$private_root/control-driver-isolation-staging.php\"'"
+            command="bash -c 'set -e; webroot=\$(cd \"./${STAGING_TARGET_PATH#./}\" && pwd -P); private_root=\$(cd \"./${STAGING_PRIVATE_PATH#./}\" && pwd -P); LF_TEST_PASSWORD=\$(cat) LF_TEST_LOGIN=$login_name LF_TEST_ACTION=$1 LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT=\"\$webroot\" /opt/RZphp81/bin/php-cli -d \"auto_prepend_file=\$private_root/runtime-env.php\" -f \"\$private_root/control-driver-isolation-staging.php\"'"
             test "$(printf '%s' "$test_password" | "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "$command")" = OK
           }
           cleanup() {

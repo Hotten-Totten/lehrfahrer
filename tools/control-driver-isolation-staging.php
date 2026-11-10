@@ -4,7 +4,7 @@ declare(strict_types=1);
 try {
     $appRoot = (string)getenv('LEHRFAHRER_APP_ROOT');
     require_once $appRoot . '/api/_account_auth.php';
-    if (!in_array(PHP_SAPI, ['cli', 'cgi-fcgi'], true) || isset($_SERVER['REQUEST_METHOD'])
+    if (PHP_SAPI !== 'cli' || isset($_SERVER['REQUEST_METHOD'])
         || lehrfahrer_environment() !== 'staging' || lehrfahrer_control_database_driver() !== 'mysql'
         || lehrfahrer_public_origin() !== 'https://staging.lehrfahrer.de') {
         throw new RuntimeException('STAGING_ONLY');
