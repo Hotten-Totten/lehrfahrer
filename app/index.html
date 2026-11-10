@@ -19,7 +19,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.063-e6de478fbbc8">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.063-6a46643c814b">
 </head>
 <body>
 
@@ -260,8 +260,10 @@
           </p>
           <div id="tileStatus" class="status-box">Kartenquelle wird geprüft …</div>
           <div id="offlineMapInstallStatus" class="status-box">Keine Offline-Karte installiert</div>
+          <button id="downloadRegionMapBtn" type="button" hidden>Offline-Karte für Cottbus laden</button>
+          <p id="regionMapDownloadStatus" role="status"></p>
           <button id="loadLocalTilesBtn" title="Lokale PMTiles-Datei dauerhaft auf diesem Gerät speichern">
-            Offline-Karte installieren
+            Kartendatei importieren
           </button>
           <input type="file" id="tilesFileInput" accept=".pmtiles">
           <button id="removeLocalTilesBtn" type="button" disabled>
@@ -459,7 +461,7 @@
   <script src="../js/tenant-cache-boundary.js?v=6f1f3c95d4c9"></script>
   <script src="js/map.js?v=V2.1.063"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.065-79f7e42a3cd8"></script>
+  <script src="js/app.js?v=V2.1.065-6d680e3320c5"></script>
   <script src="js/debug-helper.js?v=c6059d9a1163"></script>
 </body>
 </html>

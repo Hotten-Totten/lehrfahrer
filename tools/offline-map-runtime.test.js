@@ -167,3 +167,51 @@ test('MapLibre-Reset schreibt niemals user-select undefined', () => {
   assert.doesNotMatch(mapSource, /style\.userSelect\s*=\s*(?:undefined|['"]undefined['"])/);
   assert.doesNotMatch(appCss, /user-select\s*:\s*undefined/);
 });
+
+test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übergeben', async () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
+  const config = appSource.match(/const COTTBUS_OFFLINE_MAP = .*;/)[0];
+  const fileName = 'cottbus-20261101.pmtiles';
+  const asset = fs.statSync(path.resolve(__dirname, '../assets/offline-maps', fileName));
+  const button = { hidden: true, disabled: false };
+  const status = {};
+  let responseSize = 1;
+  let imported = null;
+  const context = vm.createContext({
+    availableLinesCatalog: [{ city: 'test' }],
+    downloadRegionMapBtn: button,
+    regionMapDownloadStatus: status,
+    offlineMapInstalled: false,
+    readOfflineMapManifest: () => null,
+    navigator: { onLine: true },
+    fetch: async (url, options) => {
+      assert.equal(url, '../assets/offline-maps/' + fileName);
+      assert.equal(options.cache, 'no-store');
+      return { ok: true, blob: async () => new Blob([Buffer.alloc(responseSize)]) };
+    },
+    installOfflineMapFile: async file => { imported = file; return true; },
+    requestPersistentStorage: async () => {},
+    AbortController, File, setTimeout, clearTimeout,
+    console: { warn() {} }
+  });
+  vm.runInContext(config + '\nlet offlineMapActionPending = false;\n' + appSource.slice(
+    appSource.indexOf('function updateRegionMapDownloadButton()'),
+    appSource.indexOf('async function onTilesFileSelected()')
+  ), context);
+
+  context.updateRegionMapDownloadButton();
+  assert.equal(button.hidden, true);
+  context.availableLinesCatalog = [{ city: 'cottbus' }];
+  context.updateRegionMapDownloadButton();
+  assert.equal(button.hidden, false);
+  await context.downloadCottbusOfflineMap();
+  assert.equal(imported, null);
+  assert.match(status.textContent, /konnte nicht geladen werden/);
+  assert.equal(button.disabled, false);
+
+  responseSize = asset.size;
+  await context.downloadCottbusOfflineMap();
+  assert.equal(imported.name, fileName);
+  assert.equal(imported.size, asset.size);
+  assert.match(status.textContent, /offline verfügbar/);
+});
