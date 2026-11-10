@@ -31,6 +31,12 @@ try {
         exit;
     }
 
+    if ($auth['auth_source'] === 'ACCOUNT' && $auth['roles'] === ['FAHRER']) {
+        header('Cache-Control: no-store, private');
+        header('Location: /app/index.html', true, 302);
+        exit;
+    }
+
     $capabilities = $auth['capabilities'];
     if (!in_array('routes.read', $capabilities, true)) {
         lehrfahrer_editor_response(403, 'Keine Berechtigung für diese Oberfläche.');

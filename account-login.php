@@ -98,6 +98,7 @@ try {
       <div id="accountDetails"></div>
       <a id="continueTarget" class="link-button" href="/">Zum Editor</a>
       <button id="passkeyManageButton" class="secondary" type="button" hidden>Passkeys verwalten</button>
+      <a id="platformAccountsLink" class="link-button secondary" href="platform-accounts.php" hidden>Firmenkonten ansehen</a>
       <a id="platformAuditLink" class="link-button secondary" href="platform-audit.html" hidden>Plattformprotokoll öffnen</a>
       <button id="switchCompany" class="secondary" type="button">Gesellschaft wechseln</button>
       <button id="accountLogout" class="secondary" type="button">Abmelden</button>
@@ -117,6 +118,6 @@ try {
     <button type="button" class="secondary" data-support-diagnostics>Diagnose für den Support …</button>
   </main>
   <script src="js/tenant-cache-boundary.js?v=6f1f3c95d4c9" defer></script>
-  <script src="js/account-login.js?v=617a84cdcee5" defer></script>
+  <script src="js/account-login.js?v=e703a9a7b0c6" defer></script>
 </body>
 </html>

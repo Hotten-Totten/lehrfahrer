@@ -345,6 +345,8 @@
     accountDetails.replaceChildren();
     const platformAuditLink = document.getElementById('platformAuditLink');
     if (platformAuditLink) platformAuditLink.hidden = true;
+    const platformAccountsLink = document.getElementById('platformAccountsLink');
+    if (platformAccountsLink) platformAccountsLink.hidden = true;
     activeCompany.textContent = '';
     window.LehrfahrerTenantCache.clearForLogout().catch(() => {});
     show('login');
@@ -354,6 +356,8 @@
   async function handleSession(body) {
     const platformAuditLink = document.getElementById('platformAuditLink');
     if (platformAuditLink) platformAuditLink.hidden = !(Array.isArray(body.platformCapabilities) && body.platformCapabilities.includes('platform.audit.read'));
+    const platformAccountsLink = document.getElementById('platformAccountsLink');
+    if (platformAccountsLink) platformAccountsLink.hidden = !body.platformRoles?.includes('SYSOP');
     csrfToken = typeof body.csrfToken === 'string' ? body.csrfToken : '';
     if (body.context === 'TENANT') {
       continueTarget.hidden = false;

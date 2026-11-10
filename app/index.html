@@ -19,7 +19,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.063-4fdc2e444274">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.063-6c9a29540419">
 </head>
 <body>
 
@@ -161,6 +161,10 @@
   </div>
 
   <div id="map"></div>
+  <section id="appStartNotice" hidden aria-label="App-Start">
+    <p id="appStartMessage" role="status"></p>
+    <a id="appStartLogin" href="../account-login.php?next=%2Fapp%2Findex.html" hidden>Zur App-Anmeldung</a>
+  </section>
 
   <!-- ── Panel (Haltestellenliste) ─────────── -->
   <div id="panel" class="panel-collapsed">
@@ -454,7 +458,7 @@
   <script src="../js/tenant-cache-boundary.js?v=6f1f3c95d4c9"></script>
   <script src="js/map.js?v=V2.1.063"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.065-1b182c1c0ccf"></script>
+  <script src="js/app.js?v=V2.1.065-82ddba3fb0c5"></script>
   <script src="js/debug-helper.js?v=c6059d9a1163"></script>
 </body>
 </html>

@@ -397,6 +397,25 @@ body.nav-mode #rerouteCenterBtn {
   bottom: calc(var(--panel-peek) + var(--safe-bottom));
 }
 
+#appStartNotice {
+  position: fixed;
+  top: calc(var(--topbar-total-h) + var(--sel-h) + 16px);
+  left: 16px;
+  right: 16px;
+  max-width: 36rem;
+  margin-inline: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
+
+#appStartNotice p { margin: 0; }
+#appStartNotice a { color: inherit; }
+#appStartNotice a:not([hidden]) { display: inline-block; margin-top: 12px; }
+
 /* MapLibre overrides */
 .maplibregl-ctrl-attrib { font-size: 10px !important; }
 .maplibregl-ctrl-group   { background: var(--surface) !important; border: 1px solid var(--border) !important; }

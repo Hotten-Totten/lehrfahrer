@@ -1926,6 +1926,17 @@ jobs:
           test "$(status first "$origin/api/list_lines.php?scope=driver")" = 401
           test "$(status second "$auth_url?action=me")" = 200
           test "$(status second "$origin/api/list_lines.php?scope=driver")" = 200
+          curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+            "$origin/app/index.html" > "$temp_dir/app.html"
+          grep -Fq 'id="appStartNotice"' "$temp_dir/app.html"
+          grep -Fq 'account-login.php?next=%2Fapp%2Findex.html' "$temp_dir/app.html"
+          touch "$temp_dir/anonymous.cookies"
+          test "$(status anonymous "$origin/platform-accounts.php")" = 401
+          test "$(status second "$origin/platform-accounts.php")" = 403
+          redirect="$(curl --silent --show-error -o /dev/null -w '%{redirect_url}' \
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/second.cookies" "$origin/")"
+          test "$redirect" = "$origin/app/index.html"
+          echo 'PASS: app login link, Driver redirect and platform directory access restrictions'
           csrf="$(jq -er '.csrfToken' "$temp_dir/second.json")"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD"             -b "$temp_dir/second.cookies" -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -X POST             "$auth_url?action=logout" | jq -e '.ok == true' >/dev/null
           echo 'PASS: first Driver session revoked, second session can read routes'

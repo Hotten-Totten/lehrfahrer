@@ -210,6 +210,9 @@ let lastActiveDrivePersistAt = 0;
 
 // ── Start ────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  const notice = document.getElementById('appStartNotice');
+  const message = document.getElementById('appStartMessage');
+  const login = document.getElementById('appStartLogin');
   let tenantContext;
   try {
     tenantContext = await window.LehrfahrerTenantCache.ensureContext();
@@ -217,7 +220,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.warn('Mandantenkontext konnte nicht geprüft werden:', error);
   }
   if (!tenantContext) {
-    if (lineDataStatus) lineDataStatus.textContent = 'Mandantenkontext nicht bestätigt. Bitte online anmelden.';
+    const loginRequired = tenantContext === null && navigator.onLine !== false;
+    message.textContent = loginRequired
+      ? 'Bitte melde dich an, um die Karte und die freigegebenen Routen deiner Firma zu laden.'
+      : 'Die Firmenzuordnung konnte nicht geprüft werden. Verbinde das Gerät mit dem Internet und lade die App neu.';
+    login.hidden = !loginRequired;
+    notice.hidden = false;
+    if (lineDataStatus) lineDataStatus.textContent = message.textContent;
     return;
   }
   console.log('🚀 App starting...');
