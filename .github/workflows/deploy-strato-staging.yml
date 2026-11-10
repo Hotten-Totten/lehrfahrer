@@ -43,6 +43,11 @@ on:
         required: true
         default: false
         type: boolean
+      verify_driver_company_isolation:
+        description: Verify two Staging Driver companies with a temporary account
+        required: false
+        default: false
+        type: boolean
       diagnose_driver_api:
         description: P2.4e read-only Driver API checks using the dedicated staging smoke account
         required: true
@@ -696,6 +701,7 @@ jobs:
             tools/control-sysop-bootstrap-staging.php \
             tools/control-sysop-bootstrap-json-check.php \
             tools/control-driver-smoke-staging.php \
+            tools/control-driver-isolation-staging.php \
             tools/control-account-migrate.php \
             tools/staging-smoke.php \
             "$REMOTE:./$STAGING_PRIVATE_PATH/"
@@ -1895,6 +1901,89 @@ jobs:
           result="$(printf '%s' "$DRIVER_SMOKE_PASSWORD" | "${ssh_run[@]}" "$remote" "$provision_command")"
           printf '%s\n' "$result" | jq -e '.ok == true and .releasedRoutes > 0 and .smokeAccountPresent == true and .smokeAccountValid == true and .userNumber > 100 and .auth.mode == "PARALLEL" and .auth.lock == "OPEN"' >/dev/null
           echo "DRIVER_SMOKE_PROVISION=PASS user_number=$(printf '%s\n' "$result" | jq -r '.userNumber')"
+
+      - name: Verify Driver route isolation between Staging companies
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_driver_company_isolation }}
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.STRATO_PASSWORD }}
+          STRATO_USER: ${{ secrets.STRATO_USER }}
+          STRATO_HOST: ${{ secrets.STRATO_HOST }}
+          STRATO_PORT: ${{ secrets.STRATO_PORT }}
+          STRATO_SSH_KEY: ${{ secrets.STRATO_SSH_KEY }}
+          STAGING_TARGET_PATH: ${{ vars.STAGING_TARGET_PATH }}
+          STAGING_PRIVATE_PATH: ${{ vars.STAGING_PRIVATE_PATH }}
+          BASIC_USER: ${{ secrets.STAGING_BASIC_AUTH_USER }}
+          BASIC_PASSWORD: ${{ secrets.STAGING_BASIC_AUTH_PASSWORD }}
+          DRIVER_SMOKE_PASSWORD: ${{ secrets.STAGING_DRIVER_SMOKE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          origin='https://staging.lehrfahrer.de'
+          auth_url="$origin/api/auth/account_test.php"
+          test -n "$DRIVER_SMOKE_PASSWORD"
+          temp_dir="$(mktemp -d)"
+          login_name="staging-isolation-$(openssl rand -hex 12)"
+          test_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$test_password"
+          ssh_base=(ssh -p "$STRATO_PORT" -o UpdateHostKeys=no -o StrictHostKeyChecking=yes)
+          if [ -n "$STRATO_SSH_KEY" ]; then
+            ssh_run=("${ssh_base[@]}" -i ~/.ssh/id_rsa)
+          else
+            ssh_run=(sshpass -e "${ssh_base[@]}")
+          fi
+          fixture() {
+            local command
+            command="bash -c 'set -e; webroot=\$(cd \"./${STAGING_TARGET_PATH#./}\" && pwd -P); private_root=\$(cd \"./${STAGING_PRIVATE_PATH#./}\" && pwd -P); LF_TEST_PASSWORD=\$(cat) LF_TEST_LOGIN=$login_name LF_TEST_ACTION=$1 LEHRFAHRER_ENV=staging LEHRFAHRER_APP_ROOT=\"\$webroot\" php -q -d \"auto_prepend_file=\$private_root/runtime-env.php\" -f \"\$private_root/control-driver-isolation-staging.php\"'"
+            test "$(printf '%s' "$test_password" | "${ssh_run[@]}" "$STRATO_USER@$STRATO_HOST" "$command")" = OK
+          }
+          cleanup() {
+            local result=$?
+            if ! fixture disable; then
+              sleep 2
+              fixture disable || result=1
+            fi
+            rm -rf -- "$temp_dir"
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 1' TERM INT
+          fixture create
+          echo 'PASS: temporary Driver account created'
+          login() {
+            jq -n --arg login "$2" --arg password "$3" '{login:$login,password:$password}' > "$temp_dir/login.json"
+            curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
+              -H "Origin: $origin" -H 'Content-Type: application/json' -c "$temp_dir/$1.cookies" \
+              --data-binary @"$temp_dir/login.json" "$auth_url?action=login" > "$temp_dir/$1.json"
+            jq -e --arg company "$4" '.ok == true and .context == "TENANT" and .companyName == $company
+              and .tenantRoles == ["FAHRER"] and .tenantCapabilities == ["app.access","routes.read"]' \
+              "$temp_dir/$1.json" >/dev/null
+          }
+          get() {
+            curl --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/$1.cookies" "${@:2}"
+          }
+          login cottbus staging-driver-smoke "$DRIVER_SMOKE_PASSWORD" Cottbusverkehr
+          login test "$login_name" "$test_password" 'Lehrfahrer Testgesellschaft'
+          get cottbus --fail "$origin/api/list_lines.php?scope=driver" > "$temp_dir/cottbus-routes.json"
+          get test --fail "$origin/api/list_lines.php?scope=driver" > "$temp_dir/test-routes.json"
+          jq -e '.ok and (.lines | type == "array")' "$temp_dir/test-routes.json" >/dev/null
+          route="$(jq -ce '.lines | map(select(.city == "cottbus" and (.routePointCount // 0) >= 2)) | first | select(. != null)' "$temp_dir/cottbus-routes.json")"
+          city="$(jq -r '.city' <<<"$route")"
+          file="$(jq -r '.fileBase' <<<"$route")"
+          line="$(jq -r '.lineFolder // ""' <<<"$route")"
+          category="$(jq -r '.categoryFolder // ""' <<<"$route")"
+          jq -e --arg city "$city" 'all(.lines[]; .city != $city)' "$temp_dir/test-routes.json" >/dev/null
+          route_status() {
+            get "$1" --output /dev/null --write-out '%{http_code}' --get \
+              --data-urlencode 'scope=driver' --data-urlencode "city=$city" --data-urlencode "line=$file" \
+              --data-urlencode "lineFolder=$line" --data-urlencode "categoryFolder=$category" "$origin/api/load_line.php"
+          }
+          test "$(route_status cottbus)" = 200
+          test "$(route_status test)" = 404
+          echo 'PASS: Cottbus route accessible to own Driver, hidden in other catalog, direct access rejected'
+          fixture disable
+          test "$(get test --output /dev/null --write-out '%{http_code}' "$auth_url?action=me")" = 401
+          echo 'PASS: temporary account disabled and session revoked'
 
       - name: Verify single Driver session with two independent clients
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_driver_api }}
