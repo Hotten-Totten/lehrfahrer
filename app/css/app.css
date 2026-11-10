@@ -357,6 +357,8 @@ body.nav-mode #rerouteCenterBtn {
   padding-right: 28px;
 }
 #selectionBar select:disabled { opacity: 0.45; }
+#selectionBar select { min-width: 0; }
+#operationalRouteSelect:disabled { display: none; }
 
 #saveOfflineBtn {
   flex-shrink: 0;
@@ -422,6 +424,9 @@ body.nav-mode #rerouteCenterBtn {
 .maplibregl-ctrl-group button { background: transparent !important; color: var(--text) !important; }
 
 /* ── Panel (Haltestellenliste) ──────────────── */
+#panel[hidden] { display: none; }
+body:has(#panel[hidden]) { --panel-peek: 0px; }
+
 #panel {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -442,12 +447,22 @@ body.nav-mode #rerouteCenterBtn {
 }
 
 #panelHandle {
-  width: 42px; height: 5px;
-  background: var(--border);
-  border-radius: 3px;
-  margin: 10px auto 6px;
+  display: block;
+  width: 56px;
+  height: 28px;
+  margin: 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text);
   cursor: pointer;
 }
+
+#panelHandle::before {
+  content: '▴';
+  font-size: 18px;
+}
+
+#panelHandle[aria-expanded="true"]::before { content: '▾'; }
 
 #panelHeader {
   display: flex;
@@ -523,26 +538,6 @@ body.nav-mode #rerouteCenterBtn {
 .line-start-menu-placeholder {
   opacity: 0.55;
   cursor: default;
-}
-
-#panelCloseBtn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-#panelCloseBtn:active {
-  background: var(--primary);
-  color: #fff;
 }
 
 #panelTitle {
@@ -1760,12 +1755,12 @@ body.nav-mode #navHud {
   }
 
   #panelHandle {
-    width: 8px;
-    height: 62px;
+    width: 30px;
+    height: 44px;
     border-radius: 4px;
     margin: 0;
     position: absolute;
-    left: -4px;
+    left: 0;
     top: 50%;
     transform: translateY(-50%);
     background: var(--primary);
@@ -1773,8 +1768,11 @@ body.nav-mode #navHud {
     z-index: 2;
   }
 
+  #panelHandle::before { content: '◂'; }
+  #panelHandle[aria-expanded="true"]::before { content: '▸'; }
+
   #panelHeader {
-    padding: 10px 36px 8px 12px;
+    padding: 10px 36px 8px 38px;
     align-items: center;
   }
 
@@ -1788,12 +1786,6 @@ body.nav-mode #navHud {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  #panelCloseBtn {
-    width: 24px;
-    height: 24px;
-    font-size: 13px;
   }
 
   #stopList {

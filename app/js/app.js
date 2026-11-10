@@ -133,7 +133,6 @@ const startupDownloadText = document.getElementById('startupDownloadText');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const settingsOverlay  = document.getElementById('settingsOverlay');
 const panelHandle      = document.getElementById('panelHandle');
-const panelCloseBtn    = document.getElementById('panelCloseBtn');
 const panel            = document.getElementById('panel');
 const panelTitle       = document.getElementById('panelTitle');
 const panelMeta        = document.getElementById('panelMeta');
@@ -1805,7 +1804,6 @@ function bindEvents() {
   });
 
   panelHandle.addEventListener('click', togglePanel);
-  if (panelCloseBtn) panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
   
   if (navigateToStartBtn) {
     navigateToStartBtn.addEventListener('click', () => {
@@ -1980,7 +1978,7 @@ function renderCitiesFromCatalog(catalog, preferredCity = '') {
   )).sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
 
   citySelect.innerHTML = cities.length
-    ? '<option value="">Stadt …</option>'
+    ? '<option value="">Stadt wählen …</option>'
     : '<option value="">Keine Orte vorhanden</option>';
 
   cities.forEach(city => {
@@ -1994,7 +1992,7 @@ function renderCitiesFromCatalog(catalog, preferredCity = '') {
   else if (cities.length === 1) citySelect.value = cities[0];
 
   if (!citySelect.value) {
-    lineSelect.innerHTML = '<option value="">Linie …</option>';
+    lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
     lineSelect.disabled = true;
     if (operationalRouteSelect) {
       operationalRouteSelect.innerHTML = '<option value="">Betriebsfahrten …</option>';
@@ -2008,7 +2006,7 @@ async function loadCities() {
 }
 
 async function onCityChange() {
-  lineSelect.innerHTML = '<option value="">Linie …</option>';
+  lineSelect.innerHTML = '<option value="">Linie wählen …</option>';
   lineSelect.disabled  = true;
   if (operationalRouteSelect) {
     operationalRouteSelect.innerHTML = '<option value="">Betriebsfahrten …</option>';
@@ -2215,6 +2213,8 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
       categoryFolder
     });
     stopList.innerHTML = '<p class="hint">Route nicht verfuegbar - online nicht gefunden und offline nicht gespeichert.</p>';
+    panel.hidden = false;
+    setPanelOpen(true);
     return null;
   }
 
@@ -2394,6 +2394,7 @@ function displayRoute(data) {
 
   // Haltestellenliste
   renderStopList(visibleStops);
+  panel.hidden = false;
   setPanelOpen(true);
 
   // Navi-Button freischalten
@@ -2989,6 +2990,7 @@ function togglePanel() {
 }
 
 function setPanelOpen(isOpen) {
+  panelHandle.setAttribute('aria-expanded', String(isOpen));
   panel.classList.toggle('panel-open', isOpen);
   panel.classList.toggle('panel-collapsed', !isOpen);
   document.body.classList.toggle('panel-is-open', isOpen);
@@ -3887,12 +3889,7 @@ function startNavigation(options = {}) {
   document.body.classList.toggle('nav-off-route-compact', navOffRouteActive);
   hideNavOffRouteAlert();
   if (lineStartMenu) lineStartMenu.classList.add('hidden');
-  document.body.classList.remove('panel-is-open');
-  panel.classList.remove('panel-open');
-  panel.classList.add('panel-collapsed');
-  if (typeof refreshMapViewport === 'function') {
-    setTimeout(() => refreshMapViewport(), 0);
-  }
+  setPanelOpen(false);
   navBtn.textContent = '■';
   navBtn.title       = 'Lehrfahrt beenden';
   navBtn.classList.add('nav-active');

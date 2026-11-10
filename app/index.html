@@ -19,7 +19,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.063-eef722efe541">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.063-afdb9df8465a">
 </head>
 <body>
 
@@ -94,13 +94,13 @@
   </div>
 
   <div id="selectionBar">
-    <select id="citySelect" title="Stadt auswählen">
-      <option value="">Stadt …</option>
+    <select id="citySelect" aria-label="Stadt auswählen">
+      <option value="">Stadt wählen …</option>
     </select>
-    <select id="lineSelect" disabled title="Linie auswählen">
-      <option value="">Linie …</option>
+    <select id="lineSelect" disabled aria-label="Linie auswählen">
+      <option value="">Linie wählen …</option>
     </select>
-    <select id="operationalRouteSelect" disabled title="Betriebsfahrt auswählen">
+    <select id="operationalRouteSelect" disabled aria-label="Betriebsfahrt auswählen">
       <option value="">Betriebsfahrten …</option>
     </select>
   </div>
@@ -167,8 +167,8 @@
   </section>
 
   <!-- ── Panel (Haltestellenliste) ─────────── -->
-  <div id="panel" class="panel-collapsed">
-    <div id="panelHandle" title="Liste aufklappen / zuklappen"></div>
+  <div id="panel" class="panel-collapsed" hidden>
+    <button id="panelHandle" type="button" aria-controls="stopList" aria-expanded="false" aria-label="Haltestellenfolge ein- oder ausklappen"></button>
     <div id="panelHeader">
       <span id="panelTitle">Haltestellenfolge</span>
       <span id="panelMeta"></span>
@@ -180,7 +180,6 @@
         <button id="startAtLineStartBtn" class="line-start-menu-action" type="button">Am Linienstart starten</button>
         <button class="line-start-menu-action line-start-menu-placeholder" type="button" disabled>Zum Linienstart navigieren – später</button>
       </div>
-      <button id="panelCloseBtn" type="button" title="Haltestellenliste schließen" aria-label="Haltestellenliste schließen">✕</button>
     </div>
     <div id="stopList">
       <p class="hint">Bitte eine Linie auswählen.</p>
@@ -458,7 +457,7 @@
   <script src="../js/tenant-cache-boundary.js?v=6f1f3c95d4c9"></script>
   <script src="js/map.js?v=V2.1.063"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.065-82ddba3fb0c5"></script>
+  <script src="js/app.js?v=V2.1.065-c6bdf22e0fc6"></script>
   <script src="js/debug-helper.js?v=c6059d9a1163"></script>
 </body>
 </html>
