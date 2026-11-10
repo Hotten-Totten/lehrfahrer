@@ -148,14 +148,7 @@ const storagePersistenceStatus = document.getElementById('storagePersistenceStat
 const requestStoragePersistenceBtn = document.getElementById('requestStoragePersistenceBtn');
 const lineDataStatus   = document.getElementById('lineDataStatus');
 const availableLinesContainer = document.getElementById('availableLinesContainer');
-const navigateToStartBtn = document.getElementById('navigateToStartBtn');
-const lineStartMenu = document.getElementById('lineStartMenu');
-const closeLineStartMenuBtn = document.getElementById('closeLineStartMenuBtn');
 const startAtLineStartBtn = document.getElementById('startAtLineStartBtn');
-
-console.log('🔍 DOM Elements:', {
-  navigateToStartBtn: !!navigateToStartBtn
-});
 
 // Nav-DOM-Referenzen
 const navBtn        = document.getElementById('navBtn');
@@ -1805,25 +1798,7 @@ function bindEvents() {
 
   panelHandle.addEventListener('click', togglePanel);
   
-  if (navigateToStartBtn) {
-    navigateToStartBtn.addEventListener('click', () => {
-      if (lineStartMenu) lineStartMenu.classList.toggle('hidden');
-    });
-    console.log('✅ navigateToStartBtn event listener attached');
-  } else {
-    console.warn('❌ navigateToStartBtn not found in DOM');
-  }
-  if (closeLineStartMenuBtn) {
-    closeLineStartMenuBtn.addEventListener('click', () => {
-      lineStartMenu.classList.add('hidden');
-    });
-  }
-  if (startAtLineStartBtn) {
-    startAtLineStartBtn.addEventListener('click', () => {
-      lineStartMenu.classList.add('hidden');
-      startNavigation();
-    });
-  }
+  startAtLineStartBtn.addEventListener('click', () => startNavigation());
   loadLocalTilesBtn.addEventListener('click', () => {
     tilesFileInput.value = '';
     tilesFileInput.click();
@@ -1846,10 +1821,7 @@ function bindEvents() {
     requestStoragePersistenceBtn.addEventListener('click', () => requestPersistentStorage(false));
   }
 
-  navBtn.addEventListener('click', () => {
-    if (navActive) requestManualEndActiveDrive();
-    else startNavigation();
-  });
+  navBtn.addEventListener('click', requestManualEndActiveDrive);
 
   if (navEndBtn) {
     bindTapAction(navEndBtn, () => {
@@ -2213,6 +2185,7 @@ async function loadAndShowRoute(city, fileBase, lineFolder, categoryFolder, json
       categoryFolder
     });
     stopList.innerHTML = '<p class="hint">Route nicht verfuegbar - online nicht gefunden und offline nicht gespeichert.</p>';
+    startAtLineStartBtn.hidden = true;
     panel.hidden = false;
     setPanelOpen(true);
     return null;
@@ -2397,18 +2370,8 @@ function displayRoute(data) {
   panel.hidden = false;
   setPanelOpen(true);
 
-  // Navi-Button freischalten
-  navBtn.classList.remove('hidden');
+  startAtLineStartBtn.hidden = navActive || !data.routePoints?.length;
   if (simBtn) simBtn.classList.remove('hidden');
-  
-  // "Zum Startpunkt" Button freischalten (wenn Route vorhanden)
-  if (data.routePoints && data.routePoints.length > 0) {
-    console.log('✅ Showing navigateToStartBtn');
-    navigateToStartBtn.style.display = 'block';
-  } else {
-    console.log('❌ No routePoints, hiding navigateToStartBtn');
-    navigateToStartBtn.style.display = 'none';
-  }
 }
 
 function applyTabletRoutePresentation() {
@@ -3888,10 +3851,9 @@ function startNavigation(options = {}) {
   document.body.classList.toggle('nav-off-route', navOffRouteActive);
   document.body.classList.toggle('nav-off-route-compact', navOffRouteActive);
   hideNavOffRouteAlert();
-  if (lineStartMenu) lineStartMenu.classList.add('hidden');
   setPanelOpen(false);
-  navBtn.textContent = '■';
-  navBtn.title       = 'Lehrfahrt beenden';
+  startAtLineStartBtn.hidden = true;
+  navBtn.classList.remove('hidden');
   navBtn.classList.add('nav-active');
   requestScreenWakeLock();
 
@@ -4102,8 +4064,8 @@ function stopNavigation() {
   closeNavRouteRemark();
   navHud.classList.add('hidden');
   document.body.classList.remove('nav-mode');
-  navBtn.textContent = '▶';
-  navBtn.title       = 'Navigation starten';
+  navBtn.classList.add('hidden');
+  startAtLineStartBtn.hidden = !currentRoute?.data?.routePoints?.length;
   navBtn.classList.remove('nav-active');
   stopNavSimulation();
   stopGPS();

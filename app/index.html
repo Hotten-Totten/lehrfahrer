@@ -19,7 +19,7 @@
   <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.063-afdb9df8465a">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.063-5aae5d152aaa">
 </head>
 <body>
 
@@ -31,7 +31,7 @@
       <span id="offlineBadge" class="hidden" title="App läuft offline – Karte und Routen aus dem Cache">● Offline</span>
     </div>
     <div id="topbar-right">
-      <button id="navBtn"      class="hidden" title="Navigation starten">▶</button>
+      <button id="navBtn" type="button" class="hidden" title="Lehrfahrt beenden" aria-label="Lehrfahrt beenden">■</button>
       <button id="simBtn"      class="hidden" title="Debug-Simulation starten (ohne GPS)">SIM</button>
       <button id="refreshLinesBtn" title="Linien und aktuelle Route aktualisieren">⟳</button>
       <button id="fullscreenBtn" title="Vollbild ein/aus">⛶</button>
@@ -168,18 +168,13 @@
 
   <!-- ── Panel (Haltestellenliste) ─────────── -->
   <div id="panel" class="panel-collapsed" hidden>
-    <button id="panelHandle" type="button" aria-controls="stopList" aria-expanded="false" aria-label="Haltestellenfolge ein- oder ausklappen"></button>
+    <div id="panelActions">
+      <button id="panelHandle" type="button" aria-controls="stopList" aria-expanded="false" aria-label="Haltestellenfolge ein- oder ausklappen"></button>
+      <button id="startAtLineStartBtn" type="button" hidden>Linienstart</button>
+    </div>
     <div id="panelHeader">
       <span id="panelTitle">Haltestellenfolge</span>
       <span id="panelMeta"></span>
-      <button id="navigateToStartBtn" type="button" title="Zum Startpunkt navigieren: Zeigt Weg vom GPS-Standort zum Anfang der Route" style="padding: 4px 10px; margin-right: 4px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; display: none;">
-        DirektStart
-      </button>
-      <div id="lineStartMenu" class="line-start-menu hidden" role="dialog" aria-label="Linie starten">
-        <button id="closeLineStartMenuBtn" class="line-start-menu-close" type="button" aria-label="Startmenü schließen">×</button>
-        <button id="startAtLineStartBtn" class="line-start-menu-action" type="button">Am Linienstart starten</button>
-        <button class="line-start-menu-action line-start-menu-placeholder" type="button" disabled>Zum Linienstart navigieren – später</button>
-      </div>
     </div>
     <div id="stopList">
       <p class="hint">Bitte eine Linie auswählen.</p>
@@ -457,7 +452,7 @@
   <script src="../js/tenant-cache-boundary.js?v=6f1f3c95d4c9"></script>
   <script src="js/map.js?v=V2.1.063"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.065-c6bdf22e0fc6"></script>
+  <script src="js/app.js?v=V2.1.065-f45ac58e014f"></script>
   <script src="js/debug-helper.js?v=c6059d9a1163"></script>
 </body>
 </html>
