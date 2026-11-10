@@ -1919,24 +1919,34 @@ jobs:
           status() {
             curl --silent --show-error --output /dev/null --write-out '%{http_code}'               -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/$1.cookies" "$2"
           }
+          expect_status() {
+            local label="$1" expected="$2" actual
+            actual="$(status "$3" "$4")"
+            printf '%s: expected HTTP %s, received HTTP %s\n' "$label" "$expected" "$actual"
+            test "$actual" = "$expected"
+          }
           login first
-          test "$(status first "$auth_url?action=me")" = 200
+          expect_status first-session 200 first "$auth_url?action=me"
           login second
-          test "$(status first "$auth_url?action=me")" = 401
-          test "$(status first "$origin/api/list_lines.php?scope=driver")" = 401
-          test "$(status second "$auth_url?action=me")" = 200
-          test "$(status second "$origin/api/list_lines.php?scope=driver")" = 200
+          expect_status revoked-session 401 first "$auth_url?action=me"
+          expect_status revoked-routes 401 first "$origin/api/list_lines.php?scope=driver"
+          expect_status second-session 200 second "$auth_url?action=me"
+          expect_status second-routes 200 second "$origin/api/list_lines.php?scope=driver"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD" \
             "$origin/app/index.html" > "$temp_dir/app.html"
           grep -Fq 'id="appStartNotice"' "$temp_dir/app.html"
           grep -Fq 'account-login.php?next=%2Fapp%2Findex.html' "$temp_dir/app.html"
+          echo 'PASS: direct app entry contains sign-in link'
           touch "$temp_dir/anonymous.cookies"
-          test "$(status anonymous "$origin/platform-accounts.php")" = 401
-          test "$(status second "$origin/platform-accounts.php")" = 403
+          expect_status anonymous-directory 401 anonymous "$origin/platform-accounts.php"
+          expect_status driver-directory 403 second "$origin/platform-accounts.php"
           redirect="$(curl --silent --show-error -o /dev/null -w '%{redirect_url}' \
-            -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/second.cookies" "$origin/")"
-          test "$redirect" = "$origin/app/index.html"
-          echo 'PASS: app login link, Driver redirect and platform directory access restrictions'
+            -u "$BASIC_USER:$BASIC_PASSWORD" -b "$temp_dir/second.cookies" "$origin/index.php")"
+          if [ "$redirect" != "$origin/app/index.html" ]; then
+            echo 'Driver editor entry did not redirect to the app' >&2
+            exit 1
+          fi
+          echo 'PASS: Driver redirect and platform directory access restrictions'
           csrf="$(jq -er '.csrfToken' "$temp_dir/second.json")"
           curl --fail --silent --show-error -u "$BASIC_USER:$BASIC_PASSWORD"             -b "$temp_dir/second.cookies" -H "Origin: $origin" -H "X-CSRF-Token: $csrf" -X POST             "$auth_url?action=logout" | jq -e '.ok == true' >/dev/null
           echo 'PASS: first Driver session revoked, second session can read routes'
