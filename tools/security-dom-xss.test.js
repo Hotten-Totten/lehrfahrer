@@ -99,7 +99,11 @@ test('Offline-Linienliste rendert Namen, Varianten und Sonderzeichen nur als Tex
   const windowObject = { __xss_test: 0 };
   const dom = createDom(windowObject);
   const container = dom.createElement('div');
-  const request = { result: [{ id: 'xss-line', data: { lineName: payload, routeType: 'line' } }] };
+  const request = { result: [
+    { id: 'xss-line', data: { city: 'A', lineName: payload, routeType: 'line' } },
+    { id: 'xss-variant', data: { city: 'A', lineName: payload, routeType: 'line' } },
+    { id: 'xss-other-city', data: { city: 'B', lineName: payload, routeType: 'line' } }
+  ] };
   Object.defineProperty(request, 'onsuccess', { set(handler) { queueMicrotask(handler); } });
   Object.defineProperty(request, 'onerror', { set() {} });
   const context = {
@@ -129,10 +133,17 @@ test('Offline-Linienliste rendert Namen, Varianten und Sonderzeichen nur als Tex
   await context.displayAvailableLines();
 
   assert.equal(windowObject.__xss_test, 0);
-  assert.equal(container.children.length, 1);
-  const textWrap = container.children[0].children[1];
+  const [firstCity, firstGroup, secondCity, secondGroup] = container.children;
+  assert.equal(container.children.length, 4);
+  assert.equal(firstCity.textContent, 'A');
+  assert.equal(secondCity.textContent, 'B');
+  assert.equal(firstGroup.tagName, 'details');
+  assert.equal(firstGroup.children.length, 3);
+  assert.equal(firstGroup.children[0].textContent, `${payload} · 2 Routen`);
+  assert.equal(secondGroup.children[0].textContent, `${payload} · 1 Route`);
+  const textWrap = firstGroup.children[1].children[0];
   assert.equal(textWrap.children[0].textContent, payload);
-  assert.equal(textWrap.children[1].textContent, `${payload} -> ${payload}`);
+  assert.equal(textWrap.children[1].textContent, payload);
 });
 
 test('gleichartiger Editor-Speichern-Toast interpretiert fileBase und city nicht als HTML', () => {

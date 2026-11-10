@@ -668,7 +668,8 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
   background: var(--surface);
   border-radius: 16px 16px 0 0;
   padding: 20px 16px 32px;
-  width: 100%;
+  width: min(100%, 760px);
+  margin-inline: auto;
   max-height: 85vh;
   overflow-y: auto;
 }
@@ -676,6 +677,64 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 #settingsBox h2 {
   font-size: 18px;
   margin-bottom: 16px;
+}
+
+.settings-group {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.settings-group > summary,
+.offline-line-group > summary {
+  padding: 11px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-group > .settings-section {
+  margin: 0 8px 8px;
+}
+
+.settings-section:not(:has(#punctualityToggle:checked)) .settings-departure-time,
+#removeLocalTilesBtn:disabled,
+#requestStoragePersistenceBtn.hidden {
+  display: none;
+}
+
+.settings-departure-time { margin-top: 8px; }
+
+.offline-city-title {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+.offline-line-group {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.offline-route-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.offline-route-row > div { overflow-wrap: anywhere; }
+.offline-route-meta { color: var(--text-muted); font-size: 12px; }
+
+.settings-section .offline-route-row button {
+  width: auto;
+  padding: 7px 10px;
+  margin: 0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .settings-section {

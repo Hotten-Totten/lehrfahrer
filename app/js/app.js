@@ -2681,88 +2681,72 @@ async function displayAvailableLines() {
       req.onerror = () => reject(req.error);
     });
 
-    if (!allLines.length) {
-      availableLinesContainer.innerHTML = '<p class="hint">Keine Linien heruntergeladen – werden beim App-Start automatisch geladen.</p>';
+    const catalogById = new Map((availableLinesCatalog || []).map(item => [buildLineStorageId(item), item]));
+    const cities = new Map();
+    for (const line of allLines) {
+      const catalogLine = catalogById.get(line.id);
+      const data = line.data || {};
+      if (normalizeOperationalRouteType(data.routeType ?? data.line?.routeType ?? catalogLine?.routeType) !== 'line') continue;
+
+      const city = String(catalogLine?.city || data.city || data.line?.city || '').trim();
+      const name = String(data.lineName || data.line?.lineName || catalogLine?.lineName || line.id).trim();
+      const key = name.toLocaleLowerCase('de').replace(/\s+/g, ' ');
+      if (!cities.has(city)) cities.set(city, new Map());
+      const groups = cities.get(city);
+      if (!groups.has(key)) groups.set(key, { name, routes: [] });
+      groups.get(key).routes.push({ id: line.id, data, catalogLine });
+    }
+    if (!cities.size) {
+      availableLinesContainer.innerHTML = '<p class="hint">Keine Offline-Linien gespeichert.</p>';
       return;
     }
 
-    availableLinesContainer.innerHTML = '';
-    const passengerLines = allLines.filter(line => {
-      const catalogLine = (availableLinesCatalog || []).find(item => buildLineStorageId(item) === line.id);
-      return normalizeOperationalRouteType(line?.data?.routeType ?? line?.data?.line?.routeType ?? catalogLine?.routeType) === 'line';
-    });
-    for (const line of passengerLines) {
-      const catalogLine = (availableLinesCatalog || []).find(item => buildLineStorageId(item) === line.id) || null;
-      const lineData = line.data || {};
-      const lineName = lineData.lineName || lineData?.line?.lineName || catalogLine?.lineName || line.id;
-      const routeName = lineData.routeName || lineData?.line?.routeName || catalogLine?.routeName || 'Route';
-      const variantName = getAppVariantName(lineData, catalogLine);
-      const variantCategory = getAppVariantCategory(lineData, catalogLine);
-      const description = getAppLineDescription(lineData, catalogLine);
-      const validityText = formatAppValidity(lineData, catalogLine);
-
-      const div = document.createElement('div');
-      div.style.cssText = `
-        padding: 10px 12px;
-        background: var(--surface2);
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      `;
-
-      const icon = document.createElement('span');
-      icon.style.fontSize = '18px';
-      icon.textContent = '✅';
-
-      const textWrap = document.createElement('div');
-      textWrap.style.flex = '1';
-      const lineNameEl = document.createElement('div');
-      lineNameEl.style.cssText = 'font-weight: 600; font-size: 14px;';
-      lineNameEl.textContent = String(lineName || '');
-      const variantEl = document.createElement('div');
-      variantEl.style.cssText = 'font-size: 12px; color: var(--text-muted);';
-      variantEl.textContent = `${String(variantCategory || '')} -> ${String(variantName || '')}`;
-      textWrap.append(lineNameEl, variantEl);
-      if (description) {
-        const descriptionEl = document.createElement('div');
-        descriptionEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.35;';
-        descriptionEl.textContent = `Bemerkung: ${description}`;
-        textWrap.appendChild(descriptionEl);
+    const compare = (a, b) => a.localeCompare(b, 'de', { numeric: true });
+    const sections = [];
+    for (const [city, groups] of [...cities].sort(([a], [b]) => compare(a, b))) {
+      if (cities.size > 1) {
+        const title = document.createElement('h4');
+        title.className = 'offline-city-title';
+        title.textContent = city || 'Ohne Stadtangabe';
+        sections.push(title);
       }
-      if (validityText) {
-        const validityEl = document.createElement('div');
-        validityEl.style.cssText = 'font-size:12px;color:var(--text-muted);margin-top:3px;font-weight:600;';
-        validityEl.textContent = validityText;
-        textWrap.appendChild(validityEl);
+      for (const { name, routes } of [...groups.values()].sort((a, b) => compare(a.name, b.name))) {
+        const group = document.createElement('details');
+        group.className = 'offline-line-group';
+        const summary = document.createElement('summary');
+        summary.textContent = name + ' · ' + routes.length + (routes.length === 1 ? ' Route' : ' Routen');
+        group.appendChild(summary);
+        for (const { id, data, catalogLine } of routes) {
+          const row = document.createElement('div');
+          row.className = 'offline-route-row';
+          const text = document.createElement('div');
+          const heading = document.createElement('strong');
+          const route = data.routeName || data.line?.routeName || catalogLine?.routeName;
+          const variant = getAppVariantName(data, catalogLine);
+          heading.textContent = [...new Set([route, variant].filter(Boolean))].join(' · ') || 'Route';
+          text.appendChild(heading);
+          const meta = document.createElement('div');
+          meta.className = 'offline-route-meta';
+          meta.textContent = [
+            getAppVariantCategory(data, catalogLine),
+            getAppLineDescription(data, catalogLine),
+            formatAppValidity(data, catalogLine)
+          ].filter(Boolean).join(' · ');
+          text.appendChild(meta);
+          row.appendChild(text);
+          if (catalogLine?.hasPdf) {
+            const pdfButton = document.createElement('button');
+            pdfButton.type = 'button';
+            pdfButton.textContent = await dbGetLinePDFRecord(id) ? 'PDF öffnen' : 'PDF laden';
+            pdfButton.addEventListener('click', () => openLineOverviewPdf(id, catalogLine));
+            row.appendChild(pdfButton);
+          }
+          group.appendChild(row);
+        }
+        sections.push(group);
       }
-
-      div.appendChild(icon);
-      div.appendChild(textWrap);
-
-      if (catalogLine?.hasPdf) {
-        const pdfRecord = await dbGetLinePDFRecord(line.id);
-        const pdfBtn = document.createElement('button');
-        pdfBtn.type = 'button';
-        pdfBtn.textContent = pdfRecord ? 'PDF öffnen' : 'PDF laden';
-        pdfBtn.style.cssText = `
-          padding: 6px 10px;
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: var(--surface);
-          color: var(--text);
-          font-size: 12px;
-          cursor: pointer;
-        `;
-        pdfBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await openLineOverviewPdf(line.id, catalogLine);
-        });
-        div.appendChild(pdfBtn);
-      }
-      
-      availableLinesContainer.appendChild(div);
     }
+    availableLinesContainer.replaceChildren(...sections);
   } catch (err) {
     console.error('Error displaying available lines:', err);
     availableLinesContainer.innerHTML = '<p class="hint">Fehler beim Laden der Linien.</p>';
