@@ -170,7 +170,7 @@ test('MapLibre-Reset schreibt niemals user-select undefined', () => {
 
 test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übergeben', async () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
-  const config = appSource.match(/const COTTBUS_OFFLINE_MAP = .*;/)[0];
+  const config = appSource.match(/const COTTBUS_(?:OFFLINE|NORTH)_MAP = .*;/g).join('\n');
   const fileName = 'cottbus-20261101.pmtiles';
   const asset = fs.statSync(path.resolve(__dirname, '../assets/offline-maps', fileName));
   const button = { hidden: true, disabled: false };
@@ -181,8 +181,11 @@ test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übe
     availableLinesCatalog: [{ city: 'test' }],
     downloadRegionMapBtn: button,
     regionMapDownloadStatus: status,
-    offlineMapInstalled: false,
-    readOfflineMapManifest: () => null,
+    downloadNorthMapBtn: {},
+    removeNorthMapBtn: {},
+    OFFLINE_MAP_MANIFEST_KEY: 'center',
+    NORTH_MAP_MANIFEST_KEY: 'north',
+    regionalMapSources: new Map(),
     navigator: { onLine: true },
     fetch: async (url, options) => {
       assert.equal(url, '../assets/offline-maps/' + fileName);
@@ -204,14 +207,43 @@ test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übe
   context.availableLinesCatalog = [{ city: 'cottbus' }];
   context.updateRegionMapDownloadButton();
   assert.equal(button.hidden, false);
-  await context.downloadCottbusOfflineMap();
+  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, downloadRegionMapBtn)', context);
   assert.equal(imported, null);
   assert.match(status.textContent, /konnte nicht geladen werden/);
   assert.equal(button.disabled, false);
 
   responseSize = asset.size;
-  await context.downloadCottbusOfflineMap();
+  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, downloadRegionMapBtn)', context);
   assert.equal(imported.name, fileName);
   assert.equal(imported.size, asset.size);
   assert.match(status.textContent, /offline verfügbar/);
+});
+
+test('Regionalkacheln kommen aus Zentrum, Nord oder bei Bedarf aus dem Internet', async () => {
+  const requested = [];
+  const context = vm.createContext({
+    regionalMapSources: new Map([
+      ['center', { archive: { getZxy: async (z, x, y) => y === 2 ? { data: 'center' } : undefined } }],
+      ['north', { archive: { getZxy: async (z, x, y) => y === 1 ? { data: 'north' } : undefined } }]
+    ]),
+    navigator: { onLine: false },
+    fetch: async url => {
+      requested.push(url);
+      return { ok: true, arrayBuffer: async () => 'online' };
+    },
+    ArrayBuffer
+  });
+  vm.runInContext(mapSource.slice(
+    mapSource.indexOf('async function loadRegionalMapTile('),
+    mapSource.indexOf('function hasCottbusRegionalMap()')
+  ), context);
+  const controller = new AbortController();
+  const load = y => context.loadRegionalMapTile({ url: 'lf-regions://cottbus/3/4/' + y }, controller);
+  assert.equal((await load(2)).data, 'center');
+  assert.equal((await load(1)).data, 'north');
+  assert.equal((await load(3)).data.byteLength, 0);
+  assert.deepEqual(requested, []);
+  context.navigator.onLine = true;
+  assert.equal((await load(3)).data, 'online');
+  assert.deepEqual(requested, ['https://tiles.openfreemap.org/planet/latest/3/4/3.pbf']);
 });

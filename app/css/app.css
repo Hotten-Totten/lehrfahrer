@@ -698,6 +698,8 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 .settings-section:not(:has(#punctualityToggle:checked)) .settings-departure-time,
 #downloadRegionMapBtn[hidden],
+#downloadNorthMapBtn[hidden],
+#removeNorthMapBtn[hidden],
 #removeLocalTilesBtn:disabled,
 #requestStoragePersistenceBtn.hidden {
   display: none;

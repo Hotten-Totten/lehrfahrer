@@ -62,6 +62,9 @@ let lastGpsPosition = null;
 const DEFAULT_CENTER = [14.33, 51.76]; // Cottbus
 const DEFAULT_ZOOM   = 12;
 const OFFLINE_MAP_MANIFEST_KEY = 'lehrfahrer_offline_pmtiles_manifest';
+const NORTH_MAP_MANIFEST_KEY = OFFLINE_MAP_MANIFEST_KEY + '-north';
+const regionalMapSources = new Map();
+let regionalMapProtocolRegistered = false;
 const LEGACY_OFFLINE_MAP_FILE = 'region.pmtiles';
 
 function normalizeDeg(deg) {
@@ -1113,9 +1116,9 @@ function formatOfflineMapSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function readOfflineMapManifestRecord() {
+function readOfflineMapManifestRecord(key = OFFLINE_MAP_MANIFEST_KEY) {
   try {
-    const raw = localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY);
+    const raw = localStorage.getItem(key);
     if (raw == null) return { manifest: null, invalid: false };
     const value = JSON.parse(raw);
     const valid = value && typeof value.storageName === 'string' && value.storageName.trim() !== '';
@@ -1125,8 +1128,8 @@ function readOfflineMapManifestRecord() {
   }
 }
 
-function readOfflineMapManifest() {
-  return readOfflineMapManifestRecord().manifest;
+function readOfflineMapManifest(key = OFFLINE_MAP_MANIFEST_KEY) {
+  return readOfflineMapManifestRecord(key).manifest;
 }
 
 function clearOfflineMapManifest() {
@@ -1157,7 +1160,9 @@ function setOfflineMapInstallState(state, metadata = null, detail = '') {
   if (state === 'ready') offlineMapInstalled = true;
   else if (['none', 'unavailable', 'denied', 'stale'].includes(state)) offlineMapInstalled = false;
   if (installButton) installButton.disabled = state === 'installing';
-  if (removeButton) removeButton.disabled = state === 'installing' || !offlineMapInstalled;
+  if (removeButton) removeButton.disabled = state === 'installing'
+    || (!regionalMapSources.has(OFFLINE_MAP_MANIFEST_KEY) && !readOfflineMapManifest()
+      && (!offlineMapInstalled || regionalMapSources.has(NORTH_MAP_MANIFEST_KEY)));
 }
 
 function offlineMapReadResult(status, source = null, detail = '') {
@@ -1187,6 +1192,7 @@ async function createLocalPMTilesSource(file, metadata = null) {
     kind: 'local',
     label: mapMetadata.displayName,
     url: source.getKey(),
+    archive,
     style: buildPMTilesStyle(source.getKey()),
     metadata: mapMetadata
   };
@@ -1243,6 +1249,61 @@ async function readStoredPMTilesSource() {
   }
 }
 
+async function readNorthMapSource() {
+  const metadata = readOfflineMapManifest(NORTH_MAP_MANIFEST_KEY);
+  if (!metadata) return;
+  try {
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getFileHandle(metadata.storageName);
+    const file = await handle.getFile();
+    regionalMapSources.set(NORTH_MAP_MANIFEST_KEY, await createLocalPMTilesSource(file, metadata));
+  } catch (error) {
+    console.warn('Offline-Karte Cottbus Nord nicht lesbar:', error);
+  }
+}
+
+async function loadRegionalMapTile({ url }, controller) {
+  const coordinates = url.match(/^lf-regions:\/\/cottbus\/(\d+)\/(\d+)\/(\d+)$/);
+  if (!coordinates) throw new Error('Ungültige Kartenkachel.');
+  const [z, x, y] = coordinates.slice(1).map(Number);
+  for (const source of regionalMapSources.values()) {
+    const tile = await source.archive.getZxy(z, x, y, controller.signal);
+    if (tile) return { data: tile.data };
+  }
+  if (navigator.onLine !== false) {
+    try {
+      const response = await fetch(`https://tiles.openfreemap.org/planet/latest/${z}/${x}/${y}.pbf`, {
+        signal: controller.signal
+      });
+      if (response.ok) return { data: await response.arrayBuffer() };
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+    }
+  }
+  return { data: new ArrayBuffer(0) };
+}
+
+function hasCottbusRegionalMap() {
+  const primary = regionalMapSources.get(OFFLINE_MAP_MANIFEST_KEY);
+  return regionalMapSources.has(NORTH_MAP_MANIFEST_KEY)
+    || /^cottbus-\d{8}\.pmtiles$/.test(primary?.metadata.displayName || '');
+}
+
+function regionalMapSource() {
+  if (!regionalMapProtocolRegistered) {
+    maplibregl.addProtocol('lf-regions', loadRegionalMapTile);
+    regionalMapProtocolRegistered = true;
+  }
+  const style = buildPMTilesStyle('');
+  style.sources.openmaptiles = {
+    type: 'vector',
+    tiles: ['lf-regions://cottbus/{z}/{x}/{y}'],
+    maxzoom: 14,
+    attribution: 'OpenFreeMap © OpenMapTiles · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap-Mitwirkende</a>'
+  };
+  return { kind: 'local', label: 'Cottbus · Offline-Regionen mit Online-Ergänzung', style };
+}
+
 async function onlineMapAvailable() {
   if (navigator.onLine === false) return false;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -1262,6 +1323,9 @@ async function onlineMapAvailable() {
 
 async function resolveInitialMapSource() {
   const localResult = await readStoredPMTilesSource();
+  if (localResult.source) regionalMapSources.set(OFFLINE_MAP_MANIFEST_KEY, localResult.source);
+  await readNorthMapSource();
+  if (hasCottbusRegionalMap()) return regionalMapSource();
   if (localResult.source) return localResult.source;
   if (await onlineMapAvailable()) {
     return { kind: 'online', label: 'OpenFreeMap', style: buildRasterStyle() };
@@ -1341,6 +1405,11 @@ async function initMap() {
     handleMapSourceError(e);
   });
 
+  window.addEventListener('online', () => {
+    const tiles = map.getStyle()?.sources.openmaptiles?.tiles;
+    if (tiles?.[0]?.startsWith('lf-regions://')) map.getSource('openmaptiles').setTiles(tiles);
+  });
+
   map.on('zoomend', updateStopPoiVisibility);
   map.on('moveend', () => {
     updateStopPoiVisibility();
@@ -1395,11 +1464,22 @@ async function removeOPFSFileIfPresent(root, storageName) {
 function activateLocalPMTilesSource(source) {
   if (!source) return false;
   setMapSourceState('local', source.label);
-  switchToPMTiles(source.url);
+  if (source.url) {
+    switchToPMTiles(source.url);
+  } else if (map) {
+    mapSourceErrorHandled = false;
+    const tiles = source.style.sources.openmaptiles.tiles;
+    const currentTiles = map.getStyle()?.sources.openmaptiles?.tiles;
+    if (tiles[0] === currentTiles?.[0]) {
+      map.getSource('openmaptiles').setTiles(tiles);
+    } else {
+      map.setStyle(source.style);
+    }
+  }
   return true;
 }
 
-async function installOfflineMapFile(file) {
+async function installOfflineMapFile(file, manifestKey = OFFLINE_MAP_MANIFEST_KEY) {
   if (!file) return false;
   const metadata = { displayName: file.name || 'Offline-Karte.pmtiles', size: file.size };
   if (!/\.pmtiles$/i.test(metadata.displayName)) {
@@ -1412,10 +1492,10 @@ async function installOfflineMapFile(file) {
   }
 
   setOfflineMapInstallState('installing', metadata);
-  const previousManifest = readOfflineMapManifest();
+  const previousManifest = readOfflineMapManifest(manifestKey);
   const previousStorageName = previousManifest
     ? previousManifest.storageName
-    : (offlineMapInstalled ? LEGACY_OFFLINE_MAP_FILE : null);
+    : (manifestKey === OFFLINE_MAP_MANIFEST_KEY && offlineMapInstalled ? LEGACY_OFFLINE_MAP_FILE : null);
   const storageName = createOfflineMapStorageName();
   let previousManifestText = null;
   let root = null;
@@ -1424,7 +1504,7 @@ async function installOfflineMapFile(file) {
   let importPhase = 'storage';
 
   try {
-    previousManifestText = localStorage.getItem(OFFLINE_MAP_MANIFEST_KEY);
+    previousManifestText = localStorage.getItem(manifestKey);
     if (navigator.storage && typeof navigator.storage.estimate === 'function') {
       const estimate = await navigator.storage.estimate();
       const available = Number(estimate.quota) - Number(estimate.usage);
@@ -1451,10 +1531,18 @@ async function installOfflineMapFile(file) {
     const installedMetadata = { ...metadata, storageName, size: storedFile.size };
     const source = await createLocalPMTilesSource(storedFile, installedMetadata);
     importPhase = 'activation';
-    localStorage.setItem(OFFLINE_MAP_MANIFEST_KEY, JSON.stringify(installedMetadata));
+    localStorage.setItem(manifestKey, JSON.stringify(installedMetadata));
     manifestUpdated = true;
-    activateLocalPMTilesSource(source);
-    setOfflineMapInstallState('ready', installedMetadata);
+    const previousSource = regionalMapSources.get(manifestKey);
+    regionalMapSources.set(manifestKey, source);
+    try {
+      activateLocalPMTilesSource(hasCottbusRegionalMap() ? regionalMapSource() : source);
+    } catch (error) {
+      if (previousSource) regionalMapSources.set(manifestKey, previousSource);
+      else regionalMapSources.delete(manifestKey);
+      throw error;
+    }
+    setOfflineMapInstallState('ready', regionalMapSources.get(OFFLINE_MAP_MANIFEST_KEY)?.metadata || installedMetadata);
 
     if (previousStorageName && previousStorageName !== storageName) {
       try {
@@ -1473,8 +1561,8 @@ async function installOfflineMapFile(file) {
       }
     }
     if (manifestUpdated) {
-      if (previousManifestText == null) localStorage.removeItem(OFFLINE_MAP_MANIFEST_KEY);
-      else localStorage.setItem(OFFLINE_MAP_MANIFEST_KEY, previousManifestText);
+      if (previousManifestText == null) localStorage.removeItem(manifestKey);
+      else localStorage.setItem(manifestKey, previousManifestText);
     }
     if (root) {
       try {
@@ -1512,18 +1600,26 @@ async function switchToMapFallback() {
   return source.kind;
 }
 
-async function removeInstalledOfflineMap() {
-  const manifest = readOfflineMapManifest();
-  const storageName = manifest ? manifest.storageName : LEGACY_OFFLINE_MAP_FILE;
+async function removeInstalledOfflineMap(manifestKey = OFFLINE_MAP_MANIFEST_KEY) {
+  const manifest = readOfflineMapManifest(manifestKey);
+  const storageName = manifest?.storageName || (manifestKey === OFFLINE_MAP_MANIFEST_KEY ? LEGACY_OFFLINE_MAP_FILE : null);
+  if (!storageName) return false;
   try {
     if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
       throw new Error('Dauerhafter Gerätespeicher ist nicht verfügbar.');
     }
     const root = await navigator.storage.getDirectory();
     await removeOPFSFileIfPresent(root, storageName);
-    localStorage.removeItem(OFFLINE_MAP_MANIFEST_KEY);
-    setOfflineMapInstallState('none');
-    await switchToMapFallback();
+    localStorage.removeItem(manifestKey);
+    regionalMapSources.delete(manifestKey);
+    const remaining = regionalMapSources.get(OFFLINE_MAP_MANIFEST_KEY) || regionalMapSources.get(NORTH_MAP_MANIFEST_KEY);
+    if (remaining) {
+      setOfflineMapInstallState('ready', remaining.metadata);
+      activateLocalPMTilesSource(hasCottbusRegionalMap() ? regionalMapSource() : remaining);
+    } else {
+      setOfflineMapInstallState('none');
+      await switchToMapFallback();
+    }
     return true;
   } catch (err) {
     console.warn('Offline-Karte konnte nicht entfernt werden:', err);
