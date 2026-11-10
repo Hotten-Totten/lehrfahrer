@@ -36,7 +36,28 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $smoke = lehrfahrer_driver_smoke_identity($pdo);
     $smokePresent = $smoke['present'];
     if ($smokePresent && !$smoke['valid']) $add('BLOCKER', 'DRIVER_SMOKE_IDENTITY');
-    $additional = $smokePresent ? 1 : 0;
+    $closedFixtures = [];
+    if ($auth['mode'] === 'ACCOUNT_PRIMARY' && lehrfahrer_environment() === 'staging') {
+        $rows = $pdo->query("SELECT a.id, a.login_normalized FROM accounts a
+            JOIN account_memberships m ON m.account_id = a.id
+            JOIN companies c ON c.id = m.company_id
+            JOIN membership_roles mr ON mr.membership_id = m.id
+            JOIN roles r ON r.id = mr.role_id
+            WHERE a.active = 0 AND a.display_name = 'Staging Firmentrennung'
+                AND m.status = 'inactive' AND m.legacy_user_id IS NULL
+                AND c.slug = 'lehrfahrer-test' AND r.code = 'FAHRER'
+                AND (SELECT COUNT(*) FROM account_memberships x WHERE x.account_id = a.id) = 1
+                AND (SELECT COUNT(*) FROM membership_roles x WHERE x.membership_id = m.id) = 1
+                AND NOT EXISTS (SELECT 1 FROM account_sessions s WHERE s.account_id = a.id AND s.revoked_at IS NULL)
+                AND NOT EXISTS (SELECT 1 FROM account_activation_tokens t WHERE t.account_id = a.id AND t.used_at IS NULL)")
+            ->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as $row) {
+            if (preg_match('/^staging-isolation-[a-f0-9]{24}$/D', (string)$row['login_normalized'])) {
+                $closedFixtures[(string)$row['id']] = (string)$row['login_normalized'];
+            }
+        }
+    }
+    $additional = ($smokePresent ? 1 : 0) + count($closedFixtures);
     $sysopRows = $pdo->query('SELECT account_id FROM sysop_assignment')->fetchAll(PDO::FETCH_COLUMN);
     $bootstrapped = count($sysopRows) === 1;
     if ($bootstrapped) {
@@ -45,7 +66,7 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
             $target->execute([LEHRFAHRER_SYSOP_BOOTSTRAP_LOGIN]);
             $targetId = $target->fetchColumn();
             if (!is_string($targetId)) throw new RuntimeException('TARGET_ACCOUNT');
-            lehrfahrer_sysop_bootstrap_postcheck($pdo, $targetId);
+            lehrfahrer_sysop_bootstrap_postcheck($pdo, $targetId, count($closedFixtures));
         } catch (Throwable $error) {
             $add('BLOCKER', 'SYSOP_POSTSTATE');
         }
@@ -139,7 +160,8 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
     $membersByUser = [];
     foreach ($memberships as $membership) {
         $legacyId = (string)($membership['legacy_user_id'] ?? '');
-        if ($legacyId === '' && $smokePresent && (string)$membership['account_id'] === (string)$smoke['accountId']) continue;
+        if ($legacyId === '' && ($smokePresent && (string)$membership['account_id'] === (string)$smoke['accountId']
+            || isset($closedFixtures[(string)$membership['account_id']]))) continue;
         if ($legacyId === '' || isset($membersByUser[$legacyId])) $add('BLOCKER', 'MEMBERSHIP_DUPLICATE_OR_UNLINKED');
         $membersByUser[$legacyId] = $membership;
         if (!isset($accountsById[(string)$membership['account_id']])) $add('BLOCKER', 'MEMBERSHIP_ACCOUNT_ORPHAN');
@@ -185,6 +207,7 @@ function lehrfahrer_account_cutover_preflight(PDO $pdo): array {
         $add('BLOCKER', 'ORPHAN_OR_EXTRA_ACCOUNT');
     }
     if ($smokePresent) $normalizedLogins[] = LEHRFAHRER_DRIVER_SMOKE_LOGIN;
+    $normalizedLogins = array_merge($normalizedLogins, array_values($closedFixtures));
     if (count(array_unique($normalizedLogins)) !== count($normalizedLogins)) $add('BLOCKER', 'LOGIN_COLLISION');
     if (count(array_unique($legacyLogins)) !== count($legacyLogins)) $add('BLOCKER', 'LOGIN_COLLISION');
     if (lehrfahrer_control_driver($pdo) === 'mysql') {

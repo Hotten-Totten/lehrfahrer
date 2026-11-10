@@ -88,7 +88,7 @@ function lehrfahrer_sysop_bootstrap_preflight(PDO $pdo): array {
 }
 
 /** Validate the complete post-state before commit and on every subsequent read-only check. */
-function lehrfahrer_sysop_bootstrap_postcheck(PDO $pdo, string $accountId): array {
+function lehrfahrer_sysop_bootstrap_postcheck(PDO $pdo, string $accountId, int $closedFixtures = 0): array {
     $target = $pdo->prepare('SELECT id, active FROM accounts WHERE login_normalized = ?');
     $target->execute([LEHRFAHRER_SYSOP_BOOTSTRAP_LOGIN]);
     $targets = $target->fetchAll(PDO::FETCH_ASSOC);
@@ -99,7 +99,7 @@ function lehrfahrer_sysop_bootstrap_postcheck(PDO $pdo, string $accountId): arra
         && (string)$rows[0]['account_id'] === $accountId, 'SYSOP_SINGLETON');
     $numbers = $pdo->query('SELECT user_number, issued_to_account_id, current_account_id FROM account_user_numbers
         ORDER BY user_number')->fetchAll(PDO::FETCH_ASSOC);
-    lehrfahrer_sysop_bootstrap_require(count($numbers) === 4
+    lehrfahrer_sysop_bootstrap_require(count($numbers) === 4 + $closedFixtures
         && (int)$numbers[0]['user_number'] === 1 && $numbers[0]['issued_to_account_id'] === $accountId
         && $numbers[0]['current_account_id'] === $accountId
         && (int)$numbers[1]['user_number'] === 101
@@ -112,7 +112,7 @@ function lehrfahrer_sysop_bootstrap_postcheck(PDO $pdo, string $accountId): arra
     $smoke->execute([(string)$numbers[3]['current_account_id']]);
     lehrfahrer_sysop_bootstrap_require($smoke->fetchColumn() === 'staging-driver-smoke', 'SMOKE_NUMBER');
     lehrfahrer_sysop_bootstrap_require(lehrfahrer_control_user_number_for_account($pdo, $accountId) === 1
-        && (int)$pdo->query('SELECT next_number FROM account_user_number_allocator WHERE singleton_key = 1')->fetchColumn() === 104
+        && (int)$pdo->query('SELECT next_number FROM account_user_number_allocator WHERE singleton_key = 1')->fetchColumn() === 104 + $closedFixtures
         && (int)$pdo->query('SELECT COUNT(*) FROM account_platform_roles')->fetchColumn() === 0,
         'NUMBER_OR_PLATFORM_STATE');
     $membershipCount = $pdo->prepare('SELECT COUNT(*) FROM account_memberships WHERE account_id = ?');
