@@ -926,6 +926,7 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 
 /* ── Nav-Button + Sim-Button ────────────────── */
 #navBtn, #simBtn { transition: background 0.2s, color 0.2s, border-color 0.2s; }
+#navBtn.hidden { display: none; }
 #navBtn.nav-active { background: #1b3d20 !important; border-color: #2daa50 !important; color: #2daa50 !important; }
 #simBtn.nav-active { background: #3d2a10 !important; border-color: #e08c25 !important; color: #e08c25 !important; }
 
