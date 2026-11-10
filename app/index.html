@@ -12,14 +12,14 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../assets/icons/icon_final3_blue_64.png">
 
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="./vendor/maplibre-gl-4.7.1.css">
   <link rel="stylesheet" href="../support-diagnostics.css?v=1">
   <script src="../js/support-diagnostics-core.js?v=2"></script>
   <script src="../js/support-diagnostics.js?v=2"></script>
-  <script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script defer src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
+  <script defer src="./vendor/maplibre-gl-4.7.1.js"></script>
+  <script defer src="./vendor/pmtiles-3.2.1.js"></script>
 
-  <link rel="stylesheet" href="css/app.css?v=V2.1.063-34cbad27411b">
+  <link rel="stylesheet" href="css/app.css?v=V2.1.063-fbeea3c0dbc0">
 </head>
 <body>
 
@@ -182,6 +182,13 @@
   </div>
 
   <!-- ── Einstellungen ─────────────────────── -->
+  <dialog id="offlineMapSetup" aria-labelledby="offlineMapSetupTitle">
+    <h2 id="offlineMapSetupTitle">Cottbus-Karte einrichten</h2>
+    <p>Damit du die App auch ohne Internet starten kannst, lade zuerst die Standardkarte auf dieses Gerät.</p>
+    <button id="offlineMapSetupBtn" type="button">Cottbus · Zentrum laden (ca. 22 MB)</button>
+    <p id="offlineMapSetupStatus" role="status"></p>
+  </dialog>
+
   <div id="settingsOverlay" class="hidden">
     <div id="settingsBox">
       <h2>Einstellungen</h2>
@@ -260,9 +267,7 @@
           </p>
           <div id="tileStatus" class="status-box">Kartenquelle wird geprüft …</div>
           <div id="offlineMapInstallStatus" class="status-box">Keine Offline-Karte installiert</div>
-          <button id="downloadRegionMapBtn" type="button" hidden>Cottbus · Zentrum laden</button>
-          <button id="downloadNorthMapBtn" type="button" hidden>Cottbus · Nord laden</button>
-          <button id="removeNorthMapBtn" type="button" hidden>Cottbus · Nord entfernen</button>
+          <div id="regionMapControls"></div>
           <p id="regionMapDownloadStatus" role="status"></p>
           <button id="loadLocalTilesBtn" title="Lokale PMTiles-Datei dauerhaft auf diesem Gerät speichern">
             Kartendatei importieren
@@ -461,9 +466,9 @@
   </div>
 
   <script src="../js/tenant-cache-boundary.js?v=6f1f3c95d4c9"></script>
-  <script src="js/map.js?v=V2.1.063-d7852d4740cd"></script>
+  <script src="js/map.js?v=V2.1.063-3e71417ff62c"></script>
   <script src="js/local-bus-routing-storage.js"></script>
-  <script src="js/app.js?v=V2.1.065-78a7679265ab"></script>
+  <script src="js/app.js?v=V2.1.065-5630acfdc1f4"></script>
   <script src="js/debug-helper.js?v=c6059d9a1163"></script>
 </body>
 </html>

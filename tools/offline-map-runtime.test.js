@@ -147,12 +147,12 @@ test('PMTiles-Style nutzt ausschließlich lokale Glyphs', () => {
   assert.doesNotMatch(style.glyphs, /demotiles|unpkg|cdnjs/);
 });
 
-test('App-Start hat keine Font-Awesome-Pflicht und CDN-Runtime ist exakt vorgecached', () => {
+test('App-Start verwendet lokal ausgelieferte und vorgecachte Kartenbibliotheken', () => {
   assert.doesNotMatch(appHtml, /font-awesome|cdnjs\.cloudflare\.com|fa-solid|fa-arrow/);
   for (const url of [
-    'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
-    'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js',
-    'https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js'
+    './vendor/maplibre-gl-4.7.1.css',
+    './vendor/maplibre-gl-4.7.1.js',
+    './vendor/pmtiles-3.2.1.js'
   ]) {
     assert.ok(appHtml.includes(url));
     assert.ok(serviceWorker.includes(url));
@@ -170,21 +170,21 @@ test('MapLibre-Reset schreibt niemals user-select undefined', () => {
 
 test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übergeben', async () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, '../app/js/app.js'), 'utf8');
-  const config = appSource.match(/const COTTBUS_(?:OFFLINE|NORTH)_MAP = .*;/g).join('\n');
+  const config = appSource.slice(appSource.indexOf('const COTTBUS_OFFLINE_MAP'), appSource.indexOf('let offlineMapActionPending'));
   const fileName = 'cottbus-20261101.pmtiles';
   const asset = fs.statSync(path.resolve(__dirname, '../assets/offline-maps', fileName));
-  const button = { hidden: true, disabled: false };
+  const buttons = [];
   const status = {};
   let responseSize = 1;
   let imported = null;
   const context = vm.createContext({
     availableLinesCatalog: [{ city: 'test' }],
-    downloadRegionMapBtn: button,
+    regionMapControls: { replaceChildren: (...items) => buttons.splice(0, buttons.length, ...items) },
+    offlineMapSetupBtn: {},
+    document: { createElement: () => ({ addEventListener() {} }) },
     regionMapDownloadStatus: status,
-    downloadNorthMapBtn: {},
-    removeNorthMapBtn: {},
     OFFLINE_MAP_MANIFEST_KEY: 'center',
-    NORTH_MAP_MANIFEST_KEY: 'north',
+    OPTIONAL_MAP_MANIFEST_KEYS: ['north', 'east', 'south', 'west'],
     regionalMapSources: new Map(),
     navigator: { onLine: true },
     fetch: async (url, options) => {
@@ -198,22 +198,22 @@ test('Cottbus-Karte wird nur vollständig an den vorhandenen Offline-Import übe
     console: { warn() {} }
   });
   vm.runInContext(config + '\nlet offlineMapActionPending = false;\n' + appSource.slice(
-    appSource.indexOf('function updateRegionMapDownloadButton()'),
+    appSource.indexOf('function cottbusMapOffered()'),
     appSource.indexOf('async function onTilesFileSelected()')
   ), context);
 
   context.updateRegionMapDownloadButton();
-  assert.equal(button.hidden, true);
+  assert.equal(buttons.length, 0);
   context.availableLinesCatalog = [{ city: 'cottbus' }];
   context.updateRegionMapDownloadButton();
-  assert.equal(button.hidden, false);
-  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, downloadRegionMapBtn)', context);
+  assert.equal(buttons.length, 5);
+  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP)', context);
   assert.equal(imported, null);
   assert.match(status.textContent, /konnte nicht geladen werden/);
-  assert.equal(button.disabled, false);
+  assert.equal(buttons[0].disabled, false);
 
   responseSize = asset.size;
-  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, downloadRegionMapBtn)', context);
+  await vm.runInContext('downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP)', context);
   assert.equal(imported.name, fileName);
   assert.equal(imported.size, asset.size);
   assert.match(status.textContent, /offline verfügbar/);
@@ -246,4 +246,34 @@ test('Regionalkacheln kommen aus Zentrum, Nord oder bei Bedarf aus dem Internet'
   context.navigator.onLine = true;
   assert.equal((await load(3)).data, 'online');
   assert.deepEqual(requested, ['https://tiles.openfreemap.org/planet/latest/3/4/3.pbf']);
+});
+
+test('installierte App und alter App-Startpfad öffnen offline dieselbe vorbereitete Seite', async () => {
+  const listeners = new Map();
+  const origin = 'https://example.test';
+  const shell = new Response('cached shell');
+  let networkRequests = 0;
+  const context = vm.createContext({
+    self: {
+      registration: { scope: origin + '/app/' },
+      addEventListener: (name, listener) => listeners.set(name, listener)
+    },
+    URL, Request, Response,
+    caches: { match: async request => request.url === origin + '/app/index.html' ? shell : undefined },
+    fetch: async () => { networkRequests++; throw new TypeError('offline'); }
+  });
+  vm.runInContext(serviceWorker, context);
+  const navigate = url => {
+    let response;
+    listeners.get('fetch')({
+      request: { url: origin + url, method: 'GET', mode: 'navigate' },
+      respondWith: value => { response = value; }
+    });
+    return response;
+  };
+  assert.equal((await navigate('/app/')).status, 200);
+  assert.equal(await (await navigate('/app/index.html?launch=1')).text(), 'cached shell');
+  assert.equal(networkRequests, 0);
+  await assert.rejects(navigate('/api/auth/account_test.php?action=me'), TypeError);
+  assert.equal(networkRequests, 1);
 });

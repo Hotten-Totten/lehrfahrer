@@ -140,12 +140,18 @@ const stopList         = document.getElementById('stopList');
 const tileStatus       = document.getElementById('tileStatus');
 const loadLocalTilesBtn= document.getElementById('loadLocalTilesBtn');
 const tilesFileInput   = document.getElementById('tilesFileInput');
-const downloadRegionMapBtn = document.getElementById('downloadRegionMapBtn');
-const downloadNorthMapBtn = document.getElementById('downloadNorthMapBtn');
-const removeNorthMapBtn = document.getElementById('removeNorthMapBtn');
+const regionMapControls = document.getElementById('regionMapControls');
 const regionMapDownloadStatus = document.getElementById('regionMapDownloadStatus');
+const offlineMapSetup = document.getElementById('offlineMapSetup');
+const offlineMapSetupBtn = document.getElementById('offlineMapSetupBtn');
+const offlineMapSetupStatus = document.getElementById('offlineMapSetupStatus');
 const COTTBUS_OFFLINE_MAP = { fileName: 'cottbus-20261101.pmtiles', size: 21713833, label: 'Cottbus · Zentrum', manifestKey: OFFLINE_MAP_MANIFEST_KEY };
-const COTTBUS_NORTH_MAP = { fileName: 'cottbus-nord-20261101.pmtiles', size: 16754067, label: 'Cottbus · Nord', manifestKey: NORTH_MAP_MANIFEST_KEY };
+const COTTBUS_OPTIONAL_MAPS = [
+  { fileName: 'cottbus-nord-20261101.pmtiles', size: 16754067, label: 'Cottbus · Nord' },
+  { fileName: 'cottbus-ost-20261101.pmtiles', size: 13737613, label: 'Cottbus · Ost' },
+  { fileName: 'cottbus-sued-20261101.pmtiles', size: 20714605, label: 'Cottbus · Süd' },
+  { fileName: 'cottbus-west-20261101.pmtiles', size: 17007290, label: 'Cottbus · West' }
+].map((config, index) => ({ ...config, manifestKey: OPTIONAL_MAP_MANIFEST_KEYS[index] }));
 let offlineMapActionPending = false;
 const routingGraphInstallStatus = document.getElementById('routingGraphInstallStatus');
 const importRoutingGraphBtn = document.getElementById('importRoutingGraphBtn');
@@ -245,7 +251,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   detectOffline();
   await initializePersistentLocalBusRoutingGraph();
-  await initializePersistentLineData();
+  await initializePersistentLineData(tenantContext.offline);
+  if (!tenantContext.offline && !navActive && cottbusMapOffered() && !isRegionMapInstalled(COTTBUS_OFFLINE_MAP)) {
+    offlineMapSetup.showModal();
+  }
 });
 
 function startupDownloadGuardKey() {
@@ -1270,7 +1279,7 @@ async function performPersistentLineDataRefresh() {
   return serverCatalog;
 }
 
-async function initializePersistentLineData() {
+async function initializePersistentLineData(offline = false) {
   const cachedCatalog = await dbGetLinesCatalog();
   const cachedRecords = await dbGetAllLineDataRecords();
   if (cachedCatalog.length) {
@@ -1282,7 +1291,7 @@ async function initializePersistentLineData() {
   }
 
   try {
-    await refreshPersistentLineData();
+    if (!offline) await refreshPersistentLineData();
   } catch (err) {
     console.warn('Online-Aktualisierung der Liniendaten fehlgeschlagen; lokaler Stand bleibt aktiv:', err);
     renderLineDataStatus(cachedCatalog.length ? 'offline' : 'none', cachedRecords.length);
@@ -1806,9 +1815,11 @@ function bindEvents() {
   panelHandle.addEventListener('click', togglePanel);
   
   startAtLineStartBtn.addEventListener('click', () => startNavigation());
-  downloadRegionMapBtn.addEventListener('click', () => downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, downloadRegionMapBtn));
-  downloadNorthMapBtn.addEventListener('click', () => downloadCottbusOfflineMap(COTTBUS_NORTH_MAP, downloadNorthMapBtn));
-  removeNorthMapBtn.addEventListener('click', () => removeOfflineMapFromSettings(NORTH_MAP_MANIFEST_KEY));
+  offlineMapSetup.addEventListener('cancel', event => event.preventDefault());
+  offlineMapSetupBtn.addEventListener('click', async () => {
+    await downloadCottbusOfflineMap(COTTBUS_OFFLINE_MAP, offlineMapSetupStatus);
+    if (isRegionMapInstalled(COTTBUS_OFFLINE_MAP)) offlineMapSetup.close();
+  });
   loadLocalTilesBtn.addEventListener('click', () => {
     if (offlineMapActionPending) return;
     tilesFileInput.value = '';
@@ -2818,30 +2829,51 @@ function armGpsFirstFixTimer(scopeLabel) {
 }
 
 // ── PMTiles-Datei laden ──────────────────────────────────────
+function cottbusMapOffered() {
+  return (availableLinesCatalog || []).some(line => String(line.city).toLowerCase() === 'cottbus');
+}
+
+function isRegionMapInstalled(config) {
+  return regionalMapSources.get(config.manifestKey)?.metadata.displayName === config.fileName;
+}
+
 function updateRegionMapDownloadButton() {
-  const offered = (availableLinesCatalog || []).some(line => String(line.city).toLowerCase() === 'cottbus');
-  for (const [config, button] of [[COTTBUS_OFFLINE_MAP, downloadRegionMapBtn], [COTTBUS_NORTH_MAP, downloadNorthMapBtn]]) {
-    const installed = regionalMapSources.get(config.manifestKey)?.metadata.displayName === config.fileName;
-    button.hidden = !offered && !installed;
+  const offered = cottbusMapOffered();
+  offlineMapSetupBtn.disabled = offlineMapActionPending;
+  const controls = [];
+  for (const config of [COTTBUS_OFFLINE_MAP, ...COTTBUS_OPTIONAL_MAPS]) {
+    const installed = isRegionMapInstalled(config);
+    if (!offered && !installed) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
     button.disabled = offlineMapActionPending || installed;
     button.textContent = installed
       ? `${config.label} installiert`
       : `${config.label} laden (ca. ${Math.round(config.size / 1000000)} MB)`;
+    button.addEventListener('click', () => downloadCottbusOfflineMap(config));
+    controls.push(button);
+    if (installed && config.manifestKey !== OFFLINE_MAP_MANIFEST_KEY) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.disabled = offlineMapActionPending;
+      remove.textContent = `${config.label} entfernen`;
+      remove.addEventListener('click', () => removeOfflineMapFromSettings(config.manifestKey));
+      controls.push(remove);
+    }
   }
-  removeNorthMapBtn.hidden = !regionalMapSources.has(NORTH_MAP_MANIFEST_KEY);
-  removeNorthMapBtn.disabled = offlineMapActionPending;
+  regionMapControls.replaceChildren(...controls);
 }
 
-async function downloadCottbusOfflineMap(config, button) {
-  if (offlineMapActionPending || button.hidden || button.disabled) return;
+async function downloadCottbusOfflineMap(config, status = regionMapDownloadStatus) {
+  if (offlineMapActionPending || !cottbusMapOffered() || isRegionMapInstalled(config)) return;
   if (navigator.onLine === false) {
-    regionMapDownloadStatus.textContent = 'Verbinde das Gerät zum Laden der Karte mit dem Internet.';
+    status.textContent = 'Verbinde das Gerät zum Laden der Karte mit dem Internet.';
     return;
   }
   if (regionalMapSources.has(config.manifestKey) && !confirm('Die vorhandene Offline-Karte ersetzen?')) return;
   offlineMapActionPending = true;
   updateRegionMapDownloadButton();
-  regionMapDownloadStatus.textContent = 'Offline-Karte für Cottbus wird geladen …';
+  status.textContent = 'Offline-Karte für Cottbus wird geladen …';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
   try {
@@ -2854,16 +2886,16 @@ async function downloadCottbusOfflineMap(config, button) {
     const blob = await response.blob();
     if (blob.size !== size) throw new Error('Kartendatei ist unvollständig.');
     clearTimeout(timeout);
-    regionMapDownloadStatus.textContent = 'Karte wird auf diesem Gerät gespeichert …';
+    status.textContent = 'Karte wird auf diesem Gerät gespeichert …';
     if (await installOfflineMapFile(new File([blob], fileName), manifestKey)) {
-      regionMapDownloadStatus.textContent = `${config.label} ist auf diesem Gerät offline verfügbar.`;
+      status.textContent = `${config.label} ist auf diesem Gerät offline verfügbar.`;
       await requestPersistentStorage(true);
     } else {
-      regionMapDownloadStatus.textContent = 'Die Karte konnte nicht installiert werden. Details stehen oben beim Kartenstatus.';
+      status.textContent = 'Die Karte konnte nicht installiert werden. Prüfe den freien Speicher und versuche es erneut.';
     }
   } catch (error) {
     console.warn('Download der Offline-Karte fehlgeschlagen:', error);
-    regionMapDownloadStatus.textContent = 'Karte konnte nicht geladen werden. Prüfe die Verbindung und versuche es erneut.';
+    status.textContent = 'Karte konnte nicht geladen werden. Prüfe die Verbindung und versuche es erneut.';
   } finally {
     clearTimeout(timeout);
     offlineMapActionPending = false;

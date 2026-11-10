@@ -6,27 +6,26 @@
 //   API-Calls   → nur Netzwerk; Offline-Linien liegen im mandantengeprüften IndexedDB
 //   CDN-Libs    → Cache-First nach erstem Laden
 
-const CACHE_APP = 'lehrfahrer-app-v21065-78a7679265ab-34cbad27411b';
+const CACHE_APP = 'lehrfahrer-app-v21065-5630acfdc1f4-fbeea3c0dbc0';
 
 // App-Shell einschließlich der bereits verwendeten Kartenbibliotheken
 const APP_SHELL = [
-  './',
   './index.html',
   './manifest.json',
   '../support-diagnostics.css?v=1',
   '../js/support-diagnostics-core.js?v=2',
   '../js/support-diagnostics.js?v=2',
-  './css/app.css?v=V2.1.063-34cbad27411b',
-  './js/app.js?v=V2.1.065-78a7679265ab',
+  './css/app.css?v=V2.1.063-fbeea3c0dbc0',
+  './js/app.js?v=V2.1.065-5630acfdc1f4',
   '../js/tenant-cache-boundary.js?v=6f1f3c95d4c9',
-  './js/map.js?v=V2.1.063-d7852d4740cd',
+  './js/map.js?v=V2.1.063-3e71417ff62c',
   './js/local-bus-routing-storage.js',
   './js/debug-helper.js?v=c6059d9a1163',
   './js/local-bus-router.js?v=V2.1.063',
   './js/local-bus-router.js',
-  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css',
-  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js',
-  'https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js',
+  './vendor/maplibre-gl-4.7.1.css',
+  './vendor/maplibre-gl-4.7.1.js',
+  './vendor/pmtiles-3.2.1.js',
   './glyphs/Noto%20Sans%20Bold/0-255.pbf',
   './glyphs/Noto%20Sans%20Bold/256-511.pbf',
   './glyphs/Noto%20Sans%20Bold/8192-8447.pbf',
@@ -57,6 +56,14 @@ self.addEventListener('activate', event => {
 // ── Fetch ────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  const scope = new URL(self.registration.scope);
+  const entry = new URL('index.html', scope);
+  if (event.request.method === 'GET' && event.request.mode === 'navigate'
+      && url.origin === scope.origin && [scope.pathname, entry.pathname].includes(url.pathname)) {
+    event.respondWith(cacheFirstApp(new Request(entry)));
+    return;
+  }
 
   // API-Antworten enthalten Mandantendaten und werden nie gemeinsam gecacht.
   if (url.pathname.includes('/api/')) {
@@ -100,7 +107,7 @@ async function cacheFirstApp(request) {
   try {
     const response = await fetch(request);
     const cache = await caches.open(CACHE_APP);
-    cache.put(request, response.clone());
+    if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
     return new Response('Offline – Ressource nicht im Cache.', { status: 503 });

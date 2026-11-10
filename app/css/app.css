@@ -697,15 +697,35 @@ body.nav-mode.map-2d-mode .gps-arrow-icon::before {
 }
 
 .settings-section:not(:has(#punctualityToggle:checked)) .settings-departure-time,
-#downloadRegionMapBtn[hidden],
-#downloadNorthMapBtn[hidden],
-#removeNorthMapBtn[hidden],
 #removeLocalTilesBtn:disabled,
 #requestStoragePersistenceBtn.hidden {
   display: none;
 }
 
 .settings-departure-time { margin-top: 8px; }
+
+#offlineMapSetup {
+  width: min(calc(100% - 32px), 480px);
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+#offlineMapSetup::backdrop { background: rgba(0, 0, 0, 0.65); }
+#offlineMapSetup p { margin: 12px 0; }
+#offlineMapSetupBtn {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+}
 
 .offline-city-title {
   margin: 12px 0 6px;
